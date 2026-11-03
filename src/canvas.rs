@@ -32,8 +32,18 @@ impl Canvas {
         self.pixmap.data()
     }
 
+    pub fn pixmap(&self) -> &Pixmap {
+        &self.pixmap
+    }
+
     pub fn pixmap_mut(&mut self) -> &mut Pixmap {
         &mut self.pixmap
+    }
+
+    pub fn set_pixmap(&mut self, pixmap: Pixmap) {
+        self.width = pixmap.width();
+        self.height = pixmap.height();
+        self.pixmap = pixmap;
     }
 
     pub fn region_bytes(&self, x: u32, y: u32, w: u32, h: u32) -> Vec<u8> {
