@@ -175,6 +175,7 @@ impl App {
         if let Some(previous) = self.history.undo(current) {
             self.canvas.set_pixmap(previous);
             self.repaint_full();
+            self.dirty = true;
         }
     }
 
@@ -183,6 +184,7 @@ impl App {
         if let Some(next) = self.history.redo(current) {
             self.canvas.set_pixmap(next);
             self.repaint_full();
+            self.dirty = true;
         }
     }
 
@@ -885,6 +887,23 @@ impl App {
 
         let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
         painter.image(self.canvas_tex.id(), rect, uv, Color32::WHITE);
+
+        if response.hovered()
+            && matches!(self.tools.tool, Tool::Brush | Tool::Eraser)
+            && let Some(cursor) = ui.input(|i| i.pointer.hover_pos())
+        {
+            let radius = (self.tools.size * self.zoom * 0.5).max(0.5);
+            painter.circle_stroke(
+                cursor,
+                radius + 1.0,
+                egui::Stroke::new(1.0, Color32::from_black_alpha(180)),
+            );
+            painter.circle_stroke(
+                cursor,
+                radius,
+                egui::Stroke::new(1.0, Color32::from_white_alpha(220)),
+            );
+        }
     }
 }
 
