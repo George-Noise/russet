@@ -1,0 +1,40 @@
+[package]
+name = "russet"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+
+[dependencies]
+eframe = "0.37"
+tiny-skia = "0.11"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+rfd = "0.15"
+log = "0.4"
+
+# натив (Windows):
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11"
+
+# web:
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+
+# БЫСТРАЯ РАЗРАБОТКА:
+# - свой код пересобирается без оптимизаций (быстро);
+# - зависимости (eframe, wgpu, image...) оптимизируются ОДИН раз и берутся из кэша —
+#   UI остаётся отзывчивым в dev-сборке;
+# - укороченная отладочная информация ускоряет линковку и почти не грузит диск.
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+# РЕЛИЗ: собирается владельцем ВРУЧНУЮ, когда всё готово (LTO медленный).
+# Во время разработки `cargo build --release` НЕ запускать.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
