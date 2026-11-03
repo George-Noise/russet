@@ -9,6 +9,7 @@ mod palette;
 mod tools;
 
 use app::App;
+#[cfg(not(target_arch = "wasm32"))]
 use eframe::egui;
 
 #[cfg(not(target_arch = "wasm32"))]
