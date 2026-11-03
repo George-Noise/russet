@@ -108,6 +108,36 @@ impl App {
         }
     }
 
+    fn sync_texture(&mut self, x: u32, y: u32, w: u32, h: u32) {
+        let x0 = x.min(self.canvas.width);
+        let y0 = y.min(self.canvas.height);
+        let x1 = x.saturating_add(w).min(self.canvas.width);
+        let y1 = y.saturating_add(h).min(self.canvas.height);
+        if x1 <= x0 || y1 <= y0 {
+            return;
+        }
+        let region_w = x1 - x0;
+        let region_h = y1 - y0;
+        let bytes = self.canvas.region_bytes(x0, y0, region_w, region_h);
+        let image = egui::ColorImage::from_rgba_premultiplied(
+            [region_w as usize, region_h as usize],
+            &bytes,
+        );
+        self.canvas_tex.set_partial(
+            [x0 as usize, y0 as usize],
+            image,
+            egui::TextureOptions::NEAREST,
+        );
+    }
+
+    fn repaint_full(&mut self) {
+        let image = egui::ColorImage::from_rgba_premultiplied(
+            [self.canvas.width as usize, self.canvas.height as usize],
+            self.canvas.data(),
+        );
+        self.canvas_tex.set(image, egui::TextureOptions::NEAREST);
+    }
+
     fn draw_canvas(&mut self, ui: &mut egui::Ui, panel_rect: Rect) {
         let response = ui.interact(
             panel_rect,
@@ -148,6 +178,24 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ui, |ui| {
             let panel_rect = ui.max_rect();
             self.draw_canvas(ui, panel_rect);
+        });
+
+        egui::Window::new("M2 Test").show(&ctx, |ui| {
+            if ui.button("Fill region").clicked() {
+                let (x, y, w, h) = (10u32, 10u32, 50u32, 50u32);
+                let stride = self.canvas.width as usize * 4;
+                let data = self.canvas.pixmap_mut().data_mut();
+                for row in y..y + h {
+                    for col in x..x + w {
+                        let i = row as usize * stride + col as usize * 4;
+                        data[i..i + 4].copy_from_slice(&[0, 0, 255, 255]);
+                    }
+                }
+                self.sync_texture(x, y, w, h);
+            }
+            if ui.button("Repaint full").clicked() {
+                self.repaint_full();
+            }
         });
     }
 }
