@@ -46,6 +46,32 @@ impl Canvas {
         self.pixmap = pixmap;
     }
 
+    pub fn resize_canvas(&mut self, width: u32, height: u32) {
+        let width = width.clamp(1, 4096);
+        let height = height.clamp(1, 4096);
+        if width == self.width && height == self.height {
+            return;
+        }
+        let Some(mut next) = Pixmap::new(width, height) else {
+            return;
+        };
+        let copy_width = width.min(self.width) as usize * 4;
+        let copy_height = height.min(self.height) as usize;
+        let src = self.pixmap.data();
+        let dst = next.data_mut();
+        let src_stride = self.width as usize * 4;
+        let dst_stride = width as usize * 4;
+        for row in 0..copy_height {
+            let src_start = row * src_stride;
+            let dst_start = row * dst_stride;
+            dst[dst_start..dst_start + copy_width]
+                .copy_from_slice(&src[src_start..src_start + copy_width]);
+        }
+        self.width = width;
+        self.height = height;
+        self.pixmap = next;
+    }
+
     pub fn region_bytes(&self, x: u32, y: u32, w: u32, h: u32) -> Vec<u8> {
         let x0 = x.min(self.width);
         let y0 = y.min(self.height);
