@@ -44,6 +44,11 @@ impl History {
         !self.redo.is_empty()
     }
 
+    pub fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+
     fn snapshot_bytes(pixmap: &Pixmap) -> usize {
         pixmap.width() as usize * pixmap.height() as usize * 4
     }

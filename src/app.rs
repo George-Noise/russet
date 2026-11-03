@@ -1,6 +1,9 @@
+use std::path::PathBuf;
+
 use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect, Sense, Vec2};
 
 use crate::canvas::Canvas;
+use crate::file_io;
 use crate::history::History;
 use crate::palette::COLORS;
 use crate::tools::{Tool, ToolState, draw_segment};
@@ -8,6 +11,16 @@ use crate::tools::{Tool, ToolState, draw_segment};
 const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 8.0;
 const ZOOM_STEP: f32 = 1.25;
+const NEW_WIDTH: u32 = 800;
+const NEW_HEIGHT: u32 = 600;
+const MIN_CANVAS: u32 = 1;
+const MAX_CANVAS: u32 = 4096;
+
+#[derive(Clone, Copy)]
+enum PendingAction {
+    New,
+    Open,
+}
 
 pub struct App {
     canvas: Canvas,
@@ -23,6 +36,15 @@ pub struct App {
     tools_window_open: bool,
     palette_window_open: bool,
     last_panel_rect: Rect,
+    current_path: Option<PathBuf>,
+    display_name: String,
+    dirty: bool,
+    show_new_dialog: bool,
+    new_width: f32,
+    new_height: f32,
+    pending_action: Option<PendingAction>,
+    error_popup: Option<String>,
+    window_title: String,
 }
 
 impl App {
@@ -70,6 +92,15 @@ impl App {
             tools_window_open: true,
             palette_window_open: true,
             last_panel_rect: cc.egui_ctx.content_rect(),
+            current_path: None,
+            display_name: "Untitled".to_string(),
+            dirty: false,
+            show_new_dialog: false,
+            new_width: NEW_WIDTH as f32,
+            new_height: NEW_HEIGHT as f32,
+            pending_action: None,
+            error_popup: None,
+            window_title: String::new(),
         }
     }
 
@@ -85,6 +116,18 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Num0)) {
             self.zoom = 1.0;
             self.pan = Vec2::ZERO;
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)) {
+            self.save_as();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::S)) {
+            self.save();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::N)) {
+            self.request_new();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::O)) {
+            self.request_open();
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::P)) {
             self.tools.tool = Tool::Pencil;
@@ -192,6 +235,7 @@ impl App {
         );
         if let Some(dirty) = dirty {
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
+            self.dirty = true;
         }
     }
 
@@ -269,14 +313,228 @@ impl App {
         self.pan = Vec2::ZERO;
     }
 
+    fn reset_canvas(&mut self, width: u32, height: u32) {
+        let width = width.clamp(MIN_CANVAS, MAX_CANVAS);
+        let height = height.clamp(MIN_CANVAS, MAX_CANVAS);
+        self.canvas = Canvas::new(width, height, Color32::WHITE);
+        self.history.clear();
+        self.current_path = None;
+        self.display_name = "Untitled".to_string();
+        self.dirty = false;
+        self.zoom = 1.0;
+        self.pan = Vec2::ZERO;
+        self.repaint_full();
+    }
+
+    fn open_new_dialog(&mut self) {
+        self.new_width = NEW_WIDTH as f32;
+        self.new_height = NEW_HEIGHT as f32;
+        self.show_new_dialog = true;
+    }
+
+    fn request_new(&mut self) {
+        if self.dirty {
+            self.pending_action = Some(PendingAction::New);
+        } else {
+            self.open_new_dialog();
+        }
+    }
+
+    fn request_open(&mut self) {
+        if self.dirty {
+            self.pending_action = Some(PendingAction::Open);
+        } else {
+            self.open_now();
+        }
+    }
+
+    fn open_now(&mut self) {
+        match file_io::open_image() {
+            Ok(Some(loaded)) => {
+                self.canvas.set_pixmap(loaded.pixmap);
+                self.history.clear();
+                self.current_path = Some(loaded.path);
+                self.display_name = loaded.name;
+                self.dirty = false;
+                self.zoom = 1.0;
+                self.pan = Vec2::ZERO;
+                self.repaint_full();
+            }
+            Ok(None) => {}
+            Err(error) => self.error_popup = Some(error),
+        }
+    }
+
+    fn save(&mut self) {
+        if let Some(path) = self.current_path.clone() {
+            self.save_to(&path);
+        } else {
+            self.save_as();
+        }
+    }
+
+    fn save_as(&mut self) {
+        match file_io::save_image_as(self.canvas.pixmap(), &self.display_name) {
+            Ok(Some(saved)) => {
+                self.current_path = Some(saved.path);
+                self.display_name = saved.name;
+                self.dirty = false;
+            }
+            Ok(None) => {}
+            Err(error) => self.error_popup = Some(error),
+        }
+    }
+
+    fn save_to(&mut self, path: &std::path::Path) {
+        match file_io::save_image_to(self.canvas.pixmap(), path) {
+            Ok(()) => self.dirty = false,
+            Err(error) => self.error_popup = Some(error),
+        }
+    }
+
+    fn new_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_new_dialog {
+            return;
+        }
+        let mut open = true;
+        let mut ok = false;
+        let mut cancel = false;
+        egui::Window::new("New")
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Width");
+                    ui.add(
+                        egui::DragValue::new(&mut self.new_width)
+                            .range(MIN_CANVAS as f32..=MAX_CANVAS as f32)
+                            .speed(1.0)
+                            .max_decimals(0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Height");
+                    ui.add(
+                        egui::DragValue::new(&mut self.new_height)
+                            .range(MIN_CANVAS as f32..=MAX_CANVAS as f32)
+                            .speed(1.0)
+                            .max_decimals(0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        ok = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if ok {
+            let width = self.new_width.round() as u32;
+            let height = self.new_height.round() as u32;
+            self.reset_canvas(width, height);
+            self.show_new_dialog = false;
+        } else if cancel || !open {
+            self.show_new_dialog = false;
+        }
+    }
+
+    fn discard_dialog(&mut self, ctx: &egui::Context) {
+        let Some(action) = self.pending_action else {
+            return;
+        };
+        let mut confirmed = false;
+        let mut cancel = false;
+        egui::Window::new("Unsaved Changes")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label("You have unsaved changes. Discard them and continue?");
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        confirmed = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if confirmed {
+            self.pending_action = None;
+            match action {
+                PendingAction::New => self.open_new_dialog(),
+                PendingAction::Open => self.open_now(),
+            }
+        } else if cancel {
+            self.pending_action = None;
+        }
+    }
+
+    fn error_dialog(&mut self, ctx: &egui::Context) {
+        let Some(message) = self.error_popup.clone() else {
+            return;
+        };
+        let mut close = false;
+        egui::Window::new("Error")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label(message);
+                if ui.button("OK").clicked() {
+                    close = true;
+                }
+            });
+        if close {
+            self.error_popup = None;
+        }
+    }
+
+    fn update_title(&mut self, ctx: &egui::Context) {
+        let title = format!(
+            "{}{} - Russet",
+            if self.dirty { "*" } else { "" },
+            self.display_name
+        );
+        if title != self.window_title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
+        }
+    }
+
     fn top_menu(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("top_menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    let _ = ui.button("New…");
-                    let _ = ui.button("Open…");
-                    let _ = ui.button("Save");
-                    let _ = ui.button("Save As…");
+                    if ui
+                        .add(egui::Button::new("New…").shortcut_text("Ctrl+N"))
+                        .clicked()
+                    {
+                        self.request_new();
+                        ui.close();
+                    }
+                    if ui
+                        .add(egui::Button::new("Open…").shortcut_text("Ctrl+O"))
+                        .clicked()
+                    {
+                        self.request_open();
+                        ui.close();
+                    }
+                    if ui
+                        .add(egui::Button::new("Save").shortcut_text("Ctrl+S"))
+                        .clicked()
+                    {
+                        self.save();
+                        ui.close();
+                    }
+                    if ui
+                        .add(egui::Button::new("Save As…").shortcut_text("Ctrl+Shift+S"))
+                        .clicked()
+                    {
+                        self.save_as();
+                        ui.close();
+                    }
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         ui.separator();
@@ -520,5 +778,9 @@ impl eframe::App for App {
 
         self.tools_window(&ctx);
         self.palette_window(&ctx);
+        self.discard_dialog(&ctx);
+        self.new_dialog(&ctx);
+        self.error_dialog(&ctx);
+        self.update_title(&ctx);
     }
 }
