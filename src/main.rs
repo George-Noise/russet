@@ -1,5 +1,5 @@
 #![warn(clippy::all, rust_2018_idioms)]
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // без консоли в release на Windows
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // no console in release on Windows
 
 mod app;
 mod canvas;
