@@ -42,6 +42,9 @@ pub struct App {
     show_new_dialog: bool,
     new_width: f32,
     new_height: f32,
+    show_resize_dialog: bool,
+    resize_width: f32,
+    resize_height: f32,
     pending_action: Option<PendingAction>,
     error_popup: Option<String>,
     window_title: String,
@@ -98,6 +101,9 @@ impl App {
             show_new_dialog: false,
             new_width: NEW_WIDTH as f32,
             new_height: NEW_HEIGHT as f32,
+            show_resize_dialog: false,
+            resize_width: NEW_WIDTH as f32,
+            resize_height: NEW_HEIGHT as f32,
             pending_action: None,
             error_popup: None,
             window_title: String::new(),
@@ -447,6 +453,58 @@ impl App {
         }
     }
 
+    fn resize_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_resize_dialog {
+            return;
+        }
+        let mut open = true;
+        let mut ok = false;
+        let mut cancel = false;
+        egui::Window::new("Resize Canvas")
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Width");
+                    ui.add(
+                        egui::DragValue::new(&mut self.resize_width)
+                            .range(MIN_CANVAS as f32..=MAX_CANVAS as f32)
+                            .speed(1.0)
+                            .max_decimals(0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Height");
+                    ui.add(
+                        egui::DragValue::new(&mut self.resize_height)
+                            .range(MIN_CANVAS as f32..=MAX_CANVAS as f32)
+                            .speed(1.0)
+                            .max_decimals(0),
+                    );
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        ok = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if ok {
+            let width = self.resize_width.round() as u32;
+            let height = self.resize_height.round() as u32;
+            self.history.push_snapshot(self.canvas.pixmap().clone());
+            self.canvas.resize_canvas(width, height);
+            self.repaint_full();
+            self.dirty = true;
+            self.show_resize_dialog = false;
+        } else if cancel || !open {
+            self.show_resize_dialog = false;
+        }
+    }
+
     fn discard_dialog(&mut self, ctx: &egui::Context) {
         let Some(action) = self.pending_action else {
             return;
@@ -570,7 +628,12 @@ impl App {
                 });
 
                 ui.menu_button("Canvas", |ui| {
-                    let _ = ui.button("Resize Canvas…");
+                    if ui.button("Resize Canvas…").clicked() {
+                        self.resize_width = self.canvas.width as f32;
+                        self.resize_height = self.canvas.height as f32;
+                        self.show_resize_dialog = true;
+                        ui.close();
+                    }
                 });
 
                 ui.menu_button("View", |ui| {
@@ -786,6 +849,7 @@ impl eframe::App for App {
         self.palette_window(&ctx);
         self.discard_dialog(&ctx);
         self.new_dialog(&ctx);
+        self.resize_dialog(&ctx);
         self.error_dialog(&ctx);
         self.update_title(&ctx);
     }
