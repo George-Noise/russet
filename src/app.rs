@@ -2,6 +2,7 @@ use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect, Sen
 
 use crate::canvas::Canvas;
 use crate::history::History;
+use crate::palette::COLORS;
 use crate::tools::{Tool, ToolState, draw_segment};
 
 const MIN_ZOOM: f32 = 0.1;
@@ -19,6 +20,9 @@ pub struct App {
     is_stroking: bool,
     last_pos: Option<Pos2>,
     stroke_button: Option<PointerButton>,
+    tools_window_open: bool,
+    palette_window_open: bool,
+    last_panel_rect: Rect,
 }
 
 impl App {
@@ -63,6 +67,9 @@ impl App {
             is_stroking: false,
             last_pos: None,
             stroke_button: None,
+            tools_window_open: true,
+            palette_window_open: true,
+            last_panel_rect: cc.egui_ctx.content_rect(),
         }
     }
 
@@ -251,6 +258,176 @@ impl App {
         }
     }
 
+    fn fit_to_window(&mut self) {
+        let rect = self.last_panel_rect;
+        if rect.width() <= 0.0 || rect.height() <= 0.0 {
+            return;
+        }
+        let sx = rect.width() / self.canvas.width as f32;
+        let sy = rect.height() / self.canvas.height as f32;
+        self.zoom = sx.min(sy).clamp(MIN_ZOOM, MAX_ZOOM);
+        self.pan = Vec2::ZERO;
+    }
+
+    fn top_menu(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::top("top_menu").show(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    let _ = ui.button("New…");
+                    let _ = ui.button("Open…");
+                    let _ = ui.button("Save");
+                    let _ = ui.button("Save As…");
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        ui.separator();
+                        if ui.button("Exit").clicked() {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    }
+                });
+
+                ui.menu_button("Edit", |ui| {
+                    let can_undo = self.history.can_undo();
+                    if ui
+                        .add_enabled(can_undo, egui::Button::new("Undo (Ctrl+Z)"))
+                        .clicked()
+                    {
+                        self.undo();
+                        ui.close();
+                    }
+                    let can_redo = self.history.can_redo();
+                    if ui
+                        .add_enabled(can_redo, egui::Button::new("Redo (Ctrl+Y)"))
+                        .clicked()
+                    {
+                        self.redo();
+                        ui.close();
+                    }
+                });
+
+                ui.menu_button("Canvas", |ui| {
+                    let _ = ui.button("Resize Canvas…");
+                });
+
+                ui.menu_button("View", |ui| {
+                    if ui.button("Zoom 100% (Ctrl+0)").clicked() {
+                        self.zoom = 1.0;
+                        self.pan = Vec2::ZERO;
+                        ui.close();
+                    }
+                    if ui.button("Fit to Window").clicked() {
+                        self.fit_to_window();
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.checkbox(&mut self.tools_window_open, "Tools");
+                    ui.checkbox(&mut self.palette_window_open, "Palette");
+                });
+            });
+        });
+    }
+
+    fn tools_window(&mut self, ctx: &egui::Context) {
+        if !self.tools_window_open {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Tools").open(&mut open).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(self.tools.tool == Tool::Pencil, "Pencil (P)")
+                    .clicked()
+                {
+                    self.tools.tool = Tool::Pencil;
+                }
+                if ui
+                    .selectable_label(self.tools.tool == Tool::Brush, "Brush (B)")
+                    .clicked()
+                {
+                    self.tools.tool = Tool::Brush;
+                }
+                if ui
+                    .selectable_label(self.tools.tool == Tool::Eraser, "Eraser (E)")
+                    .clicked()
+                {
+                    self.tools.tool = Tool::Eraser;
+                }
+            });
+
+            let is_pencil = self.tools.tool == Tool::Pencil;
+            ui.add_enabled(
+                !is_pencil,
+                egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"),
+            );
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                color_swatch(ui, self.tools.primary, 24.0);
+                ui.label("Primary");
+                color_swatch(ui, self.tools.secondary, 24.0);
+                ui.label("Secondary");
+            });
+        });
+        if !open {
+            self.tools_window_open = false;
+        }
+    }
+
+    fn palette_window(&mut self, ctx: &egui::Context) {
+        if !self.palette_window_open {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Palette")
+            .open(&mut open)
+            .show(ctx, |ui| {
+                egui::Grid::new("palette_grid")
+                    .spacing([2.0, 2.0])
+                    .show(ui, |ui| {
+                        for row in 0..2 {
+                            for col in 0..10 {
+                                let color = COLORS[row * 10 + col];
+                                let (rect, response) =
+                                    ui.allocate_exact_size(egui::vec2(20.0, 20.0), Sense::click());
+                                ui.painter().rect_filled(rect, 0.0, color);
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    0.0,
+                                    egui::Stroke::new(1.0, Color32::from_gray(40)),
+                                    egui::StrokeKind::Inside,
+                                );
+                                if response.clicked() {
+                                    self.tools.primary = color;
+                                }
+                                if response.secondary_clicked() {
+                                    self.tools.secondary = color;
+                                }
+                            }
+                            ui.end_row();
+                        }
+                    });
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    color_swatch(ui, self.tools.primary, 32.0);
+                    ui.label("Primary");
+                    color_swatch(ui, self.tools.secondary, 32.0);
+                    ui.label("Secondary");
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Swap (X)").clicked() {
+                        std::mem::swap(&mut self.tools.primary, &mut self.tools.secondary);
+                    }
+                    ui.label("Custom…");
+                    ui.color_edit_button_srgba(&mut self.tools.primary);
+                });
+            });
+        if !open {
+            self.palette_window_open = false;
+        }
+    }
+
     fn sync_texture(&mut self, x: u32, y: u32, w: u32, h: u32) {
         let x0 = x.min(self.canvas.width);
         let y0 = y.min(self.canvas.height);
@@ -286,6 +463,7 @@ impl App {
     }
 
     fn draw_canvas(&mut self, ui: &mut egui::Ui, panel_rect: Rect) {
+        self.last_panel_rect = panel_rect;
         let response = ui.interact(
             panel_rect,
             ui.scope_id().with("canvas_interaction"),
@@ -318,14 +496,29 @@ impl App {
     }
 }
 
+fn color_swatch(ui: &mut egui::Ui, color: Color32, size: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), Sense::hover());
+    ui.painter().rect_filled(rect, 2.0, color);
+    ui.painter().rect_stroke(
+        rect,
+        2.0,
+        egui::Stroke::new(1.0, Color32::from_gray(40)),
+        egui::StrokeKind::Inside,
+    );
+}
+
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.handle_hotkeys(&ctx);
+        self.top_menu(ui);
 
         egui::CentralPanel::default().show(ui, |ui| {
             let panel_rect = ui.max_rect();
             self.draw_canvas(ui, panel_rect);
         });
+
+        self.tools_window(&ctx);
+        self.palette_window(&ctx);
     }
 }
