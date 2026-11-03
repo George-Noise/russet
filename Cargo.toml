@@ -11,7 +11,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 rfd = "0.15"
 log = "0.4"
 
-# натив (Windows):
+# native (Windows):
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
 
@@ -20,11 +20,11 @@ env_logger = "0.11"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 
-# БЫСТРАЯ РАЗРАБОТКА:
-# - свой код пересобирается без оптимизаций (быстро);
-# - зависимости (eframe, wgpu, image...) оптимизируются ОДИН раз и берутся из кэша —
-#   UI остаётся отзывчивым в dev-сборке;
-# - укороченная отладочная информация ускоряет линковку и почти не грузит диск.
+# FAST DEVELOPMENT:
+# - own code rebuilds without optimizations (fast);
+# - dependencies (eframe, wgpu, image...) are optimized ONCE and taken from cache —
+#   the UI stays responsive in dev builds;
+# - shorter debug info speeds up linking and barely loads the disk.
 [profile.dev]
 opt-level = 1
 debug = "line-tables-only"
@@ -32,7 +32,7 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 2
 
-# НЕ запускать `cargo build --release` пока пользователь сам не попросит.
+# Do NOT run `cargo build --release` until the user explicitly asks for it.
 [profile.release]
 lto = "fat"
 codegen-units = 1
