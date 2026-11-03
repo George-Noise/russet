@@ -1,9 +1,12 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect, Sense, Vec2};
 
 use crate::canvas::Canvas;
 use crate::file_io;
+#[cfg(target_arch = "wasm32")]
+use crate::file_io::{WebOutcome, WebTask};
 use crate::history::History;
 use crate::palette::COLORS;
 use crate::tools::{Tool, ToolState, draw_segment};
@@ -36,7 +39,10 @@ pub struct App {
     tools_window_open: bool,
     palette_window_open: bool,
     last_panel_rect: Rect,
+    #[cfg(not(target_arch = "wasm32"))]
     current_path: Option<PathBuf>,
+    #[cfg(target_arch = "wasm32")]
+    web_task: Option<WebTask>,
     display_name: String,
     dirty: bool,
     show_new_dialog: bool,
@@ -95,7 +101,10 @@ impl App {
             tools_window_open: true,
             palette_window_open: true,
             last_panel_rect: cc.egui_ctx.content_rect(),
+            #[cfg(not(target_arch = "wasm32"))]
             current_path: None,
+            #[cfg(target_arch = "wasm32")]
+            web_task: None,
             display_name: "Untitled".to_string(),
             dirty: false,
             show_new_dialog: false,
@@ -124,16 +133,16 @@ impl App {
             self.pan = Vec2::ZERO;
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)) {
-            self.save_as();
+            self.save_as(ctx);
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::S)) {
-            self.save();
+            self.save(ctx);
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::N)) {
             self.request_new();
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::O)) {
-            self.request_open();
+            self.request_open(ctx);
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::P)) {
             self.tools.tool = Tool::Pencil;
@@ -330,7 +339,10 @@ impl App {
         let height = height.clamp(MIN_CANVAS, MAX_CANVAS);
         self.canvas = Canvas::new(width, height, Color32::WHITE);
         self.history.clear();
-        self.current_path = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.current_path = None;
+        }
         self.display_name = "Untitled".to_string();
         self.dirty = false;
         self.zoom = 1.0;
@@ -352,55 +364,108 @@ impl App {
         }
     }
 
-    fn request_open(&mut self) {
+    fn request_open(&mut self, ctx: &egui::Context) {
         if self.dirty {
             self.pending_action = Some(PendingAction::Open);
         } else {
-            self.open_now();
+            self.open_now(ctx);
         }
     }
 
-    fn open_now(&mut self) {
-        match file_io::open_image() {
-            Ok(Some(loaded)) => {
-                self.canvas.set_pixmap(loaded.pixmap);
-                self.history.clear();
-                self.current_path = Some(loaded.path);
-                self.display_name = loaded.name;
-                self.dirty = false;
-                self.zoom = 1.0;
-                self.pan = Vec2::ZERO;
-                self.repaint_full();
+    fn apply_loaded(&mut self, loaded: file_io::LoadedImage) {
+        self.canvas.set_pixmap(loaded.pixmap);
+        self.history.clear();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.current_path = Some(loaded.path);
+        }
+        self.display_name = loaded.name;
+        self.dirty = false;
+        self.zoom = 1.0;
+        self.pan = Vec2::ZERO;
+        self.repaint_full();
+    }
+
+    fn apply_saved(&mut self, saved: file_io::SavedImage) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.current_path = Some(saved.path);
+        }
+        self.display_name = saved.name;
+        self.dirty = false;
+    }
+
+    fn open_now(&mut self, ctx: &egui::Context) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = ctx;
+            match file_io::open_image() {
+                Ok(Some(loaded)) => self.apply_loaded(loaded),
+                Ok(None) => {}
+                Err(error) => self.error_popup = Some(error),
             }
-            Ok(None) => {}
-            Err(error) => self.error_popup = Some(error),
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.web_task = Some(file_io::open_image(ctx));
         }
     }
 
-    fn save(&mut self) {
-        if let Some(path) = self.current_path.clone() {
-            self.save_to(&path);
-        } else {
-            self.save_as();
-        }
-    }
-
-    fn save_as(&mut self) {
-        match file_io::save_image_as(self.canvas.pixmap(), &self.display_name) {
-            Ok(Some(saved)) => {
-                self.current_path = Some(saved.path);
-                self.display_name = saved.name;
-                self.dirty = false;
+    fn save(&mut self, ctx: &egui::Context) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = ctx;
+            if let Some(path) = self.current_path.clone() {
+                self.save_to(&path);
+            } else {
+                self.save_as(ctx);
             }
-            Ok(None) => {}
-            Err(error) => self.error_popup = Some(error),
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.save_as(ctx);
         }
     }
 
+    fn save_as(&mut self, ctx: &egui::Context) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = ctx;
+            match file_io::save_image_as(self.canvas.pixmap(), &self.display_name) {
+                Ok(Some(saved)) => self.apply_saved(saved),
+                Ok(None) => {}
+                Err(error) => self.error_popup = Some(error),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.web_task = Some(file_io::save_image_as(
+                ctx,
+                self.canvas.pixmap().clone(),
+                self.display_name.clone(),
+            ));
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn save_to(&mut self, path: &std::path::Path) {
         match file_io::save_image_to(self.canvas.pixmap(), path) {
             Ok(()) => self.dirty = false,
             Err(error) => self.error_popup = Some(error),
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn poll_file_task(&mut self) {
+        let Some(task) = self.web_task.take() else {
+            return;
+        };
+        match task.poll() {
+            Some(Ok(WebOutcome::Opened(Some(loaded)))) => self.apply_loaded(loaded),
+            Some(Ok(WebOutcome::Opened(None))) | Some(Ok(WebOutcome::Saved(None))) => {}
+            Some(Ok(WebOutcome::Saved(Some(saved)))) => self.apply_saved(saved),
+            Some(Err(error)) => self.error_popup = Some(error),
+            None => self.web_task = Some(task),
         }
     }
 
@@ -529,7 +594,7 @@ impl App {
             self.pending_action = None;
             match action {
                 PendingAction::New => self.open_new_dialog(),
-                PendingAction::Open => self.open_now(),
+                PendingAction::Open => self.open_now(ctx),
             }
         } else if cancel {
             self.pending_action = None;
@@ -582,21 +647,21 @@ impl App {
                         .add(egui::Button::new("Open…").shortcut_text("Ctrl+O"))
                         .clicked()
                     {
-                        self.request_open();
+                        self.request_open(ui.ctx());
                         ui.close();
                     }
                     if ui
                         .add(egui::Button::new("Save").shortcut_text("Ctrl+S"))
                         .clicked()
                     {
-                        self.save();
+                        self.save(ui.ctx());
                         ui.close();
                     }
                     if ui
                         .add(egui::Button::new("Save As…").shortcut_text("Ctrl+Shift+S"))
                         .clicked()
                     {
-                        self.save_as();
+                        self.save_as(ui.ctx());
                         ui.close();
                     }
                     #[cfg(not(target_arch = "wasm32"))]
@@ -837,6 +902,8 @@ fn color_swatch(ui: &mut egui::Ui, color: Color32, size: f32) {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        #[cfg(target_arch = "wasm32")]
+        self.poll_file_task();
         self.handle_hotkeys(&ctx);
         self.top_menu(ui);
 
