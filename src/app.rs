@@ -138,6 +138,12 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::E)) {
             self.tools.tool = Tool::Eraser;
         }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::OpenBracket)) {
+            self.tools.size = (self.tools.size - 1.0).clamp(1.0, 100.0);
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::CloseBracket)) {
+            self.tools.size = (self.tools.size + 1.0).clamp(1.0, 100.0);
+        }
         if self.history.can_undo() && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Z)) {
             self.undo();
         }
