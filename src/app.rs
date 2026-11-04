@@ -11,12 +11,20 @@ use crate::history::History;
 use crate::palette::COLORS;
 use crate::tools::{Tool, ToolState, draw_segment};
 
-/// Canvas texture: smooth bilinear/trilinear sampling at EVERY zoom level,
-/// zoomed in and out alike (the Paint.NET-style look). Point magnification
-/// makes "100%" uneven under Windows DPI 125/150% (texel widths alternate
-/// 1/2 px) and drops texel rows/columns at fractional screen offsets;
-/// point minification skips whole texel rows/columns when zoomed out.
-const CANVAS_TEXTURE_OPTIONS: egui::TextureOptions = egui::TextureOptions {
+/// Canvas texture at integer zoom (100%..=800%): the canvas rect is snapped
+/// to the physical pixel grid, so each texel covers an exact whole number of
+/// physical pixels and NEAREST is perfectly crisp (like Paint.NET at
+/// 100/200/300%).
+const CANVAS_TEXTURE_CRISP: egui::TextureOptions = egui::TextureOptions {
+    magnification: egui::TextureFilter::Nearest,
+    minification: egui::TextureFilter::Linear,
+    wrap_mode: egui::TextureWrapMode::ClampToEdge,
+    mipmap_mode: Some(egui::TextureFilter::Linear),
+};
+
+/// Canvas texture otherwise (non-integer zoom, and zoomed out below 100%):
+/// smooth bilinear/trilinear sampling, no dropped texel rows/columns.
+const CANVAS_TEXTURE_SMOOTH: egui::TextureOptions = egui::TextureOptions {
     magnification: egui::TextureFilter::Linear,
     minification: egui::TextureFilter::Linear,
     wrap_mode: egui::TextureWrapMode::ClampToEdge,
@@ -44,6 +52,7 @@ enum PendingAction {
 }
 
 pub struct App {
+    ctx: egui::Context,
     canvas: Canvas,
     canvas_tex: egui::TextureHandle,
     checker_tex: egui::TextureHandle,
@@ -83,7 +92,7 @@ impl App {
                 [canvas.width as usize, canvas.height as usize],
                 canvas.data(),
             ),
-            CANVAS_TEXTURE_OPTIONS,
+            CANVAS_TEXTURE_CRISP, // initial zoom is 100%
         );
 
         let checker = egui::ColorImage::new(
@@ -106,6 +115,7 @@ impl App {
             .load_texture("checker", checker, checker_options);
 
         Self {
+            ctx: cc.egui_ctx.clone(),
             canvas,
             canvas_tex,
             checker_tex,
@@ -138,8 +148,30 @@ impl App {
     }
 
     fn canvas_rect(&self, panel_rect: Rect) -> Rect {
-        let size = egui::vec2(self.canvas.width as f32, self.canvas.height as f32) * self.zoom;
-        Rect::from_center_size(panel_rect.center() + self.pan, size)
+        // Zoom is defined in PHYSICAL screen pixels (100% = 1 texel per
+        // physical pixel): compute the rect on the physical pixel grid, snap
+        // its top-left to whole physical pixels, feed egui the logical size
+        // = physical / ppp.
+        let ppp = self.ctx.pixels_per_point();
+        let canvas = egui::vec2(self.canvas.width as f32, self.canvas.height as f32);
+        let size_phys = canvas * self.zoom;
+        let center_phys = panel_rect.center().to_vec2() * ppp;
+        let min_phys = (center_phys - size_phys * 0.5 + self.pan * ppp).round();
+        Rect::from_min_size((min_phys / ppp).to_pos2(), size_phys / ppp)
+    }
+
+    /// Zoom is honest at whole multiples of 100% (1 texel = N physical pixels).
+    fn crisp_zoom(&self) -> bool {
+        let percent = (self.zoom * 100.0).round();
+        percent >= 100.0 && percent % 100.0 == 0.0
+    }
+
+    fn canvas_texture_options(&self) -> egui::TextureOptions {
+        if self.crisp_zoom() {
+            CANVAS_TEXTURE_CRISP
+        } else {
+            CANVAS_TEXTURE_SMOOTH
+        }
     }
 
     fn handle_hotkeys(&mut self, ctx: &egui::Context) {
@@ -227,13 +259,17 @@ impl App {
             return;
         }
         if let Some(anchor) = anchor {
+            let ppp = self.ctx.pixels_per_point();
             let rect = self.canvas_rect(panel_rect);
-            let canvas_size = egui::vec2(self.canvas.width as f32, self.canvas.height as f32);
-            let p = (anchor - rect.min) / self.zoom;
-            let new_min = anchor - p * new_zoom;
-            self.pan = new_min - panel_rect.center() + canvas_size * new_zoom * 0.5;
+            let canvas = egui::vec2(self.canvas.width as f32, self.canvas.height as f32);
+            let p = (anchor - rect.min) * ppp / self.zoom;
+            let new_min = anchor - p * (new_zoom / ppp);
+            self.pan = new_min - panel_rect.center() + canvas * (new_zoom / ppp) * 0.5;
         }
         self.zoom = new_zoom;
+        // Re-upload once so the new NEAREST/LINEAR sampling takes effect
+        // immediately (glow applies the sampler params on every upload).
+        self.repaint_full();
         log::info!("Zoom: {}%", (self.zoom * 100.0).round() as i32);
     }
 
@@ -284,7 +320,8 @@ impl App {
     }
 
     fn canvas_pos(&self, rect: Rect, screen: Pos2) -> Pos2 {
-        let p = (screen - rect.min) / self.zoom;
+        let ppp = self.ctx.pixels_per_point();
+        let p = (screen - rect.min) * ppp / self.zoom;
         Pos2::new(p.x, p.y)
     }
 
@@ -385,8 +422,9 @@ impl App {
         if rect.width() <= 0.0 || rect.height() <= 0.0 {
             return;
         }
-        let sx = rect.width() / self.canvas.width as f32;
-        let sy = rect.height() / self.canvas.height as f32;
+        let ppp = self.ctx.pixels_per_point();
+        let sx = rect.width() * ppp / self.canvas.width as f32;
+        let sy = rect.height() * ppp / self.canvas.height as f32;
         self.set_zoom(sx.min(sy), None, rect);
         self.pan = Vec2::ZERO;
     }
@@ -888,8 +926,11 @@ impl App {
             [region_w as usize, region_h as usize],
             &bytes,
         );
-        self.canvas_tex
-            .set_partial([x0 as usize, y0 as usize], image, CANVAS_TEXTURE_OPTIONS);
+        self.canvas_tex.set_partial(
+            [x0 as usize, y0 as usize],
+            image,
+            self.canvas_texture_options(),
+        );
     }
 
     fn repaint_full(&mut self) {
@@ -897,7 +938,7 @@ impl App {
             [self.canvas.width as usize, self.canvas.height as usize],
             self.canvas.data(),
         );
-        self.canvas_tex.set(image, CANVAS_TEXTURE_OPTIONS);
+        self.canvas_tex.set(image, self.canvas_texture_options());
     }
 
     fn draw_canvas(&mut self, ui: &mut egui::Ui, panel_rect: Rect) {
@@ -940,7 +981,8 @@ impl App {
             && matches!(self.tools.tool, Tool::Brush | Tool::Eraser)
             && let Some(cursor) = ui.input(|i| i.pointer.hover_pos())
         {
-            let radius = (self.tools.size * self.zoom * 0.5).max(0.5);
+            let ppp = self.ctx.pixels_per_point();
+            let radius = (self.tools.size * self.zoom * 0.5 / ppp).max(0.5);
             painter.circle_stroke(
                 cursor,
                 radius + 1.0,
