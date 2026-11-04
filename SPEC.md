@@ -261,11 +261,11 @@ Common stroke lifecycle (for all tools):
 4. Every segment returns a dirty rectangle (bbox of the segment expanded by `ceil(size/2) + 2` px, clipped to the canvas) — the texture is updated using it (§3.4/§5).
 5. During a stroke the texture is updated per dirty region via `set_partial`; afterwards — `ctx.request_repaint()`.
 
-Segment rasterization — in `tools.rs`, via `tiny-skia`: `PathBuilder` line from→to, `Stroke` with width and caps; segments with round caps leave no gaps, no separate point interpolation is needed.
+Segment rasterization — in `tools.rs`. Brush and eraser: via `tiny-skia` (`PathBuilder` line from→to, `Stroke` with width and caps); segments with round caps leave no gaps, no separate point interpolation is needed. Pencil: classic integer **Bresenham** between the rounded endpoints (`from.round()` → `to.round()`), plotted pixel-by-pixel directly into the `Pixmap` (premultiplied source-over; opaque color overwrites the pixel) — exactly one pixel per column (per row for steep segments), corner-connected diagonals, never 2 px thick at any angle, and a single click sets exactly one pixel. Do NOT rasterize the pencil through tiny-skia path stroking: its non-AA scanline filler crosses the 50% coverage threshold depending on the subpixel position, so some diagonal pixels come out 2 px thick (ragged 1px/2px lines).
 
 | Tool | Width | LineCap | Antialias | Color | Note |
 |---|---|---|---|---|---|
-| Pencil | 1 | Round | **off** (`paint.anti_alias = false`) | primary/secondary | hard 1-pixel trail, like in Paint |
+| Pencil | 1 | — | — (integer Bresenham, not a tiny-skia stroke) | primary/secondary | hard 1-pixel trail, like in Paint: exactly one pixel per step at every angle |
 | Brush | `size` | Round | on | primary/secondary | hard round brush, like "Brush" in Paint.NET |
 | Eraser | `size` | Round | on | color ignored | **`paint.blend_mode = BlendMode::DestinationOut`** — erases to transparency |
 
@@ -389,7 +389,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 
 **Windows (native):**
 1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen).
-2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary.
+2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary; a diagonal at any angle is a 1 px staircase (classic Bresenham), never 2 px thick; a single click sets exactly one pixel.
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.
 5. Fast mouse zigzags leave no stroke gaps; drawing beyond the canvas edge does not panic and is clipped.
