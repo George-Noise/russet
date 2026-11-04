@@ -13,7 +13,9 @@ use crate::tools::{Tool, ToolState, draw_segment};
 
 const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 8.0;
-const ZOOM_STEP: f32 = 1.25;
+const ZOOM_STEP_FACTOR: f32 = 1.12;
+const ZOOM_SNAP_RATIO: f32 = 0.06;
+const TOOL_COLUMNS: usize = 1;
 const NEW_WIDTH: u32 = 800;
 const NEW_HEIGHT: u32 = 600;
 const MIN_CANVAS: u32 = 1;
@@ -188,6 +190,22 @@ impl App {
         }
     }
 
+    fn next_zoom(current: f32, zoom_in: bool) -> f32 {
+        let percent = current * 100.0;
+        let mut candidate = if zoom_in {
+            (percent * ZOOM_STEP_FACTOR).round()
+        } else {
+            (percent / ZOOM_STEP_FACTOR).round()
+        };
+        let nearest_hundred = (candidate / 100.0).round() * 100.0;
+        if nearest_hundred > 0.0
+            && (candidate - nearest_hundred).abs() / candidate <= ZOOM_SNAP_RATIO
+        {
+            candidate = nearest_hundred;
+        }
+        candidate.clamp(MIN_ZOOM * 100.0, MAX_ZOOM * 100.0) / 100.0
+    }
+
     fn handle_zoom(&mut self, ui: &egui::Ui, panel_rect: Rect, rect: Rect, hovered: bool) {
         if !hovered {
             return;
@@ -200,12 +218,7 @@ impl App {
             return;
         };
 
-        let factor = if scroll > 0.0 {
-            ZOOM_STEP
-        } else {
-            1.0 / ZOOM_STEP
-        };
-        let new_zoom = (self.zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM);
+        let new_zoom = Self::next_zoom(self.zoom, scroll > 0.0);
         if (new_zoom - self.zoom).abs() < f32::EPSILON {
             return;
         }
@@ -725,42 +738,35 @@ impl App {
         if !self.tools_window_open {
             return;
         }
+        let tools = [
+            (Tool::Pencil, "Pencil (P)"),
+            (Tool::Brush, "Brush (B)"),
+            (Tool::Eraser, "Eraser (E)"),
+        ];
         let mut open = true;
         egui::Window::new("Tools").open(&mut open).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui
-                    .selectable_label(self.tools.tool == Tool::Pencil, "Pencil (P)")
-                    .clicked()
-                {
-                    self.tools.tool = Tool::Pencil;
-                }
-                if ui
-                    .selectable_label(self.tools.tool == Tool::Brush, "Brush (B)")
-                    .clicked()
-                {
-                    self.tools.tool = Tool::Brush;
-                }
-                if ui
-                    .selectable_label(self.tools.tool == Tool::Eraser, "Eraser (E)")
-                    .clicked()
-                {
-                    self.tools.tool = Tool::Eraser;
-                }
-            });
+            egui::Grid::new("tools_grid")
+                .num_columns(TOOL_COLUMNS)
+                .spacing([4.0, 2.0])
+                .show(ui, |ui| {
+                    for row in tools.chunks(TOOL_COLUMNS) {
+                        for (tool, label) in row {
+                            if ui
+                                .selectable_label(self.tools.tool == *tool, *label)
+                                .clicked()
+                            {
+                                self.tools.tool = *tool;
+                            }
+                        }
+                        ui.end_row();
+                    }
+                });
 
             let is_pencil = self.tools.tool == Tool::Pencil;
             ui.add_enabled(
                 !is_pencil,
                 egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"),
             );
-
-            ui.separator();
-            ui.horizontal(|ui| {
-                color_swatch(ui, self.tools.primary, 24.0);
-                ui.label("Primary");
-                color_swatch(ui, self.tools.secondary, 24.0);
-                ui.label("Secondary");
-            });
         });
         if !open {
             self.tools_window_open = false;
@@ -916,6 +922,31 @@ fn color_swatch(ui: &mut egui::Ui, color: Color32, size: f32) {
         egui::Stroke::new(1.0, Color32::from_gray(40)),
         egui::StrokeKind::Inside,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::App;
+
+    fn percent(zoom: f32) -> i32 {
+        (zoom * 100.0).round() as i32
+    }
+
+    #[test]
+    fn zoom_in_sequence_matches_paint_net() {
+        let mut zoom = 1.0;
+        for expected in [112, 125, 140, 157, 176, 200, 224, 251, 281, 300] {
+            zoom = App::next_zoom(zoom, true);
+            assert_eq!(percent(zoom), expected);
+        }
+    }
+
+    #[test]
+    fn zoom_out_returns_to_100_and_clamps() {
+        assert_eq!(percent(App::next_zoom(1.12, false)), 100);
+        assert_eq!(percent(App::next_zoom(8.0, true)), 800);
+        assert_eq!(percent(App::next_zoom(0.1, false)), 10);
+    }
 }
 
 impl eframe::App for App {
