@@ -8,7 +8,7 @@ use crate::file_io;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::{WebOutcome, WebTask};
 use crate::history::History;
-use crate::palette::COLORS;
+use crate::palette::{COLORS, COLS, GRID_WIDTH, ROWS, TILE};
 use crate::tools::{Tool, ToolState, draw_segment};
 
 /// Canvas texture at integer zoom (100%..=800%): the canvas rect is snapped
@@ -871,21 +871,35 @@ impl App {
             .open(&mut open)
             .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {
-                let grid = egui::Grid::new("palette_grid")
-                    .spacing([2.0, 2.0])
+                // Top: the primary/secondary color wells. A click on a well
+                // opens egui's color picker for that color (the former
+                // "Custom…" button, one per color); Swap sits to the right.
+                ui.horizontal(|ui| {
+                    color_swell_button(ui, &mut self.tools.primary, 32.0);
+                    color_swell_button(ui, &mut self.tools.secondary, 32.0);
+                    if ui.button("Swap (X)").clicked() {
+                        std::mem::swap(&mut self.tools.primary, &mut self.tools.secondary);
+                    }
+                });
+
+                // A plain ui.separator() fills all available width; inside an
+                // auto-sized window that width feeds back into the window size
+                // until the window spans the whole screen. Pin the divider to
+                // the swatch-grid width instead (6.0 pt = default height).
+                ui.add_sized([GRID_WIDTH, 6.0], egui::Separator::default());
+
+                // Bottom: the seamless preset grid — tiles touch each other
+                // (gap 0) and have no outline. LMB sets the primary color,
+                // RMB the secondary.
+                egui::Grid::new("palette_grid")
+                    .spacing([0.0, 0.0])
                     .show(ui, |ui| {
-                        for row in 0..2 {
-                            for col in 0..10 {
-                                let color = COLORS[row * 10 + col];
+                        for row in 0..ROWS {
+                            for col in 0..COLS {
+                                let color = COLORS[row * COLS + col];
                                 let (rect, response) =
-                                    ui.allocate_exact_size(egui::vec2(20.0, 20.0), Sense::click());
+                                    ui.allocate_exact_size(egui::vec2(TILE, TILE), Sense::click());
                                 ui.painter().rect_filled(rect, 0.0, color);
-                                ui.painter().rect_stroke(
-                                    rect,
-                                    0.0,
-                                    egui::Stroke::new(1.0, Color32::from_gray(40)),
-                                    egui::StrokeKind::Inside,
-                                );
                                 if response.clicked() {
                                     self.tools.primary = color;
                                 }
@@ -896,27 +910,6 @@ impl App {
                             ui.end_row();
                         }
                     });
-                let grid_width = grid.response.rect.width();
-
-                // A plain ui.separator() fills all available width; inside an
-                // auto-sized window that width feeds back into the window size
-                // until the window spans the whole screen. Pin the divider to
-                // the swatch-grid width instead (6.0 pt = default height).
-                ui.add_sized([grid_width, 6.0], egui::Separator::default());
-                ui.horizontal(|ui| {
-                    color_swatch(ui, self.tools.primary, 32.0);
-                    ui.label("Primary");
-                    color_swatch(ui, self.tools.secondary, 32.0);
-                    ui.label("Secondary");
-                });
-
-                ui.horizontal(|ui| {
-                    if ui.button("Swap (X)").clicked() {
-                        std::mem::swap(&mut self.tools.primary, &mut self.tools.secondary);
-                    }
-                    ui.label("Custom…");
-                    ui.color_edit_button_srgba(&mut self.tools.primary);
-                });
             });
         if !open {
             self.palette_window_open = false;
@@ -1013,15 +1006,39 @@ impl App {
     }
 }
 
-fn color_swatch(ui: &mut egui::Ui, color: Color32, size: f32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), Sense::hover());
-    ui.painter().rect_filled(rect, 2.0, color);
+/// A primary/secondary color well: keeps the classic swatch look, but a
+/// click opens egui's built-in color picker for THIS color (each well edits
+/// its own color; there are no captions).
+fn color_swell_button(ui: &mut egui::Ui, color: &mut Color32, size: f32) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), Sense::click());
+    ui.painter().rect_filled(rect, 2.0, *color);
     ui.painter().rect_stroke(
         rect,
         2.0,
         egui::Stroke::new(1.0, Color32::from_gray(40)),
         egui::StrokeKind::Inside,
     );
+
+    // Same wiring as egui's own color button (color_edit_button_hsva): a
+    // click toggles the popup; the HSV state is re-derived from the current
+    // color every frame and written back only when the picker changed it.
+    let mut hsva = egui::ecolor::Hsva::from(*color);
+    let mut button_response = response;
+    egui::Popup::menu(&button_response)
+        .id(button_response.id.with("color_popup"))
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            ui.spacing_mut().slider_width = 275.0;
+            if egui::color_picker::color_picker_hsva_2d(
+                ui,
+                &mut hsva,
+                egui::color_picker::Alpha::Opaque,
+            ) {
+                *color = Color32::from(hsva);
+                button_response.mark_changed();
+            }
+        });
+    button_response
 }
 
 #[cfg(test)]

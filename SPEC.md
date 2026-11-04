@@ -111,7 +111,7 @@ russet/
     tools.rs      — enum Tool, struct ToolState, stroke segment rasterization
     history.rs    — snapshot-based undo/redo
     file_io.rs    — open/save PNG/JPEG; the ONLY place with native/web cfg branches
-    palette.rs    — fixed array of 20 preset colors
+    palette.rs    — fixed array of 34 preset colors (2 rows × 17)
 ```
 
 ### 2.1 `main.rs` — skeleton (both platforms at once, following the eframe_template)
@@ -214,18 +214,20 @@ Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`W
 - The Tools window must NOT show the currently selected Primary/Secondary colors. Color previews and color selection live only in the Palette window.
 
 ### 3.3 "Palette" window
-Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). No width-filling widgets are allowed inside: a plain `ui.separator()` fills all available width, and in an auto-sized window that width feeds back into the window size until the window spans the whole screen. The divider is pinned to the swatch-grid width: capture `Grid::show(...).response.rect.width()` and draw the separator with `ui.add_sized([grid_width, 6.0], egui::Separator::default())`.
+Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). No width-filling widgets are allowed inside: a plain `ui.separator()` fills all available width, and in an auto-sized window that width feeds back into the window size until the window spans the whole screen. The divider is pinned to the swatch-grid width: `ui.add_sized([GRID_WIDTH, 6.0], egui::Separator::default())`, where `GRID_WIDTH = COLS as f32 * TILE` comes from `palette.rs`.
 
-- A 10×2 grid of 20 preset colors (classic MS Paint palette), fixed in `palette.rs`:
+Layout, top to bottom:
 
-  | | | | | | | | | | |
-  |---|---|---|---|---|---|---|---|---|---|
-  | `#000000` | `#7F7F7F` | `#880015` | `#ED1C24` | `#FF7F27` | `#FFF200` | `#22B14C` | `#00A2E8` | `#3F48CC` | `#A349A4` |
-  | `#FFFFFF` | `#C3C3C3` | `#B97A57` | `#FFAEC9` | `#FFC90E` | `#EFE4B0` | `#B5E61D` | `#99D9EA` | `#7092BE` | `#C8BFE7` |
+1. **Primary/Secondary color wells** (32×32) with the "Swap (X)" button to their right. No text captions — the wells are visually self-explanatory. Clicking a well opens the built-in egui color picker for THAT well's color (the former "Custom…" button, now one per color). The well is drawn manually (filled rect, corner radius 2, 1 px `from_gray(40)` inside stroke) and wired like egui's own color button: `Popup::menu(&response)` + `color_picker::color_picker_hsva_2d(…, Alpha::Opaque)`, writing the value back only when the picker reports a change. Do not write a custom HSV picker.
+2. **The divider** (pinned width, see above).
+3. **The preset grid** — a seamless 17×2 grid of 34 colors: tile gap 0 (`Grid::spacing([0.0, 0.0])`), tiles 20×20, painted with `rect_filled` only, **no outline stroke**. Only the set of colors and their order are taken from the original Russet web palette (russetpaint.github.io) — nothing else is borrowed from it. The grid is fixed in `palette.rs`:
+
+  | | | | | | | | | | | | | | | | | |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | `#000000` | `#404040` | `#6B6B6B` | `#FF0000` | `#FF6A00` | `#FFD800` | `#B6FF00` | `#4CFF00` | `#00FF21` | `#00FF90` | `#00FFFF` | `#0094FF` | `#0026FF` | `#4800FF` | `#B200FF` | `#FF00DC` | `#FF006E` |
+  | `#FFFFFF` | `#C2C2C2` | `#949494` | `#7F0000` | `#7F3300` | `#7F6A00` | `#5B7F00` | `#267F00` | `#007F0E` | `#007F46` | `#007F7F` | `#004A7F` | `#00137F` | `#21007F` | `#57007F` | `#7F006E` | `#7F0037` |
 
 - LMB click on a swatch — set Primary; RMB click — set Secondary.
-- Two large Primary/Secondary cells and a "Swap (X)" button.
-- "Custom…" button — the built-in `ui.color_edit_button_srgba` for Primary. Do not write a custom HSV picker.
 
 ### 3.4 Canvas: display, zoom, pan, coordinates
 
@@ -343,7 +345,7 @@ Unit tests: `History` — 20-snapshot limit and eviction; push clears redo.
 
 ### M4. UI: menu and windows
 Menu from §3.1 (file and undo items are no-op stubs for now), "Tools" window from §3.2, "Palette" window from §3.3, window checkboxes in View. Ensure that clicks on windows do not paint on the canvas underneath them (egui does this itself — verify).
-**Done:** the tool can be selected from the window too, size changes with the slider; palette LMB/RMB changes colors, "Swap (X)" works, "Custom…" opens the egui picker; windows can be reopened from View.
+**Done:** the tool can be selected from the window too, size changes with the slider; palette LMB/RMB changes colors, "Swap (X)" works, clicking a color well opens the egui picker for that color; windows can be reopened from View.
 
 ### M5. Files (native, Windows)
 `file_io.rs`: New (dialog + confirmation), Open, Save, Save As per §3.7 — synchronous rfd dialogs; `dirty`, `display_name`, `current_path`, window title via `ViewportCommand::Title`; "Error" popup. Do NOT implement web branches — they will appear in M8.
@@ -388,7 +390,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**
-1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen).
+1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen); in the Palette window the Primary/Secondary wells (no captions) and "Swap (X)" are on top, the seamless gap-0 swatch grid is below, and clicking a well opens the color picker for that well.
 2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary; a diagonal at any angle is a 1 px staircase (classic Bresenham), never 2 px thick; a single click sets exactly one pixel.
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.
