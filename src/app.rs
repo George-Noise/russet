@@ -11,11 +11,13 @@ use crate::history::History;
 use crate::palette::COLORS;
 use crate::tools::{Tool, ToolState, draw_segment};
 
-/// Canvas texture: crisp pixels when zoomed in, averaged when zoomed out
-/// (trilinear, like Paint.NET/Photoshop). Plain NEAREST drops whole texel
-/// rows/columns when minified (zoom < 100%, and also "100%" at Windows DPI 125/150%).
+/// Canvas texture: smooth bilinear/trilinear sampling at EVERY zoom level,
+/// zoomed in and out alike (the Paint.NET-style look). Point magnification
+/// makes "100%" uneven under Windows DPI 125/150% (texel widths alternate
+/// 1/2 px) and drops texel rows/columns at fractional screen offsets;
+/// point minification skips whole texel rows/columns when zoomed out.
 const CANVAS_TEXTURE_OPTIONS: egui::TextureOptions = egui::TextureOptions {
-    magnification: egui::TextureFilter::Nearest,
+    magnification: egui::TextureFilter::Linear,
     minification: egui::TextureFilter::Linear,
     wrap_mode: egui::TextureWrapMode::ClampToEdge,
     mipmap_mode: Some(egui::TextureFilter::Linear),
@@ -25,6 +27,10 @@ const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 8.0;
 const ZOOM_STEP_FACTOR: f32 = 1.12;
 const ZOOM_SNAP_RATIO: f32 = 0.06;
+/// egui's raw wheel delta (40 pt per notch on native) pans slower than
+/// Paint.NET; scaled up so panning feels ~1.5x slower than Paint.NET
+/// (owner-tuned).
+const SCROLL_PAN_SPEED: f32 = 1.5;
 const TOOL_COLUMNS: usize = 1;
 const NEW_WIDTH: u32 = 800;
 const NEW_HEIGHT: u32 = 600;
@@ -259,9 +265,9 @@ impl App {
                 let new_zoom = Self::next_zoom(self.zoom, scroll > 0.0);
                 self.set_zoom(new_zoom, Some(cursor), panel_rect);
             } else if modifiers.shift {
-                self.pan.x += delta.x + delta.y;
+                self.pan.x += (delta.x + delta.y) * SCROLL_PAN_SPEED;
             } else {
-                self.pan.y += delta.y;
+                self.pan.y += delta.y * SCROLL_PAN_SPEED;
             }
         }
     }
