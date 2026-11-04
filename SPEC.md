@@ -214,7 +214,7 @@ Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`W
 - The Tools window must NOT show the currently selected Primary/Secondary colors. Color previews and color selection live only in the Palette window.
 
 ### 3.3 "Palette" window
-Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it).
+Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). No width-filling widgets are allowed inside: a plain `ui.separator()` fills all available width, and in an auto-sized window that width feeds back into the window size until the window spans the whole screen. The divider is pinned to the swatch-grid width: capture `Grid::show(...).response.rect.width()` and draw the separator with `ui.add_sized([grid_width, 6.0], egui::Separator::default())`.
 
 - A 10×2 grid of 20 preset colors (classic MS Paint palette), fixed in `palette.rs`:
 
@@ -388,7 +388,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**
-1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles.
+1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen).
 2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary.
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.

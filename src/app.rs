@@ -871,7 +871,7 @@ impl App {
             .open(&mut open)
             .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {
-                egui::Grid::new("palette_grid")
+                let grid = egui::Grid::new("palette_grid")
                     .spacing([2.0, 2.0])
                     .show(ui, |ui| {
                         for row in 0..2 {
@@ -896,8 +896,13 @@ impl App {
                             ui.end_row();
                         }
                     });
+                let grid_width = grid.response.rect.width();
 
-                ui.separator();
+                // A plain ui.separator() fills all available width; inside an
+                // auto-sized window that width feeds back into the window size
+                // until the window spans the whole screen. Pin the divider to
+                // the swatch-grid width instead (6.0 pt = default height).
+                ui.add_sized([grid_width, 6.0], egui::Separator::default());
                 ui.horizontal(|ui| {
                     color_swatch(ui, self.tools.primary, 32.0);
                     ui.label("Primary");
