@@ -11,6 +11,16 @@ use crate::history::History;
 use crate::palette::COLORS;
 use crate::tools::{Tool, ToolState, draw_segment};
 
+/// Canvas texture: crisp pixels when zoomed in, averaged when zoomed out
+/// (trilinear, like Paint.NET/Photoshop). Plain NEAREST drops whole texel
+/// rows/columns when minified (zoom < 100%, and also "100%" at Windows DPI 125/150%).
+const CANVAS_TEXTURE_OPTIONS: egui::TextureOptions = egui::TextureOptions {
+    magnification: egui::TextureFilter::Nearest,
+    minification: egui::TextureFilter::Linear,
+    wrap_mode: egui::TextureWrapMode::ClampToEdge,
+    mipmap_mode: Some(egui::TextureFilter::Linear),
+};
+
 const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 8.0;
 const ZOOM_STEP_FACTOR: f32 = 1.12;
@@ -67,7 +77,7 @@ impl App {
                 [canvas.width as usize, canvas.height as usize],
                 canvas.data(),
             ),
-            egui::TextureOptions::NEAREST,
+            CANVAS_TEXTURE_OPTIONS,
         );
 
         let checker = egui::ColorImage::new(
@@ -872,11 +882,8 @@ impl App {
             [region_w as usize, region_h as usize],
             &bytes,
         );
-        self.canvas_tex.set_partial(
-            [x0 as usize, y0 as usize],
-            image,
-            egui::TextureOptions::NEAREST,
-        );
+        self.canvas_tex
+            .set_partial([x0 as usize, y0 as usize], image, CANVAS_TEXTURE_OPTIONS);
     }
 
     fn repaint_full(&mut self) {
@@ -884,7 +891,7 @@ impl App {
             [self.canvas.width as usize, self.canvas.height as usize],
             self.canvas.data(),
         );
-        self.canvas_tex.set(image, egui::TextureOptions::NEAREST);
+        self.canvas_tex.set(image, CANVAS_TEXTURE_OPTIONS);
     }
 
     fn draw_canvas(&mut self, ui: &mut egui::Ui, panel_rect: Rect) {
