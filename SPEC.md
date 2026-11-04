@@ -14,9 +14,7 @@
 
 ## 0. Goal
 
-A single-window raster application **"Russet"**: a canvas with drawing via three tools
-(pencil, brush, eraser), a top menu, floating "Tools" and "Palette" windows,
-undo/redo, zoom/pan, and PNG/JPEG open and save.
+A single-window raster application **"Russet"**: a canvas with drawing via three tools (pencil, brush, eraser), a top menu, floating "Tools" and "Palette" windows, undo/redo, zoom/pan, and PNG/JPEG open and save.
 
 - **Platforms.** Development and running — **Windows**. A **web build (WASM, via trunk)** is required — milestone M8. Do not test the Linux build now (the code is portable anyway; `std::path` is allowed only in `file_io.rs`). **macOS is permanently out of scope** (the project owner has no Mac and never will).
 - **UI language — English only.** All menu, button, dialog, and title labels are hardcoded English strings (lists are in §3). There will never be translations: do not add i18n.
@@ -222,13 +220,20 @@ Floating `egui::Window` titled "Palette", open by default.
 - The canvas is drawn in `egui::CentralPanel`. Panel background — dark gray `#404040`.
 - Under the image — a "checkerboard" (transparency): generate one 2×2 pixel texture once (colors `#FFFFFF` and `#CCCCCC`) with `TextureOptions` and Repeat wrap mode, draw it with `painter().image(...)` using uv values proportional to the on-screen canvas size (tile ~16 screen pixels). If Repeat causes problems — the acceptable fallback is a solid `#999999` fill.
 - On top of the checkerboard — the canvas texture: `painter().image(canvas_tex.id(), screen_rect, uv(0..1), Color32::WHITE)`, where `screen_rect = Rect::from_min_size(panel_center + pan - size*zoom/2, canvas_size * zoom)`.
-- **Mouse wheel zoom — always toward the cursor position, through discrete Paint.NET-style zoom levels.** Zoom must be implemented as a dedicated step method (for example `next_zoom(current, direction)`) instead of an inline continuous multiplier:
+- **Zoom percentage indicator.** In the **bottom-right corner** of the `CentralPanel`, draw a small, **low-contrast** label showing the current zoom percentage, e.g. `"100%"`. Use a muted gray (e.g. `Color32::from_gray(140)`) so it does not stand out against the `#404040` panel background. Use `painter().text(...)` (or a small overlay `Area` with a `Label`) — do **not** add a status-bar panel (out of scope, §6). Always visible.
+- **Zoom is abrupt, not smooth.** Every zoom change (Ctrl+wheel, Ctrl+0, Fit to Window, menu) must jump instantly to the next discrete level, in the same frame. Do **not** use `ctx.animate_value_with_time`, `lerp`, or any other time-based interpolation for the zoom value. The canvas rect is recomputed with the new `zoom` in the same frame.
+- **Zoom — `Ctrl` + mouse wheel**, always toward the cursor position, through discrete Paint.NET-style zoom levels. Plain wheel (no modifiers) does **not** zoom; `Shift` + wheel does **not** zoom. Zoom must be implemented as a dedicated step method (for example `next_zoom(current, direction)`) instead of an inline continuous multiplier:
   - zoom in: `candidate = round(current * 1.12)`;
   - zoom out: `candidate = round(current / 1.12)`;
   - if the nearest multiple of 100% is within 6% of the candidate, snap to that multiple;
   - clamp to 10%..=800%.
   Zooming in from 100% must produce exactly: 112, 125, 140, 157, 176, 200, 224, 251, 281, 300, ... (same behavior as Paint.NET). The anchor formula is mandatory:
   `p = (cursor - rect.min) / zoom;` after changing `zoom`: `rect.min' = cursor - p * zoom_new`.
+- **Scroll without modifiers — vertical pan.** Plain mouse wheel adjusts `pan.y` by the raw scroll delta (scroll up/down moves the view vertically). No horizontal change.
+- **`Shift` + scroll — horizontal pan.** `Shift` + mouse wheel adjusts `pan.x` by the raw scroll delta (moves the view left/right). No vertical change.
+- **Console log on zoom change.** Centralize zoom updates in a single function and, on every change, emit:
+  `log::info!("Zoom: {}%", (zoom * 100.0).round() as i32);`
+  Native dev builds: run with `RUST_LOG=info` to see it (the default `env_logger` filter is `error`). Web: `WebLogger` is initialized at `Debug`, so it goes to the browser console without further config. Do not duplicate the log call.
 - **Pan**: middle-button drag OR LMB drag while Space is held. Space-pan has priority: while Space is held, a stroke must not start. Space state — via `ctx.input(...).key_down(Key::Space)`.
 - Zoom reset to 100%: Ctrl+0 and the "Zoom 100%" menu item; "Fit to Window" — `zoom = min(panel_w/canvas_w, panel_h/canvas_h)`, clamped to the same range.
 - **Coordinate conversion (critical):** screen point → canvas point: `p_canvas = (screen_pos - rect.min) / zoom`; pixel: `(floor(p_canvas.x), floor(p_canvas.y))`; cast numbers explicitly to `i32`/`u32`; before indexing check `0 <= x < width` and `0 <= y < height`. Drawing outside canvas bounds is clipped, never panics.
@@ -251,7 +256,7 @@ Segment rasterization — in `tools.rs`, via `tiny-skia`: `PathBuilder` line fro
 | Brush | `size` | Round | on | primary/secondary | hard round brush, like "Brush" in Paint.NET |
 | Eraser | `size` | Round | on | color ignored | **`paint.blend_mode = BlendMode::DestinationOut`** — erases to transparency |
 
-Coordinate limits: segment points — `f32` in canvas space; clip to `0..width`, `0..height` on the rasterization side (clip the segment or rely on `tiny_skia` bounds checks — at the agent's discretion, but without panics and without going outside the `Pixmap`).
+Coordinate limits: segment points — `f32` in canvas space; clip to `0..width`, `0..height` on the rasterization side (clip the segment or rely on `tiny-skia` bounds checks — at the agent's discretion, but without panics and without going outside the `Pixmap`).
 
 ### 3.6 Undo / Redo
 
@@ -286,7 +291,9 @@ On OK: `history.push_snapshot()`, then `canvas.resize_canvas(w, h)` — content 
 | `Ctrl+0` | Zoom 100% |
 | `[` / `]` | Brush/Eraser size −1 / +1 (clamped 1..=100) |
 | `Space` (hold) + LMB drag | pan |
-| Mouse wheel | zoom toward cursor through the §3.4 zoom-step method |
+| `Ctrl` + mouse wheel | zoom toward cursor through the §3.4 zoom-step method (abrupt, no smoothing) |
+| mouse wheel (no modifiers) | vertical pan |
+| `Shift` + mouse wheel | horizontal pan |
 
 Implementation: via `ctx.input_mut(|i| i.consume_key(...))` and modifiers; **must** be gated by `!ctx.wants_keyboard_input()` — hotkeys must not fire while focus is in dialog input fields. Do not add other hotkeys. On web the browser may keep some Ctrl combinations for itself — do not fight it; menu items must always work.
 
@@ -307,8 +314,8 @@ Package `russet` (edition 2024), Cargo.toml from §1, `main.rs` with both entry 
 **Done:** `cargo run` on Windows opens a 1200×800 window titled "Russet"; check/clippy/fmt are clean.
 
 ### M1. Canvas on screen + zoom/pan
-`Canvas` 800×600, filled white; egui texture (`ColorImage::from_rgba_premultiplied`); checkerboard; drawing in CentralPanel using the §3.4 formulas; wheel zoom toward cursor through the §3.4 discrete zoom-step method; middle-button pan and Space+LMB; Ctrl+0 and "Fit to Window".
-**Done:** wheel zoom steps toward the cursor through the Paint.NET-style levels across the whole 10–800% range; pan works; when the window is resized, the canvas stays in place relative to `pan`.
+`Canvas` 800×600, filled white; egui texture (`ColorImage::from_rgba_premultiplied`); checkerboard; drawing in CentralPanel using the §3.4 formulas; **`Ctrl`+wheel** zoom toward cursor through the §3.4 discrete zoom-step method (abrupt, no smoothing); **plain wheel = vertical pan, `Shift`+wheel = horizontal pan**; middle-button pan and Space+LMB; Ctrl+0 and "Fit to Window"; **low-contrast zoom-percentage label in the bottom-right of the CentralPanel**; **`log::info!` of the new zoom % on every zoom change**.
+**Done:** `Ctrl`+wheel zoom steps toward the cursor through the Paint.NET-style levels across the whole 10–800% range (abrupt, no smoothing); plain wheel pans vertically, `Shift`+wheel horizontally; pan works via middle-button and Space+LMB; when the window is resized, the canvas stays in place relative to `pan`; the zoom % label is visible in the bottom-right corner and the console shows each zoom change (with `RUST_LOG=info` on native / automatically on web).
 
 ### M2. Dirty-region texture updates
 Method `App::sync_texture(rect)`: the region is read from the `Pixmap` and the texture is updated via `set_partial` (the region position is in texture pixels!). `App::repaint_full()` stub — a full `set`.
@@ -329,7 +336,7 @@ Menu from §3.1 (file and undo items are no-op stubs for now), "Tools" window fr
 **Done:** a PNG with transparency saves and opens correctly; JPEG opens and saves on a white background; Ctrl+S on a new file opens the save dialog; the unsaved-changes confirmation works; the title shows `*`.
 
 ### M6. Undo/Redo + hotkeys
-Bind undo/redo to the menu and the §3.9 keys; full texture update on undo/redo; disable menu items when history is empty; all hotkeys from the §3.9 table including `[`/`]`; gate with `wants_keyboard_input`.
+Bind undo/redo to the menu and the §3.9 keys; full texture update on undo/redo; disable menu items when history is empty; all hotkeys from the §3.9 table including `[`/`]`; gate with `wants_keyboard_input`. The scroll controls (`Ctrl`+wheel, plain wheel, `Shift`+wheel) must match the §3.9 table.
 **Done:** 20 undo steps with a large number of strokes; redo works until a new stroke; hotkeys do not fire while focus is in dialog input fields.
 
 ### M7. Resize Canvas + New
@@ -337,8 +344,8 @@ Dialog from §3.8: history snapshot, resize with content preserved (top-left anc
 **Done:** enlarging and shrinking the canvas does not lose the drawing, the added area is transparent; undo after resize restores the previous size and content.
 
 ### M8. Web build (WASM)
-Set up web per §8 (`rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`), add `index.html` from §2.1/§2.2, run `trunk serve` and get the app working in the browser. Then add web branches to `file_io.rs` per §3.10 (`AsyncFileDialog`: open via `read()`, save via `save_file().write()`, result via `Arc<Mutex<Option<...>>>` + `ctx.request_repaint()`); cfg forks at `app.rs` call sites. Verify in the browser: drawing, zoom/pan, undo, Open/Save.
-**Done:** in the browser at `http://localhost:8080` all three tools draw, the eraser makes pixels transparent, PNG opens and downloads, the tab title updates; `trunk build --release` succeeds.
+Set up web per §8 (`rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`), add `index.html` from §2.1/§2.2, run `trunk serve` and get the app working in the browser. Then add web branches to `file_io.rs` per §3.10 (`AsyncFileDialog`: open via `read()`, save via `save_file().write()`, result via `Arc<Mutex<Option<...>>>` + `ctx.request_repaint()`); cfg forks at `app.rs` call sites. Verify in the browser: drawing, `Ctrl`+wheel zoom, wheel / `Shift`+wheel pan, undo, Open/Save.
+**Done:** in the browser at `http://localhost:8080` all three tools draw, the eraser makes pixels transparent, PNG opens and downloads, the tab title updates, `Ctrl`+wheel zoom and wheel / `Shift`+wheel pan work, zoom % label and zoom-change console log are visible; `trunk build --release` succeeds.
 
 ### M9. Acceptance and polish
 Run the §7 checklist in full (Windows + web), fix what is found. Optional (only if everything else is ready): round brush/eraser cursor preview (a circle outline with radius `size/2 * zoom` at the current cursor position).
@@ -348,14 +355,14 @@ Run the §7 checklist in full (Windows + web), fix what is found. Optional (only
 
 1. **Premultiplied alpha.** tiny-skia's `Pixmap` is premultiplied RGBA8. In egui use `ColorImage::from_rgba_premultiplied`, otherwise semi-transparent colors will look wrong. When writing files, account for premultiplication when compositing onto white (or demultiply before creating `image::RgbaImage`).
 2. **`set_partial`**: the first argument is the region position/rectangle IN TEXTURE COORDINATES, and the data must be exactly `w*h*4` bytes for the region. A size mismatch panics egui.
-3. **Zoom toward cursor** must use the anchor formula and the discrete zoom-step method from §3.4, otherwise the canvas "drifts" or the wheel produces the wrong percentage sequence.
+3. **Zoom toward cursor** must use the anchor formula and the discrete zoom-step method from §3.4, otherwise the canvas "drifts" or the wheel produces the wrong percentage sequence. Zoom is bound to **`Ctrl`+wheel only**; plain wheel must pan vertically, `Shift`+wheel must pan horizontally. Zoom is applied **abruptly** — no smoothing or animation; do not use `ctx.animate_value_with_time`.
 4. **Coordinates**: all screen→canvas→pixel conversions are explicit (`f32` → `floor` → `i32`/`u32` + clamp/bounds check). Unchecked `as` casts are a source of panics at boundaries.
 5. **`eframe::App` signature** in 0.37 differs from old tutorials (the method may not be named `update`). Do not copy old code — look at the template for the same version and at compiler messages.
 6. **Eraser** is `BlendMode::DestinationOut` on the `Pixmap`, not drawing with the background color.
 7. **Right click**: CentralPanel has no context menu by default, but do not call `context_menu`: RMB with pencil/brush = secondary color, with eraser = erase.
 8. **Space-pan**: while Space is held — do not start a stroke; if a stroke is already in progress, Space does not interrupt it (pan activates only on the next press).
 9. **rfd: platforms differ.** Native (Windows) — synchronous `rfd::FileDialog`. Web — ONLY `rfd::AsyncFileDialog` (the synchronous one panics under wasm) + `spawn_local` + `ctx.request_repaint()`.
-10. **Browser shortcuts**: on web, Ctrl+S/Ctrl+O/Ctrl+N may be captured by the browser — this is acceptable and not a "bug"; do not try to block browser behavior.
+10. **Browser shortcuts**: on web, Ctrl+S/Ctrl+O/Ctrl+N (and `Ctrl`+wheel page zoom) may be captured by the browser — this is acceptable and not a "bug"; do not try to block browser behavior.
 11. **UI strings** — hardcoded English only (§0). No `rust-i18n`/`fluent`/translation files.
 12. **Build**: the dev profile from §1 is already tuned for speed and cargo parallelizes automatically — do not change or disable anything. Do not run `cargo build --release` (slow fat-LTO) during development, except for the final M9 check.
 
@@ -371,7 +378,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.
 5. Fast mouse zigzags leave no stroke gaps; drawing beyond the canvas edge does not panic and is clipped.
-6. Wheel zoom toward cursor 10–800% with Paint.NET-style levels (from 100%: 112, 125, 140, 157, 176, 200, 224, 251, 281, 300); pan with middle button and Space+LMB; Ctrl+0 returns to 100%; Fit to Window fits the canvas.
+6. `Ctrl`+wheel zoom toward cursor 10–800% with Paint.NET-style levels (from 100%: 112, 125, 140, 157, 176, 200, 224, 251, 281, 300), applied abruptly (no smoothing); plain wheel pans vertically, `Shift`+wheel pans horizontally; pan with middle button and Space+LMB; Ctrl+0 returns to 100%; Fit to Window fits the canvas; zoom % label visible in the bottom-right of the panel; console logs each zoom change (with `RUST_LOG=info`).
 7. Undo/redo: a sequence of >20 strokes can be undone at most 20 steps and does not panic on empty history; redo is reset by a new stroke.
 8. New: 300×200 gives a white canvas; values 0 and 5000 are rejected; when dirty, a confirmation is shown.
 9. Open: a PNG with alpha is displayed correctly on the checkerboard (colors are not distorted — premultiplied check).
@@ -382,7 +389,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 
 **Web (browser):**
 14. `trunk serve`: the page opens, "Loading Russet…" disappears, the app fills the screen with no page scrolling.
-15. Drawing, eraser, zoom/pan, undo/redo work in the browser.
+15. Drawing, eraser, `Ctrl`+wheel zoom, plain-wheel vertical pan, `Shift`+wheel horizontal pan, middle/Space pan, undo/redo work in the browser; zoom % label is visible in the bottom-right; console logs each zoom change.
 16. Open opens a PNG; Save downloads a file with the correct name; JPEG downloads with a white background.
 17. The browser tab title shows `*Untitled - Russet` when dirty.
 18. There is no synchronous `rfd::FileDialog` call on web (AsyncFileDialog only) — the app does not panic during file operations.
