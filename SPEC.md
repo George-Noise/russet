@@ -25,7 +25,7 @@ A single-window raster application **"Russet"**: a canvas with drawing via three
 
 | Crate | Version | Purpose |
 |---|---|---|
-| `eframe` (includes `egui`) | `0.37` | window (winit inside), event loop, all UI, rendering (wgpu inside) |
+| `eframe` (includes `egui`) | `0.37` | window (winit inside), event loop, all UI, rendering (glow — OpenGL, mipmap-capable) |
 | `tiny-skia` | `0.11` | stroke rasterization into the `Pixmap` pixel buffer |
 | `image` | `0.25`, `default-features = false`, `features = ["png", "jpeg"]` | PNG and JPEG read/write |
 | `rfd` | `0.15` | open/save dialogs (native: synchronous; web: `AsyncFileDialog` only) |
@@ -44,7 +44,19 @@ edition = "2024"
 rust-version = "1.95"
 
 [dependencies]
-eframe = "0.37"
+# Renderer: default eframe features MINUS wgpu PLUS glow (OpenGL).
+# Rationale: no in-process Vulkan/D3D driver (~3-5x lower RAM), and glow is the
+# only renderer in egui 0.37 that supports TextureOptions::mipmap_mode (§3.4).
+eframe = { version = "0.37", default-features = false, features = [
+  "glow",
+  "accesskit",
+  "clipboard",
+  "default_fonts",
+  "links",
+  "system_fonts",
+  "wayland",
+  "x11",
+] }
 tiny-skia = "0.11"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 rfd = "0.15"
@@ -61,7 +73,7 @@ web-sys = "0.3"
 
 # FAST DEVELOPMENT:
 # - own code rebuilds without optimizations (fast);
-# - dependencies (eframe, wgpu, image...) are optimized ONCE and taken from cache —
+# - dependencies (eframe, glow, image...) are optimized ONCE and taken from cache —
 #   the UI stays responsive in dev builds;
 # - shorter debug info speeds up linking and barely loads the disk.
 [profile.dev]
@@ -220,6 +232,7 @@ Floating `egui::Window` titled "Palette", open by default.
 - The canvas is drawn in `egui::CentralPanel`. Panel background — dark gray `#404040`.
 - Under the image — a "checkerboard" (transparency): generate one 2×2 pixel texture once (colors `#FFFFFF` and `#CCCCCC`) with `TextureOptions` and Repeat wrap mode, draw it with `painter().image(...)` using uv values proportional to the on-screen canvas size (tile ~16 screen pixels). If Repeat causes problems — the acceptable fallback is a solid `#999999` fill.
 - On top of the checkerboard — the canvas texture: `painter().image(canvas_tex.id(), screen_rect, uv(0..1), Color32::WHITE)`, where `screen_rect = Rect::from_min_size(panel_center + pan - size*zoom/2, canvas_size * zoom)`.
+- **Canvas texture sampling (mandatory).** The canvas texture must NOT use plain `TextureOptions::NEAREST`: point sampling skips whole texel rows/columns when the texture is minified (zoom < 100%, and also at "100%" on Windows with display scaling 125%/150%, since `pixels_per_point` ≠ 1 — this is the "missing lines and columns" artifact). Define ONE shared options value and use it for creation and for every update of the canvas texture: `TextureOptions { magnification: TextureFilter::Nearest, minification: TextureFilter::Linear, wrap_mode: TextureWrapMode::ClampToEdge, mipmap_mode: Some(TextureFilter::Linear) }` — crisp pixels when zoomed in, averaged when zoomed out (the trilinear approach used by Paint.NET/Photoshop). `mipmap_mode` is supported only by the `glow` renderer (§1) and eframe regenerates mipmaps after every upload, including `set_partial`, so incremental stroke updates stay correct. This does not apply to the checkerboard texture — keep its existing options.
 - **Zoom percentage indicator.** In the **bottom-right corner** of the `CentralPanel`, draw a small, **low-contrast** label showing the current zoom percentage, e.g. `"100%"`. Use a muted gray (e.g. `Color32::from_gray(140)`) so it does not stand out against the `#404040` panel background. Use `painter().text(...)` (or a small overlay `Area` with a `Label`) — do **not** add a status-bar panel (out of scope, §6). Always visible.
 - **Zoom is abrupt, not smooth.** Every zoom change (Ctrl+wheel, Ctrl+0, Fit to Window, menu) must jump instantly to the next discrete level, in the same frame. Do **not** use `ctx.animate_value_with_time`, `lerp`, or any other time-based interpolation for the zoom value. The canvas rect is recomputed with the new `zoom` in the same frame.
 - **Zoom — `Ctrl` + mouse wheel**, always toward the cursor position, through discrete Paint.NET-style zoom levels. Plain wheel (no modifiers) does **not** zoom; `Shift` + wheel does **not** zoom. Zoom must be implemented as a dedicated step method (for example `next_zoom(current, direction)`) instead of an inline continuous multiplier:
