@@ -202,19 +202,19 @@ Page requirement: nothing scrolls (`overflow: hidden`), the canvas fills the scr
 `egui::TopBottomPanel` + `egui::menu::bar`. Items:
 
 - **File**: New… (Ctrl+N), Open… (Ctrl+O), Save (Ctrl+S), Save As… (Ctrl+Shift+S), separator, Exit (native build only; do not show on web).
-- **Edit**: Undo (Ctrl+Z), Redo (Ctrl+Y). Items are disabled when history is empty.
+- **Edit**: Undo (Ctrl+Z), Redo (Ctrl+Y; Ctrl+Shift+Z triggers the same redo action). Items are disabled when the corresponding stack is empty.
 - **Canvas**: Resize Canvas…
 - **View**: Zoom 100% (Ctrl+0), Fit to Window, separator, Tools and Palette checkboxes (open/close the corresponding windows).
 
 ### 3.2 "Tools" window
-Floating `egui::Window` titled "Tools", open by default, movable.
+Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it).
 
 - Tool buttons are stacked in a single column: "Pencil (P)", "Brush (B)", "Eraser (E)"; the active tool is visually highlighted (`selected`). The layout must already be prepared for growth: when more tools are added, it must be possible to switch to two columns without restructuring the window (use a configurable column count, not hardcoded row assumptions).
 - "Size" slider 1..=100 — affects brush and eraser; disabled for pencil.
 - The Tools window must NOT show the currently selected Primary/Secondary colors. Color previews and color selection live only in the Palette window.
 
 ### 3.3 "Palette" window
-Floating `egui::Window` titled "Palette", open by default.
+Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it).
 
 - A 10×2 grid of 20 preset colors (classic MS Paint palette), fixed in `palette.rs`:
 
@@ -229,7 +229,7 @@ Floating `egui::Window` titled "Palette", open by default.
 
 ### 3.4 Canvas: display, zoom, pan, coordinates
 
-- The canvas is drawn in `egui::CentralPanel`. Panel background — dark gray `#404040`.
+- The canvas is drawn in `egui::CentralPanel::no_frame()` (zero panel margin), so the dark gray `#404040` background reaches the window edges with no border.
 - Under the image — a "checkerboard" (transparency): generate one 2×2 pixel texture once (colors `#FFFFFF` and `#CCCCCC`) with `TextureOptions` and Repeat wrap mode, draw it with `painter().image(...)` using uv values proportional to the on-screen canvas size (tile ~16 screen pixels). If Repeat causes problems — the acceptable fallback is a solid `#999999` fill.
 - On top of the checkerboard — the canvas texture: `painter().image(canvas_tex.id(), screen_rect, uv(0..1), Color32::WHITE)`, where the screen rect comes from the physical pixel grid: zoom is defined in PHYSICAL screen pixels (100% = 1 texel per physical pixel — "honest" Actual Size at any Windows display scaling); physical size = `canvas_size * zoom`, `min_physical = ((panel_center + pan) * pixels_per_point - physical_size / 2).round()`, and the logical rect fed to egui is `min_physical / pixels_per_point` with size `physical_size / pixels_per_point`.
 - **Canvas texture sampling (mandatory).** Define TWO shared options consts and pick per current zoom for the creation and EVERY update of the canvas texture. At integer zoom ≥ 100% (100%, 200%, …, 800%) — `TextureOptions { magnification: TextureFilter::Nearest, minification: TextureFilter::Linear, wrap_mode: TextureWrapMode::ClampToEdge, mipmap_mode: Some(TextureFilter::Linear) }`: the rect is snapped to the physical pixel grid, so each texel covers an exact whole number of physical pixels and NEAREST is perfectly crisp (Paint.NET-style pixel grid for pencil work). At any other zoom (non-integer 112–281%, and everything < 100%) — `TextureOptions { magnification: TextureFilter::Linear, minification: TextureFilter::Linear, wrap_mode: TextureWrapMode::ClampToEdge, mipmap_mode: Some(TextureFilter::Linear) }`: smooth bilinear/trilinear sampling, no dropped rows/columns. When zoom crosses between a crisp and a smooth level, re-upload the texture once (a full `set` inside the zoom-change handler) so the new filter takes effect immediately. `mipmap_mode` is supported only by the `glow` renderer (§1); glow re-applies the sampler params on every upload, including `set_partial`, so switching options per zoom works. This does not apply to the checkerboard texture — keep its existing options.
@@ -299,7 +299,8 @@ On OK: `history.push_snapshot()`, then `canvas.resize_canvas(w, h)` — content 
 | Keys | Action |
 |---|---|
 | `P` / `B` / `E` | Pencil / Brush / Eraser |
-| `Ctrl+Z`, `Ctrl+Y` (and `Ctrl+Shift+Z`) | Undo / Redo |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y`, `Ctrl+Shift+Z` | Redo (both keys) |
 | `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S` | New / Open / Save / Save As |
 | `Ctrl+0` | Zoom 100% |
 | `[` / `]` | Brush/Eraser size −1 / +1 (clamped 1..=100) |
@@ -308,7 +309,7 @@ On OK: `history.push_snapshot()`, then `canvas.resize_canvas(w, h)` — content 
 | mouse wheel (no modifiers) | vertical pan |
 | `Shift` + mouse wheel | horizontal pan |
 
-Implementation: via `ctx.input_mut(|i| i.consume_key(...))` and modifiers; **must** be gated by `!ctx.wants_keyboard_input()` — hotkeys must not fire while focus is in dialog input fields. Do not add other hotkeys. On web the browser may keep some Ctrl combinations for itself — do not fight it; menu items must always work.
+Implementation: via `ctx.input_mut(|i| i.consume_key(...))` and modifiers; **must** be gated by `!ctx.wants_keyboard_input()` — hotkeys must not fire while focus is in dialog input fields. Do not add other hotkeys. egui matches modifiers logically (extra Shift/Alt are ignored), so test the most specific shortcut first: `Ctrl+Shift+Z` (redo) before `Ctrl+Z` (undo); the redo keys are consumed even when the redo stack is empty, so an exhausted stack is a no-op and never falls through to undo. On web the browser may keep some Ctrl combinations for itself — do not fight it; menu items must always work.
 
 ### 3.10 Web build (WASM) — specifics
 
@@ -387,13 +388,13 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**
-1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors.
+1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles.
 2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary.
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.
 5. Fast mouse zigzags leave no stroke gaps; drawing beyond the canvas edge does not panic and is clipped.
 6. `Ctrl`+wheel zoom toward cursor 10–800% with Paint.NET-style levels (from 100%: 112, 125, 140, 157, 176, 200, 224, 251, 281, 300), applied abruptly (no smoothing); plain wheel pans vertically, `Shift`+wheel pans horizontally; pan with middle button and Space+LMB; Ctrl+0 returns to 100%; Fit to Window fits the canvas; zoom % label visible in the bottom-right of the panel; console logs each zoom change (with `RUST_LOG=info`); at 100%/200%/…/800% on any Windows display scaling the canvas is pixel-exact (each texel an exact whole number of physical pixels), non-integer zoom and < 100% are smoothly interpolated.
-7. Undo/redo: a sequence of >20 strokes can be undone at most 20 steps and does not panic on empty history; redo is reset by a new stroke.
+7. Undo/redo: a sequence of >20 strokes can be undone at most 20 steps and does not panic on empty history; redo is reset by a new stroke; Ctrl+Y and Ctrl+Shift+Z both redo, and Ctrl+Shift+Z never performs undo (including when there is nothing to redo).
 8. New: 300×200 gives a white canvas; values 0 and 5000 are rejected; when dirty, a confirmation is shown.
 9. Open: a PNG with alpha is displayed correctly on the checkerboard (colors are not distorted — premultiplied check).
 10. Save PNG → the file opens in an external viewer, transparency is intact; Save JPEG → background is white.

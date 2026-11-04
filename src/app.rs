@@ -13,8 +13,8 @@ use crate::tools::{Tool, ToolState, draw_segment};
 
 /// Canvas texture at integer zoom (100%..=800%): the canvas rect is snapped
 /// to the physical pixel grid, so each texel covers an exact whole number of
-/// physical pixels and NEAREST is perfectly crisp (like Paint.NET at
-/// 100/200/300%).
+/// physical pixels and point magnification is perfectly crisp (like
+/// Paint.NET at 100/200/300%).
 const CANVAS_TEXTURE_CRISP: egui::TextureOptions = egui::TextureOptions {
     magnification: egui::TextureFilter::Nearest,
     minification: egui::TextureFilter::Linear,
@@ -208,14 +208,21 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::CloseBracket)) {
             self.tools.size = (self.tools.size + 1.0).clamp(1.0, 100.0);
         }
+        // egui's consume_key matches modifiers logically (extra Shift is
+        // ignored), so Ctrl+Shift+Z also matches the plain Ctrl+Z binding:
+        // redo must be tested and consumed BEFORE undo. The redo keys are
+        // consumed unconditionally, so an exhausted redo stack is a no-op
+        // instead of falling through to undo.
+        let redo_pressed = ctx.input_mut(|i| {
+            let shift_z = i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z);
+            let y = i.consume_key(Modifiers::COMMAND, Key::Y);
+            shift_z || y
+        });
+        if self.history.can_redo() && redo_pressed {
+            self.redo();
+        }
         if self.history.can_undo() && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Z)) {
             self.undo();
-        }
-        if self.history.can_redo()
-            && (ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Y))
-                || ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)))
-        {
-            self.redo();
         }
     }
 
@@ -267,7 +274,7 @@ impl App {
             self.pan = new_min - panel_rect.center() + canvas * (new_zoom / ppp) * 0.5;
         }
         self.zoom = new_zoom;
-        // Re-upload once so the new NEAREST/LINEAR sampling takes effect
+        // Re-upload once so the new point/bilinear sampling takes effect
         // immediately (glow applies the sampler params on every upload).
         self.repaint_full();
         log::info!("Zoom: {}%", (self.zoom * 100.0).round() as i32);
@@ -823,30 +830,33 @@ impl App {
             (Tool::Eraser, "Eraser (E)"),
         ];
         let mut open = true;
-        egui::Window::new("Tools").open(&mut open).show(ctx, |ui| {
-            egui::Grid::new("tools_grid")
-                .num_columns(TOOL_COLUMNS)
-                .spacing([4.0, 2.0])
-                .show(ui, |ui| {
-                    for row in tools.chunks(TOOL_COLUMNS) {
-                        for (tool, label) in row {
-                            if ui
-                                .selectable_label(self.tools.tool == *tool, *label)
-                                .clicked()
-                            {
-                                self.tools.tool = *tool;
+        egui::Window::new("Tools")
+            .open(&mut open)
+            .auto_sized() // size follows the content; no resize handles
+            .show(ctx, |ui| {
+                egui::Grid::new("tools_grid")
+                    .num_columns(TOOL_COLUMNS)
+                    .spacing([4.0, 2.0])
+                    .show(ui, |ui| {
+                        for row in tools.chunks(TOOL_COLUMNS) {
+                            for (tool, label) in row {
+                                if ui
+                                    .selectable_label(self.tools.tool == *tool, *label)
+                                    .clicked()
+                                {
+                                    self.tools.tool = *tool;
+                                }
                             }
+                            ui.end_row();
                         }
-                        ui.end_row();
-                    }
-                });
+                    });
 
-            let is_pencil = self.tools.tool == Tool::Pencil;
-            ui.add_enabled(
-                !is_pencil,
-                egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"),
-            );
-        });
+                let is_pencil = self.tools.tool == Tool::Pencil;
+                ui.add_enabled(
+                    !is_pencil,
+                    egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"),
+                );
+            });
         if !open {
             self.tools_window_open = false;
         }
@@ -859,6 +869,7 @@ impl App {
         let mut open = true;
         egui::Window::new("Palette")
             .open(&mut open)
+            .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {
                 egui::Grid::new("palette_grid")
                     .spacing([2.0, 2.0])
@@ -1041,7 +1052,9 @@ impl eframe::App for App {
         self.handle_hotkeys(&ctx);
         self.top_menu(ui);
 
-        egui::CentralPanel::default().show(ui, |ui| {
+        // no_frame: zero margin, the gray canvas background reaches the
+        // window edges (default panel frame leaves an 8 pt dark border).
+        egui::CentralPanel::no_frame().show(ui, |ui| {
             let panel_rect = ui.max_rect();
             self.draw_canvas(ui, panel_rect);
         });
