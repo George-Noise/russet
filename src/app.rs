@@ -131,8 +131,7 @@ impl App {
             return;
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Num0)) {
-            self.zoom = 1.0;
-            self.pan = Vec2::ZERO;
+            self.reset_zoom();
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)) {
             self.save_as(ctx);
@@ -206,28 +205,55 @@ impl App {
         candidate.clamp(MIN_ZOOM * 100.0, MAX_ZOOM * 100.0) / 100.0
     }
 
-    fn handle_zoom(&mut self, ui: &egui::Ui, panel_rect: Rect, rect: Rect, hovered: bool) {
-        if !hovered {
-            return;
-        }
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll.abs() < f32::EPSILON {
-            return;
-        }
-        let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) else {
-            return;
-        };
-
-        let new_zoom = Self::next_zoom(self.zoom, scroll > 0.0);
+    fn set_zoom(&mut self, new_zoom: f32, anchor: Option<Pos2>, panel_rect: Rect) {
+        let new_zoom = new_zoom.clamp(MIN_ZOOM, MAX_ZOOM);
         if (new_zoom - self.zoom).abs() < f32::EPSILON {
             return;
         }
-
-        let canvas_size = egui::vec2(self.canvas.width as f32, self.canvas.height as f32);
-        let p = (cursor - rect.min) / self.zoom;
-        let new_min = cursor - p * new_zoom;
-        self.pan = new_min - panel_rect.center() + canvas_size * new_zoom * 0.5;
+        if let Some(anchor) = anchor {
+            let rect = self.canvas_rect(panel_rect);
+            let canvas_size = egui::vec2(self.canvas.width as f32, self.canvas.height as f32);
+            let p = (anchor - rect.min) / self.zoom;
+            let new_min = anchor - p * new_zoom;
+            self.pan = new_min - panel_rect.center() + canvas_size * new_zoom * 0.5;
+        }
         self.zoom = new_zoom;
+        log::info!("Zoom: {}%", (self.zoom * 100.0).round() as i32);
+    }
+
+    fn reset_zoom(&mut self) {
+        self.set_zoom(1.0, None, self.last_panel_rect);
+        self.pan = Vec2::ZERO;
+    }
+
+    fn handle_scroll(&mut self, ui: &egui::Ui, panel_rect: Rect, hovered: bool) {
+        if !hovered {
+            return;
+        }
+        let events = ui.input(|i| i.raw.events.clone());
+        for event in events {
+            let egui::Event::MouseWheel {
+                delta, modifiers, ..
+            } = event
+            else {
+                continue;
+            };
+            if modifiers.ctrl || modifiers.command {
+                let scroll = delta.x + delta.y;
+                if scroll.abs() < f32::EPSILON {
+                    continue;
+                }
+                let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) else {
+                    continue;
+                };
+                let new_zoom = Self::next_zoom(self.zoom, scroll > 0.0);
+                self.set_zoom(new_zoom, Some(cursor), panel_rect);
+            } else if modifiers.shift {
+                self.pan.x += delta.x + delta.y;
+            } else {
+                self.pan.y += delta.y;
+            }
+        }
     }
 
     fn handle_pan(&mut self, ui: &egui::Ui, response: &egui::Response) -> bool {
@@ -345,7 +371,7 @@ impl App {
         }
         let sx = rect.width() / self.canvas.width as f32;
         let sy = rect.height() / self.canvas.height as f32;
-        self.zoom = sx.min(sy).clamp(MIN_ZOOM, MAX_ZOOM);
+        self.set_zoom(sx.min(sy), None, rect);
         self.pan = Vec2::ZERO;
     }
 
@@ -360,7 +386,7 @@ impl App {
         }
         self.display_name = "Untitled".to_string();
         self.dirty = false;
-        self.zoom = 1.0;
+        self.set_zoom(1.0, None, self.last_panel_rect);
         self.pan = Vec2::ZERO;
         self.repaint_full();
     }
@@ -396,7 +422,7 @@ impl App {
         }
         self.display_name = loaded.name;
         self.dirty = false;
-        self.zoom = 1.0;
+        self.set_zoom(1.0, None, self.last_panel_rect);
         self.pan = Vec2::ZERO;
         self.repaint_full();
     }
@@ -718,8 +744,7 @@ impl App {
 
                 ui.menu_button("View", |ui| {
                     if ui.button("Zoom 100% (Ctrl+0)").clicked() {
-                        self.zoom = 1.0;
-                        self.pan = Vec2::ZERO;
+                        self.reset_zoom();
                         ui.close();
                     }
                     if ui.button("Fit to Window").clicked() {
@@ -870,12 +895,7 @@ impl App {
             Sense::click_and_drag(),
         );
 
-        self.handle_zoom(
-            ui,
-            panel_rect,
-            self.canvas_rect(panel_rect),
-            response.hovered(),
-        );
+        self.handle_scroll(ui, panel_rect, response.hovered());
         let panning = self.handle_pan(ui, &response);
         let rect = self.canvas_rect(panel_rect);
         self.handle_stroke(ui, rect, &response, panning);
@@ -893,6 +913,15 @@ impl App {
 
         let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
         painter.image(self.canvas_tex.id(), rect, uv, Color32::WHITE);
+
+        let zoom_label = format!("{}%", (self.zoom * 100.0).round() as i32);
+        painter.text(
+            panel_rect.right_bottom() - egui::vec2(8.0, 6.0),
+            egui::Align2::RIGHT_BOTTOM,
+            zoom_label,
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(140),
+        );
 
         if response.hovered()
             && matches!(self.tools.tool, Tool::Brush | Tool::Eraser)
