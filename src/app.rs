@@ -890,26 +890,40 @@ impl App {
 
                 // Bottom: the seamless preset grid — tiles touch each other
                 // (gap 0) and have no outline. LMB sets the primary color,
-                // RMB the secondary.
-                egui::Grid::new("palette_grid")
-                    .spacing([0.0, 0.0])
-                    .show(ui, |ui| {
-                        for row in 0..ROWS {
-                            for col in 0..COLS {
-                                let color = COLORS[row * COLS + col];
-                                let (rect, response) =
-                                    ui.allocate_exact_size(egui::vec2(TILE, TILE), Sense::click());
-                                ui.painter().rect_filled(rect, 0.0, color);
-                                if response.clicked() {
-                                    self.tools.primary = color;
-                                }
-                                if response.secondary_clicked() {
-                                    self.tools.secondary = color;
-                                }
+                // RMB the secondary. Not an egui::Grid: Grid enforces a
+                // minimum column width (`interact_size.x`, 40 pt by default),
+                // which leaves gaps between the 20 pt tiles. One exact-size
+                // block is allocated instead; neighboring tiles share edges,
+                // and clicks are resolved manually from the pointer position.
+                let grid_size = egui::vec2(GRID_WIDTH, ROWS as f32 * TILE);
+                let (grid_rect, grid) = ui.allocate_exact_size(grid_size, Sense::click());
+                for row in 0..ROWS {
+                    for col in 0..COLS {
+                        let tile = Rect::from_min_size(
+                            grid_rect.min + egui::vec2(col as f32 * TILE, row as f32 * TILE),
+                            egui::vec2(TILE, TILE),
+                        );
+                        ui.painter()
+                            .rect_filled(tile, 0.0, COLORS[row * COLS + col]);
+                    }
+                }
+                if let Some(pos) = grid.interact_pointer_pos() {
+                    let dx = pos.x - grid_rect.min.x;
+                    let dy = pos.y - grid_rect.min.y;
+                    if dx >= 0.0 && dy >= 0.0 {
+                        let col = (dx / TILE) as usize;
+                        let row = (dy / TILE) as usize;
+                        if col < COLS && row < ROWS {
+                            let color = COLORS[row * COLS + col];
+                            if grid.clicked() {
+                                self.tools.primary = color;
                             }
-                            ui.end_row();
+                            if grid.secondary_clicked() {
+                                self.tools.secondary = color;
+                            }
                         }
-                    });
+                    }
+                }
             });
         if !open {
             self.palette_window_open = false;
