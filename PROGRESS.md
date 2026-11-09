@@ -24,12 +24,48 @@
 
 ## Warnings — open issues deliberately NOT fixed yet
 
-- 2026-11-09 — `src/app.rs` is **1634 lines**, over the 500-line guard (AGENTS.md "Repo facts").
-  Per the owner's decision the file is NOT split for now. The split must be proposed again at
-  the end of some future task, after the owner has verified that everything works; do not
-  split unprompted.
+- 2026-11-09 — RESOLVED: `src/app.rs` (1634 lines) was split into four child modules
+  (`app/camera.rs`, `app/dialogs.rs`, `app/windows.rs`, `app/placement.rs`). `app.rs` itself
+  remains ~690 lines BY OWNER'S DECISION — it stays the single orchestrator and may exceed
+  the 500-line guard; do not propose splitting it further unless it roughly doubles
+  (see the exception in AGENTS.md "Repo facts").
 
 ## Log — newest first. Insert a new entry directly under this heading.
+
+### 2026-11-09 — `UX:` first-open positions for Tools/Palette + main-window min size
+- **What:** on its first open the Tools window sits flush left, vertically centered in the
+  main window (`Window::pivot(Align2::LEFT_CENTER)` + `default_pos(content_rect().left_center())`),
+  and the Palette window sits flush in the bottom-left corner (`Align2::LEFT_BOTTOM` +
+  `content_rect().left_bottom()`). `default_pos` is consumed only until the window has a
+  stored area position, so the user's placement (§3.11) always wins afterwards; the free-axis
+  gap-ratio formula preserves both layouts on resizes (ratios 0.5 and 1.0). Main-window min
+  size lowered 600 → 540 so the window can shrink ~1.5x in BOTH axes (1200/800 = 1.5 exactly,
+  800/540 ≈ 1.48 — whole "nice" numbers per owner's request).
+- **Files:** `src/main.rs` (min inner size + comment), `src/app/windows.rs` (pivot +
+  default_pos on both windows, module doc); docs synced: SPEC §2.1 code quote, §3.2, §3.3,
+  §7 item 1, AGENTS.md placement bullet + a new egui `pivot`/`default_pos` quirk bullet.
+- **Verified:** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+  `cargo test` — all green, 25 tests passed (2026-11-09).
+- **Owner must check:** on Windows `cargo run` — Tools appears left-center, Palette
+  bottom-left; the window shrinks down to 800×540 but no further; dragging the windows and
+  resizing the main window still behaves per §3.11.
+
+### 2026-11-09 — `refactor:` app.rs split into child modules (owner-approved)
+- **What:** the 1634-line `app.rs` was split for agent readability, with `app.rs` kept as
+  the orchestrator (struct `App`, frame flow, hotkeys, strokes, file glue, menu, canvas
+  widget — ~690 lines, over the 500 guard by owner's decision). New child modules (they can
+  access `App`'s private fields, so no `pub(crate)` churn; `main.rs` and its mod list are
+  untouched): `app/camera.rs` — §3.4 viewport/zoom/pan + zoom tests; `app/dialogs.rs` —
+  §3.7/§3.8 New/Resize/Discard/Error; `app/windows.rs` — §3.2/§3.3 Tools/Palette windows,
+  color wells, stable window ids; `app/placement.rs` — §3.11 entirely, incl. all 12
+  placement tests. Behavior unchanged.
+- **Files:** `src/app.rs` rewritten (1634 → 684 lines), new `src/app/{camera,dialogs,windows,placement}.rs`;
+  docs synced: SPEC §2 structure + §3.11 implementation notes, AGENTS.md module facts +
+  placement bullet + owner-approved app.rs exception.
+- **Verified:** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+  `cargo test` — all green, 25 tests passed (2026-11-09).
+- **Owner must check:** nothing new — behavior must be identical; a `cargo run` smoke test
+  (draw, zoom, dialogs, drag the floating windows) is enough.
 
 ### 2026-11-09 — `M4-rework:` floating-window magnetism switched to drop-point anchoring
 - **What:** per owner feedback, the magnet no longer pulls a window flush to an edge and

@@ -18,7 +18,10 @@ fn main() -> eframe::Result {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([800.0, 600.0]),
+            // The minimum lets the window shrink ~1.5x in BOTH axes:
+            // 1200/1.5 = 800 exactly, 800/1.5 ≈ 533 → rounded to a whole,
+            // "nice" 540 (owner's request; 800/540 ≈ 1.48).
+            .with_min_inner_size([800.0, 540.0]),
         ..Default::default()
     };
     eframe::run_native(
