@@ -141,8 +141,8 @@ fn main() -> eframe::Result {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            // min = ~1.5x smaller than the default in BOTH axes; whole numbers
-            .with_min_inner_size([800.0, 540.0]),
+            // owner-set fixed minimum (not derived from the default)
+            .with_min_inner_size([500.0, 400.0]),
         ..Default::default()
     };
     eframe::run_native("Russet", native_options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
@@ -212,6 +212,7 @@ Page requirement: nothing scrolls (`overflow: hidden`), the canvas fills the scr
 - **Edit**: Undo (Ctrl+Z), Redo (Ctrl+Y; Ctrl+Shift+Z triggers the same redo action). Items are disabled when the corresponding stack is empty.
 - **Canvas**: Resize Canvas…
 - **View**: Zoom 100% (Ctrl+0), Fit to Window, separator, Tools and Palette checkboxes (open/close the corresponding windows).
+- **Help**: About Russet (owner request, 2026-11-09) — opens the non-resizable, non-collapsible "About Russet" window: name, version (`CARGO_PKG_VERSION`), one-line description, `Platform:` — one of Wayland (Linux), X11 (Linux), Windows, macOS, Web (WASM) — and `Renderer:` (OpenGL on native, WebGL on web). The platform string comes from `crate::platform_label()` in `main.rs`, which mirrors winit's Linux backend choice (`WINIT_UNIX_BACKEND` override, then `WAYLAND_DISPLAY`/`WAYLAND_SOCKET` → Wayland, else `DISPLAY` → X11); the window has a Close button and no `open` flag (same pattern as the Error dialog).
 
 ### 3.2 "Tools" window
 Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). On its FIRST open it sits flush left, vertically centered in the main window: `Window::pivot(Align2::LEFT_CENTER)` + `default_pos(ctx.content_rect().left_center())`. `default_pos` is consumed only while the window has no stored area position — afterwards the user's placement (§3.11) always wins.
@@ -414,10 +415,12 @@ Run the §7 checklist in full (Windows + web), fix what is found. Optional (only
 
 Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); fill (flood fill); eyedropper; transforms (rotate/flip/image scale); action history list; saving application settings; recent files; themes/appearance customization; custom window decorations (`set_decorations(false)`); multithreading in application code (rayon/std::thread/tokio); any new dependencies; status bar; custom project format; internationalization and localization (in any form); macOS and Linux builds/CI; beforeunload tab protection on web; PWA/offline mode/service worker; wasm size optimization (wasm-opt, etc.).
 
+Exception (owner decision, 2026-11-09): `flake.nix` for building and running the app on **Linux** (Wayland/X11, `nix build` / `nix run` / `nix develop`) is part of the repo and must be kept in sync with `Cargo.toml` (deps, binary name, runtime dlopen libs). This does not re-enable anything else from this list.
+
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**
-1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. The Tools window sits flush left, vertically centered, and the Palette window sits flush in the bottom-left corner; the main window cannot be resized below 800×540. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen); in the Palette window the Primary/Secondary wells (no captions) and "Swap (X)" are on top, the seamless gap-0 swatch grid is below, and clicking a well opens the color picker for that well.
+1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View/Help menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. The Tools window sits flush left, vertically centered, and the Palette window sits flush in the bottom-left corner; the main window cannot be resized below 500×400. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen); in the Palette window the Primary/Secondary wells (no captions) and "Swap (X)" are on top, the seamless gap-0 swatch grid is below, and clicking a well opens the color picker for that well.
 2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary; a diagonal at any angle is a 1 px staircase (classic Bresenham), never 2 px thick; a single click sets exactly one pixel.
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.
@@ -438,9 +441,10 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 17. Open opens a PNG; Save downloads a file with the correct name; JPEG downloads with a white background.
 18. The browser tab title shows `*Untitled - Russet` when dirty.
 19. There is no synchronous `rfd::FileDialog` call on web (AsyncFileDialog only) — the app does not panic during file operations.
+20. About: Help → "About Russet" opens a small non-resizable window with the name, version, and a `Platform:` line — `Windows` on Windows; `Wayland (Linux)` under a Wayland session (or `WINIT_UNIX_BACKEND=wayland`), `X11 (Linux)` under X11 (or `WINIT_UNIX_BACKEND=x11`); `Web (WASM)` in the browser — plus a `Renderer:` line (OpenGL native / WebGL web). Close hides it.
 
 **Build:**
-20. `cargo check`, `cargo clippy -- -D warnings`, `cargo fmt --check`, `cargo test` — all pass; `cargo build --release` succeeds (M9); `trunk build --release` succeeds.
+21. `cargo check`, `cargo clippy -- -D warnings`, `cargo fmt --check`, `cargo test` — all pass; `cargo build --release` succeeds (M9); `trunk build --release` succeeds; `nix build` on Linux succeeds and the wrapped binary runs in a Wayland and an X11 session.
 
 ## 8. Build & run
 
