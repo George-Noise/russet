@@ -69,6 +69,32 @@ edit as a log entry (AGENTS.md "Git & progress log").
   `cargo check --target wasm32-unknown-unknown`; `trunk build --release` → `dist/`.
 - **Owner must check:** interactive web pass (real-mouse draw/zoom/pan, Open/Save); decide on
   `PERF.md` P3 (region undo) and P6 (web budgets).
+### 2026-11-09 — `Docs:` README.md added (build & run for humans) — owner request
+- **What:** new `README.md` in English, deliberately MINIMAL per the owner's instruction: it contains ONLY how to build and run the app for the three supported targets — Windows (`cargo run`, `cargo build --release`), NixOS/Linux (`nix build` / `nix run` / `nix develop`, flake enablement one-liner, `WINIT_UNIX_BACKEND` override, non-NixOS distros welcome) and Web/WASM (wasm32 target, `trunk serve`, `trunk build --release` → `dist/`, one example of serving it). No feature descriptions, no changelog. The fact that README.md is the HUMAN-facing document (agents read AGENTS.md/SPEC.md instead) is recorded in AGENTS.md ("Repo facts") and SPEC §8, with a keep-in-sync rule when commands change.
+- **Files:** new `README.md`; `AGENTS.md` (README audience bullet), `SPEC.md` (§8 pointer + note that Linux builds go through `flake.nix` since 2026-11-09).
+- **Verified:** documentation-only change — no code touched; commands cross-checked against SPEC §8, `flake.nix` and `index.html` (trunk entry).
+- **Owner must check:** the three command blocks read correctly on Windows PowerShell vs bash; nothing else.
+### 2026-11-09 — `Docs:` `PERF.md` — RAM / build-speed backlog + first release-build measurement
+- **What:** new `PERF.md` (design note, not part of the spec) collects everything about memory and
+  build cost: (1) a table of where RAM goes for 800×600 / 2000×1500 / 4096×4096 (pixmap + texture +
+  mips + full-snapshot history) and the wasm "heap never shrinks" caveat with the transient spikes
+  (resize, open, undo); (2) a ranked backlog — A. region-based undo instead of full snapshots
+  (10–100× less history, no full-canvas memcpy per stroke; needs a SPEC §3.6 decision), B. mipmaps
+  only at zoom < 100 % (`egui_glow` regenerates the whole mip chain on every `set_partial` —
+  `painter.rs:632`), C. `into_rgba8()` + no intermediate copy on open, D. wasm-only eframe features
+  (drop `accesskit`/`system_fonts`), release log level, wasm-opt (§6 exception), `panic=abort`,
+  E. canvas/history budgets on web, F. micro-optimizations; (3) build-time options (thin LTO, codegen
+  units, opt-level) with the measured baseline; (4) measurement recipes for browser + native.
+  **First release measurement** on this Linux box (24 threads; `jobs = 8` and `-C target-cpu=native`
+  come from the owner's global `~/.cargo/config.toml`): cold `cargo build --release` **243 s**,
+  one-file relink after `touch src/main.rs` **160 s**, no-op **6 s**, stripped binary **14.1 MiB**.
+  No application code changed.
+- **Files:** new `PERF.md`; the layout trees in `AGENTS.md` and `SPEC.md` §2 now list it.
+- **Verified:** the three build timings above (Linux, Rust 1.99.1); `cargo check` green;
+  `cargo fmt --check` green (no Rust changes).
+- **Owner must check:** read `PERF.md`, pick what to implement and confirm the two decisions it
+  needs — region undo (SPEC §3.6 rewrite) and the wasm-opt exception to SPEC §6. Nothing in the
+  app behaves differently.
 
 ### 2026-11-10 — `Docs:` fixed artifact names `russet.zip`/`russet.patch`; commit title last in reply — owner request
 - **Commit title:** `Fix delivery artifact names; require commit title as the reply's last line`
