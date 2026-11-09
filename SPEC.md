@@ -323,6 +323,25 @@ Implementation: via `ctx.input_mut(|i| i.consume_key(...))` and modifiers; **mus
 - Platform cfg branches are allowed only in `file_io.rs` and at call sites in `app.rs`; the rest of the code knows nothing about the platform.
 - Exit is not shown in the menu on web; do NOT add beforeunload protection against closing the tab (§6).
 
+### 3.11 Floating-window placement: drop-time edge anchoring and resize repositioning
+
+Applies to the two existing floating windows, "Tools" and "Palette" — no new windows, no changes to their content, no collapsing/shadows/resize handles (§6): plain `auto_sized` egui windows as before. All distances are in logical points; **2rem = 32 pt** (egui 0.37 has no rem API; 2 × the 16 pt default body text size).
+
+**Edge magnetism — the window is fixed where the user drops it.** While a window is dragged by its title bar it follows the pointer freely: the magnet **never moves a window during the drag** and never pulls it flush to an edge — a gap of 0 happens only when the user drops the window flush. When the drag ends, each axis whose edge was dropped **closer than 2rem** to the corresponding edge of `ctx.content_rect()` becomes **anchored** to that edge at the dropped gap — the window stays exactly where the user placed it, and only this anchor state is remembered. **Tie rule:** if BOTH edges of one axis are simultaneously within 2rem of their respective edges (the window is nearly as wide/tall as the main window), the axis anchors to the **left** edge on x and the **bottom** edge on y. Dropping the window outside all 2rem zones clears every anchor.
+
+**Repositioning on main-window resize — never snaps.** When the main window is resized (`ctx.content_rect()` changed between frames) — and never while a drag is in progress — each floating window is repositioned per axis: an **anchored** axis slides with its edge, **keeping the dropped gap** (clamped into the new range so the window never overflows it); a **free** axis keeps its relative placement via the **gap-ratio formula**. Per axis, with `old`/`new` = previous/new content-rect span and `win` = window span:
+
+```text
+min_gap  = max(0, win.min - old.min);  max_gap = max(0, old.max - win.max)
+ratio    = min_gap / (min_gap + max_gap)        // 0 = flush left/top, 1 = flush right/bottom, 0.5 = centered
+free_new = max(0, (new.max - new.min) - (win.max - win.min))
+pos      = clamp(new.min + ratio * free_new, new.min, new.min + free_new)
+```
+
+so a top-left window stays top-left, a centered one stays centered, a bottom-right one stays bottom-right. Resizes never set, clear or change anchors and never pull a free window flush: shrinking the main window must not snap windows at 2rem — anchoring is a decision the user makes only by dropping the window.
+
+**Implementation notes.** Per-window `WindowPlacement` (in `App`) stores the last shown rect, whether the window is being dragged, and the `WindowAnchor` fixed when the last drag ended (`window_anchor`); `place_floating_window` runs right after each `Window::show`; the title-bar drag response is read as `area_id.with("__title_click")` (the id `window.rs` uses internally); a reposition is persisted into the next frame by rewriting the window's `AreaState` (`set_left_top_pos` + `areas_mut().set_state`, layer `Order::Middle`) — `Window::current_pos` is discarded every frame in title-bar mode and cannot be used. Repositioning compares the previous frame's window rect and `content_rect`. Unit tests for `anchor_axis` / `window_anchor` / `reposition_axis` / `reposition_window_pos` live in the `tests` module of `app.rs`.
+
 ## 4. Milestones — do them in order
 
 ### M0. Scaffold
@@ -344,8 +363,8 @@ Unit tests: `History` — 20-snapshot limit and eviction; push clears redo.
 **Done:** all three tools draw according to the table; the eraser makes pixels transparent (checkerboard visible); no gaps when the mouse moves fast; no panics when drawing outside the canvas.
 
 ### M4. UI: menu and windows
-Menu from §3.1 (file and undo items are no-op stubs for now), "Tools" window from §3.2, "Palette" window from §3.3, window checkboxes in View. Ensure that clicks on windows do not paint on the canvas underneath them (egui does this itself — verify).
-**Done:** the tool can be selected from the window too, size changes with the slider; palette LMB/RMB changes colors, "Swap (X)" works, clicking a color well opens the egui picker for that color; windows can be reopened from View.
+Menu from §3.1 (file and undo items are no-op stubs for now), "Tools" window from §3.2, "Palette" window from §3.3, window checkboxes in View, floating-window placement per §3.11 (drop-time edge anchoring — the window keeps the gap the user dropped it at, never pulled flush; left/bottom on ties — and per-axis repositioning on main-window resize: anchored axis keeps the dropped gap, free axis keeps the gap ratio). Ensure that clicks on windows do not paint on the canvas underneath them (egui does this itself — verify).
+**Done:** the tool can be selected from the window too, size changes with the slider; palette LMB/RMB changes colors, "Swap (X)" works, clicking a color well opens the egui picker for that color; windows can be reopened from View; dropping a window within 2rem of a main-window edge anchors that axis at the dropped gap without pulling it flush, and re-dropping it farther away releases it; resizing the main window keeps an anchored window's dropped gap and a free window's relative placement.
 
 ### M5. Files (native, Windows)
 `file_io.rs`: New (dialog + confirmation), Open, Save, Save As per §3.7 — synchronous rfd dialogs; `dirty`, `display_name`, `current_path`, window title via `ViewportCommand::Title`; "Error" popup. Do NOT implement web branches — they will appear in M8.
@@ -382,6 +401,7 @@ Run the §7 checklist in full (Windows + web), fix what is found. Optional (only
 11. **UI strings** — hardcoded English only (§0). No `rust-i18n`/`fluent`/translation files.
 12. **Build**: the dev profile from §1 is already tuned for speed and cargo parallelizes automatically — do not change or disable anything. Do not run `cargo build --release` (slow fat-LTO) during development, except for the final M9 check.
 13. **Zoom is in PHYSICAL pixels.** Do not compute the canvas rect in logical points: physical size = `canvas_size * zoom`, top-left snapped to whole physical pixels, logical = physical / `pixels_per_point`; every screen→canvas conversion multiplies by `pixels_per_point`. Otherwise "100%" is uneven under Windows display scaling and strokes land offset from the cursor.
+14. **Floating-window anchoring (§3.11)** is decided only when a title-bar drag ENDS: the magnet never moves a window during the drag and never pulls it flush; the anchor keeps the dropped gap on later resizes. Resize repositioning must never anchor, unanchor or snap anything. `Window::current_pos` is discarded every frame in title-bar mode — persist a new position via the window's `AreaState`, not via `Window` builder calls.
 
 ## 6. Out of scope — do NOT do in this version
 
@@ -403,16 +423,17 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 11. Resize Canvas: content is not lost, the new area is transparent, undo restores the old size.
 12. Hotkeys do not fire while focus is in a dialog input field.
 13. Title looks like `*Untitled - Russet` when there are unsaved changes; Save removes the `*`.
+14. Floating-window placement (§3.11): dropping Tools/Palette within 2rem of a main-window edge anchors that axis at the dropped gap — the window is NOT pulled flush to the edge (gap 0 only if it was dropped flush); when both edges of one axis are within 2rem, it anchors left (x) / bottom (y); re-dropping the window farther than 2rem from all edges clears the anchors; after resizing the main window an anchored window keeps its dropped gap to that edge (both when growing and shrinking), a free window keeps its relative placement (top-left stays top-left, centered stays centered, bottom-right stays bottom-right), and resizing never anchors, unanchors or pulls anything flush.
 
 **Web (browser):**
-14. `trunk serve`: the page opens, "Loading Russet…" disappears, the app fills the screen with no page scrolling.
-15. Drawing, eraser, `Ctrl`+wheel zoom, plain-wheel vertical pan, `Shift`+wheel horizontal pan, middle/Space pan, undo/redo work in the browser; zoom % label is visible in the bottom-right; console logs each zoom change.
-16. Open opens a PNG; Save downloads a file with the correct name; JPEG downloads with a white background.
-17. The browser tab title shows `*Untitled - Russet` when dirty.
-18. There is no synchronous `rfd::FileDialog` call on web (AsyncFileDialog only) — the app does not panic during file operations.
+15. `trunk serve`: the page opens, "Loading Russet…" disappears, the app fills the screen with no page scrolling.
+16. Drawing, eraser, `Ctrl`+wheel zoom, plain-wheel vertical pan, `Shift`+wheel horizontal pan, middle/Space pan, undo/redo work in the browser; zoom % label is visible in the bottom-right; console logs each zoom change.
+17. Open opens a PNG; Save downloads a file with the correct name; JPEG downloads with a white background.
+18. The browser tab title shows `*Untitled - Russet` when dirty.
+19. There is no synchronous `rfd::FileDialog` call on web (AsyncFileDialog only) — the app does not panic during file operations.
 
 **Build:**
-19. `cargo check`, `cargo clippy -- -D warnings`, `cargo fmt --check`, `cargo test` — all pass; `cargo build --release` succeeds (M9); `trunk build --release` succeeds.
+20. `cargo check`, `cargo clippy -- -D warnings`, `cargo fmt --check`, `cargo test` — all pass; `cargo build --release` succeeds (M9); `trunk build --release` succeeds.
 
 ## 8. Build & run
 
