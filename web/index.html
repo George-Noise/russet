@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
   <title>Russet</title>
+
+  <!-- Trunk entry point. `href` is resolved relative to THIS file, so the
+       Cargo manifest one directory up is found from web/. Explicit link =
+       no reliance on Trunk's automatic Cargo.toml discovery. -->
+  <link data-trunk rel="rust" href="../Cargo.toml" />
+
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%;
                  overflow: hidden; background: #1e1e1e; }
@@ -13,8 +20,8 @@
   </style>
 </head>
 <body>
+  <!-- The id is hardcoded in src/main.rs (wasm entry point): keep both in sync. -->
   <canvas id="russet_canvas"></canvas>
   <div id="loading_text">Loading Russet…</div>
-  <!-- trunk injects the wasm <script> tag itself -->
 </body>
 </html>

@@ -5,6 +5,7 @@
 - `SPEC.md` is the full product spec and the authoritative task list. Follow its milestones (M0–M9) in order.
 - `PROGRESS.md` is the progress log and the substitute for git history (see "Git & progress log" below). Read it before starting any task and update it after every finished, verified one.
 - Reading is routed by task type (see "Reading routes" below) — do not read the whole SPEC when a task touches one §. Do not add features from §6 (out of scope).
+- `PERF.md` is a **reference backlog** for memory/build-speed work, not an autonomous queue: the owner picks an item, and the agent executes it only when asked. Its §0 has the task details and the owner gates.
 
 ## Reading routes — task type → what to read
 
@@ -12,15 +13,104 @@ Always read first (cheap): this file, plus `PROGRESS.md` — status snapshot, wa
 
 | Task type | Read |
 |---|---|
-| Behavior change in an existing feature | that `SPEC.md` §3.x + the implementing module (map in "Repo facts" below) + its `#[cfg(test)]` tests |
+| Behavior change in an existing feature | that `SPEC.md` §3.x + the implementing module (map in "Repo facts" below) + its tests (`<module>/tests.rs`) |
 | New tool / feature | its §3.x + `SPEC.md` §6 (scope check) + the closest existing module as the pattern (preview-then-commit tool → `app/preview.rs`; new floating window → `app/panels.rs`) |
-| Window placement / resize behavior | `SPEC.md` §3.11 + `app/placement.rs` (everything about §3.11 lives there, incl. its tests) |
+| Window placement / resize behavior | `SPEC.md` §3.11 + `app/placement.rs` (everything about §3.11 lives there, incl. its `placement/tests.rs`) |
 | Dialogs / file I/O | `SPEC.md` §3.7–3.8 + `app/dialogs.rs` / `file_io.rs` |
 | Hotkeys | `SPEC.md` §3.9 (that list is exhaustive) |
 | Build / toolchain / flake | `SPEC.md` §1 + §8 + `flake.nix`; update `README.md` in the same edit if a human-facing command changed |
 | Unfamiliar area, or the § is unclear | additionally `SPEC.md` §4–§7 (milestones, pitfalls, scope, acceptance) before coding |
 
 Never change behavior based on a § you have not read this session. `SPEC.md` §4–§7 in full is required reading for milestone (M<N>) work only, not for one-line fixes.
+
+## Project layout — keep this tree true
+
+```
+russet/
+  Cargo.toml          pinned deps + dev/release profiles (SPEC §1 — do not edit profiles)
+  SPEC.md             product spec (authoritative)
+  AGENTS.md           this file
+  PROGRESS.md         progress log (git substitute; older entries in PROGRESS-archive.md)
+  PERF.md             RAM / build-speed reference backlog (not a spec, not autonomous)
+  README.md           human-facing build & run instructions
+  Trunk.toml          web build config: web/index.html -> dist/ (gitignored)
+  web/index.html      trunk entry page (canvas #russet_canvas, loading text)
+  scripts/verify.sh   done gate: fmt + clippy + test + 500-line report
+  flake.nix           Linux build (nix build/run/develop), owner-approved exception
+  src/
+    main.rs           TWO entry points (native run_native / web WebRunner),
+                      platform_label() + renderer_label() for the About window
+    app.rs            App orchestrator: state, frame flow, hotkeys, strokes,
+                      file glue, menu, canvas widget (may exceed 500 lines —
+                      owner exception, see "Repo facts")
+    app/
+      camera.rs        camera/tests.rs     §3.4 viewport, zoom steps, pan
+      dialogs.rs                           §3.7/§3.8 New / Resize / Discard / Error
+      panels.rs                            History log + Layers placeholder windows
+      placement.rs     placement/tests.rs  §3.11 floating-window anchoring
+      preview.rs                           Line/Curve/Shape preview-then-commit gestures
+      text_tool.rs                         Text tool input window
+      windows.rs                           §3.2/§3.3 Tools + Palette windows
+    canvas.rs          canvas/tests.rs      Pixmap buffer, resize, regions
+    file_io.rs         file_io/tests.rs     PNG/JPEG open+save (ONLY cfg fork site
+                                            besides main.rs)
+    history.rs         history/tests.rs     snapshot undo/redo + ActionLog
+    palette.rs                              34 preset colors / grid constants
+    text.rs            text/tests.rs        text rasterization via egui's font atlas
+    tools.rs           tools/tests.rs       Tool enum, ToolState, stroke/shape rasterization
+```
+
+Rules:
+
+- A module's tests live in a sibling `tests.rs` file (see "Tests"): `src/canvas.rs` ↔
+  `src/canvas/tests.rs`. `main.rs`, `app.rs`, `dialogs.rs`, `panels.rs`, `preview.rs`,
+  `text_tool.rs`, `windows.rs`, `palette.rs` currently have no tests.
+- New subsystem → a child module of the module that owns the state/behavior (for `App` state that
+  means `src/app/<name>.rs`). Never grow `app.rs` with a new subsystem.
+- Add a file → update this tree AND `SPEC.md` §2 in the same edit, and say why in `PROGRESS.md`.
+- Do not add top-level directories or build tooling (no `xtask`, `just`, CI workflows) without
+  asking the owner. The build is `cargo` + `scripts/verify.sh` + `trunk` + the flake.
+
+## Tests — separate files, always
+
+Hard rules. They exist so production files stay readable and an agent can add tests without
+touching behavior code.
+
+1. **No inline test modules.** Never write `#[cfg(test)] mod tests { ... }` inside a source file.
+   The module file ends with exactly:
+
+   ```rust
+   #[cfg(test)]
+   mod tests;
+   ```
+
+   and the tests live in `<module>/tests.rs` next to it:
+
+   - `src/canvas.rs` → `src/canvas/tests.rs`
+   - `src/app/placement.rs` → `src/app/placement/tests.rs`
+   - `src/text.rs` → `src/text/tests.rs`
+
+   The file is a CHILD module: start it with `use super::*;` (or an explicit
+   `use super::{a, b};`) and test private items directly.
+2. **Never widen visibility for a test.** No `pub(crate)`/`pub` just to reach code from a test.
+   If a test cannot reach it, it is in the wrong module — move the test, not the visibility.
+3. **No crate-root `tests/` directory.** The crate is a single binary (no lib target), so
+   integration tests cannot import it. Keep tests as in-crate unit tests. Adding a lib target is a
+   structural change that needs the owner's OK first.
+4. **Every fix/feature ships with a test**, in the same task, in the module that owns the behavior.
+   A bug fix starts from a regression test that fails before the fix. Never delete a test to get
+   green; update it in the same edit when behavior intentionally changes.
+5. **Test what the spec promises**, not implementation details. Prefer small pure helpers over a
+   full egui frame; if behavior is only reachable through `App`, extract the math into a testable
+   helper in the same task.
+6. **Style.** `#[test]` only (no async, no new dev-dependencies). Names are behavior sentences in
+   `snake_case`, no `test_` prefix. Arrange–Act–Assert with blank lines between blocks.
+   `expect("what must hold")` for invariants; `unwrap()` forbidden everywhere. No filesystem,
+   network, sleeps or wall-clock in tests.
+7. **Size guard.** Keep `tests.rs` under ~300 lines. Past that, split by topic: `tests.rs` keeps
+   only `mod <topic>;` declarations and the files move to `src/<module>/tests/<topic>.rs`.
+8. `cargo test` must pass before a task counts as done, and `cargo clippy --all-targets` lints the
+   test files too.
 
 ## Git & progress log
 
@@ -45,19 +135,25 @@ Before calling the delivery ready: with git, apply the patch onto a clean copy o
 
 - Quick loop during development: `cargo check` (owner's time-saving policy 2026-11-09).
 - Done gate: `bash scripts/verify.sh` — `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, plus the soft 500-line file-size report. Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
-- Run tests with `cargo test` (unit tests are inline `#[cfg(test)]` modules, e.g. `canvas.rs`, `history.rs`).
+- Tests: `cargo test` (all) / `cargo test app::placement` (one module by path fragment). Unit tests live in `<module>/tests.rs` (see "Tests").
+- Docs/comment-only edits: `cargo check` is enough; say so explicitly in the `PROGRESS.md` entry.
 - Daily run: `cargo run` (Windows). Do not run `cargo build --release` during development; release validation belongs to M9.
-- Web (M8): `rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`, then `trunk serve` / `trunk build --release`. Trunk is not currently installed on this machine.
+- Web (M8): `rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`, then from the repo root
+  `trunk serve` / `trunk build --release` (config `Trunk.toml`, page `web/index.html`, output `dist/`).
+  Trunk 0.22.1 is installed at `~/.cargo/bin/trunk` (that directory is NOT on `PATH`):
+  `export PATH="$HOME/.cargo/bin:$PATH"`. Release builds run wasm-opt — the page passes the
+  required flags (see "Repo facts"). The release web build was verified in Firefox on 2026-11-09.
 
 ## Repo facts
 
 - Single Rust binary crate `russet`: edition 2024, pinned deps from `SPEC.md` §1. Do not add dependencies.
 - Required module split (monolith forbidden): `main`, `app`, `canvas`, `tools`, `history` (snapshot undo/redo + `ActionLog`), `file_io`, `palette`, `text` (text rasterization through egui's font atlas — owner request 2026-11-10). `app.rs` is the orchestrator (all `App` state, frame flow, hotkeys, strokes, file glue, menu, canvas widget); cohesive subsystems are its CHILD modules, which can access `App`'s private fields without any visibility churn: `app/camera.rs` (§3.4 viewport/zoom/pan), `app/dialogs.rs` (§3.7–3.8 dialogs), `app/windows.rs` (§3.2–3.3 floating windows), `app/placement.rs` (§3.11 placement), `app/preview.rs` (Line/Curve/Shape preview-then-commit gestures — owner request 2026-11-10), `app/text_tool.rs` (Text tool input window — owner request 2026-11-10), `app/panels.rs` (History log + Layers placeholder windows — owner request 2026-11-10; deliberately WITHOUT §3.11 placement). Keep new subsystems as such child modules instead of growing `app.rs`.
-- File-size guard (soft): when a source file exceeds 500 lines, do not split it right away and never split mid-task. Instead, warn the owner that the file has outgrown the limit and propose a split — at the END of the current task, after the owner has verified that everything works. Split only with the owner's approval. Owner-approved exception (2026-11-09): `app.rs` stays the single orchestrator and may remain over 500 lines — agent readability beats the line count there; do not propose splitting it again unless it roughly doubles.
+- File-size guard (soft): when a source file exceeds 500 lines, do not split it right away and never split mid-task. Instead, warn the owner that the file has outgrown the limit and propose a split — at the END of the current task, after the owner has verified that everything works. Split only with the owner's approval. Owner-approved exception (2026-11-09): `app.rs` stays the single orchestrator and may remain over 500 lines — agent readability beats the line count there; do not propose splitting it again unless it roughly doubles. Test files have their own 300-line guard (see "Tests"). Moving inline tests out of `tools.rs` took it from 679 to ~430 lines (2026-11-10), which retired the old proposed `raster.rs` split.
 - Platform `cfg` branches may appear only in `main.rs` and `file_io.rs` (plus call sites in `app.rs`). The About window's platform/renderer strings are `crate::platform_label()` / `crate::renderer_label()` in `main.rs` — plain `cfg!()` macros (no `#[cfg]` attributes), mirroring winit's Linux backend choice: `WINIT_UNIX_BACKEND` override, then `WAYLAND_DISPLAY`/`WAYLAND_SOCKET` → Wayland, else `DISPLAY` → X11. Keep them in sync with the actual backend selection if winit's behavior changes.
 - Canvas is a premultiplied `tiny-skia::Pixmap`; feed egui with `ColorImage::from_rgba_premultiplied`. Use `TextureHandle::set_partial(pos, image, options)` for dirty rectangles.
 - File I/O: native uses synchronous `rfd::FileDialog`; WASM must use `rfd::AsyncFileDialog` only.
-- Floating windows ("Tools"/"Palette"): placement (drop-time edge anchoring — a window keeps the gap the user dropped it at, never pulled flush; left/bottom tie rule — and per-axis repositioning on main-window resize: anchored axis keeps the dropped gap, free axis keeps the gap ratio) is specified in `SPEC.md` §3.11 and implemented in `app/placement.rs` with unit tests. Anchors are decided only when a drag ends — never during drags, never on resizes. First-open positions are §3.2/§3.3 facts: Tools 0.5rem (8 pt) from the left edge / vertically centered, Palette 0.5rem from the left and bottom edges — set via `Window::pivot` + `default_pos` (1 rem = 16 pt because egui 0.37 has no rem API; the `0.5 * REM` constant is `app/placement.rs::FIRST_OPEN_GAP`, next to the 2rem `WINDOW_SNAP_DISTANCE`); once the window has a stored area position, `default_pos` is dead and the user's placement wins.
+- Web page: `web/index.html` is the trunk entry. It declares `<link data-trunk rel="rust" href="../Cargo.toml" data-wasm-opt-params="--all-features" />` on purpose — trunk resolves the manifest relative to the HTML file, so the explicit `href` is what makes `web/` work, and trunk 0.22 runs wasm-opt on release builds where the bundled wasm-opt 131 needs `--all-features` for Rust 1.99's bulk-memory output. `#russet_canvas` is hardcoded in `main.rs`: rename in both or neither. `Trunk.toml` pins `target`/`dist`.
+- Floating windows ("Tools"/"Palette"): placement (drop-time edge anchoring — a window keeps the gap the user dropped it at, never pulled flush; left/bottom tie rule — and per-axis repositioning on main-window resize: anchored axis keeps the dropped gap, free axis keeps the gap ratio) is specified in `SPEC.md` §3.11 and implemented in `app/placement.rs` with unit tests in `app/placement/tests.rs`. Anchors are decided only when a drag ends — never during drags, never on resizes. First-open positions are §3.2/§3.3 facts: Tools 0.5rem (8 pt) from the left edge / vertically centered, Palette 0.5rem from the left and bottom edges — set via `Window::pivot` + `default_pos` (1 rem = 16 pt because egui 0.37 has no rem API; the `0.5 * REM` constant is `app/placement.rs::FIRST_OPEN_GAP`, next to the 2rem `WINDOW_SNAP_DISTANCE`); once the window has a stored area position, `default_pos` is dead and the user's placement wins.
 - All user-facing strings are hardcoded English. No i18n/localization.
 - `README.md` is written for HUMANS — people who want to build and run the app. It contains ONLY build & run instructions (Windows, NixOS/Linux via `flake.nix`, Web/WASM) and nothing else — no feature lists, no changelog, no agent guidance. Agents must read project rules here in AGENTS.md and in SPEC.md, never from README.md. When build/run commands change (SPEC §8, `flake.nix`, Cargo.toml toolchain requirements), update README.md in the same edit.
 - `flake.nix` (owner decision 2026-11-09, an exception to SPEC §6's "Linux builds/CI"): builds/ runs the app on Linux (Wayland/X11) via `nix build` / `nix run` / `nix develop`. The binary links only fontconfig directly; ALL other GUI libs (wayland, libxkbcommon, X11 via `x11-dl`, GLX/EGL via glutin) are dlopen'd at runtime and are provided by `wrapProgram` (LD_LIBRARY_PATH). When `Cargo.toml` gains deps with runtime libs, update `runtimeLibs` in the flake. No vulkan-loader (glow never uses Vulkan).
