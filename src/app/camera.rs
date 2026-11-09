@@ -1,14 +1,14 @@
 //! The main-canvas viewport (SPEC §3.4): where the canvas sits on screen,
 //! zooming (Paint.NET-style discrete steps, Ctrl+wheel toward the cursor,
 //! physical-pixel snapping) and panning (plain/Shift wheel, middle button,
-//! Space+LMB). A child module of `app`, so it can touch `App`'s private
-//! fields; `app.rs` stays the orchestrator.
+//! Space+LMB, W/A/S/D). A child module of `app`, so it can touch `App`'s
+//! private fields; `app.rs` stays the orchestrator.
 
 use eframe::egui::{self, Key, PointerButton, Pos2, Rect, Vec2};
 
 use super::{
-    App, CANVAS_TEXTURE_CRISP, CANVAS_TEXTURE_SMOOTH, MAX_ZOOM, MIN_ZOOM, SCROLL_PAN_SPEED,
-    ZOOM_SNAP_RATIO, ZOOM_STEP_FACTOR,
+    App, CANVAS_TEXTURE_CRISP, CANVAS_TEXTURE_SMOOTH, KEY_PAN_SPEED, MAX_ZOOM, MIN_ZOOM,
+    SCROLL_PAN_SPEED, ZOOM_SNAP_RATIO, ZOOM_STEP_FACTOR,
 };
 
 impl App {
@@ -112,13 +112,43 @@ impl App {
 
     pub(super) fn handle_pan(&mut self, ui: &egui::Ui, response: &egui::Response) -> bool {
         let space = ui.input(|i| i.key_down(Key::Space));
-        let panning = response.dragged_by(PointerButton::Middle)
+        let drag_panning = response.dragged_by(PointerButton::Middle)
             || (space && !self.is_stroking && response.dragged_by(PointerButton::Primary));
-        if panning {
-            self.pan += response.drag_delta();
+        let key_panning = self.handle_key_pan(ui);
+        if drag_panning {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         }
-        panning
+        drag_panning || key_panning
+    }
+
+    /// W/A/S/D pan the viewport continuously (§3.4). `egui::Key` letter
+    /// variants are PHYSICAL keys — egui-winit maps them from winit's
+    /// `PhysicalKey` — so the bindings are keyboard-layout independent: on
+    /// ЙЦУКЕН the same physical keys (Ц/Ф/Ы/В) work, and so on for every
+    /// other layout. While a pan key is held, no stroke starts (the caller
+    /// treats this as panning, same as Space+LMB).
+    fn handle_key_pan(&mut self, ui: &egui::Ui) -> bool {
+        // Same gate as the hotkeys: keys must not pan while focus is in a
+        // dialog input field.
+        if ui.ctx().egui_wants_keyboard_input() {
+            return false;
+        }
+        let dir = ui.input(|i| {
+            key_pan_dir(
+                i.key_down(Key::W),
+                i.key_down(Key::A),
+                i.key_down(Key::S),
+                i.key_down(Key::D),
+            )
+        });
+        if dir == Vec2::ZERO {
+            return false;
+        }
+        self.pan += dir * (KEY_PAN_SPEED * ui.input(|i| i.stable_dt.min(0.1)));
+        // Repaint even without OS key-repeat events, so a held key pans
+        // smoothly every frame.
+        ui.ctx().request_repaint();
+        true
     }
 
     pub(super) fn canvas_pos(&self, rect: Rect, screen: Pos2) -> Pos2 {
@@ -140,9 +170,34 @@ impl App {
     }
 }
 
+/// W/A/S/D pan direction, normalized (a free function so the convention is
+/// unit-testable without an egui context). "Camera" convention, matching
+/// the wheel: W/S/A/D move the VIEWPORT up/down/left/right — the canvas
+/// content moves the opposite way on screen. Signs follow `pan`'s
+/// definition in `canvas_rect`: growing `pan.y` draws the canvas lower,
+/// which is the view moving up (same as a wheel-up scroll).
+fn key_pan_dir(w: bool, a: bool, s: bool, d: bool) -> Vec2 {
+    let mut dir = Vec2::ZERO;
+    if w {
+        dir.y += 1.0;
+    }
+    if s {
+        dir.y -= 1.0;
+    }
+    if a {
+        dir.x += 1.0;
+    }
+    if d {
+        dir.x -= 1.0;
+    }
+    // `normalized` is the safe variant in emath 0.37 (zero in → zero out).
+    dir.normalized()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::App;
+    use super::{App, key_pan_dir};
+    use eframe::egui::Vec2;
 
     fn percent(zoom: f32) -> i32 {
         (zoom * 100.0).round() as i32
@@ -162,5 +217,24 @@ mod tests {
         assert_eq!(percent(App::next_zoom(1.12, false)), 100);
         assert_eq!(percent(App::next_zoom(8.0, true)), 800);
         assert_eq!(percent(App::next_zoom(0.1, false)), 10);
+    }
+
+    #[test]
+    fn wasd_directions_move_the_viewport() {
+        // W = view up = pan.y grows (canvas content moves DOWN the screen,
+        // same as a wheel-up scroll); A = view left = pan.x grows.
+        assert_eq!(key_pan_dir(true, false, false, false), Vec2::new(0.0, 1.0));
+        assert_eq!(key_pan_dir(false, false, true, false), Vec2::new(0.0, -1.0));
+        assert_eq!(key_pan_dir(false, true, false, false), Vec2::new(1.0, 0.0));
+        assert_eq!(key_pan_dir(false, false, false, true), Vec2::new(-1.0, 0.0));
+    }
+
+    #[test]
+    fn wasd_diagonals_are_normalized() {
+        let diag = key_pan_dir(true, false, false, true);
+        assert!((diag.length() - 1.0).abs() < 1e-4);
+        assert!((diag.x + 1.0 / 2.0f32.sqrt()).abs() < 1e-4);
+        // No keys — no movement.
+        assert_eq!(key_pan_dir(false, false, false, false), Vec2::ZERO);
     }
 }

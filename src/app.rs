@@ -55,6 +55,10 @@ const ZOOM_SNAP_RATIO: f32 = 0.06;
 /// Paint.NET; scaled up so panning feels ~1.5x slower than Paint.NET
 /// (owner-tuned).
 const SCROLL_PAN_SPEED: f32 = 1.5;
+/// WASD pans the viewport continuously (§3.4): screen-space speed in
+/// logical points per second, applied while a pan key is held (owner-tuned;
+/// crossing a 1080p-height main window takes ~1.8 s).
+const KEY_PAN_SPEED: f32 = 600.0;
 const NEW_WIDTH: u32 = 800;
 const NEW_HEIGHT: u32 = 600;
 const MIN_CANVAS: u32 = 1;
