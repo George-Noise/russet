@@ -103,7 +103,9 @@ Project structure (the split is mandatory; a monolith is forbidden):
 ```
 russet/
   Cargo.toml
-  index.html      — page for trunk: <canvas id="russet_canvas">, title "Russet" (§2)
+  Trunk.toml      — trunk config: target web/index.html, output dist/ (§2.2)
+  web/index.html  — page for trunk: <canvas id="russet_canvas">, title "Russet" (§2.2)
+  PERF.md         — RAM / build-speed backlog; a design note, not a spec (§2)
   src/
     main.rs       — TWO entry points: native (run_native) and web (WebRunner); template below
     app.rs        — struct App (all state), impl eframe::App, the ORCHESTRATOR:
@@ -119,6 +121,13 @@ russet/
     file_io.rs    — open/save PNG/JPEG; the ONLY place with native/web cfg branches
     palette.rs    — fixed array of 34 preset colors (2 rows × 17)
 ```
+
+**Tests are separate files** (owner decision, 2026-11-09): production sources contain no
+`#[cfg(test)] mod tests { … }` blocks. A module with tests ends with `#[cfg(test)] mod tests;`
+and the tests live in the sibling `<module>/tests.rs` (`src/canvas/tests.rs`,
+`src/app/placement/tests.rs`, …). The tests file is a child module, so it reaches private items
+with `use super::*;` and no visibility changes. There is no crate-root `tests/` directory (the
+crate is a single binary, no lib target). Full rules: `AGENTS.md` → "Tests".
 
 ### 2.1 `main.rs` — skeleton (both platforms at once, following the eframe_template)
 
@@ -176,15 +185,17 @@ fn main() {
 }
 ```
 
-### 2.2 `index.html` (project root, for trunk)
+### 2.2 `web/index.html` (trunk entry page) + `Trunk.toml`
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Russet</title>
+  <!-- Trunk resolves href relative to THIS file; the manifest is one level up. -->
+  <link data-trunk rel="rust" href="../Cargo.toml" />
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%;
                  overflow: hidden; background: #1e1e1e; }
@@ -196,10 +207,21 @@ fn main() {
 <body>
   <canvas id="russet_canvas"></canvas>
   <div id="loading_text">Loading Russet…</div>
-  <!-- trunk injects the wasm <script> tag itself -->
 </body>
 </html>
 ```
+
+`Trunk.toml` (repo root) points trunk at the page and keeps the output out of the root:
+
+```toml
+[build]
+target = "web/index.html"
+dist = "dist"
+```
+
+Why the explicit `data-trunk` link: trunk defaults to looking for `Cargo.toml` next to the HTML
+file, so once the page lives in `web/` the manifest must be declared (`href="../Cargo.toml"`).
+The link also makes the wasm entry explicit instead of relying on trunk's auto-discovery.
 
 Page requirement: nothing scrolls (`overflow: hidden`), the canvas fills the screen, otherwise Space and the mouse wheel will scroll the page instead of reaching the app.
 
@@ -326,7 +348,7 @@ Implementation: via `ctx.input_mut(|i| i.consume_key(...))` and modifiers; **mus
 
 ### 3.10 Web build (WASM) — specifics
 
-- Built via **trunk** (§8), page — `index.html` from §2, canvas `#russet_canvas`.
+- Built via **trunk** (§8), page — `web/index.html` (§2.2, config in `Trunk.toml`), canvas `#russet_canvas`.
 - **File dialogs — `rfd::AsyncFileDialog` only**: synchronous `rfd::FileDialog` panics under wasm and is forbidden on web.
   - Open: `AsyncFileDialog::new().add_filter("Images", ["png","jpg","jpeg"]).pick_file().await` → `file.read().await` (bytes) → `image::load_from_memory`.
   - Save: `AsyncFileDialog::new().add_filter(...).set_file_name(&display_name).save_file().await` → `handle.write(bytes).await` — the browser downloads the file. `current_path` is not used on web.
@@ -390,7 +412,7 @@ Dialog from §3.8: history snapshot, resize with content preserved (top-left anc
 **Done:** enlarging and shrinking the canvas does not lose the drawing, the added area is transparent; undo after resize restores the previous size and content.
 
 ### M8. Web build (WASM)
-Set up web per §8 (`rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`), add `index.html` from §2.1/§2.2, run `trunk serve` and get the app working in the browser. Then add web branches to `file_io.rs` per §3.10 (`AsyncFileDialog`: open via `read()`, save via `save_file().write()`, result via `Arc<Mutex<Option<...>>>` + `ctx.request_repaint()`); cfg forks at `app.rs` call sites. Verify in the browser: drawing, `Ctrl`+wheel zoom, wheel / `Shift`+wheel pan, undo, Open/Save.
+Set up web per §8 (`rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`), add `web/index.html` + `Trunk.toml` from §2.2, run `trunk serve` and get the app working in the browser. Then add web branches to `file_io.rs` per §3.10 (`AsyncFileDialog`: open via `read()`, save via `save_file().write()`, result via `Arc<Mutex<Option<...>>>` + `ctx.request_repaint()`); cfg forks at `app.rs` call sites. Verify in the browser: drawing, `Ctrl`+wheel zoom, wheel / `Shift`+wheel pan, undo, Open/Save.
 **Done:** in the browser at `http://localhost:8080` all three tools draw, the eraser makes pixels transparent, PNG opens and downloads, the tab title updates, `Ctrl`+wheel zoom and wheel / `Shift`+wheel pan work, zoom % label and zoom-change console log are visible; `trunk build --release` succeeds.
 
 ### M9. Acceptance and polish
@@ -449,7 +471,7 @@ Exception (owner request, 2026-11-10): the owner explicitly ordered deliberately
 20. About: Help → "About Russet" opens a small non-resizable window with the name, version, and a `Platform:` line — `Windows` on Windows; `Wayland (Linux)` under a Wayland session (or `WINIT_UNIX_BACKEND=wayland`), `X11 (Linux)` under X11 (or `WINIT_UNIX_BACKEND=x11`); `Web (WASM)` in the browser — plus a `Renderer:` line (OpenGL native / WebGL web). Close hides it.
 
 **Build:**
-21. `cargo check`, `cargo clippy -- -D warnings`, `cargo fmt --check`, `cargo test` — all pass; `cargo build --release` succeeds (M9); `trunk build --release` succeeds; `nix build` on Linux succeeds and the wrapped binary runs in a Wayland and an X11 session.
+21. `cargo check`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `cargo test` — all pass; `cargo build --release` succeeds (M9); `trunk build --release` succeeds; `nix build` on Linux succeeds and the wrapped binary runs in a Wayland and an X11 session.
 
 ## 8. Build & run
 
@@ -458,16 +480,17 @@ rustup update                                   # Rust >= 1.95 required
 
 # --- Daily development (Windows) ---
 cargo run                                       # dev build; first run is long (deps once), then seconds
-cargo test                                      # unit tests (history, region_bytes)
-cargo clippy -- -D warnings
+cargo test                                      # unit tests, one file per module (src/<module>/tests.rs)
+cargo clippy --all-targets -- -D warnings       # lints the tests too
 
 # --- Release: MANUALLY, when everything is ready (fat LTO, slow) ---
 cargo build --release
 
 # --- Web (milestone M8), installed once ---
+# Run from the repo root: Trunk.toml points at web/index.html and dist/.
 rustup target add wasm32-unknown-unknown
 cargo install trunk --locked
-trunk serve                                     # http://localhost:8080
+trunk serve                                     # http://127.0.0.1:8080
 trunk build --release                           # static files in dist/
 ```
 

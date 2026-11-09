@@ -284,3 +284,6 @@ pub use native::{open_image, save_image_as, save_image_to};
 
 #[cfg(target_arch = "wasm32")]
 pub use web::{WebOutcome, WebTask, open_image, save_image_as};
+
+#[cfg(test)]
+mod tests;
