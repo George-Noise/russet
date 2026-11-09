@@ -7,7 +7,7 @@
 > 4. Do not implement anything from §6 (out of scope). Do not improve what was not requested.
 > 5. **All user-facing strings must be English only**, hardcoded (§0). No localization files, i18n crates, or translations.
 > 6. If an internet example contradicts compiler errors, trust the compiler and the official template <https://github.com/emilk/eframe_template> for the `eframe` version pinned in Cargo.toml (newer eframe versions have a different signature for the `App` trait method than older articles).
-> 7. One commit per milestone, message format: `M<N>: <short summary>`.
+> 7. Git is not a usable progress channel in this environment (the owner keeps git locally; the `.git` folder is not shared; sandbox commits are auto-generated). Instead, after each finished and verified milestone append one `M<N>: <short summary>`-style entry to `PROGRESS.md` (repo root) — see AGENTS.md "Git & progress log".
 > 8. No `unwrap()`/`expect()` on execution paths involving user data (files, pixel indices) — show errors in a popup (§3.7); application panics are unacceptable. (`expect` in the `main.rs` entry point from the §2 template is allowed.)
 
 ---

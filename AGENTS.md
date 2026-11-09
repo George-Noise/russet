@@ -2,8 +2,16 @@
 
 ## Source of truth
 
-- `SPEC.md` is the full product spec and the authoritative task list. Follow its milestones (M0–M9) in order, one commit per milestone (`M<N>: <summary>`).
+- `SPEC.md` is the full product spec and the authoritative task list. Follow its milestones (M0–M9) in order.
+- `PROGRESS.md` is the progress log and the substitute for git history (see "Git & progress log" below). Read it before starting any task and update it after every finished, verified one.
 - Read `SPEC.md` §4–§7 before changing behavior. Do not add features from §6 (out of scope).
+
+## Git & progress log
+
+- The owner keeps git locally, but the `.git` folder is too heavy to transfer to the agent, and commits made inside the agent sandbox are auto-generated (UUID messages) and carry no usable information. **Git is not a progress channel here — `PROGRESS.md` (repo root) is.**
+- Before starting work: read `PROGRESS.md` (status snapshot, warnings, latest log entries) to learn where the project actually stands.
+- After finishing AND verifying a task or milestone: insert one entry at the top of the "Log" section of `PROGRESS.md` (newest first) — date, `M<N>:`-style title (or a short title for non-milestone work), what changed and in which files, how it was verified (commands + result), and what the owner still must check manually. Update the status snapshot and warnings in the same edit.
+- Never record work as done in `PROGRESS.md` before its verification commands actually pass.
 
 ## Commands
 
@@ -16,6 +24,7 @@
 
 - Single Rust binary crate `russet`: edition 2024, pinned deps from `SPEC.md` §1. Do not add dependencies.
 - Required module split (monolith forbidden): `main`, `app`, `canvas`, `tools`, `history`, `file_io`, `palette`.
+- File-size guard (soft): when a source file exceeds 500 lines, do not split it right away and never split mid-task. Instead, warn the owner that the file has outgrown the limit and propose a split — at the END of the current task, after the owner has verified that everything works. Split only with the owner's approval.
 - Platform `cfg` branches may appear only in `main.rs` and `file_io.rs` (plus call sites in `app.rs`).
 - Canvas is a premultiplied `tiny-skia::Pixmap`; feed egui with `ColorImage::from_rgba_premultiplied`. Use `TextureHandle::set_partial(pos, image, options)` for dirty rectangles.
 - File I/O: native uses synchronous `rfd::FileDialog`; WASM must use `rfd::AsyncFileDialog` only.
