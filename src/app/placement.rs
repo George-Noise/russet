@@ -7,13 +7,25 @@
 
 use eframe::egui::{self, AreaState, Id, LayerId, Order, Pos2, Rect};
 
+/// One CSS-style `rem`: egui 0.37 has no rem API, so this is the 16 pt
+/// default body font size. The floating windows' first-open offsets
+/// (§3.2/§3.3) and the §3.11 snap distance are expressed in it.
+const REM: f32 = 16.0;
+
+/// 0.5rem — the gap between a floating window and the main-window edges on
+/// its FIRST open (§3.2/§3.3): the Tools window is offset 0.5rem from the
+/// left edge, the Palette window 0.5rem from both the left and the bottom
+/// edge. Applied to the `Window::default_pos` anchors in [`super::windows`];
+/// afterwards the §3.11 placement logic treats the offset as a dropped gap.
+pub(super) const FIRST_OPEN_GAP: f32 = 0.5 * REM;
+
 /// Floating-window magnetism (§3.11): when a window is DROPPED with an
 /// edge closer than this distance to a main-window edge, that axis anchors
 /// to the edge at the dropped gap — the window is never pulled flush. 2rem;
 /// egui 0.37 has no rem API, so this is 2 × the 16 pt default body font
-/// size. Anchors are decided only when a drag ends — never on main-window
-/// resizes.
-const WINDOW_SNAP_DISTANCE: f32 = 32.0;
+/// size (see [`REM`]). Anchors are decided only when a drag ends — never on
+/// main-window resizes.
+const WINDOW_SNAP_DISTANCE: f32 = 2.0 * REM;
 
 /// Placement bookkeeping for one floating window ("Tools"/"Palette").
 #[derive(Default)]

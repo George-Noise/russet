@@ -9,7 +9,7 @@
 use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 
 use super::App;
-use super::placement::place_floating_window;
+use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use crate::palette::{COLORS, COLS, GRID_WIDTH, ROWS, TILE};
 use crate::tools::Tool;
 
@@ -41,12 +41,14 @@ impl App {
         let shown = egui::Window::new("Tools")
             .id(tools_window_id())
             .open(&mut open)
-            // First open (§3.2): flush left, vertically centered in the
-            // main window. `default_pos` is consumed only while the window
-            // has no stored position — after any user move or §3.11
-            // repositioning the stored position always wins.
+            // First open (§3.2): 0.5rem from the left edge, vertically
+            // centered in the main window (the LEFT_CENTER pivot interprets
+            // `default_pos` as the window's left-center point). `default_pos`
+            // is consumed only while the window has no stored position —
+            // after any user move or §3.11 repositioning the stored position
+            // always wins.
             .pivot(egui::Align2::LEFT_CENTER)
-            .default_pos(ctx.content_rect().left_center())
+            .default_pos(ctx.content_rect().left_center() + egui::vec2(FIRST_OPEN_GAP, 0.0))
             .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {
                 egui::Grid::new("tools_grid")
@@ -95,12 +97,14 @@ impl App {
         let shown = egui::Window::new("Palette")
             .id(palette_window_id())
             .open(&mut open)
-            // First open (§3.3): the window's bottom-left corner sits in
-            // the main window's bottom-left corner (`Align2::LEFT_BOTTOM`
+            // First open (§3.3): the window's bottom-left corner sits 0.5rem
+            // from the main window's left and bottom edges (`Align2::LEFT_BOTTOM`
             // pivot interprets `default_pos` as that corner's position).
             // As with Tools, the stored position wins after any move.
             .pivot(egui::Align2::LEFT_BOTTOM)
-            .default_pos(ctx.content_rect().left_bottom())
+            .default_pos(
+                ctx.content_rect().left_bottom() + egui::vec2(FIRST_OPEN_GAP, -FIRST_OPEN_GAP),
+            )
             .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {
                 // Top: the primary/secondary color wells. A click on a well
