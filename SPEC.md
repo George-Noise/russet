@@ -106,7 +106,13 @@ russet/
   index.html      — page for trunk: <canvas id="russet_canvas">, title "Russet" (§2)
   src/
     main.rs       — TWO entry points: native (run_native) and web (WebRunner); template below
-    app.rs        — struct App (all state), impl eframe::App, all UI: panels, menus, windows, dialogs, hotkeys
+    app.rs        — struct App (all state), impl eframe::App, the ORCHESTRATOR:
+                    frame flow, hotkeys, strokes, file glue, menu, canvas widget
+    app/             — child modules of app (they see App's private fields):
+      camera.rs      — §3.4 viewport: canvas rect, zoom (Paint.NET-style steps), pan
+      dialogs.rs     — §3.7/§3.8: New, Resize Canvas, unsaved-changes, Error dialogs
+      windows.rs     — §3.2/§3.3: floating "Tools" and "Palette" windows
+      placement.rs   — §3.11: floating-window edge anchoring + resize repositioning
     canvas.rs     — struct Canvas: pixel buffer, resize, pixel access
     tools.rs      — enum Tool, struct ToolState, stroke segment rasterization
     history.rs    — snapshot-based undo/redo
@@ -135,7 +141,8 @@ fn main() -> eframe::Result {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([800.0, 600.0]),
+            // min = ~1.5x smaller than the default in BOTH axes; whole numbers
+            .with_min_inner_size([800.0, 540.0]),
         ..Default::default()
     };
     eframe::run_native("Russet", native_options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
@@ -207,14 +214,14 @@ Page requirement: nothing scrolls (`overflow: hidden`), the canvas fills the scr
 - **View**: Zoom 100% (Ctrl+0), Fit to Window, separator, Tools and Palette checkboxes (open/close the corresponding windows).
 
 ### 3.2 "Tools" window
-Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it).
+Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). On its FIRST open it sits flush left, vertically centered in the main window: `Window::pivot(Align2::LEFT_CENTER)` + `default_pos(ctx.content_rect().left_center())`. `default_pos` is consumed only while the window has no stored area position — afterwards the user's placement (§3.11) always wins.
 
 - Tool buttons are stacked in a single column: "Pencil (P)", "Brush (B)", "Eraser (E)"; the active tool is visually highlighted (`selected`). The layout must already be prepared for growth: when more tools are added, it must be possible to switch to two columns without restructuring the window (use a configurable column count, not hardcoded row assumptions).
 - "Size" slider 1..=100 — affects brush and eraser; disabled for pencil.
 - The Tools window must NOT show the currently selected Primary/Secondary colors. Color previews and color selection live only in the Palette window.
 
 ### 3.3 "Palette" window
-Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). No width-filling widgets are allowed inside: a plain `ui.separator()` fills all available width, and in an auto-sized window that width feeds back into the window size until the window spans the whole screen. The divider is pinned to the swatch-grid width: `ui.add_sized([GRID_WIDTH, 6.0], egui::Separator::default())`, where `GRID_WIDTH = COLS as f32 * TILE` comes from `palette.rs`.
+Floating `egui::Window` titled "Palette", open by default, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). On its FIRST open its bottom-left corner sits at the main window's bottom-left corner: `Window::pivot(Align2::LEFT_BOTTOM)` + `default_pos(ctx.content_rect().left_bottom())`. `default_pos` is consumed only while the window has no stored area position — afterwards the user's placement (§3.11) always wins. No width-filling widgets are allowed inside: a plain `ui.separator()` fills all available width, and in an auto-sized window that width feeds back into the window size until the window spans the whole screen. The divider is pinned to the swatch-grid width: `ui.add_sized([GRID_WIDTH, 6.0], egui::Separator::default())`, where `GRID_WIDTH = COLS as f32 * TILE` comes from `palette.rs`.
 
 Layout, top to bottom:
 
@@ -340,7 +347,7 @@ pos      = clamp(new.min + ratio * free_new, new.min, new.min + free_new)
 
 so a top-left window stays top-left, a centered one stays centered, a bottom-right one stays bottom-right. Resizes never set, clear or change anchors and never pull a free window flush: shrinking the main window must not snap windows at 2rem — anchoring is a decision the user makes only by dropping the window.
 
-**Implementation notes.** Per-window `WindowPlacement` (in `App`) stores the last shown rect, whether the window is being dragged, and the `WindowAnchor` fixed when the last drag ended (`window_anchor`); `place_floating_window` runs right after each `Window::show`; the title-bar drag response is read as `area_id.with("__title_click")` (the id `window.rs` uses internally); a reposition is persisted into the next frame by rewriting the window's `AreaState` (`set_left_top_pos` + `areas_mut().set_state`, layer `Order::Middle`) — `Window::current_pos` is discarded every frame in title-bar mode and cannot be used. Repositioning compares the previous frame's window rect and `content_rect`. Unit tests for `anchor_axis` / `window_anchor` / `reposition_axis` / `reposition_window_pos` live in the `tests` module of `app.rs`.
+**Implementation notes.** Per-window `WindowPlacement` (fields in `App`) stores the last shown rect, whether the window is being dragged, and the `WindowAnchor` fixed when the last drag ended (`window_anchor`); `place_floating_window` (in `app/placement.rs`, together with all §3.11 math and its unit tests) runs right after each `Window::show`; the title-bar drag response is read as `area_id.with("__title_click")` (the id `window.rs` uses internally); a reposition is persisted into the next frame by rewriting the window's `AreaState` (`set_left_top_pos` + `areas_mut().set_state`, layer `Order::Middle`) — `Window::current_pos` is discarded every frame in title-bar mode and cannot be used. Repositioning compares the previous frame's window rect and `content_rect`.
 
 ## 4. Milestones — do them in order
 
@@ -410,7 +417,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**
-1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen); in the Palette window the Primary/Secondary wells (no captions) and "Swap (X)" are on top, the seamless gap-0 swatch grid is below, and clicking a well opens the color picker for that well.
+1. A 1200×800 "Russet" window opens; the File/Edit/Canvas/View menus, Tools and Palette windows, and a white 800×600 canvas on a checkerboard are visible. The Tools window sits flush left, vertically centered, and the Palette window sits flush in the bottom-left corner; the main window cannot be resized below 800×540. Tools are stacked in one column and the Tools window does not show Primary/Secondary colors. The gray canvas background reaches the window edges (no margin); the Tools and Palette windows hug their content and have no resize handles; the Palette window is as wide as its swatch grid (not the full screen); in the Palette window the Primary/Secondary wells (no captions) and "Swap (X)" are on top, the seamless gap-0 swatch grid is below, and clicking a well opens the color picker for that well.
 2. Pencil: hard 1px line (no antialiasing), LMB — Primary, RMB — Secondary; a diagonal at any angle is a 1 px staircase (classic Bresenham), never 2 px thick; a single click sets exactly one pixel.
 3. Brush: smooth line; sizes 1 and 100 produce correct thickness; `]`/`[` change the size.
 4. Eraser: erases to transparency (checkerboard visible), with both buttons.
