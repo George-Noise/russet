@@ -8,8 +8,11 @@
 
   <!-- Trunk entry point. `href` is resolved relative to THIS file, so the
        Cargo manifest one directory up is found from web/. Explicit link =
-       no reliance on Trunk's automatic Cargo.toml discovery. -->
-  <link data-trunk rel="rust" href="../Cargo.toml" />
+       no reliance on Trunk's automatic Cargo.toml discovery.
+       `--all-features` is required: Trunk 0.22 runs wasm-opt on release
+       builds, and its bundled wasm-opt 131 rejects the bulk-memory
+       instructions Rust 1.99 emits unless the features are enabled. -->
+  <link data-trunk rel="rust" href="../Cargo.toml" data-wasm-opt-params="--all-features" />
 
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%;

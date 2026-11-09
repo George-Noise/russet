@@ -194,8 +194,10 @@ fn main() {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Russet</title>
-  <!-- Trunk resolves href relative to THIS file; the manifest is one level up. -->
-  <link data-trunk rel="rust" href="../Cargo.toml" />
+  <!-- Trunk resolves href relative to THIS file; the manifest is one level up.
+       --all-features: trunk 0.22 runs wasm-opt on release builds, and its
+       bundled wasm-opt 131 rejects the bulk-memory ops Rust 1.99 emits. -->
+  <link data-trunk rel="rust" href="../Cargo.toml" data-wasm-opt-params="--all-features" />
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%;
                  overflow: hidden; background: #1e1e1e; }
@@ -222,6 +224,13 @@ dist = "dist"
 Why the explicit `data-trunk` link: trunk defaults to looking for `Cargo.toml` next to the HTML
 file, so once the page lives in `web/` the manifest must be declared (`href="../Cargo.toml"`).
 The link also makes the wasm entry explicit instead of relying on trunk's auto-discovery.
+
+`data-wasm-opt-params="--all-features"` is a **build requirement**, verified on trunk 0.22.1:
+release builds run wasm-opt by default, and the bundled wasm-opt 131 rejects Rust 1.99's
+bulk-memory instructions (`memory.copy operations require bulk memory operations`) without the
+feature flags. This is not the wasm-size optimization from §6 — the measured effect is only
+5.32 MB → 5.02 MB (`-O`; `-Oz` gives 4.94 MB) — it just makes trunk's default release pipeline
+succeed.
 
 Page requirement: nothing scrolls (`overflow: hidden`), the canvas fills the screen, otherwise Space and the mouse wheel will scroll the page instead of reaching the app.
 

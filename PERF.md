@@ -52,7 +52,7 @@ a suggested order.
 | P2 | Open path: no duplicate image buffer | S | — | [ ] TODO |
 | P3 | Region-based undo instead of full snapshots | M | **SPEC §3.6** | [ ] TODO |
 | P4 | wasm-only eframe features + release log level | S/M | **SPEC §1** | [ ] TODO |
-| P5 | wasm-opt for the web bundle | S | **SPEC §6** | [ ] TODO |
+| P5 | wasm-opt for the web bundle | S | **SPEC §6** | [x] DONE (build fix, 2026-11-09) |
 | P6 | Canvas/history budgets on wasm | S | **owner decision** | [ ] TODO |
 | P7 | Micro-allocation cleanups | S | — (after P1–P6 profiled) | [ ] TODO |
 | P8 | Release profile tuning (build speed) | S | **SPEC §1** | [ ] TODO |
@@ -70,7 +70,10 @@ Machine used for the numbers below: Intel Xeon E5-2680 v3, 24 threads, 15 GB RAM
 | `cargo build --release`, no-op (nothing changed) | **6 s** |
 | `target/release/russet` size (stripped) | **14.1 MiB (14,784,656 bytes)** |
 | History after 20 strokes, 2000×1500 canvas (full snapshots) | **240 MB** (formula, §2) |
-| `dist/*.wasm` size | unknown — never built here |
+| `trunk build --release`, first build (wasm + bindgen + wasm-opt) | **144 s** (fails at wasm-opt without P5's flags); rebuild **10 s** |
+| `dist/` release bundle | wasm **5,017,305 B**, JS **76,943 B**, html **6,167 B** |
+| wasm `-Oz` instead of trunk's default `-O` | 4,941,128 B (−1.5 % more) |
+| wasm fetch + compile in Firefox (localhost) | ~70 ms |
 
 The relink number is the painful one: any source edit costs ~2.7 minutes in release because
 rewriting one crate re-runs the whole `lto = "fat"` + `codegen-units = 1` pipeline.
@@ -108,6 +111,21 @@ Plus transient spikes the browser cannot reclaim:
 - A single click on the canvas snapshots the whole canvas even though one pixel changed.
 
 ## 3. Tasks
+
+### Which task fixes which cost
+
+| Cost | Task |
+|---|---|
+| History: 240 MB after 20 strokes on 2000×1500 (full snapshots) | **P3** (biggest win) |
+| Mip chain: +33 % VRAM and a full `generateMipmap` per upload while drawing | **P1** |
+| Open spike: one extra full-size RGBA buffer (48 MB for a 4000×3000 photo) | **P2** |
+| Bundle/code memory: 5.0 MB wasm + 77 KB JS | **P4** (features), **P5** (wasm-opt) |
+| Worst case at 4096×4096: ~405 MB | **P6** (web cap) |
+| Per-frame transient `Vec`/`ColorImage` allocations | **P7** |
+
+Note: none of these is "remove the web build". The web build costs nothing on native; the RAM
+numbers above are mostly the same on native and wasm — the difference is that wasm linear memory
+never shrinks, so every transient peak is permanent there.
 
 ### P1 — Mipmaps only at zoom < 100 %  [no gate, S]
 
@@ -183,18 +201,19 @@ Plus transient spikes the browser cannot reclaim:
   comparison of the native binary. Browser: the app loads, keyboard/tab focus still works.
 - **Result:** _not done_
 
-### P5 — wasm-opt for the web bundle  [GATE: SPEC §6 exception, S]
+### P5 — wasm-opt for the web bundle  [DONE 2026-11-09 — build fix, was a gate]
 
-- **Ask first:** §6 says "wasm size optimization (wasm-opt, etc.)" is out of scope. This task
-  proposes the exception for the web artifacts only.
-- **Do:** add `data-wasm-opt="2"` (or `"z"`) to the `<link data-trunk rel="rust" ...>` in
-  `web/index.html`; if release-only is preferred, keep it off for `trunk serve` (trunk's
-  `data-wasm-opt` applies to both, so the alternative is a `[build]`/profile setting — check trunk
-  docs before choosing).
-- **Effect:** typically 30–50 % smaller `.wasm` → faster download, compile and lower code memory.
-- **Verify (owner, needs trunk):** `trunk build --release`, record `dist/*.wasm` before/after in
-  §1, confirm the page still runs.
-- **Result:** _not done_
+- **What actually happened:** trunk 0.22.1 runs wasm-opt on **every release build by default**
+  (`-O`), so wasm-opt is not an optional §6 optimization — a release build *fails* without a fix.
+  The bundled wasm-opt 131 rejects Rust 1.99's bulk-memory output
+  (`memory.copy operations require bulk memory operations`), so `web/index.html` now passes
+  `data-wasm-opt-params="--all-features"` on the rust link.
+- **Measured:** wasm 5,317,459 → 5,017,305 B with `-O` (5.6 %); `-Oz` would give 4,941,128 B
+  (−1.5 % more) but is not worth a second config knob. First release web build 144 s, rebuild 10 s.
+- **Not a §6 change:** the size gain is small and the flags are required for the default pipeline
+  to succeed; §6's "no wasm size optimization" still stands (no `-Oz`, no wasm-split).
+- **Result:** DONE — `web/index.html`, SPEC §2.2, verified end-to-end in Firefox (see
+  `PROGRESS.md` 2026-11-09 "M8: web build verified").
 
 ### P6 — Canvas/history budgets on wasm  [GATE: owner decision, S]
 
