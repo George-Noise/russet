@@ -467,4 +467,6 @@ trunk build --release                           # static files in dist/
 ```
 
 cargo and trunk build in parallel on all logical cores by default — no `-j` flags are needed and none should be passed.
-(For future reference: a Linux build will require the packages `libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev` — do NOT install or test this now.)
+(For future reference: a Linux build will require the packages `libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev` — do NOT install or test this now. Owner decision 2026-11-09: on Linux the app is built and run via `flake.nix`, which needs none of these packages.)
+
+A human-readable copy of the build & run instructions lives in `README.md` (English; build & run only — that file is written for people, not for agents). Keep it in sync with this section and `flake.nix` when commands change.
