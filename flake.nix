@@ -38,23 +38,26 @@
       # wrapper's LD_LIBRARY_PATH instead of buildInputs:
       #   wayland              — libwayland-client/cursor/egl (wayland-sys)
       #   libxkbcommon         — keyboard mapping (+ the -x11 variant)
-      #   xorg.*               — X11 backend (x11-dl), also covers XWayland
+      #   libx11 & co.         — X11 backend (x11-dl), also covers XWayland
       #   libGL (glvnd) + mesa — OpenGL: GLX on X11, EGL/GBM on Wayland
       #   fontconfig           — egui system font provider (fontique)
       # No vulkan-loader: the glow renderer never touches Vulkan.
+      # X11 libs use the new-style top-level attrs (libx11, not xorg.libX11):
+      # the old xorg.* aliases are deprecated in nixpkgs and emit
+      # evaluation warnings on every nix command.
       runtimeLibs = pkgs: with pkgs; [
         libGL
         mesa
         wayland
         libxkbcommon
         fontconfig
-        xorg.libX11
-        xorg.libXcursor
-        xorg.libXrandr
-        xorg.libXi
-        xorg.libXrender
-        xorg.libXext
-        xorg.libxcb
+        libx11
+        libxcursor
+        libxrandr
+        libxi
+        libxrender
+        libxext
+        libxcb
       ];
     in
     {
