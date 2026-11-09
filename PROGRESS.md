@@ -21,6 +21,7 @@
 | M7 Resize Canvas + New | done | |
 | M8 Web (WASM) | code written, never built | `wasm32` branches exist in `main.rs` / `app.rs` / `file_io.rs`; trunk is unavailable in the sandbox — ALL wasm checks are deferred to the owner (Windows) |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
+| Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -31,6 +32,24 @@
   (see the exception in AGENTS.md "Repo facts").
 
 ## Log — newest first. Insert a new entry directly under this heading.
+
+### 2026-11-09 — `Extras:` About window with platform label + flake.nix (Linux) — owner request
+- **What:** two owner-requested additions. (1) A **Help → "About Russet"** menu item opens a small non-resizable window (name, version, one-line description, Close button) that states the platform the app runs on: `Wayland (Linux)`, `X11 (Linux)`, `Windows`, `macOS` or `Web (WASM)`, plus the renderer (OpenGL/WebGL via eframe glow). The Linux Wayland-vs-X11 check mirrors winit's own backend selection: `WINIT_UNIX_BACKEND` override first, then `WAYLAND_DISPLAY`/`WAYLAND_SOCKET` → Wayland, else `DISPLAY` → X11. Implemented with plain `cfg!()` macros (one code path compiles for all targets; no new `#[cfg]` attributes outside `main.rs`). (2) **`flake.nix`** builds the app on Linux (`nix build` / `nix run` / `nix develop`, x86_64+aarch64): `rustPlatform.buildRustPackage` against the existing `Cargo.lock`; only `fontconfig` is linked directly (egui system fonts), all other GUI libs (wayland, libxkbcommon, X11, GLX/EGL) are dlopen'd at runtime and provided via `wrapProgram` LD_LIBRARY_PATH, so one binary runs in Wayland and X11 sessions (force with `WINIT_UNIX_BACKEND=x11|wayland`). No new crate dependencies.
+- **Files:** `src/main.rs` (`platform_label` / `renderer_label`), `src/app.rs` (`show_about` state, Help menu, dialog call), `src/app/dialogs.rs` (`about_dialog`), new `flake.nix`; docs synced: SPEC §3.1 (Help menu), §6 (owner exception for the flake), §7 (item 1 mentions Help; new item 20 About; Build renumbered to 21), AGENTS.md (platform-label + flake bullets).
+- **Verified:** `cargo check` (baseline AND after the change), `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` — all green, 25 tests passed (Rust 1.99.1, Linux). The flake itself was NOT built here — the sandbox has no Nix; see below.
+- **Owner must check:** on a Nix machine: `nix build && ./result/bin/russet` in a Wayland session (About must say `Wayland (Linux)`) and in an X11 session / `WINIT_UNIX_BACKEND=x11` (About must say `X11 (Linux)`); on Windows: Help → About Russet shows `Platform: Windows`; web build: `Platform: Web (WASM)`.
+
+### 2026-11-09 — `UX-fix:` main-window min size is a fixed 500×400 (owner decision)
+- **What:** the owner clarified the intent — the minimum window size is simply FIXED at
+  500×400, not derived from the default (the previous 800×540 "~1.5x" interpretation is
+  reverted). Process change recorded per owner's instruction: to save time, heavy checks
+  (`cargo test` / `clippy` / `fmt`) are no longer run by default — see AGENTS.md "Commands";
+  default verification is `cargo check` only.
+- **Files:** `src/main.rs` (min inner size + comment), `SPEC.md` (§2.1 code quote, §7 item 1),
+  `AGENTS.md` ("Commands" — new verification policy).
+- **Verified:** `cargo check` — green. Tests/clippy/fmt skipped per the owner's
+  time-saving instruction (policy above); the change is one constant.
+- **Owner must check:** the window resizes down to 500×400 and no further (next `cargo run`).
 
 ### 2026-11-09 — `UX:` first-open positions for Tools/Palette + main-window min size
 - **What:** on its first open the Tools window sits flush left, vertically centered in the

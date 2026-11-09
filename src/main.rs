@@ -12,16 +12,60 @@ use app::App;
 #[cfg(not(target_arch = "wasm32"))]
 use eframe::egui;
 
+/// Human-readable name of the platform/windowing system the app runs on,
+/// shown in the About window: Web (WASM build), Windows, macOS, or — on
+/// Unix — the winit backend that will actually be used: Wayland or X11.
+///
+/// The check mirrors winit's own Linux backend selection so the label
+/// matches reality without extra runtime API: the `WINIT_UNIX_BACKEND`
+/// override wins, then winit tries Wayland FIRST (so a compositor socket
+/// advertised via `WAYLAND_DISPLAY`/`WAYLAND_SOCKET` means Wayland), and
+/// only falls back to X11 (`DISPLAY`). Uses `cfg!()` macros rather than
+/// `#[cfg]` attributes — one code path compiles for every target.
+pub(crate) fn platform_label() -> &'static str {
+    if cfg!(target_arch = "wasm32") {
+        "Web (WASM)"
+    } else if cfg!(windows) {
+        "Windows"
+    } else if cfg!(target_os = "macos") {
+        "macOS"
+    } else {
+        match std::env::var("WINIT_UNIX_BACKEND").as_deref() {
+            Ok("x11") => "X11 (Linux)",
+            Ok("wayland") => "Wayland (Linux)",
+            _ => {
+                let wayland_session = std::env::var_os("WAYLAND_DISPLAY").is_some()
+                    || std::env::var_os("WAYLAND_SOCKET").is_some();
+                if wayland_session {
+                    "Wayland (Linux)"
+                } else if std::env::var_os("DISPLAY").is_some() {
+                    "X11 (Linux)"
+                } else {
+                    "Unknown (Linux)"
+                }
+            }
+        }
+    }
+}
+
+/// The rendering backend eframe runs with (the Cargo.toml pins the glow
+/// feature): OpenGL on native builds, WebGL in the browser.
+pub(crate) fn renderer_label() -> &'static str {
+    if cfg!(target_arch = "wasm32") {
+        "WebGL (eframe glow)"
+    } else {
+        "OpenGL (eframe glow)"
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init();
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
-            // The minimum lets the window shrink ~1.5x in BOTH axes:
-            // 1200/1.5 = 800 exactly, 800/1.5 ≈ 533 → rounded to a whole,
-            // "nice" 540 (owner's request; 800/540 ≈ 1.48).
-            .with_min_inner_size([800.0, 540.0]),
+            // Owner-set fixed minimum window size (not derived from the default).
+            .with_min_inner_size([500.0, 400.0]),
         ..Default::default()
     };
     eframe::run_native(

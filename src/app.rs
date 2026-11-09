@@ -100,6 +100,7 @@ pub struct App {
     resize_height: f32,
     pending_action: Option<PendingAction>,
     error_popup: Option<String>,
+    show_about: bool,
     window_title: String,
 }
 
@@ -166,6 +167,7 @@ impl App {
             resize_height: NEW_HEIGHT as f32,
             pending_action: None,
             error_popup: None,
+            show_about: false,
             window_title: String::new(),
         }
     }
@@ -561,6 +563,13 @@ impl App {
                     ui.checkbox(&mut self.tools_window_open, "Tools");
                     ui.checkbox(&mut self.palette_window_open, "Palette");
                 });
+
+                ui.menu_button("Help", |ui| {
+                    if ui.button("About Russet").clicked() {
+                        self.show_about = true;
+                        ui.close();
+                    }
+                });
             });
         });
     }
@@ -679,6 +688,7 @@ impl eframe::App for App {
         self.new_dialog(&ctx);
         self.resize_dialog(&ctx);
         self.error_dialog(&ctx);
+        self.about_dialog(&ctx);
         self.update_title(&ctx);
     }
 }

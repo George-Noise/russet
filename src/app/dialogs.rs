@@ -158,4 +158,35 @@ impl App {
             self.error_popup = None;
         }
     }
+
+    /// The "About Russet" window (owner request 2026-11-09): name, version
+    /// and the platform the app is running on — Wayland, X11, Windows, Web
+    /// (WASM), etc. The platform/renderer strings come from `main.rs`
+    /// (`crate::platform_label` / `crate::renderer_label`), the place where
+    /// platform knowledge is allowed to live (AGENTS.md "Repo facts").
+    pub(super) fn about_dialog(&mut self, ctx: &Context) {
+        if !self.show_about {
+            return;
+        }
+        let mut close = false;
+        egui::Window::new("About Russet")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("Russet");
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.add_space(4.0);
+                ui.label("A tiny bitmap paint program built with egui/eframe.");
+                ui.add_space(4.0);
+                ui.label(format!("Platform: {}", crate::platform_label()));
+                ui.label(format!("Renderer: {}", crate::renderer_label()));
+                ui.add_space(6.0);
+                if ui.button("Close").clicked() {
+                    close = true;
+                }
+            });
+        if close {
+            self.show_about = false;
+        }
+    }
 }
