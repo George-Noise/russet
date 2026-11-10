@@ -157,6 +157,13 @@ impl App {
         Pos2::new(p.x, p.y)
     }
 
+    /// Inverse of [`Self::canvas_pos`]: canvas point → logical screen point
+    /// (used by the preview overlays of the Line/Shape/Text tools).
+    pub(super) fn screen_pos(&self, rect: Rect, canvas: Pos2) -> Pos2 {
+        let ppp = self.ctx.pixels_per_point();
+        rect.min + canvas.to_vec2() * (self.zoom / ppp)
+    }
+
     pub(super) fn fit_to_window(&mut self) {
         let rect = self.last_panel_rect;
         if rect.width() <= 0.0 || rect.height() <= 0.0 {

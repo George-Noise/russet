@@ -3,7 +3,13 @@
 //! in child modules (they can access `App`'s private fields):
 //!   [`camera`]    — §3.4: canvas rect, zoom (Paint.NET-style steps), pan
 //!   [`dialogs`]   — §3.7/§3.8: New / Resize Canvas / unsaved-changes / Error
+//!   [`panels`]    — owner request 2026-11-10: the "History" log and the
+//!                   "Layers" placeholder windows
 //!   [`placement`] — §3.11: floating-window edge anchoring + resize repositioning
+//!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
+//!                   (press–drag–release and polyline gestures, overlay
+//!                   preview, commit)
+//!   [`text_tool`] — owner request 2026-11-10: the Text tool input window
 //!   [`windows`]   — §3.2/§3.3: the floating "Tools" and "Palette" windows
 //!
 //! Keep new subsystems as child modules instead of growing this file.
@@ -17,15 +23,20 @@ use crate::canvas::Canvas;
 use crate::file_io;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::{WebOutcome, WebTask};
-use crate::history::History;
-use crate::tools::{Tool, ToolState, draw_segment};
+use crate::history::{ActionLog, History};
+use crate::tools::{Tool, ToolState, draw_segment, pick_color};
 
 mod camera;
 mod dialogs;
+mod panels;
 mod placement;
+mod preview;
+mod text_tool;
 mod windows;
 
 use self::placement::WindowPlacement;
+use self::preview::PreviewState;
+use self::text_tool::TextEditState;
 
 /// Canvas texture at integer zoom (100%..=800%): the canvas rect is snapped
 /// to the physical pixel grid, so each texel covers an exact whole number of
@@ -76,6 +87,9 @@ pub struct App {
     canvas_tex: egui::TextureHandle,
     checker_tex: egui::TextureHandle,
     tools: ToolState,
+    /// The tool active on the previous frame: switching it cancels any
+    /// pending preview gesture or text entry (see `draw_canvas`).
+    last_tool: Tool,
     history: History,
     zoom: f32,
     pan: Vec2,
@@ -84,8 +98,19 @@ pub struct App {
     stroke_button: Option<PointerButton>,
     tools_window_open: bool,
     palette_window_open: bool,
+    history_window_open: bool,
+    layers_window_open: bool,
     tools_placement: WindowPlacement,
     palette_placement: WindowPlacement,
+    /// Pending gesture of the Line/Shape preview tools (owner request
+    /// 2026-11-10); interaction and commits live in [`preview`].
+    preview: PreviewState,
+    /// Pending text entry of the Text tool (owner request 2026-11-10);
+    /// the input window and commit live in [`text_tool`].
+    text_edit: Option<TextEditState>,
+    /// Read-only action log behind the "History" window (owner request
+    /// 2026-11-10).
+    action_log: ActionLog,
     last_panel_rect: Rect,
     /// `ctx.content_rect()` of the previous frame; a change means the main
     /// window was resized and floating windows must be re-proportioned.
@@ -145,6 +170,7 @@ impl App {
             canvas_tex,
             checker_tex,
             tools: ToolState::new(),
+            last_tool: Tool::Pencil,
             history: History::new(),
             zoom: 1.0,
             pan: Vec2::ZERO,
@@ -153,8 +179,13 @@ impl App {
             stroke_button: None,
             tools_window_open: true,
             palette_window_open: true,
+            history_window_open: true,
+            layers_window_open: true,
             tools_placement: WindowPlacement::default(),
             palette_placement: WindowPlacement::default(),
+            preview: PreviewState::None,
+            text_edit: None,
+            action_log: ActionLog::new(),
             last_panel_rect: cc.egui_ctx.content_rect(),
             last_content_rect: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -204,6 +235,18 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::E)) {
             self.tools.tool = Tool::Eraser;
         }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::I)) {
+            self.tools.tool = Tool::Eyedropper;
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::L)) {
+            self.tools.tool = Tool::Line;
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::U)) {
+            self.tools.tool = Tool::Shape;
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::T)) {
+            self.tools.tool = Tool::Text;
+        }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::OpenBracket)) {
             self.tools.size = (self.tools.size - 1.0).clamp(1.0, 100.0);
         }
@@ -234,6 +277,7 @@ impl App {
             self.canvas.set_pixmap(previous);
             self.repaint_full();
             self.dirty = true;
+            self.action_log.push("Undo");
         }
     }
 
@@ -243,6 +287,7 @@ impl App {
             self.canvas.set_pixmap(next);
             self.repaint_full();
             self.dirty = true;
+            self.action_log.push("Redo");
         }
     }
 
@@ -256,6 +301,61 @@ impl App {
                     self.tools.primary
                 }
             }
+            // Unreachable in practice: the Line/Shape/Text tools freeze
+            // their color when the gesture starts (see preview.rs /
+            // text_tool.rs); the Eyedropper never paints.
+            Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => {
+                if self.stroke_button == Some(PointerButton::Secondary) {
+                    self.tools.secondary
+                } else {
+                    self.tools.primary
+                }
+            }
+        }
+    }
+
+    /// Eyedropper: pressing on the canvas samples the pixel under the
+    /// pointer into the primary (LMB) or secondary (RMB) well, and holding
+    /// the button down keeps sampling while dragging (Paint.NET-style).
+    /// Never touches the canvas or the history.
+    fn handle_pick(&mut self, ui: &egui::Ui, rect: Rect, response: &egui::Response, panning: bool) {
+        if panning {
+            return;
+        }
+        let (cursor, primary_down, secondary_down, primary_pressed, secondary_pressed) =
+            ui.input(|i| {
+                (
+                    i.pointer.latest_pos(),
+                    i.pointer.button_down(PointerButton::Primary),
+                    i.pointer.button_down(PointerButton::Secondary),
+                    i.pointer.button_pressed(PointerButton::Primary),
+                    i.pointer.button_pressed(PointerButton::Secondary),
+                )
+            });
+        let start = (primary_pressed || secondary_pressed) && response.hovered();
+        let drag_continue = response.dragged();
+        if !start && !drag_continue {
+            return;
+        }
+        let Some(cursor) = cursor else {
+            return;
+        };
+        if !rect.contains(cursor) {
+            return;
+        }
+        let pos = self.canvas_pos(rect, cursor);
+        let x = pos.x.floor() as i32;
+        let y = pos.y.floor() as i32;
+        if x < 0 || y < 0 || x >= self.canvas.width as i32 || y >= self.canvas.height as i32 {
+            return;
+        }
+        let Some(color) = pick_color(self.canvas.pixmap(), x as u32, y as u32) else {
+            return;
+        };
+        if primary_down {
+            self.tools.primary = color;
+        } else if secondary_down {
+            self.tools.secondary = color;
         }
     }
 
@@ -315,6 +415,13 @@ impl App {
             };
             if let (Some(button), Some(cursor)) = (button, cursor) {
                 self.history.push_snapshot(self.canvas.pixmap().clone());
+                self.action_log.push(match self.tools.tool {
+                    Tool::Pencil => "Pencil stroke",
+                    Tool::Brush => "Brush stroke",
+                    Tool::Eraser => "Eraser stroke",
+                    // Guard: the preview tools never reach this path.
+                    Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => "Stroke",
+                });
                 self.stroke_button = Some(button);
                 self.is_stroking = true;
                 let pos = self.canvas_pos(rect, cursor);
@@ -349,6 +456,11 @@ impl App {
         }
         self.display_name = "Untitled".to_string();
         self.dirty = false;
+        // A new document: drop pending gestures and restart the log.
+        self.cancel_preview();
+        self.cancel_text_edit();
+        self.action_log.clear();
+        self.action_log.push(format!("New canvas {width}×{height}"));
         self.set_zoom(1.0, None, self.last_panel_rect);
         self.pan = Vec2::ZERO;
         self.repaint_full();
@@ -385,6 +497,12 @@ impl App {
         }
         self.display_name = loaded.name;
         self.dirty = false;
+        // A new document: drop pending gestures and restart the log.
+        self.cancel_preview();
+        self.cancel_text_edit();
+        self.action_log.clear();
+        let name = self.display_name.clone();
+        self.action_log.push(format!("Opened {name}"));
         self.set_zoom(1.0, None, self.last_panel_rect);
         self.pan = Vec2::ZERO;
         self.repaint_full();
@@ -566,6 +684,8 @@ impl App {
                     ui.separator();
                     ui.checkbox(&mut self.tools_window_open, "Tools");
                     ui.checkbox(&mut self.palette_window_open, "Palette");
+                    ui.checkbox(&mut self.history_window_open, "History");
+                    ui.checkbox(&mut self.layers_window_open, "Layers");
                 });
 
                 ui.menu_button("Help", |ui| {
@@ -621,9 +741,23 @@ impl App {
         );
 
         self.handle_scroll(ui, panel_rect, response.hovered());
+        // A tool switch (hotkey, Tools window, menu) cancels any pending
+        // preview gesture or text entry — they are tool-bound states.
+        if self.last_tool != self.tools.tool {
+            self.last_tool = self.tools.tool;
+            self.cancel_preview();
+            self.cancel_text_edit();
+        }
         let panning = self.handle_pan(ui, &response);
         let rect = self.canvas_rect(panel_rect);
-        self.handle_stroke(ui, rect, &response, panning);
+        match self.tools.tool {
+            Tool::Pencil | Tool::Brush | Tool::Eraser => {
+                self.handle_stroke(ui, rect, &response, panning);
+            }
+            Tool::Eyedropper => self.handle_pick(ui, rect, &response, panning),
+            Tool::Line | Tool::Shape => self.handle_preview_input(ui, rect, &response, panning),
+            Tool::Text => self.handle_text_input(ui, rect, &response, panning),
+        }
 
         let painter = ui.painter_at(panel_rect);
         painter.rect_filled(panel_rect, 0.0, Color32::from_rgb(0x40, 0x40, 0x40));
@@ -639,6 +773,11 @@ impl App {
         let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
         painter.image(self.canvas_tex.id(), rect, uv, Color32::WHITE);
 
+        // Pending-gesture previews (Line/Curve/Shape/Text), on top of the
+        // canvas texture; they never touch the Pixmap.
+        self.draw_preview_overlay(&painter, rect);
+        self.draw_text_preview(&painter, rect);
+
         let zoom_label = format!("{}%", (self.zoom * 100.0).round() as i32);
         painter.text(
             panel_rect.right_bottom() - egui::vec2(8.0, 6.0),
@@ -648,22 +787,30 @@ impl App {
             Color32::from_gray(140),
         );
 
-        if response.hovered()
-            && matches!(self.tools.tool, Tool::Brush | Tool::Eraser)
-            && let Some(cursor) = ui.input(|i| i.pointer.hover_pos())
-        {
-            let ppp = self.ctx.pixels_per_point();
-            let radius = (self.tools.size * self.zoom * 0.5 / ppp).max(0.5);
-            painter.circle_stroke(
-                cursor,
-                radius + 1.0,
-                egui::Stroke::new(1.0, Color32::from_black_alpha(180)),
-            );
-            painter.circle_stroke(
-                cursor,
-                radius,
-                egui::Stroke::new(1.0, Color32::from_white_alpha(220)),
-            );
+        if response.hovered() {
+            let tool = self.tools.tool;
+            if matches!(
+                tool,
+                Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text
+            ) {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if matches!(tool, Tool::Brush | Tool::Eraser | Tool::Line | Tool::Shape)
+                && let Some(cursor) = ui.input(|i| i.pointer.hover_pos())
+            {
+                let ppp = self.ctx.pixels_per_point();
+                let radius = (self.tools.size * self.zoom * 0.5 / ppp).max(0.5);
+                painter.circle_stroke(
+                    cursor,
+                    radius + 1.0,
+                    egui::Stroke::new(1.0, Color32::from_black_alpha(180)),
+                );
+                painter.circle_stroke(
+                    cursor,
+                    radius,
+                    egui::Stroke::new(1.0, Color32::from_white_alpha(220)),
+                );
+            }
         }
     }
 }
@@ -686,6 +833,9 @@ impl eframe::App for App {
 
         self.tools_window(&ctx);
         self.palette_window(&ctx);
+        self.history_window(&ctx);
+        self.layers_window(&ctx);
+        self.text_tool_window(&ctx);
         // Both windows must observe the resize before the tracker flips.
         self.last_content_rect = Some(ctx.content_rect());
         self.discard_dialog(&ctx);

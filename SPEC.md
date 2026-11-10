@@ -310,6 +310,7 @@ On OK: `history.push_snapshot()`, then `canvas.resize_canvas(w, h)` — content 
 | Keys | Action |
 |---|---|
 | `P` / `B` / `E` | Pencil / Brush / Eraser |
+| `I` / `L` / `U` / `T` | Eyedropper / Line / Shape / Text (owner request 2026-11-10, see §6 exception) |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y`, `Ctrl+Shift+Z` | Redo (both keys) |
 | `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S` | New / Open / Save / Save As |
@@ -418,6 +419,8 @@ Run the §7 checklist in full (Windows + web), fix what is found. Optional (only
 Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); fill (flood fill); eyedropper; transforms (rotate/flip/image scale); action history list; saving application settings; recent files; themes/appearance customization; custom window decorations (`set_decorations(false)`); multithreading in application code (rayon/std::thread/tokio); any new dependencies; status bar; custom project format; internationalization and localization (in any form); macOS and Linux builds/CI; beforeunload tab protection on web; PWA/offline mode/service worker; wasm size optimization (wasm-opt, etc.).
 
 Exception (owner decision, 2026-11-09): `flake.nix` for building and running the app on **Linux** (Wayland/X11, `nix build` / `nix run` / `nix develop`) is part of the repo and must be kept in sync with `Cargo.toml` (deps, binary name, runtime dlopen libs). This does not re-enable anything else from this list.
+
+Exception (owner request, 2026-11-10): the owner explicitly ordered deliberately simple first iterations of the following §6 items, to be reworked later — **Eyedropper** (canvas picking only), **Line/Curve tool**, **Shapes** (rectangle + ellipse), **Text** (font size only), a **non-clickable action-history log** window, and a **Layers placeholder window** (single implicit layer). New hotkeys `I`/`L`/`U`/`T` (§3.9); no new dependencies; no new `#[cfg]` platform branches. Implemented behavior is described in `PROGRESS.md` (2026-11-10 entry), which is the source of truth for these provisional features until they are formally specified. This does not re-enable anything else from the list.
 
 ## 7. Acceptance checklist — run manually at the end of M9
 

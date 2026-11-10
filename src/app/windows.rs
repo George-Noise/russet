@@ -11,7 +11,7 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use crate::palette::{COLORS, COLS, GRID_WIDTH, ROWS, TILE};
-use crate::tools::Tool;
+use crate::tools::{LineMode, ShapeKind, Tool};
 
 /// Tools are stacked in one column (SPEC §3.2).
 const TOOL_COLUMNS: usize = 1;
@@ -36,6 +36,10 @@ impl App {
             (Tool::Pencil, "Pencil (P)"),
             (Tool::Brush, "Brush (B)"),
             (Tool::Eraser, "Eraser (E)"),
+            (Tool::Eyedropper, "Eyedropper (I)"),
+            (Tool::Line, "Line (L)"),
+            (Tool::Shape, "Shape (U)"),
+            (Tool::Text, "Text (T)"),
         ];
         let mut open = true;
         let shown = egui::Window::new("Tools")
@@ -68,11 +72,40 @@ impl App {
                         }
                     });
 
-                let is_pencil = self.tools.tool == Tool::Pencil;
+                let size_affected = matches!(
+                    self.tools.tool,
+                    Tool::Brush | Tool::Eraser | Tool::Line | Tool::Shape
+                );
                 ui.add_enabled(
-                    !is_pencil,
+                    size_affected,
                     egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"),
                 );
+
+                if self.tools.tool == Tool::Line {
+                    ui.horizontal(|ui| {
+                        ui.label("Mode");
+                        ui.radio_value(&mut self.tools.line_mode, LineMode::Straight, "Straight");
+                        ui.radio_value(&mut self.tools.line_mode, LineMode::Curve, "Curve");
+                    });
+                    if self.tools.line_mode == LineMode::Curve {
+                        ui.weak("Click adds points; Enter/double-click places, Esc cancels.");
+                    }
+                }
+                if self.tools.tool == Tool::Shape {
+                    ui.horizontal(|ui| {
+                        ui.label("Kind");
+                        ui.radio_value(
+                            &mut self.tools.shape_kind,
+                            ShapeKind::Rectangle,
+                            "Rectangle",
+                        );
+                        ui.radio_value(&mut self.tools.shape_kind, ShapeKind::Ellipse, "Ellipse");
+                    });
+                    ui.checkbox(&mut self.tools.shape_fill, "Fill");
+                }
+                if self.tools.tool == Tool::Text {
+                    ui.weak("Click the canvas to place text; size is set in the Text window.");
+                }
             });
         if let Some(response) = &shown {
             place_floating_window(

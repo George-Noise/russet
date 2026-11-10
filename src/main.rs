@@ -6,6 +6,7 @@ mod canvas;
 mod file_io;
 mod history;
 mod palette;
+mod text;
 mod tools;
 
 use app::App;

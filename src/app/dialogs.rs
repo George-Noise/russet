@@ -101,8 +101,14 @@ impl App {
             let height = self.resize_height.round() as u32;
             self.history.push_snapshot(self.canvas.pixmap().clone());
             self.canvas.resize_canvas(width, height);
+            // Pending gestures reference canvas coordinates that may no
+            // longer be meaningful — drop them together with the snapshot.
+            self.cancel_preview();
+            self.cancel_text_edit();
             self.repaint_full();
             self.dirty = true;
+            self.action_log
+                .push(format!("Canvas resized to {width}×{height}"));
             self.show_resize_dialog = false;
         } else if cancel || !open {
             self.show_resize_dialog = false;

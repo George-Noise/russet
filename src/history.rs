@@ -3,6 +3,64 @@ use tiny_skia::Pixmap;
 const MAX_SNAPSHOTS: usize = 20;
 const MAX_BYTES: usize = 256 * 1024 * 1024;
 
+/// One entry of the read-only action log behind the "History" window
+/// (owner request 2026-11-10). `id` keeps increasing for the lifetime of
+/// the document, so entries stay identifiable even after old ones are
+/// evicted.
+#[derive(Clone, Debug)]
+pub struct LogEntry {
+    pub id: u64,
+    pub label: String,
+}
+
+/// A plain, non-interactive log of document actions. The "History" window
+/// renders it newest-first; making entries clickable (undo-to-state) will
+/// replace this whole structure later, so it stays deliberately trivial.
+pub struct ActionLog {
+    entries: Vec<LogEntry>,
+    next_id: u64,
+}
+
+/// The log is a memory-bound convenience view, not a document feature: it
+/// keeps the most recent actions only.
+const MAX_LOG_ENTRIES: usize = 200;
+
+impl ActionLog {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            next_id: 1,
+        }
+    }
+
+    pub fn push(&mut self, label: impl Into<String>) {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.entries.push(LogEntry {
+            id,
+            label: label.into(),
+        });
+        while self.entries.len() > MAX_LOG_ENTRIES {
+            self.entries.remove(0);
+        }
+    }
+
+    /// Oldest first; the window displays the slice reversed.
+    pub fn items(&self) -> &[LogEntry] {
+        &self.entries
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+}
+
+impl Default for ActionLog {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct History {
     undo: Vec<Pixmap>,
     redo: Vec<Pixmap>,
@@ -114,5 +172,30 @@ mod tests {
         let next = history.redo(pixmap(2));
         assert!(next.is_some());
         assert!(history.can_undo());
+    }
+
+    #[test]
+    fn action_log_keeps_most_recent_entries_with_monotonic_ids() {
+        let mut log = ActionLog::new();
+        for i in 0..250 {
+            log.push(format!("Action {i}"));
+        }
+        let items = log.items();
+        assert_eq!(items.len(), MAX_LOG_ENTRIES);
+        // Ids keep increasing and stay unique after eviction.
+        for pair in items.windows(2) {
+            assert_eq!(pair[1].id, pair[0].id + 1);
+        }
+        assert_eq!(items.last().expect("non-empty").label, "Action 249");
+    }
+
+    #[test]
+    fn action_log_clear_resets_entries_but_keeps_numbering() {
+        let mut log = ActionLog::new();
+        log.push("Line");
+        log.clear();
+        assert!(log.items().is_empty());
+        log.push("Rectangle");
+        assert_eq!(log.items()[0].id, 2);
     }
 }

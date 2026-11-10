@@ -163,7 +163,10 @@ fn reposition_window_pos(
 /// `Window::show_dyn` discards it every frame (it restores the pre-begin
 /// position, which is how title-bar drags are applied). Rewriting the area
 /// state right after `Window::show` persists into the next frame instead.
-fn set_window_pos(ctx: &egui::Context, area_id: Id, left_top: Pos2) {
+///
+/// Also used outside §3.11 for one-shot repositioning of transient tool
+/// windows (the Text tool moves its input window to the placed anchor).
+pub(super) fn set_window_pos(ctx: &egui::Context, area_id: Id, left_top: Pos2) {
     if let Some(mut state) = AreaState::load(ctx, area_id) {
         state.set_left_top_pos(left_top);
         // Windows live in `Order::Middle` (the `Window`/`Area` default);
