@@ -12,6 +12,7 @@
 
 ## Verification (paste the real command output, not a summary)
 
+- [ ] `bash scripts/rules.sh`
 - [ ] `cargo fmt --check`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`

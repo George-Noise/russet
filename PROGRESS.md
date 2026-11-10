@@ -25,7 +25,8 @@
 | Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |
 | Extra: README.md | done | English, build & run only (Windows / NixOS / Web); declared the human-facing doc in AGENTS.md + SPEC §8 |
 | Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
-| Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | code written, CI runs on first push | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
+| Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | done — first CI run GREEN (success for `0188c52`, GitHub Actions) | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
+| Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 
 **Verification stamp:** fmt clean, `cargo clippy --all-targets -- -D warnings` clean,
 `cargo test` — 48 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
@@ -52,6 +53,28 @@ edit as a log entry (AGENTS.md "Git & progress log").
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
 
+### 2026-11-11 — `CI:` machine rules job — scripts/rules.sh wired into CI and verify.sh — owner request
+- **Commit title:** `Add scripts/rules.sh machine rules; run them in CI and verify.sh`
+- **What:** the owner-approved "machine-readable rules" round. New `scripts/rules.sh` — the
+  grep-level subset of AGENTS.md, no Rust toolchain needed: HARD (exit 1) = inline test
+  modules (`mod tests {` in `src/`) and `unwrap()` anywhere in `src/` (tests included, per
+  "Tests" rule 6); SOFT report-only = `expect()` outside test files (each hit must stay off
+  user-data paths — the 5 existing ones are wasm boot + one internal invariant) and the
+  500-line file-size guard (moved here from verify.sh, single source of truth).
+  `.github/workflows/ci.yml` gained a fast `rules` job (checkout + the script, no toolchain
+  install) next to `native`. `scripts/verify.sh` now runs rules.sh first, so the local gate
+  fails before cargo even starts. Docs updated: AGENTS.md (Commands, Repo facts),
+  CONTRIBUTING.md (gates), PR template (checkbox).
+- **Files:** new `scripts/rules.sh`; `scripts/verify.sh`, `.github/workflows/ci.yml`,
+  `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md`, `PROGRESS.md`.
+- **Verified:** `bash scripts/rules.sh` green in this sandbox on the pushed master (0 hard
+  violations; 5 expect() NOTEs; size guard OK); negative tests — an injected `.unwrap()` in
+  a tests.rs and an injected `mod tests {` in canvas.rs both fail with exit 1, `unwrap_or`
+  does not match, an injected 501-line file reports OVER GUARD but exits 0; ci.yml parsed
+  with python yaml.safe_load. No Rust code touched — cargo gates unchanged; the stamp below
+  stays at its last real run (and the FIRST CI run for `0188c52` came back success).
+- **Owner must check:** the two green jobs (rules + native) in the next Actions run after
+  pushing this; skim the 5 expect() NOTE lines — they are the tolerated exceptions.
 ### 2026-11-11 — `CI+Docs:` CI workflow, CONTRIBUTING.md + PR template, doc trees removed, trunk pinned — owner request
 - **Commit title:** `Add CI (fmt/clippy/test), CONTRIBUTING.md and PR rules; drop doc file trees; pin trunk 0.22.1`
 - **What:** per the owner's request: (1) `.github/workflows/ci.yml` — the done-gate

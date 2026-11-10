@@ -1,5 +1,12 @@
 # CI = the AGENTS.md done-gate, run by GitHub on every push to master and every PR.
 #
+# Two jobs:
+#   rules  — the grep-level machine rules (scripts/rules.sh): no inline test
+#            modules and no unwrap() anywhere in src/ fail the job; expect()
+#            outside tests and the 500-line file-size guard are report-only.
+#            Needs no Rust toolchain, so it runs in seconds.
+#   native — fmt + clippy + test with the pinned Rust toolchain.
+#
 # Scope (owner decision 2026-11-11): native checks ONLY. The wasm/trunk job is
 # deliberately postponed until the web build has something to be shown.
 #
@@ -16,6 +23,15 @@ on:
   pull_request:
 
 jobs:
+  rules:
+    name: repo rules (scripts/rules.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: hard rules fail the job, soft rules report only
+        run: bash scripts/rules.sh
+
   native:
     name: fmt + clippy + test
     runs-on: ubuntu-latest

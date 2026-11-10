@@ -58,13 +58,21 @@ diff must be small and self-explanatory:
 
 ## Verification gates (same as AGENTS.md "Commands")
 
-Run before opening the PR; CI runs exactly these again:
+Run before opening the PR; CI runs exactly these again (as the `rules` and `native` jobs):
 
 ```bash
+bash scripts/rules.sh
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
+
+`scripts/rules.sh` needs no Rust toolchain and hard-fails the run on inline test modules
+(`mod tests {` inside a source file — tests live in sibling `tests.rs` files) and on any
+`unwrap()` in `src/`, tests included. `expect()` outside test files and src files over
+500 lines are printed as report-only notes: each `expect()` must stay off user-data paths
+(boot-time lookups and internal invariants pass; file open/parse/decode of user data must
+report errors via `error_popup`, never panic).
 
 A PR that mixes gates-red code with a doc fix is one PR too many — keep it
 green and small.
