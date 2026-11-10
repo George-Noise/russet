@@ -5,7 +5,10 @@
 //! preview never leaves a history snapshot behind. A child module of `app`,
 //! so it can touch `App`'s private fields; `app.rs` stays the orchestrator.
 
-use eframe::egui::{self, Color32, Key, PointerButton, Pos2, Rect, Shape, Stroke, StrokeKind};
+use eframe::egui::{
+    self, Color32, Key, PointerButton, Pos2, Rect, Shape, Stroke, StrokeKind, pos2,
+};
+use std::f32::consts::TAU;
 
 use crate::tools::{LineMode, ShapeKind, Tool, rasterize_polyline, rasterize_shape};
 
@@ -17,13 +20,17 @@ pub(super) enum PreviewState {
     #[default]
     None,
     /// A straight line or a shape dragged from `start` to `current`.
+    /// A shape stores the colors it will commit with: `outline` is the
+    /// primary-well stroke color, `fill` the secondary-well fill color;
+    /// `None` = the corresponding Tools-window checkbox is off. A straight
+    /// line always has `outline` set and `fill = None`.
     Drag {
         kind: DragKind,
         start: Pos2,
         current: Pos2,
-        color: Color32,
+        outline: Option<Color32>,
+        fill: Option<Color32>,
         width: f32,
-        fill: bool,
     },
     /// A curve-mode polyline: `points` are confirmed vertices, the rubber
     /// band follows the pointer; `mode` is remembered so that switching the
@@ -105,45 +112,53 @@ impl App {
                 let Some(pos) = pos else {
                     return;
                 };
-                let color = if button == PointerButton::Primary {
-                    self.tools.primary
-                } else {
-                    self.tools.secondary
-                };
                 let width = self.tools.size;
                 match self.tools.tool {
-                    Tool::Line => match self.tools.line_mode {
-                        LineMode::Straight => {
-                            self.preview = PreviewState::Drag {
-                                kind: DragKind::Line,
-                                start: pos,
-                                current: pos,
-                                color,
-                                width,
-                                fill: false,
-                            };
-                            // Blocks Space-pan while the drag is in progress,
-                            // same as a freehand stroke.
-                            self.is_stroking = true;
+                    Tool::Line => {
+                        let color = if button == PointerButton::Primary {
+                            self.tools.primary
+                        } else {
+                            self.tools.secondary
+                        };
+                        match self.tools.line_mode {
+                            LineMode::Straight => {
+                                self.preview = PreviewState::Drag {
+                                    kind: DragKind::Line,
+                                    start: pos,
+                                    current: pos,
+                                    outline: Some(color),
+                                    fill: None,
+                                    width,
+                                };
+                                // Blocks Space-pan while the drag is in
+                                // progress, same as a freehand stroke.
+                                self.is_stroking = true;
+                            }
+                            LineMode::Curve => {
+                                self.preview = PreviewState::Polyline {
+                                    points: vec![pos],
+                                    rubber: Some(pos),
+                                    color,
+                                    width,
+                                    mode: LineMode::Curve,
+                                };
+                            }
                         }
-                        LineMode::Curve => {
-                            self.preview = PreviewState::Polyline {
-                                points: vec![pos],
-                                rubber: Some(pos),
-                                color,
-                                width,
-                                mode: LineMode::Curve,
-                            };
-                        }
-                    },
+                    }
                     Tool::Shape => {
+                        // Primary paints the outline, secondary the fill
+                        // (owner request 2026-11-10) — regardless of the
+                        // mouse button; the Tools window guarantees at
+                        // least one of the two checkboxes is on.
+                        let outline = self.tools.shape_outline.then_some(self.tools.primary);
+                        let fill = self.tools.shape_fill.then_some(self.tools.secondary);
                         self.preview = PreviewState::Drag {
                             kind: DragKind::Shape(self.tools.shape_kind),
                             start: pos,
                             current: pos,
-                            color,
+                            outline,
+                            fill,
                             width,
-                            fill: self.tools.shape_fill,
                         };
                         self.is_stroking = true;
                     }
@@ -169,12 +184,12 @@ impl App {
                         kind,
                         start,
                         current,
-                        color,
-                        width,
+                        outline,
                         fill,
+                        width,
                     } = state
                     {
-                        self.commit_drag(kind, start, current, color, width, fill);
+                        self.commit_drag(kind, start, current, outline, fill, width);
                     }
                     self.is_stroking = false;
                 }
@@ -234,12 +249,15 @@ impl App {
         kind: DragKind,
         start: Pos2,
         current: Pos2,
-        color: Color32,
+        outline: Option<Color32>,
+        fill: Option<Color32>,
         width: f32,
-        fill: bool,
     ) {
         match kind {
             DragKind::Line => {
+                let Some(color) = outline else {
+                    return;
+                };
                 // A click without movement draws a dot (round cap).
                 self.history.push_snapshot(self.canvas.pixmap().clone());
                 let dirty =
@@ -262,7 +280,7 @@ impl App {
                     start,
                     current,
                     width,
-                    color,
+                    outline,
                     fill,
                 );
                 if let Some(dirty) = dirty {
@@ -314,35 +332,63 @@ impl App {
                 kind,
                 start,
                 current,
-                color,
-                width,
+                outline,
                 fill,
+                width,
             } => {
                 let a = to_screen(*start);
                 let b = to_screen(*current);
-                let mut stroke = screen_stroke(*width);
-                stroke.color = *color;
+                let stroke = outline
+                    .map(|c| {
+                        let mut s = screen_stroke(*width);
+                        s.color = c;
+                        s
+                    })
+                    .unwrap_or(Stroke::NONE);
                 match kind {
                     DragKind::Line => {
+                        // Round caps match the committed raster (LineCap::Round);
+                        // egui's own line ends are flat (owner request 2026-11-10).
                         painter.add(Shape::line_segment([a, b], stroke));
+                        painter.circle_filled(a, stroke.width * 0.5, stroke.color);
+                        painter.circle_filled(b, stroke.width * 0.5, stroke.color);
                     }
                     DragKind::Shape(shape_kind) => {
                         let rect = Rect::from_two_pos(a, b);
                         match shape_kind {
                             ShapeKind::Rectangle => {
-                                if *fill {
-                                    painter.rect_filled(rect, 0.0, *color);
-                                } else {
+                                if let Some(fill) = fill {
+                                    painter.rect_filled(rect, 0.0, *fill);
+                                }
+                                if stroke.width > 0.0 {
                                     painter.rect_stroke(rect, 0.0, stroke, StrokeKind::Middle);
                                 }
                             }
                             ShapeKind::Ellipse => {
-                                painter.add(Shape::Ellipse(egui::epaint::EllipseShape {
-                                    center: rect.center(),
-                                    radius: rect.size() * 0.5,
-                                    fill: if *fill { *color } else { Color32::TRANSPARENT },
-                                    stroke: if *fill { Stroke::NONE } else { stroke },
-                                    angle: 0.0,
+                                // egui's EllipseShape strokes OUTSIDE the path,
+                                // while the commit (tiny-skia) strokes the oval
+                                // CENTERED — the preview ellipse then shrinks on
+                                // release. A closed PathShape with a plain
+                                // (Middle-kind) stroke is centered, matching the
+                                // commit (owner request 2026-11-10).
+                                if rect.width() < 0.5 || rect.height() < 0.5 {
+                                    return; // degenerate click; commit draws nothing
+                                }
+                                let center = rect.center();
+                                let (rx, ry) = (rect.width() * 0.5, rect.height() * 0.5);
+                                // ~3 pt chords keep the polygon smooth at any zoom.
+                                let n = ((rx.max(ry) * TAU / 3.0) as usize).clamp(24, 256);
+                                let points: Vec<Pos2> = (0..n)
+                                    .map(|i| {
+                                        let t = TAU * i as f32 / n as f32;
+                                        pos2(center.x + rx * t.cos(), center.y + ry * t.sin())
+                                    })
+                                    .collect();
+                                painter.add(Shape::Path(egui::epaint::PathShape {
+                                    points,
+                                    closed: true,
+                                    fill: fill.unwrap_or(Color32::TRANSPARENT),
+                                    stroke: stroke.into(),
                                 }));
                             }
                         }
@@ -364,6 +410,11 @@ impl App {
                 }
                 if pts.len() >= 2 {
                     painter.add(Shape::line(pts.clone(), stroke));
+                    // Round caps at both ends, matching the committed
+                    // raster (LineCap::Round).
+                    painter.circle_filled(pts[0], stroke.width * 0.5, stroke.color);
+                    let last = pts[pts.len() - 1];
+                    painter.circle_filled(last, stroke.width * 0.5, stroke.color);
                 }
                 // Vertex handles: small white dots, visible on any color.
                 for p in points {

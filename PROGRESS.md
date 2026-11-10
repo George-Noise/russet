@@ -23,19 +23,20 @@
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
 | Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
 | Extra: README.md | done | English, build & run only (Windows / NixOS / Web); declared the human-facing doc in AGENTS.md + SPEC §8 |
-| Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entry below; all are deliberately simple first iterations |
+| Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
 
 ## Warnings — open issues deliberately NOT fixed yet
 
-- 2026-11-10 — `src/tools.rs` is now **626 lines** (was 234): the owner-requested
-  Line/Shape/Eyedropper work added `rasterize_polyline`, `rasterize_shape`,
-  `pick_color`, `blend_pixel`, `dirty_rect_for` plus 8 tests. Over the 500-line
-  soft guard — per AGENTS.md no split was made mid-task. Proposed split (needs
-  owner approval): move the shape/polyline rasterizers + tests into a sibling
-  `raster.rs` (or fold them into `canvas.rs`), leaving tool enum/state and the
-  freehand `draw_segment` in `tools.rs`. `src/app.rs` grew 698 → 848 lines —
-  still within the owner-approved orchestrator exception (roughly doubled would
-  be ~1400).
+- 2026-11-10 — `src/tools.rs` is now **679 lines** (was 626, originally 234): the
+  owner-requested Line/Shape/Eyedropper work plus the outline/fill rework of
+  `rasterize_shape` added `rasterize_polyline`, `rasterize_shape`, `pick_color`,
+  `blend_pixel`, `dirty_rect_for` plus 10 tests. Over the 500-line soft guard —
+  per AGENTS.md no split was made mid-task. Proposed split (needs owner
+  approval, unchanged): move the shape/polyline rasterizers + tests into a
+  sibling `raster.rs` (or fold them into `canvas.rs`), leaving tool
+  enum/state and the freehand `draw_segment` in `tools.rs`. `src/app.rs` is
+  848 lines — still within the owner-approved orchestrator exception (roughly
+  doubled would be ~1400).
 
 - 2026-11-09 — RESOLVED: `src/app.rs` (1634 lines) was split into four child modules
   (`app/camera.rs`, `app/dialogs.rs`, `app/windows.rs`, `app/placement.rs`). `app.rs` itself
@@ -44,6 +45,67 @@
   (see the exception in AGENTS.md "Repo facts").
 
 ## Log — newest first. Insert a new entry directly under this heading.
+
+### 2026-11-10 — `UX-fix:` preview/commit fidelity, Shape outline+fill, window nudges — owner request (6 items)
+- **Commit title:** `Fix line/ellipse preview fidelity; Shape outline+fill; window nudges`
+- **What:** six owner-requested corrections to the previous patch, found on
+  the first Windows run.
+  1. **History window** first-open position: it sat over the menu strip
+     (`content_rect()` is the FULL viewport incl. the menu bar — verified in
+     the egui 0.37 source). It is now anchored exactly 0.5rem BELOW the
+     "File Edit Canvas View Help" bar: the top edge = central-panel top
+     (`last_panel_rect`, whose top IS the menu bar's bottom because the
+     no_frame central panel has zero margin) + 0.5rem, still 0.5rem from the
+     right edge.
+  2. **Layers window** first-open position lifted by 1.75rem: its bottom now
+     sits 0.5rem + 1.75rem = 2.25rem above the window bottom (new constant
+     `placement::LAYERS_FIRST_OPEN_LIFT`), so the zoom % label in the
+     canvas's bottom-right corner stays readable.
+  3. **Tools-window hints** wrapped into short lines: the Text hint is two
+     weak lines, and the same was done for the Curve hint (identical
+     problem — one long line stretched the auto-sized window).
+  4. **Ellipse outline preview fixed.** Root cause: egui's `EllipseShape`
+     strokes OUTSIDE the path (`PathStroke::outside()`, verified in epaint
+     0.37), while the commit strokes the tiny-skia oval CENTERED — the
+     preview ring was bigger than the committed ring. The preview now uses
+     a closed `PathShape` (smooth polygon, ~3 pt chords) whose plain stroke
+     kind is Middle = centered, so preview and commit agree in both Fill
+     and Outline modes. Degenerate (click-without-drag) previews draw
+     nothing, matching the commit.
+  5. **Shape tool got a second checkbox "Outline"** next to "Fill": the
+     primary color paints the outline, the secondary the fill (button
+     choice no longer changes shape colors), both may be on at once (fill
+     under the stroke). At least one always stays on: unchecking Fill
+     re-checks Outline, unchecking Outline re-checks Fill (owner rule), so
+     the tool can never draw nothing. `rasterize_shape` now takes
+     `outline: Option<Color32>, fill: Option<Color32>` and applies fill
+     first, stroke on top; `ToolState` gained `shape_outline` (default:
+     outline on, fill off — same feel as before). Rectangle gets the same
+     two options (the checkboxes are per-tool state).
+  6. **Round caps in line previews:** egui line ends are flat (verified in
+     epaint — "no option to add a circular end"), while the commit uses
+     `LineCap::Round`. The Straight-line and Curve-polyline previews now
+     draw filled circles (radius = stroke width / 2) at both endpoints —
+     always, at least until the owner gets a cap choice; a click-without-
+     drag now previews the same round dot the commit draws.
+- **Files:** `src/tools.rs` (shape_outline, rasterize_shape signature, 2 new
+  tests), `src/app/preview.rs` (Drag outline/fill, PathShape ellipse,
+  round-cap circles), `src/app/windows.rs` (Outline checkbox + exclusivity,
+  hint wrapping), `src/app/panels.rs` (History/Layers first-open anchors),
+  `src/app/placement.rs` (LAYERS_FIRST_OPEN_LIFT); docs: AGENTS.md (commit-
+  title rule), PROGRESS.md (this entry).
+- **Verified:** `cargo fmt --check`, `cargo check`, `cargo clippy --all-targets
+  -- -D warnings`, `cargo test` — all green, **43 tests** (41 → 43:
+  fill+outline combined, outline+fill-both-None; Rust 1.99.1, Linux). No
+  app build, no release build (owner runs those); wasm untouched (no new
+  `#[cfg]` branches).
+- **Owner must check:** on Windows `cargo run` — (1) History opens below the
+  menu bar with a 0.5rem gap; (2) Layers no longer covers the zoom %;
+  (3) Text/Curve hints are narrow, the Tools window stays compact; (4)
+  Ellipse outline: preview radius == committed radius now, with Fill and
+  with Outline+Fill combined; (5) unchecking Fill/Outline never leaves both
+  off; outline takes the primary color, fill the secondary; (6) line and
+  curve previews have round caps identical to the committed line.
 
 ### 2026-11-10 — `Features:` Eyedropper, Line/Curve, Shape, Text, History log, Layers placeholder — owner request (6 items)
 - **What:** six owner-requested additions, all deliberately simple first
@@ -89,6 +151,7 @@
   because tiny-skia rejects zero-height/width path bounds (found by the
   new tests). The brush cursor ring now also shows for Line/Shape; the
   four new tools show a crosshair cursor over the canvas.
+- **Commit title:** `Add Eyedropper, Line/Curve, Shape, Text tools and History/Layers windows`
 - **Files:** new `src/text.rs` (galley+atlas text rasterization),
   `src/app/preview.rs` (Line/Curve/Shape gestures + overlay + commits),
   `src/app/text_tool.rs` (Text input window + preview + commit),

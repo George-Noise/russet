@@ -11,6 +11,7 @@
 - The owner keeps git locally, but the `.git` folder is too heavy to transfer to the agent, and commits made inside the agent sandbox are auto-generated (UUID messages) and carry no usable information. **Git is not a progress channel here — `PROGRESS.md` (repo root) is.**
 - Before starting work: read `PROGRESS.md` (status snapshot, warnings, latest log entries) to learn where the project actually stands.
 - After finishing AND verifying a task or milestone: insert one entry at the top of the "Log" section of `PROGRESS.md` (newest first) — date, `M<N>:`-style title (or a short title for non-milestone work), what changed and in which files, how it was verified (commands + result), and what the owner still must check manually. Update the status snapshot and warnings in the same edit.
+- **Commit titles (owner request 2026-11-10):** whenever a task leaves changes that will later go into a commit, ALWAYS propose a commit title for them — one short imperative line in the repo's existing `git log` style (multi-part changes joined with `;`), e.g. `Add Eyedropper, Line/Curve, Shape, Text tools and History/Layers windows`. State it both in the `PROGRESS.md` log entry (a `Commit title:` line) and in the reply to the owner, so the title can be copy-pasted when the owner commits locally. The agent never commits itself (see above).
 - Never record work as done in `PROGRESS.md` before its verification commands actually pass.
 
 ## Commands
