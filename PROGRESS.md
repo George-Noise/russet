@@ -19,7 +19,7 @@
 | M5 Files (native, Windows) | done | |
 | M6 Undo/Redo + hotkeys | done | |
 | M7 Resize Canvas + New | done | |
-| M8 Web (WASM) | built + loads in Firefox (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` verified in Firefox: UI renders, canvas draws, WebGL2. Owner must still click through drawing/zoom/pan/Open/Save with a real mouse |
+| M8 Web (WASM) | built + headless Firefox check (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` + Firefox: UI renders, canvas draws, WebGL2 — a headless smoke test, not a human pass. Owner must click through drawing/zoom/pan/Open/Save with a real mouse |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
 | Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
 | Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |
@@ -27,7 +27,7 @@
 | Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
 
 **Verification stamp:** fmt clean, `cargo clippy --all-targets -- -D warnings` clean,
-`cargo test` — 43 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
+`cargo test` — 48 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
 edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -65,8 +65,8 @@ edit as a log entry (AGENTS.md "Git & progress log").
   ignored (verified with `git check-ignore`).
 - **Files:** `AGENTS.md`, `PROGRESS.md`, `PERF.md`, `web/index.html`, `SPEC.md`; `src/tools.rs`,
   `src/history.rs`, `src/text.rs` + `src/{tools,history,text}/tests.rs`.
-- **Verified:** `bash scripts/verify.sh` (fmt/clippy clean, `cargo test` — see stamp above);
-  `cargo check --target wasm32-unknown-unknown`; `trunk build --release` → `dist/`.
+- **Verified:** `bash scripts/verify.sh` — ALL GATES GREEN (fmt/clippy clean, `cargo test` 48 green,
+  file-size guard OK); `cargo check --target wasm32-unknown-unknown`; `trunk build --release` → `dist/`.
 - **Owner must check:** interactive web pass (real-mouse draw/zoom/pan, Open/Save); decide on
   `PERF.md` P3 (region undo) and P6 (web budgets).
 ### 2026-11-09 — `Docs:` README.md added (build & run for humans) — owner request

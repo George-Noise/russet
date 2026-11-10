@@ -107,9 +107,7 @@ fn polyline_handles_perfectly_horizontal_line() {
 #[test]
 fn polyline_single_point_draws_a_dot() {
     let mut pixmap = Pixmap::new(20, 20).expect("20x20 pixmap");
-    assert!(
-        rasterize_polyline(&mut pixmap, &[pos2(10.0, 10.0)], 1.0, Color32::BLACK).is_some()
-    );
+    assert!(rasterize_polyline(&mut pixmap, &[pos2(10.0, 10.0)], 1.0, Color32::BLACK).is_some());
     // A width-1 dot straddles the pixel grid: a 2×2 block of partial
     // coverage (the brush's round-cap look).
     let painted = pixmap.pixels().iter().filter(|c| c.alpha() > 0).count();
