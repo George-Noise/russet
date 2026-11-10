@@ -98,29 +98,24 @@ About build speed:
 
 ## 2. Architecture
 
-Project structure (the split is mandatory; a monolith is forbidden):
+Project structure (the split is mandatory; a monolith is forbidden). The normative
+requirement is the module split listed below, NOT a file tree: no file tree is kept in the
+docs (owner decision 2026-11-11) — agents list the actual files with their own tools when
+they need them. Test files follow the `<module>/tests.rs` rule below and are implied for
+every tested module; they are not listed anywhere.
 
-```
-russet/
-  Cargo.toml
-  Trunk.toml      — trunk config: target web/index.html, output dist/ (§2.2)
-  web/index.html  — page for trunk: <canvas id="russet_canvas">, title "Russet" (§2.2)
-  PERF.md         — RAM / build-speed backlog; a design note, not a spec (§2)
-  src/
-    main.rs       — TWO entry points: native (run_native) and web (WebRunner); template below
-    app.rs        — struct App (all state), impl eframe::App, the ORCHESTRATOR:
-                    frame flow, hotkeys, strokes, file glue, menu, canvas widget
-    app/             — child modules of app (they see App's private fields):
-      camera.rs      — §3.4 viewport: canvas rect, zoom (Paint.NET-style steps), pan
-      dialogs.rs     — §3.7/§3.8: New, Resize Canvas, unsaved-changes, Error dialogs
-      windows.rs     — §3.2/§3.3: floating "Tools" and "Palette" windows
-      placement.rs   — §3.11: floating-window edge anchoring + resize repositioning
-    canvas.rs     — struct Canvas: pixel buffer, resize, pixel access
-    tools.rs      — enum Tool, struct ToolState, stroke segment rasterization
-    history.rs    — snapshot-based undo/redo
-    file_io.rs    — open/save PNG/JPEG; the ONLY place with native/web cfg branches
-    palette.rs    — fixed array of 34 preset colors (2 rows × 17)
-```
+Mandatory top-level modules: `main` (TWO entry points: native `run_native` and web
+`WebRunner`; template in §2.1), `app` (`struct App` — all state; the ORCHESTRATOR: frame
+flow, hotkeys, strokes, file glue, menu, canvas widget), `canvas` (pixel buffer, resize,
+pixel access), `tools` (enum Tool, struct ToolState, stroke rasterization), `history`
+(snapshot-based undo/redo), `file_io` (open/save PNG/JPEG; the ONLY place with native/web
+cfg branches), `palette` (fixed array of 34 preset colors, 2 rows × 17), `text` (text
+rasterization through egui's font atlas). Cohesive subsystems are CHILD modules of `app`
+in `app/` — they see App's private fields; new subsystems are added there, never grown
+into `app.rs` (current ones: viewport/camera, dialogs, floating windows, §3.11 placement,
+preview gestures, text tool, panels). Root web config: `Trunk.toml` targets
+`web/index.html` → `dist/` (§2.2). `PERF.md` is the RAM / build-speed reference backlog —
+a design note, not a spec.
 
 **Tests are separate files** (owner decision, 2026-11-09): production sources contain no
 `#[cfg(test)] mod tests { … }` blocks. A module with tests ends with `#[cfg(test)] mod tests;`
@@ -498,7 +493,7 @@ cargo build --release
 # --- Web (milestone M8), installed once ---
 # Run from the repo root: Trunk.toml points at web/index.html and dist/.
 rustup target add wasm32-unknown-unknown
-cargo install trunk --locked
+cargo install trunk --locked --version 0.22.1      # trunk is PINNED — see AGENTS.md "Repo facts"
 trunk serve                                     # http://127.0.0.1:8080
 trunk build --release                           # static files in dist/
 ```

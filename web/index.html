@@ -11,7 +11,11 @@
        no reliance on Trunk's automatic Cargo.toml discovery.
        `--all-features` is required: Trunk 0.22 runs wasm-opt on release
        builds, and its bundled wasm-opt 131 rejects the bulk-memory
-       instructions Rust 1.99 emits unless the features are enabled. -->
+       instructions Rust 1.99 emits unless the features are enabled.
+       Trunk is PINNED to 0.22.1 (README / SPEC §8 / AGENTS.md "Repo facts"):
+       after a trunk upgrade, re-evaluate these flags under PERF.md P9 and
+       remove `data-wasm-opt-params` once the bundled wasm-opt accepts
+       Rust's bulk-memory output by default. -->
   <link data-trunk rel="rust" href="../Cargo.toml" data-wasm-opt-params="--all-features" />
 
   <style>

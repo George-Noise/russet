@@ -56,6 +56,7 @@ a suggested order.
 | P6 | Canvas/history budgets on wasm | S | **owner decision** | [ ] TODO |
 | P7 | Micro-allocation cleanups | S | — (after P1–P6 profiled) | [ ] TODO |
 | P8 | Release profile tuning (build speed) | S | **SPEC §1** | [ ] TODO |
+| P9 | Re-evaluate wasm-opt flags after a trunk upgrade | S | — (do together with a trunk upgrade) | [ ] TODO |
 
 ## 1. Measured facts
 
@@ -246,6 +247,22 @@ Only do these if the profiler (or `/usr/bin/time -v`) still shows allocation chu
   If the numbers disappoint or the owner says no, revert and record why.
 - **Note:** do not edit the owner's global `~/.cargo/config.toml` (`jobs = 8`,
   `target-cpu=native`). Pass flags on the command line for experiments.
+- **Result:** _not done_
+
+### P9 — Re-evaluate wasm-opt flags after a trunk upgrade  [no gate, S — but only together with a trunk upgrade]
+
+- **Context:** trunk is pinned to 0.22.1 (AGENTS.md "Repo facts") because `web/index.html`
+  passes `data-wasm-opt-params="--all-features"` — a workaround for the wasm-opt 131 bundled
+  with trunk 0.22, which rejects Rust 1.99's bulk-memory instructions on release builds.
+- **Do (when the owner upgrades trunk):** `trunk build --release` WITHOUT
+  `data-wasm-opt-params` first. If the build succeeds, remove the attribute from
+  `web/index.html` and record the new trunk version in README, SPEC §8 and AGENTS.md (same
+  edit). If it still fails with the bulk-memory error, keep the flag and note the new
+  bundled wasm-opt version here.
+- **Why:** the flag is a version-coupled workaround, not a feature; carrying it past its
+  useful life hides wasm-opt failures that should be loud.
+- **Verify:** `trunk build --release` succeeds; the wasm bundle size stays in the §1 range;
+  owner loads the page in a browser.
 - **Result:** _not done_
 
 ## 4. Build-time options (reference for P8)

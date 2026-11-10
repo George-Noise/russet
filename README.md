@@ -51,10 +51,12 @@ One-time setup:
 
 ```bash
 rustup target add wasm32-unknown-unknown
-cargo install trunk --locked
+cargo install trunk --locked --version 0.22.1
 ```
 
-Development server (serves the app from `index.html`):
+The trunk version is pinned: the page (`web/index.html`) passes wasm-opt flags
+tuned for trunk 0.22, so a different trunk version can break the release
+build. Development server:
 
 ```bash
 trunk serve      # open http://localhost:8080
@@ -66,4 +68,12 @@ Release build:
 trunk build --release
 ```
 
-The static site is written to `dist/` - serve that folder with any web server,
+The static site is written to `dist/` — serve that folder with any web server,
+for example `python3 -m http.server -d dist`, and open the printed URL.
+
+## Contributing
+
+This repository is developed by LLM agents under the owner's direction; the
+owner pushes to `master` directly. For how to file issues or contribute via
+your own agent — including the one-logical-change-per-PR rule — see
+[CONTRIBUTING.md](CONTRIBUTING.md).

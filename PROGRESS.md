@@ -25,6 +25,7 @@
 | Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |
 | Extra: README.md | done | English, build & run only (Windows / NixOS / Web); declared the human-facing doc in AGENTS.md + SPEC §8 |
 | Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
+| Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | code written, CI runs on first push | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
 
 **Verification stamp:** fmt clean, `cargo clippy --all-targets -- -D warnings` clean,
 `cargo test` — 48 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
@@ -51,6 +52,26 @@ edit as a log entry (AGENTS.md "Git & progress log").
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
 
+### 2026-11-11 — `CI+Docs:` CI workflow, CONTRIBUTING.md + PR template, doc trees removed, trunk pinned — owner request
+- **Commit title:** `Add CI (fmt/clippy/test), CONTRIBUTING.md and PR rules; drop doc file trees; pin trunk 0.22.1`
+- **What:** per the owner's request: (1) `.github/workflows/ci.yml` — the done-gate
+  (fmt/clippy/test) on every push to `master` and every PR, Rust pinned 1.99.1; wasm job
+  deliberately postponed by the owner. (2) `CONTRIBUTING.md` for outsiders +
+  `.github/pull_request_template.md` enforcing ONE logical change per non-owner PR (review
+  target: an LLM reviewer; the owner pushes directly). (3) File trees removed from AGENTS.md
+  and SPEC §2 (owner decision: the filesystem is the source of truth; rules kept as prose).
+  (4) Trunk pinned to 0.22.1 in README/SPEC §8/AGENTS, removal condition for
+  `data-wasm-opt-params` written into `web/index.html`, PERF P9 added. (5) README: fixed the
+  truncated last sentence and the stale `index.html` path; added the Contributing pointer.
+- **Files:** new `.github/workflows/ci.yml`, `.github/pull_request_template.md`,
+  `CONTRIBUTING.md`; `AGENTS.md`, `SPEC.md`, `README.md`, `PERF.md`, `PROGRESS.md`,
+  `web/index.html`.
+- **Verified:** docs/config-only batch (AGENTS.md "Commands": cargo check is enough), but cargo
+  is not installed in this sandbox, so NO Rust gate was re-run here — the stamp below stays at
+  its last real run; `ci.yml` parsed with python yaml.safe_load; delivery byte-compared per
+  "Delivery ritual". The FIRST PUSH runs the new CI — that is the independent verification.
+- **Owner must check:** the first Actions run after pushing (repo → Actions tab, ~3–5 min);
+  CONTRIBUTING.md reads correctly for a human contributor; P3/P6 decisions still pending.
 ### 2026-11-10 — `PR:` rebased on master; new inline tests moved to `tests.rs`; PERF.md demoted to a reference
 - **Commit title:** `Rebase PR onto master; move new inline tests to tests.rs; make PERF.md a reference backlog`
 - **What:** rebased the open PR onto current `master` (WASD/0.5 rem first-open gaps, six

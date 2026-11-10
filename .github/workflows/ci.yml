@@ -1,0 +1,38 @@
+# CI = the AGENTS.md done-gate, run by GitHub on every push to master and every PR.
+#
+# Scope (owner decision 2026-11-11): native checks ONLY. The wasm/trunk job is
+# deliberately postponed until the web build has something to be shown.
+#
+# The Rust toolchain is PINNED to the owner's local version for the same reason
+# trunk is pinned (see AGENTS.md "Repo facts"): a moving toolchain changes clippy
+# lints, and a `-D warnings` build breaks on toolchain updates, not on code
+# changes. Bump the pin in the same edit as the local toolchain (SPEC §8 needs
+# >= 1.95).
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  native:
+    name: fmt + clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pin Rust toolchain (keep in sync with the owner's local version)
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+          rustup component add rustfmt clippy
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test

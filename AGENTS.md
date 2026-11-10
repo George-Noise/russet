@@ -23,53 +23,21 @@ Always read first (cheap): this file, plus `PROGRESS.md` — status snapshot, wa
 
 Never change behavior based on a § you have not read this session. `SPEC.md` §4–§7 in full is required reading for milestone (M<N>) work only, not for one-line fixes.
 
-## Project layout — keep this tree true
+## Project layout — the filesystem is the source of truth
 
-```
-russet/
-  Cargo.toml          pinned deps + dev/release profiles (SPEC §1 — do not edit profiles)
-  SPEC.md             product spec (authoritative)
-  AGENTS.md           this file
-  PROGRESS.md         progress log (git substitute; older entries in PROGRESS-archive.md)
-  PERF.md             RAM / build-speed reference backlog (not a spec, not autonomous)
-  README.md           human-facing build & run instructions
-  Trunk.toml          web build config: web/index.html -> dist/ (gitignored)
-  web/index.html      trunk entry page (canvas #russet_canvas, loading text)
-  scripts/verify.sh   done gate: fmt + clippy + test + 500-line report
-  flake.nix           Linux build (nix build/run/develop), owner-approved exception
-  src/
-    main.rs           TWO entry points (native run_native / web WebRunner),
-                      platform_label() + renderer_label() for the About window
-    app.rs            App orchestrator: state, frame flow, hotkeys, strokes,
-                      file glue, menu, canvas widget (may exceed 500 lines —
-                      owner exception, see "Repo facts")
-    app/
-      camera.rs        camera/tests.rs     §3.4 viewport, zoom steps, pan
-      dialogs.rs                           §3.7/§3.8 New / Resize / Discard / Error
-      panels.rs                            History log + Layers placeholder windows
-      placement.rs     placement/tests.rs  §3.11 floating-window anchoring
-      preview.rs                           Line/Curve/Shape preview-then-commit gestures
-      text_tool.rs                         Text tool input window
-      windows.rs                           §3.2/§3.3 Tools + Palette windows
-    canvas.rs          canvas/tests.rs      Pixmap buffer, resize, regions
-    file_io.rs         file_io/tests.rs     PNG/JPEG open+save (ONLY cfg fork site
-                                            besides main.rs)
-    history.rs         history/tests.rs     snapshot undo/redo + ActionLog
-    palette.rs                              34 preset colors / grid constants
-    text.rs            text/tests.rs        text rasterization via egui's font atlas
-    tools.rs           tools/tests.rs       Tool enum, ToolState, stroke/shape rasterization
-```
-
-Rules:
+No file tree is kept in the docs (owner decision 2026-11-11): agents list the
+actual files with their own tools when needed, and docs only carry the rules
+that survive file churn. The durable rules:
 
 - A module's tests live in a sibling `tests.rs` file (see "Tests"): `src/canvas.rs` ↔
-  `src/canvas/tests.rs`. `main.rs`, `app.rs`, `dialogs.rs`, `panels.rs`, `preview.rs`,
-  `text_tool.rs`, `windows.rs`, `palette.rs` currently have no tests.
+  `src/canvas/tests.rs`.
 - New subsystem → a child module of the module that owns the state/behavior (for `App` state that
   means `src/app/<name>.rs`). Never grow `app.rs` with a new subsystem.
-- Add a file → update this tree AND `SPEC.md` §2 in the same edit, and say why in `PROGRESS.md`.
-- Do not add top-level directories or build tooling (no `xtask`, `just`, CI workflows) without
-  asking the owner. The build is `cargo` + `scripts/verify.sh` + `trunk` + the flake.
+- A new or removed file is reported in the `PROGRESS.md` entry of the same task (what and why);
+  no tree or layout list needs updating anywhere.
+- Do not add top-level directories or build tooling (no `xtask`, `just`, scripts) without
+  asking the owner. CI is the single owner-approved exception (2026-11-11, see "Repo facts").
+  The build is `cargo` + `scripts/verify.sh` + `trunk` + the flake.
 
 ## Tests — separate files, always
 
@@ -135,10 +103,11 @@ Before calling the delivery ready: with git, apply the patch onto a clean copy o
 
 - Quick loop during development: `cargo check` (owner's time-saving policy 2026-11-09).
 - Done gate: `bash scripts/verify.sh` — `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, plus the soft 500-line file-size report. Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
+- CI (`.github/workflows/ci.yml`) runs the same gate on GitHub — `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` — for every push to `master` and every PR, with Rust pinned to the owner's local toolchain. Keep it green: a red CI on `master` is a stop-everything signal. Editing the workflow (or adding the postponed wasm job) is a build-tooling change and needs the owner's OK.
 - Tests: `cargo test` (all) / `cargo test app::placement` (one module by path fragment). Unit tests live in `<module>/tests.rs` (see "Tests").
 - Docs/comment-only edits: `cargo check` is enough; say so explicitly in the `PROGRESS.md` entry.
 - Daily run: `cargo run` (Windows). Do not run `cargo build --release` during development; release validation belongs to M9.
-- Web (M8): `rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`, then from the repo root
+- Web (M8): `rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked --version 0.22.1` (pinned — see "Repo facts"), then from the repo root
   `trunk serve` / `trunk build --release` (config `Trunk.toml`, page `web/index.html`, output `dist/`).
   Trunk 0.22.1 is installed at `~/.cargo/bin/trunk` (that directory is NOT on `PATH`):
   `export PATH="$HOME/.cargo/bin:$PATH"`. Release builds run wasm-opt — the page passes the
@@ -153,9 +122,12 @@ Before calling the delivery ready: with git, apply the patch onto a clean copy o
 - Canvas is a premultiplied `tiny-skia::Pixmap`; feed egui with `ColorImage::from_rgba_premultiplied`. Use `TextureHandle::set_partial(pos, image, options)` for dirty rectangles.
 - File I/O: native uses synchronous `rfd::FileDialog`; WASM must use `rfd::AsyncFileDialog` only.
 - Web page: `web/index.html` is the trunk entry. It declares `<link data-trunk rel="rust" href="../Cargo.toml" data-wasm-opt-params="--all-features" />` on purpose — trunk resolves the manifest relative to the HTML file, so the explicit `href` is what makes `web/` work, and trunk 0.22 runs wasm-opt on release builds where the bundled wasm-opt 131 needs `--all-features` for Rust 1.99's bulk-memory output. `#russet_canvas` is hardcoded in `main.rs`: rename in both or neither. `Trunk.toml` pins `target`/`dist`.
+- Trunk is PINNED to 0.22.1 (owner decision 2026-11-11): `cargo install trunk --locked --version 0.22.1` (README, SPEC §8). The page's `data-wasm-opt-params` is tuned to what trunk 0.22 bundles, so a different trunk can break the release web build. After any trunk upgrade, re-evaluate the flags under PERF.md P9 before trusting the build.
+- CI (owner decision 2026-11-11, the single exception to the no-build-tooling rule): `.github/workflows/ci.yml` runs the done-gate (fmt/clippy/test) on GitHub for every push to `master` and every PR. Native only — the wasm/trunk job is deliberately postponed (owner 2026-11-11). The workflow is build tooling: changing it needs the owner's OK. CI is the independent verifier of the `PROGRESS.md` stamps — agents' claims are checked by GitHub's machines.
 - Floating windows ("Tools"/"Palette"): placement (drop-time edge anchoring — a window keeps the gap the user dropped it at, never pulled flush; left/bottom tie rule — and per-axis repositioning on main-window resize: anchored axis keeps the dropped gap, free axis keeps the gap ratio) is specified in `SPEC.md` §3.11 and implemented in `app/placement.rs` with unit tests in `app/placement/tests.rs`. Anchors are decided only when a drag ends — never during drags, never on resizes. First-open positions are §3.2/§3.3 facts: Tools 0.5rem (8 pt) from the left edge / vertically centered, Palette 0.5rem from the left and bottom edges — set via `Window::pivot` + `default_pos` (1 rem = 16 pt because egui 0.37 has no rem API; the `0.5 * REM` constant is `app/placement.rs::FIRST_OPEN_GAP`, next to the 2rem `WINDOW_SNAP_DISTANCE`); once the window has a stored area position, `default_pos` is dead and the user's placement wins.
 - All user-facing strings are hardcoded English. No i18n/localization.
-- `README.md` is written for HUMANS — people who want to build and run the app. It contains ONLY build & run instructions (Windows, NixOS/Linux via `flake.nix`, Web/WASM) and nothing else — no feature lists, no changelog, no agent guidance. Agents must read project rules here in AGENTS.md and in SPEC.md, never from README.md. When build/run commands change (SPEC §8, `flake.nix`, Cargo.toml toolchain requirements), update README.md in the same edit.
+- `README.md` is written for HUMANS — people who want to build and run the app. It contains build & run instructions (Windows, NixOS/Linux via `flake.nix`, Web/WASM) and one pointer to `CONTRIBUTING.md` — no feature lists, no changelog, no agent guidance. Agents must read project rules here in AGENTS.md and in SPEC.md, never from README.md. When build/run commands change (SPEC §8, `flake.nix`, Cargo.toml toolchain requirements), update README.md in the same edit.
+- `CONTRIBUTING.md` (owner decision 2026-11-11) is for OUTSIDERS — humans and foreign agents, both readable. It states how the repo is developed (LLM agents; the owner pushes to `master` directly and does not use PRs), the PR rules for non-owners (ONE logical change per PR so an LLM reviewer — e.g. GLM-5.3-Flash or similar — can review the diff), the verification gates, and a document map. It is linked from README.md.
 - `flake.nix` (owner decision 2026-11-09, an exception to SPEC §6's "Linux builds/CI"): builds/ runs the app on Linux (Wayland/X11) via `nix build` / `nix run` / `nix develop`. The binary links only fontconfig directly; ALL other GUI libs (wayland, libxkbcommon, X11 via `x11-dl`, GLX/EGL via glutin) are dlopen'd at runtime and are provided by `wrapProgram` (LD_LIBRARY_PATH). When `Cargo.toml` gains deps with runtime libs, update `runtimeLibs` in the flake. No vulkan-loader (glow never uses Vulkan).
 - Never `unwrap()`/`expect()` on user-data paths; report errors via `error_popup`. Panics are forbidden.
 
