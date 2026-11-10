@@ -19,6 +19,12 @@ const REM: f32 = 16.0;
 /// afterwards the §3.11 placement logic treats the offset as a dropped gap.
 pub(super) const FIRST_OPEN_GAP: f32 = 0.5 * REM;
 
+/// 1.75rem — the extra first-open LIFT of the "Layers" window above the
+/// usual [`FIRST_OPEN_GAP`]: its bottom edge sits 0.5rem + 1.75rem = 2.25rem
+/// above the main window's bottom edge so the zoom % label in the canvas's
+/// bottom-right corner stays readable (owner request 2026-11-10).
+pub(super) const LAYERS_FIRST_OPEN_LIFT: f32 = 1.75 * REM;
+
 /// Floating-window magnetism (§3.11): when a window is DROPPED with an
 /// edge closer than this distance to a main-window edge, that axis anchors
 /// to the edge at the dropped gap — the window is never pulled flush. 2rem;

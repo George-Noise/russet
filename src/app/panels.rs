@@ -9,7 +9,7 @@
 use eframe::egui::{self, Color32, Context};
 
 use super::App;
-use super::placement::FIRST_OPEN_GAP;
+use super::placement::{FIRST_OPEN_GAP, LAYERS_FIRST_OPEN_LIFT};
 
 /// Stable ids, same idea as `windows.rs`: independent of the title text so
 /// placement / area state lookups stay stable.
@@ -29,15 +29,21 @@ impl App {
             return;
         }
         let mut open = true;
-        // First open: 0.5rem from the top-right corner (mirrors the
-        // Tools/Palette first-open gaps; no §3.11 anchoring afterwards).
+        let content = ctx.content_rect();
+        // First open: 0.5rem from the right edge and exactly 0.5rem below
+        // the "File Edit Canvas View Help" strip. `last_panel_rect` is the
+        // central panel's rect, whose top edge IS the menu bar's bottom
+        // (the no_frame central panel has zero margin), so the window's
+        // title sits just under the menu instead of covering it (owner
+        // request 2026-11-10). No §3.11 anchoring afterwards.
         egui::Window::new("History")
             .id(history_window_id())
             .open(&mut open)
             .pivot(egui::Align2::RIGHT_TOP)
-            .default_pos(
-                ctx.content_rect().right_top() + egui::vec2(-FIRST_OPEN_GAP, FIRST_OPEN_GAP),
-            )
+            .default_pos(egui::pos2(
+                content.right() - FIRST_OPEN_GAP,
+                self.last_panel_rect.top() + FIRST_OPEN_GAP,
+            ))
             .default_width(200.0)
             .show(ctx, |ui| {
                 ui.set_min_width(180.0);
@@ -69,13 +75,19 @@ impl App {
             return;
         }
         let mut open = true;
+        let content = ctx.content_rect();
+        // First open: 0.5rem from the right edge; the bottom edge sits
+        // 0.5rem + 1.75rem above the window's bottom edge so it never
+        // covers the zoom % label painted in the canvas's bottom-right
+        // corner (owner request 2026-11-10). No §3.11 anchoring afterwards.
         egui::Window::new("Layers")
             .id(layers_window_id())
             .open(&mut open)
             .pivot(egui::Align2::RIGHT_BOTTOM)
-            .default_pos(
-                ctx.content_rect().right_bottom() + egui::vec2(-FIRST_OPEN_GAP, -FIRST_OPEN_GAP),
-            )
+            .default_pos(egui::pos2(
+                content.right() - FIRST_OPEN_GAP,
+                content.bottom() - FIRST_OPEN_GAP - LAYERS_FIRST_OPEN_LIFT,
+            ))
             .auto_sized()
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {

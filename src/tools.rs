@@ -42,8 +42,12 @@ pub struct ToolState {
     pub secondary: Color32,
     pub line_mode: LineMode,
     pub shape_kind: ShapeKind,
-    /// Fill shapes with the stroke color instead of outlining them.
+    /// Fill shapes with the fill color (the secondary well).
     pub shape_fill: bool,
+    /// Outline shapes with a `size`-wide stroke (the primary well).
+    /// The Tools window keeps at least one of `shape_fill`/`shape_outline`
+    /// enabled, so a shape always paints something.
+    pub shape_outline: bool,
     /// Font size (canvas pixels) used by the Text tool.
     pub font_size: f32,
 }
@@ -58,6 +62,7 @@ impl ToolState {
             line_mode: LineMode::Straight,
             shape_kind: ShapeKind::Rectangle,
             shape_fill: false,
+            shape_outline: true,
             font_size: 24.0,
         }
     }
@@ -319,22 +324,27 @@ pub fn rasterize_polyline(
 }
 
 /// Rasterizes a rectangle or an ellipse between two opposite corners
-/// (either orientation). `fill` fills the shape with `color`; otherwise the
-/// outline is stroked with a `width`-wide antialiased stroke. Zero-size
-/// shapes draw nothing. Returns the dirty rectangle.
+/// (either orientation). `fill` fills the interior (the secondary color);
+/// `outline` strokes the boundary with a `width`-wide antialiased stroke
+/// (the primary color) — both may be enabled at once, then the fill goes
+/// first and the stroke covers it. The Tools window never lets both be
+/// `None`; if they are, nothing is drawn. Returns the dirty rectangle.
 pub fn rasterize_shape(
     pixmap: &mut Pixmap,
     kind: ShapeKind,
     from: Pos2,
     to: Pos2,
     width: f32,
-    color: Color32,
-    fill: bool,
+    outline: Option<Color32>,
+    fill: Option<Color32>,
 ) -> Option<DirtyRect> {
     let width = width.clamp(1.0, 100.0);
     let (min_x, max_x) = (from.x.min(to.x), from.x.max(to.x));
     let (min_y, max_y) = (from.y.min(to.y), from.y.max(to.y));
     if max_x - min_x < 0.01 || max_y - min_y < 0.01 {
+        return None;
+    }
+    if outline.is_none() && fill.is_none() {
         return None;
     }
     let bounds = tiny_skia::Rect::from_xywh(min_x, min_y, max_x - min_x, max_y - min_y)?;
@@ -347,11 +357,11 @@ pub fn rasterize_shape(
     let path = builder.finish()?;
     let dirty = dirty_rect_for(pixmap, min_x, min_y, max_x, max_y, width)?;
 
-    let mut paint = Paint::default();
-    let [r, g, b, a] = color.to_srgba_unmultiplied();
-    paint.set_color_rgba8(r, g, b, a);
-    paint.anti_alias = true;
-    if fill {
+    if let Some(fill) = fill {
+        let mut paint = Paint::default();
+        let [r, g, b, a] = fill.to_srgba_unmultiplied();
+        paint.set_color_rgba8(r, g, b, a);
+        paint.anti_alias = true;
         pixmap.fill_path(
             &path,
             &paint,
@@ -359,7 +369,12 @@ pub fn rasterize_shape(
             Transform::identity(),
             None,
         );
-    } else {
+    }
+    if let Some(outline) = outline {
+        let mut paint = Paint::default();
+        let [r, g, b, a] = outline.to_srgba_unmultiplied();
+        paint.set_color_rgba8(r, g, b, a);
+        paint.anti_alias = true;
         let stroke = Stroke {
             width,
             line_cap: LineCap::Round,
@@ -545,8 +560,8 @@ mod tests {
             pos2(5.0, 5.0),
             pos2(34.0, 34.0),
             2.0,
-            Color32::BLACK,
-            false,
+            Some(Color32::BLACK),
+            None,
         );
         assert!(dirty.is_some());
         let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -565,12 +580,50 @@ mod tests {
             pos2(5.0, 5.0),
             pos2(34.0, 34.0),
             2.0,
-            Color32::BLACK,
-            true,
+            None,
+            Some(Color32::BLACK),
         );
         assert!(dirty.is_some());
         let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
         assert!(at(20, 20).alpha() > 200, "center is filled");
+    }
+
+    #[test]
+    fn fill_and_outline_paint_both() {
+        let mut pixmap = Pixmap::new(40, 40).expect("40x40 pixmap");
+        let dirty = rasterize_shape(
+            &mut pixmap,
+            ShapeKind::Ellipse,
+            pos2(5.0, 5.0),
+            pos2(34.0, 34.0),
+            2.0,
+            Some(Color32::BLACK),
+            Some(Color32::WHITE),
+        );
+        assert!(dirty.is_some());
+        let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
+        assert!(at(20, 20).alpha() > 200, "center is filled");
+        let painted = pixmap.pixels().iter().filter(|c| c.alpha() > 0).count();
+        assert!(painted > 20, "the ring is drawn on top of the fill");
+        assert_eq!(at(6, 6).alpha(), 0, "corner stays transparent");
+    }
+
+    #[test]
+    fn shape_without_outline_or_fill_draws_nothing() {
+        let mut pixmap = Pixmap::new(40, 40).expect("40x40 pixmap");
+        assert!(
+            rasterize_shape(
+                &mut pixmap,
+                ShapeKind::Rectangle,
+                pos2(5.0, 5.0),
+                pos2(34.0, 34.0),
+                2.0,
+                None,
+                None,
+            )
+            .is_none()
+        );
+        assert!(pixmap.pixels().iter().all(|c| c.alpha() == 0));
     }
 
     #[test]
@@ -582,8 +635,8 @@ mod tests {
             pos2(5.0, 5.0),
             pos2(34.0, 34.0),
             2.0,
-            Color32::BLACK,
-            false,
+            Some(Color32::BLACK),
+            None,
         );
         assert!(dirty.is_some());
         let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -603,8 +656,8 @@ mod tests {
                 pos2(10.0, 10.0),
                 pos2(10.0, 10.0),
                 2.0,
-                Color32::BLACK,
-                false
+                Some(Color32::BLACK),
+                None,
             )
             .is_none()
         );

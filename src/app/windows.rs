@@ -88,7 +88,10 @@ impl App {
                         ui.radio_value(&mut self.tools.line_mode, LineMode::Curve, "Curve");
                     });
                     if self.tools.line_mode == LineMode::Curve {
-                        ui.weak("Click adds points; Enter/double-click places, Esc cancels.");
+                        // Short lines: one long hint stretches the auto-sized
+                        // Tools window (owner request 2026-11-10).
+                        ui.weak("Click adds points.");
+                        ui.weak("Enter/double-click places, Esc cancels.");
                     }
                 }
                 if self.tools.tool == Tool::Shape {
@@ -101,10 +104,29 @@ impl App {
                         );
                         ui.radio_value(&mut self.tools.shape_kind, ShapeKind::Ellipse, "Ellipse");
                     });
-                    ui.checkbox(&mut self.tools.shape_fill, "Fill");
+                    // The primary color paints the outline, the secondary
+                    // color the fill. At least one of the two must stay on:
+                    // unchecking Fill re-checks Outline and unchecking
+                    // Outline re-checks Fill, so the tool can never end up
+                    // drawing nothing (owner request 2026-11-10).
+                    if ui.checkbox(&mut self.tools.shape_fill, "Fill").changed()
+                        && !self.tools.shape_fill
+                    {
+                        self.tools.shape_outline = true;
+                    }
+                    if ui
+                        .checkbox(&mut self.tools.shape_outline, "Outline")
+                        .changed()
+                        && !self.tools.shape_outline
+                    {
+                        self.tools.shape_fill = true;
+                    }
                 }
                 if self.tools.tool == Tool::Text {
-                    ui.weak("Click the canvas to place text; size is set in the Text window.");
+                    // Two short lines: the single long hint made the
+                    // auto-sized Tools window too wide (owner 2026-11-10).
+                    ui.weak("Click the canvas to place text;");
+                    ui.weak("font size is set in the Text window.");
                 }
             });
         if let Some(response) = &shown {
