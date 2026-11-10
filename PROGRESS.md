@@ -56,6 +56,19 @@ edit as a log entry (AGENTS.md "Git & progress log").
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
 
+### 2026-11-10 — `Docs:` fixed artifact names `russet.zip`/`russet.patch`; commit title last in reply — owner request
+- **Commit title:** `Fix delivery artifact names; require commit title as the reply's last line`
+- **What:** delivery ritual hardened per owner request: the zip artifact is ALWAYS named
+  `russet.zip` and the patch ALWAYS `russet.patch` (stable names across sessions, the new
+  round overwrites the old files); the commit title is now stated BOTH in the log entry AND
+  as the very last line of the chat reply, so it is always findable and copyable. No
+  app-behavior change.
+- **Files:** `AGENTS.md` (delivery ritual fixed names, commit-title rule), `PROGRESS.md`
+  (this entry); the delivered artifact renamed to `russet.zip`.
+- **Verified:** documentation-only change — no code touched; zip rebuilt and byte-compared
+  with the working tree (unpack == tree), sha256 in the chat reply.
+- **Owner must check:** nothing to run — docs and delivery naming only.
+
 ### 2026-11-10 — `Tooling:` delivery ritual, reading routes, verify.sh, log discipline — owner request
 - **Commit title:** `Add delivery ritual, reading routes, verify.sh and PROGRESS log discipline`
 - **What:** agent-workflow improvements, no app-behavior change. AGENTS.md: task-type →
