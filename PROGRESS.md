@@ -19,28 +19,23 @@
 | M5 Files (native, Windows) | done | |
 | M6 Undo/Redo + hotkeys | done | |
 | M7 Resize Canvas + New | done | |
-| M8 Web (WASM) | code written, never built | `wasm32` branches exist in `main.rs` / `app.rs` / `file_io.rs`; trunk is unavailable in the sandbox — ALL wasm checks are deferred to the owner (Windows). The 2026-11-10 tools/panels add no new `#[cfg]` branches, so wasm compilation is unaffected by them |
+| M8 Web (WASM) | built + headless Firefox check (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` + Firefox: UI renders, canvas draws, WebGL2 — a headless smoke test, not a human pass. Owner must click through drawing/zoom/pan/Open/Save with a real mouse |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
 | Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
+| Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |
 | Extra: README.md | done | English, build & run only (Windows / NixOS / Web); declared the human-facing doc in AGENTS.md + SPEC §8 |
 | Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
 
 **Verification stamp:** fmt clean, `cargo clippy --all-targets -- -D warnings` clean,
-`cargo test` — 43 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
+`cargo test` — 48 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
 edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
 
-- 2026-11-10 — `src/tools.rs` is now **679 lines** (was 626, originally 234): the
-  owner-requested Line/Shape/Eyedropper work plus the outline/fill rework of
-  `rasterize_shape` added `rasterize_polyline`, `rasterize_shape`, `pick_color`,
-  `blend_pixel`, `dirty_rect_for` plus 10 tests. Over the 500-line soft guard —
-  per AGENTS.md no split was made mid-task. Proposed split (needs owner
-  approval, unchanged): move the shape/polyline rasterizers + tests into a
-  sibling `raster.rs` (or fold them into `canvas.rs`), leaving tool
-  enum/state and the freehand `draw_segment` in `tools.rs`. `src/app.rs` is
-  848 lines — still within the owner-approved orchestrator exception (roughly
-  doubled would be ~1400).
+- 2026-11-10 — RESOLVED: `src/tools.rs` was **679 lines**; moving its inline tests to
+  `src/tools/tests.rs` (2026-11-10, PR rebase) brought it to ~430 lines, so the proposed
+  `raster.rs` split is retired. `src/app.rs` is 848 lines — still within the owner-approved
+  orchestrator exception (roughly doubled would be ~1400).
 
 - 2026-11-09 — RESOLVED: `src/app.rs` (1634 lines) was split into four child modules
   (`app/camera.rs`, `app/dialogs.rs`, `app/windows.rs`, `app/placement.rs`). `app.rs` itself
@@ -55,6 +50,51 @@ edit as a log entry (AGENTS.md "Git & progress log").
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
+
+### 2026-11-10 — `PR:` rebased on master; new inline tests moved to `tests.rs`; PERF.md demoted to a reference
+- **Commit title:** `Rebase PR onto master; move new inline tests to tests.rs; make PERF.md a reference backlog`
+- **What:** rebased the open PR onto current `master` (WASD/0.5 rem first-open gaps, six
+  tools/panels, reading routes/delivery ritual, 2026-11-10 UX fixes) and resolved the conflicts:
+  `AGENTS.md` keeps master's reading routes / delivery ritual / commit-title rules **plus** the
+  "Tests — separate files" section and the project-layout tree; `PROGRESS.md` keeps master's
+  entries. Converted the new upstream inline tests: `tools.rs` 16 tests → `tools/tests.rs` (+2 of
+  ours = 18), `text.rs` 3 → new `text/tests.rs`, `history.rs` 2 `ActionLog` tests →
+  `history/tests.rs`. `tools.rs` dropped 679 → 429 lines, so the proposed `raster.rs` split is
+  retired. `PERF.md` no longer tells the agent to start on its own — it is a reference backlog the
+  owner picks from. Review item ".gitignore lacks dist/" was a false positive: `/dist` was already
+  ignored (verified with `git check-ignore`).
+- **Files:** `AGENTS.md`, `PROGRESS.md`, `PERF.md`, `web/index.html`, `SPEC.md`; `src/tools.rs`,
+  `src/history.rs`, `src/text.rs` + `src/{tools,history,text}/tests.rs`.
+- **Verified:** `bash scripts/verify.sh` — ALL GATES GREEN (fmt/clippy clean, `cargo test` 48 green,
+  file-size guard OK); `cargo check --target wasm32-unknown-unknown`; `trunk build --release` → `dist/`.
+- **Owner must check:** interactive web pass (real-mouse draw/zoom/pan, Open/Save); decide on
+  `PERF.md` P3 (region undo) and P6 (web budgets).
+### 2026-11-09 — `Docs:` README.md added (build & run for humans) — owner request
+- **What:** new `README.md` in English, deliberately MINIMAL per the owner's instruction: it contains ONLY how to build and run the app for the three supported targets — Windows (`cargo run`, `cargo build --release`), NixOS/Linux (`nix build` / `nix run` / `nix develop`, flake enablement one-liner, `WINIT_UNIX_BACKEND` override, non-NixOS distros welcome) and Web/WASM (wasm32 target, `trunk serve`, `trunk build --release` → `dist/`, one example of serving it). No feature descriptions, no changelog. The fact that README.md is the HUMAN-facing document (agents read AGENTS.md/SPEC.md instead) is recorded in AGENTS.md ("Repo facts") and SPEC §8, with a keep-in-sync rule when commands change.
+- **Files:** new `README.md`; `AGENTS.md` (README audience bullet), `SPEC.md` (§8 pointer + note that Linux builds go through `flake.nix` since 2026-11-09).
+- **Verified:** documentation-only change — no code touched; commands cross-checked against SPEC §8, `flake.nix` and `index.html` (trunk entry).
+- **Owner must check:** the three command blocks read correctly on Windows PowerShell vs bash; nothing else.
+### 2026-11-09 — `Docs:` `PERF.md` — RAM / build-speed backlog + first release-build measurement
+- **What:** new `PERF.md` (design note, not part of the spec) collects everything about memory and
+  build cost: (1) a table of where RAM goes for 800×600 / 2000×1500 / 4096×4096 (pixmap + texture +
+  mips + full-snapshot history) and the wasm "heap never shrinks" caveat with the transient spikes
+  (resize, open, undo); (2) a ranked backlog — A. region-based undo instead of full snapshots
+  (10–100× less history, no full-canvas memcpy per stroke; needs a SPEC §3.6 decision), B. mipmaps
+  only at zoom < 100 % (`egui_glow` regenerates the whole mip chain on every `set_partial` —
+  `painter.rs:632`), C. `into_rgba8()` + no intermediate copy on open, D. wasm-only eframe features
+  (drop `accesskit`/`system_fonts`), release log level, wasm-opt (§6 exception), `panic=abort`,
+  E. canvas/history budgets on web, F. micro-optimizations; (3) build-time options (thin LTO, codegen
+  units, opt-level) with the measured baseline; (4) measurement recipes for browser + native.
+  **First release measurement** on this Linux box (24 threads; `jobs = 8` and `-C target-cpu=native`
+  come from the owner's global `~/.cargo/config.toml`): cold `cargo build --release` **243 s**,
+  one-file relink after `touch src/main.rs` **160 s**, no-op **6 s**, stripped binary **14.1 MiB**.
+  No application code changed.
+- **Files:** new `PERF.md`; the layout trees in `AGENTS.md` and `SPEC.md` §2 now list it.
+- **Verified:** the three build timings above (Linux, Rust 1.99.1); `cargo check` green;
+  `cargo fmt --check` green (no Rust changes).
+- **Owner must check:** read `PERF.md`, pick what to implement and confirm the two decisions it
+  needs — region undo (SPEC §3.6 rewrite) and the wasm-opt exception to SPEC §6. Nothing in the
+  app behaves differently.
 
 ### 2026-11-10 — `Docs:` fixed artifact names `russet.zip`/`russet.patch`; commit title last in reply — owner request
 - **Commit title:** `Fix delivery artifact names; require commit title as the reply's last line`

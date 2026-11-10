@@ -1,0 +1,12 @@
+# Trunk (web/WASM) configuration — https://trunkrs.dev
+#
+# Run from the repository root:
+#   trunk serve            # dev server on http://127.0.0.1:8080
+#   trunk build --release  # static site in ./dist (gitignored)
+#
+# The page lives in web/ so the repository root stays Cargo + docs. The page
+# declares the Cargo manifest explicitly (`data-trunk rel="rust" href=...`),
+# because Trunk otherwise only looks for Cargo.toml next to the HTML file.
+[build]
+target = "web/index.html"
+dist = "dist"
