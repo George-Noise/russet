@@ -4,19 +4,47 @@
 
 - `SPEC.md` is the full product spec and the authoritative task list. Follow its milestones (M0–M9) in order.
 - `PROGRESS.md` is the progress log and the substitute for git history (see "Git & progress log" below). Read it before starting any task and update it after every finished, verified one.
-- Read `SPEC.md` §4–§7 before changing behavior. Do not add features from §6 (out of scope).
+- Reading is routed by task type (see "Reading routes" below) — do not read the whole SPEC when a task touches one §. Do not add features from §6 (out of scope).
+
+## Reading routes — task type → what to read
+
+Always read first (cheap): this file, plus `PROGRESS.md` — status snapshot, warnings, verification stamp, the newest log entries. Then, by task type, read NOTHING beyond the listed material:
+
+| Task type | Read |
+|---|---|
+| Behavior change in an existing feature | that `SPEC.md` §3.x + the implementing module (map in "Repo facts" below) + its `#[cfg(test)]` tests |
+| New tool / feature | its §3.x + `SPEC.md` §6 (scope check) + the closest existing module as the pattern (preview-then-commit tool → `app/preview.rs`; new floating window → `app/panels.rs`) |
+| Window placement / resize behavior | `SPEC.md` §3.11 + `app/placement.rs` (everything about §3.11 lives there, incl. its tests) |
+| Dialogs / file I/O | `SPEC.md` §3.7–3.8 + `app/dialogs.rs` / `file_io.rs` |
+| Hotkeys | `SPEC.md` §3.9 (that list is exhaustive) |
+| Build / toolchain / flake | `SPEC.md` §1 + §8 + `flake.nix`; update `README.md` in the same edit if a human-facing command changed |
+| Unfamiliar area, or the § is unclear | additionally `SPEC.md` §4–§7 (milestones, pitfalls, scope, acceptance) before coding |
+
+Never change behavior based on a § you have not read this session. `SPEC.md` §4–§7 in full is required reading for milestone (M<N>) work only, not for one-line fixes.
 
 ## Git & progress log
 
-- The owner keeps git locally, but the `.git` folder is too heavy to transfer to the agent, and commits made inside the agent sandbox are auto-generated (UUID messages) and carry no usable information. **Git is not a progress channel here — `PROGRESS.md` (repo root) is.**
+- `.git` reaches the agent only when the owner includes it in the delivery, and it is gone once the agent sandbox is recycled — never count on it being there. The agent never commits; the owner commits locally using the titles proposed below. **Git is not the progress channel here — `PROGRESS.md` (repo root) is.**
 - Before starting work: read `PROGRESS.md` (status snapshot, warnings, latest log entries) to learn where the project actually stands.
 - After finishing AND verifying a task or milestone: insert one entry at the top of the "Log" section of `PROGRESS.md` (newest first) — date, `M<N>:`-style title (or a short title for non-milestone work), what changed and in which files, how it was verified (commands + result), and what the owner still must check manually. Update the status snapshot and warnings in the same edit.
 - **Commit titles (owner request 2026-11-10):** whenever a task leaves changes that will later go into a commit, ALWAYS propose a commit title for them — one short imperative line in the repo's existing `git log` style (multi-part changes joined with `;`), e.g. `Add Eyedropper, Line/Curve, Shape, Text tools and History/Layers windows`. State it both in the `PROGRESS.md` log entry (a `Commit title:` line) and in the reply to the owner, so the title can be copy-pasted when the owner commits locally. The agent never commits itself (see above).
+- **Log-entry budget (owner request 2026-11-10):** one entry = at most ~20 lines with the fixed fields (What / Files / Verified / Owner-checks / Commit title). Anything durable learned during a task MUST move to its canonical home in the SAME edit — a new egui quirk → the quirks section below, an owner decision or behavioral law → `SPEC.md` §3.x, a module fact → that module's docstring — and the log entry only references it.
+- **Log compaction:** when the "Log" section of `PROGRESS.md` grows past ~120 lines, move all but the newest 3–5 entries verbatim into `PROGRESS-archive.md` (read it only via grep when investigating history) and note that in the Log heading. The status snapshot carries a one-line verification stamp (`fmt/clippy clean, cargo test: N green — date`), updated in the same edit.
 - Never record work as done in `PROGRESS.md` before its verification commands actually pass.
+
+## Delivery ritual — artifacts sent to the owner
+
+The owner applies the work locally, so every finished round ships the project as files, and it is not known in advance which form will fit the owner's local state. Always prepare BOTH:
+
+- **zip** — the full project tree, NEVER containing `.git`, `target/` or other build junk. It applies on any owner state: unpack and replace the tree.
+- **patch** — `git diff <base-commit>` with new files intent-to-add (`git add -N` first, so they are included), base commit stated in the reply. Prepare it ONLY when `.git` is present in the sandbox copy; without git there is no patch — say so plainly in the reply and the zip is the only artifact.
+
+Before calling the delivery ready: with git, apply the patch onto a clean copy of the base commit and byte-compare the result with the working tree AND with the unpacked zip — all three must match; without git, byte-compare the unpacked zip with the working tree. Always regenerate the artifacts in the same session as the changes — never re-send an artifact from an earlier round. Print the sizes and sha256 checksums of the delivered files so the owner can verify the download.
 
 ## Commands
 
-- Verify every milestone with: `cargo check`, then `cargo clippy -- -D warnings`, then `cargo fmt` / `cargo fmt --check`.
+- Quick loop during development: `cargo check` (owner's time-saving policy 2026-11-09).
+- Done gate: `bash scripts/verify.sh` — `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, plus the soft 500-line file-size report. Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
 - Run tests with `cargo test` (unit tests are inline `#[cfg(test)]` modules, e.g. `canvas.rs`, `history.rs`).
 - Daily run: `cargo run` (Windows). Do not run `cargo build --release` during development; release validation belongs to M9.
 - Web (M8): `rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked`, then `trunk serve` / `trunk build --release`. Trunk is not currently installed on this machine.
