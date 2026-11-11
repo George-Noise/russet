@@ -1,15 +1,17 @@
 //! The "History" and "Layers" windows (owner request 2026-11-10). History
 //! is a read-only, non-clickable log of document actions; Layers is a
 //! placeholder showing the single implicit background layer (real layers
-//! come later). Both are plain floating windows WITHOUT §3.11 placement —
-//! that contract stays with the "Tools" and "Palette" windows. Child module
+//! come later). Both are plain floating windows that since the owner request
+//! 2026-11-11 follow the same §3.11 placement as "Tools" and "Palette"
+//! (drop-time edge anchoring + resize repositioning, via [`place_floating_window`]);
+//! their FIRST-open positions stay the edge anchors below. Child module
 //! of `app`, so it can touch `App`'s private fields; `app.rs` stays the
 //! orchestrator.
 
 use eframe::egui::{self, Color32, Context};
 
 use super::App;
-use super::placement::{FIRST_OPEN_GAP, LAYERS_FIRST_OPEN_LIFT};
+use super::placement::{FIRST_OPEN_GAP, LAYERS_FIRST_OPEN_LIFT, place_floating_window};
 
 /// Stable ids, same idea as `windows.rs`: independent of the title text so
 /// placement / area state lookups stay stable.
@@ -35,8 +37,9 @@ impl App {
         // central panel's rect, whose top edge IS the menu bar's bottom
         // (the no_frame central panel has zero margin), so the window's
         // title sits just under the menu instead of covering it (owner
-        // request 2026-11-10). No §3.11 anchoring afterwards.
-        egui::Window::new("History")
+        // request 2026-11-10). Afterwards the same §3.11 magnetism and
+        // resize repositioning as Tools/Palette (owner request 2026-11-11).
+        let shown = egui::Window::new("History")
             .id(history_window_id())
             .open(&mut open)
             .pivot(egui::Align2::RIGHT_TOP)
@@ -62,6 +65,16 @@ impl App {
                         });
                 }
             });
+        if let Some(response) = &shown {
+            place_floating_window(
+                ctx,
+                history_window_id(),
+                response.response.rect,
+                ctx.content_rect(),
+                self.last_content_rect,
+                &mut self.history_placement,
+            );
+        }
         if !open {
             self.history_window_open = false;
         }
@@ -79,8 +92,10 @@ impl App {
         // First open: 0.5rem from the right edge; the bottom edge sits
         // 0.5rem + 1.75rem above the window's bottom edge so it never
         // covers the zoom % label painted in the canvas's bottom-right
-        // corner (owner request 2026-11-10). No §3.11 anchoring afterwards.
-        egui::Window::new("Layers")
+        // corner (owner request 2026-11-10). Afterwards the same §3.11
+        // magnetism and resize repositioning as Tools/Palette (owner
+        // request 2026-11-11).
+        let shown = egui::Window::new("Layers")
             .id(layers_window_id())
             .open(&mut open)
             .pivot(egui::Align2::RIGHT_BOTTOM)
@@ -110,6 +125,16 @@ impl App {
                     });
                 });
             });
+        if let Some(response) = &shown {
+            place_floating_window(
+                ctx,
+                layers_window_id(),
+                response.response.rect,
+                ctx.content_rect(),
+                self.last_content_rect,
+                &mut self.layers_placement,
+            );
+        }
         if !open {
             self.layers_window_open = false;
         }

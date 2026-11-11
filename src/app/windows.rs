@@ -45,12 +45,16 @@ impl App {
         let shown = egui::Window::new("Tools")
             .id(tools_window_id())
             .open(&mut open)
-            // First open (§3.2): 0.5rem from the left edge, vertically
-            // centered in the main window (the LEFT_CENTER pivot interprets
-            // `default_pos` as the window's left-center point). `default_pos`
-            // is consumed only while the window has no stored position —
-            // after any user move or §3.11 repositioning the stored position
-            // always wins.
+            // First open (§3.2): 0.5rem from the left edge; vertically a bit
+            // ABOVE center — 40% of the free vertical space above the window
+            // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
+            // pivot + `default_pos` set the left gap and a centered start;
+            // the exact 40/60 split is applied once by the placement glue on
+            // the first frame (`placement::TOOLS_FIRST_OPEN_RATIO`), because
+            // the auto-sized height is only known after the first layout.
+            // `default_pos` is consumed only while the window has no stored
+            // position — after any user move or §3.11 repositioning the
+            // stored position always wins.
             .pivot(egui::Align2::LEFT_CENTER)
             .default_pos(ctx.content_rect().left_center() + egui::vec2(FIRST_OPEN_GAP, 0.0))
             .auto_sized() // size follows the content; no resize handles

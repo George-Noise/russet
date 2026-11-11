@@ -34,7 +34,7 @@ mod preview;
 mod text_tool;
 mod windows;
 
-use self::placement::WindowPlacement;
+use self::placement::{TOOLS_FIRST_OPEN_RATIO, WindowPlacement};
 use self::preview::PreviewState;
 use self::text_tool::TextEditState;
 
@@ -100,8 +100,13 @@ pub struct App {
     palette_window_open: bool,
     history_window_open: bool,
     layers_window_open: bool,
+    /// §3.11 placement state of the four floating windows (owner request
+    /// 2026-11-11 added the History/Layers pair); the Tools one also carries
+    /// the one-shot §3.2 first-open vertical ratio (40%/60%).
     tools_placement: WindowPlacement,
     palette_placement: WindowPlacement,
+    history_placement: WindowPlacement,
+    layers_placement: WindowPlacement,
     /// Pending gesture of the Line/Shape preview tools (owner request
     /// 2026-11-10); interaction and commits live in [`preview`].
     preview: PreviewState,
@@ -135,6 +140,15 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Owner request 2026-11-11: NO drop shadows on the app's windows —
+        // a flat look. `window_shadow` covers every `egui::Window` (Tools,
+        // Palette, History, Layers, the Text input and all dialogs) in BOTH
+        // themes; menu/popup shadows (`visuals.popup_shadow`) stay as egui
+        // draws them — popups are not "windows" in the owner's sense.
+        cc.egui_ctx.all_styles_mut(|style| {
+            style.visuals.window_shadow = egui::Shadow::NONE;
+        });
+
         let canvas = Canvas::new(800, 600, Color32::WHITE);
         let canvas_tex = cc.egui_ctx.load_texture(
             "canvas",
@@ -181,8 +195,10 @@ impl App {
             palette_window_open: true,
             history_window_open: true,
             layers_window_open: true,
-            tools_placement: WindowPlacement::default(),
+            tools_placement: WindowPlacement::first_open_at_ratio(TOOLS_FIRST_OPEN_RATIO),
             palette_placement: WindowPlacement::default(),
+            history_placement: WindowPlacement::default(),
+            layers_placement: WindowPlacement::default(),
             preview: PreviewState::None,
             text_edit: None,
             action_log: ActionLog::new(),

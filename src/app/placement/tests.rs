@@ -1,6 +1,6 @@
 use super::{
-    AxisAnchor, WINDOW_SNAP_DISTANCE, WindowAnchor, anchor_axis, reposition_axis,
-    reposition_window_pos, window_anchor,
+    AxisAnchor, WINDOW_SNAP_DISTANCE, WindowAnchor, anchor_axis, first_open_ratio_pos,
+    reposition_axis, reposition_window_pos, window_anchor,
 };
 use eframe::egui::{Rect, pos2, vec2};
 
@@ -275,5 +275,21 @@ fn anchored_window_keeps_dropped_gaps_through_resize() {
     assert_eq!(
         reposition_window_pos(rect(800.0, 650.0, 200.0, 150.0), prev_area, new_area, flush),
         pos2(300.0, 450.0)
+    );
+}
+
+#[test]
+fn first_open_ratio_splits_the_free_vertical_space() {
+    let area = rect(0.0, 0.0, 800.0, 600.0);
+    // 50 pt window: free space 550 → 220 above / 330 below = the §3.2
+    // 40%/60% first-open split; the left edge stays where it was.
+    assert_eq!(
+        first_open_ratio_pos(area, rect(8.0, 275.0, 100.0, 50.0), 0.4),
+        pos2(8.0, 220.0)
+    );
+    // A window taller than the main window is clamped flush to the top.
+    assert_eq!(
+        first_open_ratio_pos(area, rect(8.0, 0.0, 100.0, 700.0), 0.4),
+        pos2(8.0, 0.0)
     );
 }

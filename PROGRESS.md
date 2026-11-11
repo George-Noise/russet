@@ -29,7 +29,7 @@
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 
 **Verification stamp:** fmt clean, `cargo clippy --all-targets -- -D warnings` clean,
-`cargo test` — 48 green (2026-11-10, Rust 1.99.1, Linux). Update this stamp in the same
+`cargo test` — 49 green (2026-11-11, Rust 1.99.1, Linux). Update this stamp in the same
 edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -53,6 +53,37 @@ edit as a log entry (AGENTS.md "Git & progress log").
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
 
+### 2026-11-11 — `UX-fix:` History/Layers under §3.11; Tools 40/60 first open; shadows off — owner request (3 items)
+- **Commit title:** `Place History/Layers windows per §3.11; lift Tools first open; drop window shadows`
+- **What:** (1) History and Layers now follow the SAME §3.11 placement as
+  Tools/Palette — drop-time 2rem edge anchoring (at drag end only, never pulled
+  flush) and per-axis resize repositioning; their first-open anchors are
+  unchanged (`history_placement`/`layers_placement` added to `App`). (2) The
+  Tools window's first open is a bit ABOVE center: 40% of the FREE vertical
+  space above / 60% below (owner: "расстояние до верхнего края 40%, до нижнего
+  60%"). A pivot + `default_pos` cannot express this (the auto-sized height is
+  unknown before the first layout), so the exact split is a ONE-SHOT fix on the
+  first frame — `TOOLS_FIRST_OPEN_RATIO` + `first_open_ratio_pos` in
+  placement.rs, persisted via the same `set_window_pos` path as §3.11; §3.11
+  takes over right after, reopening the window never re-fires it. (3) Window
+  drop shadows are OFF app-wide: `visuals.window_shadow = Shadow::NONE` in
+  `App::new`, both themes, every `egui::Window` (dialogs included); popup/menu
+  shadows deliberately untouched. Overrides §6's shadow item — recorded in SPEC
+  §3.11; SPEC §3.2/§7.1/§7.14 + AGENTS.md repo facts updated in the same edit.
+- **Files:** `src/app/placement.rs` (+ pure `first_open_ratio_pos`, 1 test),
+  `src/app/panels.rs` (placement glue for both windows), `src/app.rs` (two
+  placement fields, Tools ratio, shadow style), `src/app/windows.rs` (comment);
+  docs: `SPEC.md`, `AGENTS.md`, `PROGRESS.md`.
+- **Verified:** `bash scripts/verify.sh` — ALL GATES GREEN: rules.sh (0 hard
+  violations, the same 5 known expect() NOTEs, size guard OK), fmt clean,
+  clippy `-D warnings` clean, `cargo test` 49 green (48 → 49: the 40/60 split
+  test; Rust 1.99.1, Linux — toolchain installed fresh in this sandbox). No
+  wasm check (no new `#[cfg]` branches, glue-only change).
+- **Owner must check:** on Windows `cargo run` — (1) History/Layers magnetize
+  at dropped edges and follow main-window resizes like Tools/Palette; (2) the
+  Tools window opens at the ~40/60 split and keeps it through resizes; (3) no
+  shadows under the floating windows/dialogs — the color-picker popup still
+  has one (say the word to drop that too).
 ### 2026-11-11 — `CI:` machine rules job — scripts/rules.sh wired into CI and verify.sh — owner request
 - **Commit title:** `Add scripts/rules.sh machine rules; run them in CI and verify.sh`
 - **What:** the owner-approved "machine-readable rules" round. New `scripts/rules.sh` — the
