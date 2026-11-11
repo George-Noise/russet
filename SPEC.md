@@ -480,12 +480,12 @@ Exception (owner request, 2026-11-10): the owner explicitly ordered deliberately
 ## 8. Build & run
 
 ```bash
-rustup update                                   # Rust >= 1.95 required
+rustup update                                   # keep rustup current; the repo pins Rust 1.99.1 (rust-toolchain.toml), installed on first use
 
 # --- Daily development (Windows) ---
 cargo run                                       # dev build; first run is long (deps once), then seconds
-cargo test                                      # unit tests, one file per module (src/<module>/tests.rs)
-cargo clippy --all-targets -- -D warnings       # lints the tests too
+cargo test --profile gates                      # unit tests, one file per module (src/<module>/tests.rs)
+cargo clippy --profile gates --all-targets -- -D warnings   # same lints, unoptimized fast lane — AGENTS.md "Repo facts"
 
 # --- Release: MANUALLY, when everything is ready (fat LTO, slow) ---
 cargo build --release

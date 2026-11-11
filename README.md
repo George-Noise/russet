@@ -1,7 +1,8 @@
 # Russet
 
-Build and run instructions for NixOS, Windows, and Web. Rust 1.95 or newer is
-required for all targets.
+Build and run instructions for NixOS, Windows, and Web. The repo pins its Rust
+toolchain (`rust-toolchain.toml`, 1.99.1) — the first cargo command installs it
+automatically via rustup. Rust 1.95 or newer is required for all targets.
 
 ## NixOS (Linux)
 
@@ -26,9 +27,10 @@ installed — not only NixOS.
 
 Prerequisites:
 
-- [Rust](https://rustup.rs) (stable, 1.95+) — on Windows this means the
-  `x86_64-pc-windows-msvc` toolchain and the Visual Studio Build Tools with the
-  "Desktop development with C++" workload (rustup offers to install them).
+- [Rust](https://rustup.rs) — the repo pins 1.99.1 (`rust-toolchain.toml`) and
+  rustup installs it on the first cargo command; on Windows this means the
+  `x86_64-pc-windows-msvc` host toolchain and the Visual Studio Build Tools with
+  the "Desktop development with C++" workload (rustup offers to install them).
 
 Run (development build; the first run compiles all dependencies once, after
 that it starts in seconds):

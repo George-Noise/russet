@@ -28,9 +28,9 @@
 | Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | done — first CI run GREEN (success for `0188c52`, GitHub Actions) | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 
-**Verification stamp:** fmt clean, `cargo clippy --all-targets -- -D warnings` clean,
-`cargo test` — 49 green (2026-11-11, Rust 1.99.1, Linux). Update this stamp in the same
-edit as a log entry (AGENTS.md "Git & progress log").
+**Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
+`cargo test --profile gates` — 49 green (2026-11-11, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
+Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -52,6 +52,14 @@ edit as a log entry (AGENTS.md "Git & progress log").
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
+
+### 2026-11-11 — `Tooling:` Rust pinned via rust-toolchain.toml; unoptimized `gates` profile for gate runs — owner request
+
+- **What:** new `rust-toolchain.toml` (channel 1.99.1, minimal + clippy/rustfmt) — rustup installs the exact compiler on the first cargo command in the repo, so every machine and agent session builds with the same toolchain; new `[profile.gates]` in `Cargo.toml` (inherits dev; opt-level 0, no debuginfo, no incremental, dependencies included) — gate runs skip the egui-template dep optimization that pure-logic tests never use; `verify.sh` clippy/test now run `--profile gates`; AGENTS.md (Commands + Repo facts), SPEC §8 and README updated in the same edit. CI untouched (needs the owner's OK) — it keeps the full optimized dev lane as the independent full-profile check. GUI dev lane unchanged.
+- **Files:** new `rust-toolchain.toml`; `Cargo.toml`, `scripts/verify.sh`, `AGENTS.md`, `SPEC.md`, `README.md`, `PROGRESS.md`.
+- **Verified:** cold start in the agent sandbox (empty `target/`, 2 cores): `cargo fmt --check` 0.1s; `cargo clippy --profile gates --all-targets -- -D warnings` clean — 1m24s; `cargo test --profile gates` 49 green — 1m42s; gate total ~3m (was ~12m45s on the same box with the default profile). Then `bash scripts/verify.sh` — ALL GATES GREEN (rules 0 hard violations; warm rerun ~5s).
+- **Owner-checks:** one `cargo run` on Windows (dev lane untouched); the next CI run after push — the workflow installs 1.99.1 explicitly, which matches the new pin; `rust-toolchain.toml` is new to the repo.
+- **Commit title:** `Pin Rust 1.99.1 via rust-toolchain.toml; add unoptimized gates profile for cold-start test runs`
 
 ### 2026-11-11 — `UX-fix:` History/Layers under §3.11; Tools 40/60 first open; shadows off — owner request (3 items)
 - **Commit title:** `Place History/Layers windows per §3.11; lift Tools first open; drop window shadows`

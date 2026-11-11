@@ -12,10 +12,10 @@ export PATH="$HOME/.cargo/bin:$PATH"
 echo "== cargo fmt --check =="
 cargo fmt --check
 
-echo "== cargo clippy --all-targets -- -D warnings =="
-cargo clippy --all-targets -- -D warnings
+echo "== cargo clippy --profile gates --all-targets -- -D warnings =="
+cargo clippy --profile gates --all-targets -- -D warnings
 
-echo "== cargo test =="
-cargo test
+echo "== cargo test --profile gates =="
+cargo test --profile gates
 
 echo "verify.sh: ALL GATES GREEN"

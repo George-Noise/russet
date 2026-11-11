@@ -1,0 +1,7 @@
+# Pins the exact Rust toolchain for everyone (owner, agents, CI). rustup
+# installs it automatically on the first cargo command inside this repo
+# (one-time network fetch per machine).
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
