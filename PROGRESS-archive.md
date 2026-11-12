@@ -31,6 +31,32 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-12 — `Feat:` opt-in MCP stdio server behind the `mcp` feature — owner request
+
+- **What:** a JSON-RPC 2.0 stdio server for agent-driven development, compiled ONLY
+  with `--features mcp`. A reader thread pushes parsed events into an mpsc queue; the
+  UI frame polls it with `try_recv` (main thread never blocks) and executes 8 tools
+  against the live App: get_layers, get_history_tree, add_stroke (the exact
+  hand-gesture path: snapshot → pixels → tree node → forks after undo), undo/redo,
+  set_active_layer, get_canvas_snapshot (PNG image content), export_png. Starts on
+  `--mcp` or piped stdin; menu-bar badge shows "MCP on (N)". serde_json (optional
+  dep) + the thread pump are owner-approved 2026-11-12 via the new approval flow;
+  the default build has NO mcp code/threads/serde_json (`cargo tree` proof) —
+  release: 14.52 MB default vs 14.71 MB mcp (+189 KB).
+- **Files:** Cargo.toml (+`[features] mcp`, optional serde_json, lock updated);
+  NEW src/app/mcp.rs + mcp/tools.rs + mcp/tests.rs + mcp/tools/tests.rs; app.rs (5
+  cfg hooks); history_tree.rs (read-only layer_nodes/layer_head); file_io.rs
+  (pub(crate) encode_png); README.md (MCP build section). tree_window.rs untouched.
+- **Verified:** verify.sh ALL GATES GREEN (64 tests); `--features mcp`: clippy
+  clean, 76 tests. Headless demo: 11/11 JSON-RPC requests OK — house drawn via
+  add_stroke, snapshot decoded to PNG, undo, fork 2:[3,4] confirmed by
+  get_history_tree; 2 screenshots + transcript in download/mcp-demo/.
+- **Owner-checks:** Windows run of the flag build (`cargo build --release --features
+  mcp`, then `--mcp`); badge look; the tree_window.rs review is still pending.
+- **Commit title:** `Add opt-in MCP stdio server behind the mcp feature`
+
+---
+
 ### 2026-11-12 — `Docs:` dependency convention reworked: hard ban → owner approval flow — owner request
 
 - **What:** the "Do not add dependencies" rule is replaced by an approval flow:

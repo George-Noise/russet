@@ -22,19 +22,21 @@
 
 | # | Opened | What the human must check | Source (PROGRESS.md log) | Status |
 |---|---|---|---|---|
-| V1 | 2026-11-10 | Six new tools, first iteration, on Windows `cargo run`: Eyedropper LMB/RMB + continuous sampling; Line straight/curve gestures (Enter/Esc/Backspace); Shape rect/ellipse + Fill, Esc mid-drag; Text commit == preview and sharp at 100% zoom; History log lists every action and survives reopen; Layers shows one live Background row; undo/redo for every new tool; hotkeys I/L/U/T muted while typing. | 2026-11-10 `Features:` entry | open |
-| V2 | 2026-11-10 | Six UX-fix items: History opens below the menu bar (0.5rem gap); Layers does not cover the zoom %; Text/Curve hints stay narrow; ellipse preview radius == committed radius (Fill and Outline+Fill); Fill/Outline never both off, outline=primary / fill=secondary; line/curve previews have round caps like the commit. | 2026-11-10 `UX-fix:` entry | open |
-| V3 | 2026-11-11 | History/Layers magnetize per §3.11 and follow resizes like Tools/Palette; Tools first open at the ~40/60 split; no shadows under floating windows/dialogs (the color-picker popup intentionally still has one — decision tracked as F7 in DEBTS-functional.md). | 2026-11-11 `UX-fix:` entry | open |
-| V4 | 2026-11-11 | One `cargo run` on Windows after the toolchain pin + `gates` profile (the dev lane was not supposed to change). | 2026-11-11 `Tooling:` entry | open |
-| V5 | 2026-11-12 | History Tree windows on Windows: draw, Ctrl+Z/Y, Clone, layer switch, direction toggle, debug "−"; confirm the anchored scrolling feels right. | 2026-11-12 `Extra:` entry | open |
-| V6 | 2026-11-13 | History Tree look after the rendering rework + lanes rework (supersedes the V5 look checks): connector shape, lane order, per-row labels; many undos+strokes at one node and horizontal scrolling; "New at top" re-check (sign logic unchanged, not re-captured). | 2026-11-13 two `Fix:` entries | open |
-| V7 | 2026-11-13 | File splits (document/menu/input, paint, layout): `cargo run` behaves exactly as before (menu, hotkeys, undo/redo, tree windows, MCP badge); skim the module map at the top of `app.rs`. | 2026-11-13 `Refactor:` entry | open |
-| V8 | 2026-11-12 | MCP on Windows: `cargo build --release --features mcp`, run with `--mcp`, check the "MCP on (N)" badge. | 2026-11-12 `Feat:` MCP entry | open |
-| V9 | 2026-11-09 | M8 web: a real-mouse pass in a browser — draw, zoom, pan, Open/Save (the 2026-11-09 Firefox check was a headless smoke only). | Status snapshot M8 | open |
-| V10 | 2026-11-09 | Nix: `nix build` / `nix run` on an actual Nix machine. | Status snapshot Extra row | open |
-| V11 | 2026-11-09 | About window on Windows: Help → "About Russet" shows the correct Platform/Renderer lines. | Status snapshot Extra row | open |
-| V12 | 2026-11-12 | Doc sign-offs (read once): the dependency approval flow wording (AGENTS.md / SPEC §6 / CONTRIBUTING.md); CONTRIBUTING.md reads correctly for an outsider; README command blocks render correctly on Windows PowerShell vs bash. | 2026-11-12 `Docs:`, 2026-11-11 `CI+Docs:`, 2026-11-09 `Docs:` entries | open |
+| V4 | 2026-11-11 | One `cargo run` on Windows after the toolchain pin + `gates` profile (the dev lane was not supposed to change). | 2026-11-11 `Tooling:` entry | open — explained in plain words 2026-11-13, awaiting the owner's word |
+| V7 | 2026-11-13 | File splits (document/menu/input, paint, layout): `cargo run` behaves exactly as before (menu, hotkeys, undo/redo, tree windows, MCP badge); skim the module map at the top of `app.rs`. | 2026-11-13 `Refactor:` entry | open — explained in plain words 2026-11-13, awaiting the owner's word |
+| V8 | 2026-11-12 | MCP on Windows: `cargo build --release --features mcp`, run with `--mcp`, check the "MCP on (N)" badge. | 2026-11-12 `Feat:` MCP entry | open — parked by the owner 2026-11-13: no Windows MCP pass for now; the agent-side MCP run is the working state |
+| V9 | 2026-11-09 | M8 web: a real-mouse pass in a browser — draw, zoom, pan, Open/Save (the 2026-11-09 Firefox check was a headless smoke only). | Status snapshot M8 | open — parked by the owner 2026-11-13: no web checks planned in the near future |
 
 Resolved (kept until the next compaction, then dropped):
 
-- (none yet)
+- V1, V2, V3 — verified 2026-11-13 via chat (owner: "проверено V1 V2 V3"): the six
+  tools, the six UX-fix items, the §3.11 magnetize/shadow pass — all clicked through
+  on Windows.
+- V5, V6 — verified 2026-11-13 via chat: the owner tried the History Tree by hand and
+  is satisfied for now ("руками потрогал, на текущий момент устраивает"). Improvement
+  ideas may come later — those will be NEW tasks, not reopened checks.
+- V10 — closed 2026-11-13, owner decision: he builds/runs on Nix periodically himself
+  ("почти всё ок") — not a debt, stop reminding.
+- V11 — verified 2026-11-13 via chat (About window checked on Windows).
+- V12 — verified 2026-11-13 via chat, partial read: the owner skimmed the docs;
+  development is stable and good, no wording fixes requested.

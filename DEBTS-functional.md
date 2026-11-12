@@ -22,10 +22,10 @@
 | F3 | 2026-11-11 | CI has no wasm/trunk job. | Deliberately postponed by the owner "until the web build has something to be shown". | After M8 gets its human pass (V9) or the owner says so. |
 | F4 | 2026-11-12 | History Tree pseudo-layers: interleaved brush/eraser strokes across layers are a known prototype caveat (pencil-only sessions stay exact; commented at `App::undo`). | The tree mirrors the real History only where the prototype's assumptions hold. | When layers become real (F1) or the owner hits the caveat. |
 | F5 | 2026-11-10 | PERF.md decisions pending: P3 (region-based undo — rewrites SPEC §3.6) and P6 (canvas/history budgets on wasm). | Owner-gated backlog; this line is a POINTER, the details live in PERF.md §0/§6. | Owner picks them from PERF.md. |
-| F6 | 2026-11-10 | Round line caps in Straight/Curve previews are drawn as endpoint circles — a stopgap "until the owner gets a cap choice". | egui 0.37 has no line-cap option (verified in epaint). | Owner wants a cap choice; otherwise the circles stay. |
-| F7 | 2026-11-11 | The color-picker popup still has a drop shadow while every window lost theirs. | Shadows were switched off app-wide; popups/menus were deliberately untouched. | Owner decides: drop it too, or keep popups shaded. |
 
-Paid (kept until the next compaction, then dropped):
+Paid / closed (kept until the next compaction, then dropped):
 
 - 2026-11-13 — CI did not run the `mcp` feature gates (the code compiled only in manual builds and could rot unseen) — **paid 2026-11-13**: clippy+test with `--features mcp` added to the CI `native` job (owner OK 2026-11-13) and already gated in `verify.sh` since 2026-11-13.
 - 2026-11-13 — keep-or-drop question for the two python helpers in `scripts/` — **paid 2026-11-13**: kept; `visual_driver.py` is now the reusable scenario runner (owner request 2026-11-13).
+- F6 (round line caps in Straight/Curve previews drawn as endpoint circles) — **closed 2026-11-13, owner decision**: the instrument works well enough for the current project state; the circles stay and the item is no longer tracked. Revisit only if the owner asks for a cap choice.
+- F7 (the color-picker popup keeps its drop shadow) — **closed 2026-11-13, owner decision**: "с тенями пока всё" — the popup shadow stays as is; not tracked anymore.

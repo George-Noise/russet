@@ -53,6 +53,27 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
 
+### 2026-11-13 — `Docs:` first debt-triage round — owner answered the batched V/F list
+
+- **What:** owner dispositions applied to the two debt files; zero code change.
+  Verified via chat: V1, V2, V3, V11 (Windows tool/UX/About checks), V5+V6 (History
+  Tree — "руками потрогал, устраивает"; later improvements = new tasks), V12 (docs
+  skimmed, dev stable). Closed as not-a-debt: V10 (owner builds on Nix periodically
+  himself), F6 (line-cap circles fine for now), F7 (popup shadow stays). Parked by
+  the owner, stay open: V8 (no Windows MCP pass for now), V9 (no web checks soon).
+  Awaiting a one-word answer after a plain-words explanation: V4 (one `cargo run`
+  after the toolchain pin + `gates` profile) and V7 (`cargo run` after the file
+  splits — nothing was supposed to change). Open tables: V 12 → 4, F 7 → 5.
+- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `PROGRESS.md` (stale
+  "two 2026-11-10 entries" note removed — V1/V2 verified; the 2026-11-12 MCP entry
+  → PROGRESS-archive.md, the Log keeps the newest 5).
+- **Verified:** docs-only edit (AGENTS.md "Docs/comment-only edits" — no cargo run):
+  rules.sh green — PROGRESS.md and Log under budget, no parked RESOLVED warnings,
+  5 live owner-check lines in the Log; `cargo fmt --check` clean.
+- **Owner-checks:** say the word on V4 and V7 (explained in chat) — one word each
+  closes them; V8/V9 stay parked until you plan those checks; F1–F5 unchanged.
+- **Commit title:** `Docs: first debt triage — verify V1-V3 V5 V6 V11 V12, close V10 F6 F7, park V8 V9`
+
 ### 2026-11-13 — `Tooling:` debt lists, PROGRESS budget check, baseline rule, CI mcp gates, scenario driver — owner request
 
 - **What:** agentic-workflow round, zero app-behavior change. (1) NEW
@@ -108,12 +129,6 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   `app.rs` and say if the grouping reads well.
 - **Commit title:** `Split the guarded files and slim app.rs into layout/painter/document/menu/input child modules`
 
-> Budget: ≤ ~20 lines per entry, fixed fields (What / Files / Verified / Owner-checks /
-> Commit title); durable facts move to their canonical home in the same edit (AGENTS.md
-> "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
-> `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
-> until the owner's Windows check of the six UX-fix items is done.
-
 ### 2026-11-13 — `Fix:` History Tree lanes: divergence-only forks, recency placement, shared connector exits, per-row labels — owner request
 
 - **What:** five owner points from the live review. (1) A PLAIN UNDO no longer diverts
@@ -161,26 +176,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   does not run the mcp gates yet — say the word and they go there too.
 - **Commit title:** `Add get_tree_layout MCP tool and gate the mcp feature in verify.sh`
 
-### 2026-11-12 — `Feat:` opt-in MCP stdio server behind the `mcp` feature — owner request
-
-- **What:** a JSON-RPC 2.0 stdio server for agent-driven development, compiled ONLY
-  with `--features mcp`. A reader thread pushes parsed events into an mpsc queue; the
-  UI frame polls it with `try_recv` (main thread never blocks) and executes 8 tools
-  against the live App: get_layers, get_history_tree, add_stroke (the exact
-  hand-gesture path: snapshot → pixels → tree node → forks after undo), undo/redo,
-  set_active_layer, get_canvas_snapshot (PNG image content), export_png. Starts on
-  `--mcp` or piped stdin; menu-bar badge shows "MCP on (N)". serde_json (optional
-  dep) + the thread pump are owner-approved 2026-11-12 via the new approval flow;
-  the default build has NO mcp code/threads/serde_json (`cargo tree` proof) —
-  release: 14.52 MB default vs 14.71 MB mcp (+189 KB).
-- **Files:** Cargo.toml (+`[features] mcp`, optional serde_json, lock updated);
-  NEW src/app/mcp.rs + mcp/tools.rs + mcp/tests.rs + mcp/tools/tests.rs; app.rs (5
-  cfg hooks); history_tree.rs (read-only layer_nodes/layer_head); file_io.rs
-  (pub(crate) encode_png); README.md (MCP build section). tree_window.rs untouched.
-- **Verified:** verify.sh ALL GATES GREEN (64 tests); `--features mcp`: clippy
-  clean, 76 tests. Headless demo: 11/11 JSON-RPC requests OK — house drawn via
-  add_stroke, snapshot decoded to PNG, undo, fork 2:[3,4] confirmed by
-  get_history_tree; 2 screenshots + transcript in download/mcp-demo/.
-- **Owner-checks:** Windows run of the flag build (`cargo build --release --features
-  mcp`, then `--mcp`); badge look; the tree_window.rs review is still pending.
-- **Commit title:** `Add opt-in MCP stdio server behind the mcp feature`
