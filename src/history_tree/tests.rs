@@ -275,13 +275,13 @@ fn head_path_rides_lane_zero_through_side_rows() {
 }
 
 #[test]
-fn second_side_branch_of_a_parent_takes_the_next_lane() {
+fn side_branches_stack_by_recency_with_the_newest_on_the_innermost_lane() {
     let mut tree = HistoryTree::new();
     stroke(&mut tree);
     stroke(&mut tree);
     stroke(&mut tree);
     tree.on_undo();
-    tree.on_undo(); // head on the root; 2..3 become side branch 1
+    tree.on_undo(); // head on the root; 2..3 become a side branch
     stroke(&mut tree); // side branch 2
     tree.on_undo();
     stroke(&mut tree); // side branch 3
@@ -290,7 +290,9 @@ fn second_side_branch_of_a_parent_takes_the_next_lane() {
 
     let layout = tree.layout();
     let branches: Vec<usize> = layout.rows.iter().map(|row| row.branch).collect();
-    assert_eq!(branches, vec![0, 1, 1, 2, 3, 0], "lanes in creation order");
+    // NEWEST branch first (owner request 2026-11-13): the latest fork hugs
+    // the current timeline on lane 1, older ones stack to the right.
+    assert_eq!(branches, vec![0, 3, 3, 2, 1, 0]);
     let forks: Vec<bool> = layout.rows.iter().map(|row| row.fork).collect();
     assert_eq!(forks, vec![false, true, false, true, true, false]);
     assert_eq!(layout.spans.len(), 4, "one rail per branch, no merges");
@@ -298,6 +300,150 @@ fn second_side_branch_of_a_parent_takes_the_next_lane() {
     assert_eq!(layout.spans[1].parent_row, Some(0));
     assert_eq!(layout.spans[2].parent_row, Some(0));
     assert_eq!(layout.spans[3].parent_row, Some(0));
+}
+
+#[test]
+fn plain_undo_keeps_the_tail_on_lane_zero() {
+    // Owner request 2026-11-13: undo alone must NOT divert a branch to the
+    // side — the undone tail is still the timeline redo walks back into.
+    let mut tree = HistoryTree::new();
+    stroke(&mut tree);
+    stroke(&mut tree);
+    stroke(&mut tree);
+    tree.on_undo();
+    tree.on_undo(); // head on the first stroke; the tail is NOT a branch
+
+    let layout = tree.layout();
+    assert!(layout.rows.iter().all(|row| row.branch == 0 && !row.fork));
+    assert_eq!(layout.spans.len(), 1, "one straight rail, no fork");
+    assert_eq!(
+        (layout.spans[0].start_row, layout.spans[0].end_row),
+        (0, 2),
+        "the rail covers the undone tail"
+    );
+    assert!(layout.rows[0].is_head, "the head sits mid-rail now");
+
+    // Redo returns along the same rail — still nothing forked.
+    tree.on_redo();
+    let layout = tree.layout();
+    assert!(layout.rows.iter().all(|row| row.branch == 0));
+    assert_eq!(layout.spans.len(), 1);
+}
+
+#[test]
+fn drawing_after_undo_is_what_forks_the_tree() {
+    let mut tree = HistoryTree::new();
+    stroke(&mut tree);
+    let _b = stroke(&mut tree);
+    let c = stroke(&mut tree);
+    tree.on_undo(); // plain undo: the tail stays on the main line
+    assert_eq!(tree.layout().spans.len(), 1);
+    let d = stroke(&mut tree); // now the user diverges from `b`
+
+    let layout = tree.layout();
+    let branches: Vec<usize> = layout.rows.iter().map(|row| row.branch).collect();
+    assert_eq!(branches, vec![0, 0, 1, 0], "only the abandoned tail forks");
+    let forks: Vec<bool> = layout.rows.iter().map(|row| row.fork).collect();
+    assert_eq!(forks, vec![false, false, true, false]);
+    assert!(
+        layout
+            .rows
+            .iter()
+            .find(|row| row.id == c)
+            .expect("known row")
+            .fork
+    );
+    let _ = d;
+}
+
+#[test]
+fn a_late_fork_reuses_the_lane_freed_above_it() {
+    // Owner request 2026-11-13: a fork far below earlier branches must not
+    // land to the right of ALL of them when its vertical range is free.
+    let mut tree = HistoryTree::new();
+    stroke(&mut tree);
+    stroke(&mut tree); // b: the early branch
+    tree.on_undo();
+    stroke(&mut tree); // c forks the root: children {b, c}
+    stroke(&mut tree);
+    stroke(&mut tree); // main line continues below the early branch
+    tree.on_undo();
+    stroke(&mut tree); // a late fork off the main line, BELOW the early branch
+
+    let layout = tree.layout();
+    let branches: Vec<usize> = layout.rows.iter().map(|row| row.branch).collect();
+    // rows: a0, b1(branch), c0, d0, e0, f1(branch) — the late fork shares
+    // lane 1 with the early branch: their ranges don't intersect.
+    assert_eq!(branches, vec![0, 1, 0, 0, 1, 0]);
+    assert_eq!(layout.spans.len(), 3);
+    let span1 = &layout.spans[1];
+    assert_eq!(span1.branch, 1);
+    assert_eq!(span1.parent_row, Some(0), "the early branch forks the root");
+    let span2 = &layout.spans[2];
+    assert_eq!(span2.branch, 1, "the late fork reuses lane 1");
+    assert_eq!(
+        span2.parent_row,
+        Some(3),
+        "the late fork hangs off the main line"
+    );
+}
+
+#[test]
+fn the_redo_chain_follows_first_created_children_through_a_forked_tail() {
+    // Undoing past a tail that already contains a real fork: the main line
+    // beyond the head walks the redo chain — the hint first, then always
+    // the FIRST-CREATED child (what repeated redo would actually visit).
+    // The newer fork at `b` hangs off lane 0 as a side branch.
+    let mut tree = HistoryTree::new();
+    stroke(&mut tree);
+    let _b = stroke(&mut tree);
+    stroke(&mut tree);
+    stroke(&mut tree);
+    tree.on_undo();
+    tree.on_undo(); // head on `b`
+    stroke(&mut tree); // e: `b`'s second child — a real fork at `b`
+    tree.on_undo();
+    tree.on_undo(); // head on the root; the tail holds the fork at `b`
+
+    let layout = tree.layout();
+    let branches: Vec<usize> = layout.rows.iter().map(|row| row.branch).collect();
+    // rows: a0, b0, c0, d0 — the OLD path (first-created children) stays
+    // on lane 0; e (the newer fork) peels off to lane 1.
+    assert_eq!(branches, vec![0, 0, 0, 0, 1]);
+    assert!(layout.rows[4].fork);
+    assert_eq!(layout.spans.len(), 2);
+}
+
+#[test]
+fn a_fork_on_a_side_node_continues_then_forks_to_the_right() {
+    // A side node with two children: the first side child continues the
+    // branch, the second opens a NEW branch to the RIGHT of its parent's
+    // lane — never back across it.
+    let mut tree = HistoryTree::new();
+    stroke(&mut tree);
+    stroke(&mut tree);
+    stroke(&mut tree); // c: will become the side fork parent
+    stroke(&mut tree); // v: c's first child
+    tree.on_undo(); // head back on c
+    stroke(&mut tree); // w: c's second child (a real fork at c)
+    stroke(&mut tree); // u: continues w's branch
+    tree.on_undo(); // head back on w
+    stroke(&mut tree); // u2: w's second child — a fork ON a side node
+    tree.on_undo();
+    tree.on_undo();
+    tree.on_undo(); // head on b; the redo chain runs c -> v
+
+    let layout = tree.layout();
+    // rows: a0, b0, c0, v0 (the redo chain rides lane 0), w+u on their
+    // branch, u2 on a branch to the RIGHT of w's branch.
+    let branches: Vec<usize> = layout.rows.iter().map(|row| row.branch).collect();
+    assert_eq!(branches, vec![0, 0, 0, 0, 1, 1, 2]);
+    let forks: Vec<bool> = layout.rows.iter().map(|row| row.fork).collect();
+    assert_eq!(forks, vec![false, false, false, false, true, false, true]);
+    // u2's span hangs off w (creation row 4) on lane 2 — right of lane 1.
+    let span_u2 = &layout.spans[2];
+    assert_eq!(span_u2.branch, 2);
+    assert_eq!(span_u2.parent_row, Some(4));
 }
 
 #[test]

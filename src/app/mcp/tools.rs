@@ -34,6 +34,7 @@ pub(crate) fn tool_call(app: &mut App, params: &Value) -> Value {
     let outcome = match name {
         "get_layers" => get_layers(app),
         "get_history_tree" => get_history_tree(app, &args),
+        "get_tree_layout" => get_tree_layout(app, &args),
         "add_stroke" => add_stroke(app, &args),
         "undo" => undo(app),
         "redo" => redo(app),
@@ -84,19 +85,7 @@ fn tool_name(tool: Tool) -> &'static str {
 }
 
 fn get_history_tree(app: &App, args: &Value) -> Result<Value, String> {
-    let layer = match args.get("layer") {
-        None | Some(Value::Null) => app.history_tree.active_layer(),
-        Some(value) => {
-            let index = value
-                .as_u64()
-                .ok_or_else(|| "layer must be an integer 0..2".to_string())?
-                as usize;
-            if index >= PSEUDO_LAYERS {
-                return Err(format!("layer is out of range 0..{PSEUDO_LAYERS}"));
-            }
-            index
-        }
-    };
+    let layer = parse_layer_arg(app, args)?;
     let nodes = app.history_tree.layer_nodes(layer).unwrap_or(&[]);
     let head = app.history_tree.layer_head(layer);
     let tree: Vec<Value> = nodes
@@ -123,6 +112,69 @@ fn get_history_tree(app: &App, args: &Value) -> Result<Value, String> {
             "name": LAYER_NAMES[layer],
             "head": head,
             "nodes": tree,
+        })
+        .to_string(),
+    ))
+}
+
+fn parse_layer_arg(app: &App, args: &Value) -> Result<usize, String> {
+    match args.get("layer") {
+        None | Some(Value::Null) => Ok(app.history_tree.active_layer()),
+        Some(value) => {
+            let index = value
+                .as_u64()
+                .ok_or_else(|| "layer must be an integer 0..2".to_string())?
+                as usize;
+            if index >= PSEUDO_LAYERS {
+                return Err(format!("layer is out of range 0..{PSEUDO_LAYERS}"));
+            }
+            Ok(index)
+        }
+    }
+}
+
+/// The LAYOUT the History Tree window renders (owner request 2026-11-13,
+/// "add more MCP if it helps"): rows in creation order with their lane,
+/// fork and head flags, plus one rail span per branch. Lane 0 is the
+/// current timeline (head path + redo chain); a plain undo moves NO row
+/// out of lane 0 — only a real fork does.
+fn get_tree_layout(app: &App, args: &Value) -> Result<Value, String> {
+    let layer = parse_layer_arg(app, args)?;
+    let Some(layout) = app.history_tree.layer_layout(layer) else {
+        return Err(format!("layer is out of range 0..{PSEUDO_LAYERS}"));
+    };
+    let rows: Vec<Value> = layout
+        .rows
+        .iter()
+        .map(|row| {
+            json!({
+                "id": row.id,
+                "parent": row.parent,
+                "branch": row.branch,
+                "fork": row.fork,
+                "is_head": row.is_head,
+            })
+        })
+        .collect();
+    let spans: Vec<Value> = layout
+        .spans
+        .iter()
+        .map(|span| {
+            json!({
+                "branch": span.branch,
+                "start_row": span.start_row,
+                "end_row": span.end_row,
+                "parent_row": span.parent_row,
+            })
+        })
+        .collect();
+    Ok(tool_text(
+        json!({
+            "layer": layer,
+            "name": LAYER_NAMES[layer],
+            "head": app.history_tree.layer_head(layer),
+            "rows": rows,
+            "spans": spans,
         })
         .to_string(),
     ))
@@ -329,6 +381,16 @@ pub(crate) fn tool_declarations() -> Value {
         {
             "name": "get_history_tree",
             "description": "The visual fork history of one pseudo-layer: nodes (id, parent, kind, color, children) and the head, git-style. Pencil strokes only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "layer": { "type": "integer", "description": "Layer index 0..2; defaults to the active layer." }
+                }
+            }
+        },
+        {
+            "name": "get_tree_layout",
+            "description": "The graph LAYOUT the History Tree window renders for one pseudo-layer: rows in creation order (id, parent, branch lane, fork flag, is_head) plus one rail span per branch (branch, start_row, end_row, parent_row; rows are 0-based creation indexes). Lane 0 is the current timeline (head path + redo chain) — a plain undo forks nothing; use it to verify forks and lane placement after undo/redo/add_stroke.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

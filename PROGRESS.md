@@ -28,9 +28,11 @@
 | Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | done — first CI run GREEN (success for `0188c52`, GitHub Actions) | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 | Extra: dependency approval flow (owner 2026-11-12) | done | AGENTS.md "Dependencies — approval flow" + SPEC §6 exception + CONTRIBUTING.md — the hard no-deps ban became propose → discuss → owner decides; no code touched |
+| Extra: opt-in MCP server (owner 2026-11-12) | done — 9 tools behind `mcp` | default build byte-identical graph (no serde_json/threads); `get_tree_layout` added 2026-11-13; verify.sh gates the feature |
+| Extra: History Tree windows (owner 2026-11-12) | done — lanes reworked 2026-11-13 | divergence-only forks, recency lanes, shared connector exits, per-row labels; MCP-driven scenarios + Xvfb screenshots green |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 64 green; with `--features mcp` — clippy clean, 76 green (2026-11-12, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
+`cargo test --profile gates` — 69 green; with `--features mcp` — clippy clean, 81 green (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -53,6 +55,53 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
+
+### 2026-11-13 — `Fix:` History Tree lanes: divergence-only forks, recency placement, shared connector exits, per-row labels — owner request
+
+- **What:** five owner points from the live review. (1) A PLAIN UNDO no longer diverts
+  the tail sideways: the main line is now root..head PLUS the redo chain beyond the head
+  (the redo hint first, then always the first-created child — exactly what repeated redo
+  visits), so the undone tail stays on lane 0 until the user really draws past the head.
+  (2) Labels hug EACH row's dot — kind + node id ("pencil 7") on an opaque window-fill
+  backdrop; the swatch follows the text width. (3) ALL connectors leaving one node exit
+  at the same height — the parent dot's center line (the FORK_DROP_STEP stagger is gone;
+  overlapping runs are fine by owner rule). (4) A branch takes the LOWEST lane free at
+  its vertical range (fork parent's row..= tip), so a late fork below early branches
+  reuses lane 1 instead of creeping right. (5) Branches are placed NEWEST first — newer
+  forks hug the trunk, older stack right; a branch forked off a side branch is pinned
+  right of its parent's lane (connectors never run backwards). Spans are per BRANCH now
+  (lane reuse means two spans can share one lane number).
+- **Files:** `src/history_tree.rs` (layout_layer rewrite + layer_layout for MCP),
+  `src/history_tree/tests.rs` (recency expectations reworked, +5 tests),
+  `src/app/tree_window.rs` (connector geometry, per-row labels + backdrop, content
+  width from the widest row), PROGRESS.md.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default, 81 with
+  `--features mcp` (soft notes: tree_window.rs 687 / history_tree.rs 600 lines over the
+  500 guard — report-only). Headless MCP scenarios (scripts/mcp_smoke.py): plain undo →
+  all lane 0; late fork reuses lane 1 ([0,1,0,0,1,0]); newest fork on lane 1
+  ([0,2,2,1,0]). Xvfb screenshots download/tree_stage*.png reviewed.
+- **Owner-checks:** `cargo run` — lane order + label look; "New at top" re-check (sign
+  logic unchanged, not re-captured); tree_window.rs split still pending your OK.
+- **Commit title:** `Rework History Tree lanes: divergence-only forks, recency placement, shared connector exits, per-row labels`
+
+### 2026-11-13 — `Feat:` MCP `get_tree_layout` tool + feature-gated verify gates — owner request ("use MCP, extend it if it helps")
+
+- **What:** (1) the 9th MCP tool `get_tree_layout` — dumps the LAYOUT the History Tree
+  window renders (rows with lane/fork/head flags + one rail span per branch), so an
+  agent asserts forks and lane placement over the wire; layer-arg parsing shared with
+  get_history_tree. (2) verify.sh now also runs clippy+tests with `--features mcp` —
+  the feature code compiled only on manual builds and could rot unseen. (3) NEW
+  scripts/mcp_smoke.py — a ~100-line stdio client (initialize / tools/list /
+  tools/call) with scenario assertions; NEW scripts/visual_driver.py — the Xvfb +
+  ffmpeg screenshot scenario runner used for the tree checks above.
+- **Files:** `src/app/mcp/tools.rs` (+tool, +declaration, tests 8→9), `scripts/verify.sh`
+  (+2 gated steps), NEW `scripts/mcp_smoke.py`, NEW `scripts/visual_driver.py`.
+- **Verified:** verify.sh ALL GATES GREEN; smoke client green against the real binary
+  under Xvfb (9 tools, 9 scenario checks); default-tree `cargo tree` still has no
+  serde_json (781 vs 786 tree lines with the feature).
+- **Owner-checks:** keep the two python helpers in scripts/ or drop them; CI (ci.yml)
+  does not run the mcp gates yet — say the word and they go there too.
+- **Commit title:** `Add get_tree_layout MCP tool and gate the mcp feature in verify.sh`
 
 ### 2026-11-12 — `Feat:` opt-in MCP stdio server behind the `mcp` feature — owner request
 

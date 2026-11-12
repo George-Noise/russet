@@ -94,14 +94,21 @@ pub struct Removal {
 #[derive(Clone, Copy, Debug)]
 pub struct Row {
     pub id: NodeId,
+    /// The node's parent; read by the MCP layout dump and the tests.
+    #[cfg_attr(not(feature = "mcp"), allow(dead_code))]
     pub parent: Option<NodeId>,
-    /// Branch index == graph lane (column). The head path owns lane 0
-    /// (owner request 2026-11-13: the CURRENT timeline is the straight
-    /// left edge); every side branch hangs off it to the right. A node
-    /// continues its parent's branch unless it opens a new side branch.
+    /// Branch index == graph lane (column). The MAIN LINE (root..head plus
+    /// the redo chain beyond the head) owns lane 0 — the straight left
+    /// edge (owner request 2026-11-13: a plain undo must NOT push the
+    /// undone tail sideways; only a real fork does). Side branches share
+    /// the lowest free lane, newest branch placed first, so newer branches
+    /// hug the current timeline and a late fork reuses a lane freed above
+    /// it instead of creeping right (owner request 2026-11-13).
     pub branch: usize,
     /// True when this node opens a NEW side branch and needs a connector
-    /// from its parent's lane to its own.
+    /// from its parent's lane to its own. Read by the MCP layout dump and
+    /// the tests; the renderer draws connectors from the SPANS.
+    #[cfg_attr(not(feature = "mcp"), allow(dead_code))]
     pub fork: bool,
     pub is_head: bool,
 }
@@ -215,8 +222,16 @@ impl HistoryTree {
 
     /// Graph layout of the active layer (see [`TreeLayout`]).
     pub fn layout(&self) -> TreeLayout {
-        let layer = &self.layers[self.active];
-        layout_layer(&layer.nodes, layer.head)
+        self.layer_layout(self.active).unwrap_or_default()
+    }
+
+    /// Graph layout of ONE layer, independent of the active layer
+    /// (read-only: the MCP server dumps it, tests assert on it).
+    #[cfg_attr(not(feature = "mcp"), allow(dead_code))]
+    pub fn layer_layout(&self, layer: usize) -> Option<TreeLayout> {
+        self.layers
+            .get(layer)
+            .map(|l| layout_layer(&l.nodes, l.head, l.redo_hint))
     }
 
     /// One completed pencil gesture = one node appended at the head. If the
@@ -369,107 +384,213 @@ fn next_forward(
 
 /// Branch/lane assignment and rail spans for one layer (see the struct
 /// docs). Parents are always processed before their children (creation
-/// order), so the branch of a parent is always known when needed.
+/// order), so a branch's parent branch is always known when needed.
 ///
-/// Lane rule (owner request 2026-11-13): the CURRENT timeline (root..head)
-/// owns lane 0 and reads as the straight left edge; side branches hang off
-/// it to the right in the order they were created. Because branches never
-/// merge (paint, not text), a branch is a plain rail: one lane, one span,
-/// one optional connector to its fork parent.
-fn layout_layer(nodes: &[TreeNode], head: Option<NodeId>) -> TreeLayout {
+/// Lane rules (owner requests 2026-11-13):
+/// - The MAIN LINE — root..head plus the redo chain beyond the head, i.e.
+///   exactly what repeated redo would visit — owns lane 0, the straight
+///   left edge. A PLAIN UNDO forks nothing: while the user has not drawn
+///   past the head, the undone tail is still the current timeline and
+///   stays on lane 0.
+/// - A branch opened from the main line (or a detached root) takes the
+///   LOWEST free lane, branches placed NEWEST first: newer branches hug
+///   the current timeline (less visual noise) and a late fork reuses a
+///   lane freed above it instead of creeping right. Two branches conflict
+///   when their vertical ranges (fork parent's row..= branch tip row)
+///   intersect; overlapping horizontal CONNECTORS are fine.
+/// - A branch opened from a side branch always lands to the RIGHT of its
+///   parent branch's lane (the peel-off connector never runs backwards),
+///   on the lowest free lane above that bound.
+fn layout_layer(nodes: &[TreeNode], head: Option<NodeId>, redo_hint: Option<NodeId>) -> TreeLayout {
     let index: HashMap<NodeId, usize> = nodes
         .iter()
         .enumerate()
         .map(|(i, node)| (node.id, i))
         .collect();
 
-    // The head path: walk from the head to the root through parents.
-    let mut on_head_path: HashSet<NodeId> = HashSet::new();
-    let mut cursor = head;
-    while let Some(id) = cursor {
-        on_head_path.insert(id);
-        cursor = index.get(&id).and_then(|&i| nodes[i].parent);
+    // Children in creation order (the order `on_redo` picks from).
+    let mut children: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+    for node in nodes {
+        if let Some(parent) = node.parent {
+            children.entry(parent).or_default().push(node.id);
+        }
     }
 
-    // First NON-head child of each parent in creation order: on a side
-    // branch it continues its parent's branch; every later child of the
-    // same parent opens yet another branch.
+    // The MAIN LINE: the head path (root..head) ...
+    let mut main_line: HashSet<NodeId> = HashSet::new();
+    let mut cursor = head;
+    while let Some(id) = cursor {
+        main_line.insert(id);
+        cursor = index.get(&id).and_then(|&i| nodes[i].parent);
+    }
+    // ... plus the redo chain beyond the head: the redo hint first (the
+    // child the last undo left, validated like `on_redo`), then always the
+    // FIRST-CREATED child — the walk strictly advances in creation order,
+    // so it terminates.
+    let mut prefer_hint = redo_hint;
+    cursor = head;
+    while let Some(id) = cursor {
+        let siblings = children.get(&id).map(Vec::as_slice).unwrap_or(&[]);
+        let next = prefer_hint
+            .take()
+            .filter(|hint| siblings.contains(hint))
+            .or_else(|| siblings.first().copied());
+        let Some(next) = next else { break };
+        main_line.insert(next);
+        cursor = Some(next);
+    }
+
+    // First side child of every node (creation order): on a side branch it
+    // continues its parent's branch; every later side child of the same
+    // parent opens yet another branch.
     let mut first_side_child: HashMap<NodeId, NodeId> = HashMap::new();
     for node in nodes {
-        if !on_head_path.contains(&node.id)
+        if !main_line.contains(&node.id)
             && let Some(parent) = node.parent
         {
             first_side_child.entry(parent).or_insert(node.id);
         }
     }
 
-    let mut rows = Vec::with_capacity(nodes.len());
+    // Group the nodes into branches. Index 0 = the main line; side
+    // branches are discovered in creation order (parents before children).
+    struct Branch {
+        /// Graph lane (column); assigned below.
+        lane: usize,
+        /// Opens with a peel-off connector from `parent` (a detached root
+        /// has none).
+        fork: bool,
+        parent: Option<NodeId>,
+        nodes: Vec<NodeId>,
+    }
+    let mut branches: Vec<Branch> = vec![Branch {
+        lane: 0,
+        fork: false,
+        parent: None,
+        nodes: Vec::new(),
+    }];
     let mut branch_of: HashMap<NodeId, usize> = HashMap::new();
-    // Lane 0 is reserved for the head path when it exists.
-    let mut next_lane = if head.is_some() { 1 } else { 0 };
     for node in nodes {
-        let (branch, fork) = match node.parent {
-            None => {
-                if on_head_path.contains(&node.id) {
-                    (0, false)
-                } else {
-                    let branch = next_lane;
-                    next_lane += 1;
-                    (branch, false)
-                }
+        if main_line.contains(&node.id) {
+            branch_of.insert(node.id, 0);
+            branches[0].nodes.push(node.id);
+            continue;
+        }
+        // A side node whose parent is a side node AND whose parent has no
+        // earlier side child continues that branch; everything else opens
+        // a new one.
+        let continues = match node.parent {
+            Some(parent)
+                if !main_line.contains(&parent)
+                    && first_side_child.get(&parent) == Some(&node.id) =>
+            {
+                branch_of.get(&parent).copied()
             }
-            Some(parent) => {
-                let parent_branch = branch_of.get(&parent).copied().unwrap_or(0);
-                if on_head_path.contains(&node.id) {
-                    // The current timeline rides its parent's lane: the
-                    // left rail stays perfectly straight.
-                    (parent_branch, false)
-                } else if !on_head_path.contains(&parent)
-                    && first_side_child.get(&parent) == Some(&node.id)
-                {
-                    // First child of a side branch: continue it.
-                    (parent_branch, false)
-                } else {
-                    // A new side branch hanging off an existing lane.
-                    let branch = next_lane;
-                    next_lane += 1;
-                    (branch, true)
-                }
+            _ => None,
+        };
+        let branch_index = match continues {
+            Some(existing) => existing,
+            None => {
+                branches.push(Branch {
+                    lane: 0,
+                    fork: node.parent.is_some(),
+                    parent: node.parent,
+                    nodes: Vec::new(),
+                });
+                branches.len() - 1
             }
         };
-        branch_of.insert(node.id, branch);
+        branches[branch_index].nodes.push(node.id);
+        branch_of.insert(node.id, branch_index);
+    }
+
+    // Vertical range of a branch in creation rows: from its fork parent's
+    // row (where the connector starts) to its tip's row.
+    let range_of = |branch: &Branch| -> (usize, usize) {
+        let start = branch
+            .parent
+            .map_or(index[&branch.nodes[0]], |parent| index[&parent]);
+        // Unreachable fallback: every side branch holds at least one node.
+        let end = branch.nodes.last().map_or(start, |last| index[last]);
+        (start, end)
+    };
+    // Lane occupancy per lane; lane 0 is occupied by the main rail's
+    // extent (completely free when the main line is empty — detached
+    // roots may then sit on the left edge, like before this rule).
+    let main_extent = match (branches[0].nodes.first(), branches[0].nodes.last()) {
+        (Some(first), Some(last)) => vec![(index[first], index[last])],
+        _ => Vec::new(),
+    };
+    let mut lane_ranges: Vec<Vec<(usize, usize)>> = vec![main_extent];
+
+    // Placement order: round A — branches forked from the main line (and
+    // detached roots), NEWEST first; round B — branches forked off side
+    // branches, in discovery order (parents before children, so the
+    // parent's lane is final when the child is placed).
+    let mut order: Vec<usize> = (1..branches.len())
+        .filter(|&i| {
+            branches[i]
+                .parent
+                .is_none_or(|parent| main_line.contains(&parent))
+        })
+        .collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(index[&branches[i].nodes[0]]));
+    order.extend((1..branches.len()).filter(|&i| {
+        branches[i]
+            .parent
+            .is_some_and(|parent| !main_line.contains(&parent))
+    }));
+
+    let fork_lane_floor = if head.is_some() { 1 } else { 0 };
+    for i in order {
+        let (start, end) = range_of(&branches[i]);
+        let floor = match branches[i]
+            .parent
+            .filter(|parent| !main_line.contains(parent))
+            .and_then(|parent| branch_of.get(&parent).copied())
+        {
+            Some(parent_branch) => branches[parent_branch].lane + 1,
+            None => fork_lane_floor,
+        };
+        let mut lane = floor;
+        while lane_ranges
+            .get(lane)
+            .is_some_and(|ranges| ranges.iter().any(|&(s, e)| start <= e && s <= end))
+        {
+            lane += 1;
+        }
+        if lane >= lane_ranges.len() {
+            lane_ranges.push(Vec::new());
+        }
+        lane_ranges[lane].push((start, end));
+        branches[i].lane = lane;
+    }
+
+    let mut rows = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let branch = &branches[branch_of[&node.id]];
         rows.push(Row {
             id: node.id,
             parent: node.parent,
-            branch,
-            fork,
+            branch: branch.lane,
+            fork: branch.fork && branch.nodes.first() == Some(&node.id),
             is_head: Some(node.id) == head,
         });
     }
 
-    let row_index: HashMap<NodeId, usize> = rows
-        .iter()
-        .enumerate()
-        .map(|(i, row)| (row.id, i))
-        .collect();
-    let mut spans: Vec<BranchSpan> = Vec::new();
-    for (i, row) in rows.iter().enumerate() {
-        match spans.iter_mut().find(|span| span.branch == row.branch) {
-            Some(span) => span.end_row = i,
-            None => spans.push(BranchSpan {
-                branch: row.branch,
-                start_row: i,
-                end_row: i,
-                // A forked branch remembers its parent's row so the
-                // renderer can draw the peel-off connector.
-                parent_row: if row.fork {
-                    row.parent
-                        .and_then(|parent| row_index.get(&parent).copied())
-                } else {
-                    None
-                },
-            }),
-        }
+    let mut spans = Vec::with_capacity(branches.len());
+    for branch in &branches {
+        // The main line may be empty (no head) — an empty branch has no
+        // rail to span.
+        let Some(last) = branch.nodes.last() else {
+            continue;
+        };
+        spans.push(BranchSpan {
+            branch: branch.lane,
+            start_row: index[&branch.nodes[0]],
+            end_row: index[last],
+            parent_row: branch.parent.map(|parent| index[&parent]),
+        });
     }
 
     TreeLayout { rows, spans }

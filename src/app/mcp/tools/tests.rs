@@ -49,7 +49,15 @@ fn tool_declarations_have_name_description_schema() {
     let tools = tool_declarations();
     let list = tools.as_array().expect("tools array");
 
-    assert_eq!(list.len(), 8);
+    assert_eq!(list.len(), 9);
+    let names: Vec<&str> = list
+        .iter()
+        .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+        .collect();
+    assert!(
+        names.contains(&"get_tree_layout"),
+        "the layout dump must stay declared"
+    );
     for tool in list {
         assert!(
             tool.get("name")

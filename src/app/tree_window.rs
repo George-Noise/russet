@@ -20,9 +20,13 @@
 //!   single color — no primary/secondary pair). Branches differ by rail
 //!   color; the CURRENT timeline is the straight LEFT edge (lane 0), side
 //!   branches peel off to the right with straight → quarter-ellipse →
-//!   straight connectors (owner request 2026-11-13). All dots and rails
-//!   stay inside a reserved gutter, labels live in a fixed column after
-//!   it, and trees wider than the window scroll horizontally.
+//!   straight connectors (owner request 2026-11-13), and every connector
+//!   leaving one node exits at the SAME height — the parent dot's center
+//!   line — even when the horizontal runs overlap (owner request
+//!   2026-11-13). Labels hug EACH row's own node (kind + node id, e.g.
+//!   "pencil 7", on an opaque backdrop) instead of sitting in one global
+//!   column right of the whole gutter (owner request 2026-11-13), and
+//!   trees wider than the window scroll horizontally.
 //! - Scroll: while the view sits at the graph's end (where the canvas
 //!   state is), it follows new nodes automatically; once the user scrolls
 //!   elsewhere the view pins to the node at the viewport's top edge and
@@ -57,12 +61,7 @@ const LABEL_GAP: f32 = 10.0;
 /// adjacent arcs never overlap (owner request 2026-11-13: the fork path is
 /// a straight run, a quarter ellipse, then a straight rail to the node).
 const ARC_RADIUS: f32 = 7.0;
-/// Vertical stagger between successive forks from one parent: each
-/// additionally crossed lane drops the horizontal run one step further
-/// from the parent dot (the drop itself hides inside the parent's rail),
-/// so the runs never overlap (owner request 2026-11-13).
-const FORK_DROP_STEP: f32 = 9.0;
-/// Padding after the last lane before the label column.
+/// Padding after the deepest lane (the gutter's minimum width).
 const GUTTER_TAIL_PAD: f32 = 6.0;
 /// The ONE color swatch of a row, one text line tall (owner request
 /// 2026-11-13: a stroke carries a single color — no pair).
@@ -480,9 +479,11 @@ struct GraphMetrics<'a> {
 ///
 /// Geometry (owner request 2026-11-13): all rails and dots live inside a
 /// gutter of `lanes * LANE_STEP` pixels; every connector is a straight
-/// horizontal run, a quarter ellipse, then the branch's straight rail.
-/// Branches never merge, so rails are ONE segment each — no per-row
-/// stubs, no seams, nothing crossing the parent's row.
+/// horizontal run, a quarter ellipse, then the branch's straight rail,
+/// and ALL runs leaving one node share the node's center height (the runs
+/// may overlap — not a problem). Branches never merge, so rails are ONE
+/// segment each — no per-row stubs, no seams, nothing crossing the
+/// parent's row. Labels hug their own node with an opaque backdrop.
 fn paint_graph(
     app: &App,
     ui: &mut egui::Ui,
@@ -498,19 +499,27 @@ fn paint_graph(
 
     let row_height = metrics.row_height;
     let text_color = metrics.text_color;
-    let label_width = ui
-        .painter()
-        .layout_no_wrap(
-            "pencil".to_string(),
-            metrics.body_font.clone(),
-            metrics.text_color,
-        )
-        .size()
-        .x;
+    // Per-row labels (owner request 2026-11-13): kind + node id, measured
+    // up front so the row width can fit the widest row.
+    let labels: Vec<(String, f32)> = rows
+        .iter()
+        .map(|row| {
+            let text = app.history_tree.node(row.id).map_or_else(
+                || "pencil".to_string(),
+                |node| format!("{} {}", kind_label(node.kind), node.id),
+            );
+            let width = ui
+                .painter()
+                .layout_no_wrap(text.clone(), metrics.body_font.clone(), metrics.text_color)
+                .size()
+                .x;
+            (text, width)
+        })
+        .collect();
 
-    // Gutter width from the deepest lane; the label column starts after it
-    // with the SAME x on every row (VS Code style), so labels never
-    // collide with rails regardless of how the tree branches.
+    // Gutter width from the deepest lane; a label sits right after its
+    // OWN dot, so the widest row — not the gutter — sets the content
+    // width.
     let lane_count = metrics
         .spans
         .iter()
@@ -518,8 +527,15 @@ fn paint_graph(
         .max()
         .unwrap_or(1);
     let gutter_end = GRAPH_PAD_X + lane_count as f32 * LANE_STEP + GUTTER_TAIL_PAD;
-    let row_width = (gutter_end + LABEL_GAP + label_width + LABEL_GAP + SWATCH_WIDTH + 8.0)
-        .max(ui.available_width());
+    let label_offset = |branch: usize| -> f32 {
+        GRAPH_PAD_X + branch as f32 * LANE_STEP + NODE_RADIUS + LABEL_GAP
+    };
+    let content_width = rows
+        .iter()
+        .zip(&labels)
+        .map(|(row, (_, width))| label_offset(row.branch) + width + LABEL_GAP + SWATCH_WIDTH + 8.0)
+        .fold(gutter_end, f32::max);
+    let row_width = content_width.max(ui.available_width());
 
     // Pass 1: allocate the rows (content size + scroll pins).
     let mut rects: Vec<Rect> = Vec::with_capacity(rows.len());
@@ -563,7 +579,7 @@ fn paint_graph(
         let color = branch_color(span.branch);
         let x = lane_x(span.branch);
         let Some(parent_row) = span.parent_row else {
-            // Root branch (the head path or a detached root): one straight
+            // Root branch (the main line or a detached root): one straight
             // rail from its first to its last node.
             painter.line_segment(
                 [
@@ -576,38 +592,35 @@ fn paint_graph(
         };
 
         // Fork connector: straight run, quarter ellipse, straight rail.
+        // EVERY branch leaving one node exits at the SAME height — the
+        // parent dot's center line (owner request 2026-11-13); sibling
+        // runs may overlap, that is fine.
         let parent_display = display_of[parent_row];
         let parent_branch = rows[parent_display].branch;
         let parent_x = lane_x(parent_branch);
         let parent_y = rects[parent_display].center().y;
         let child_y = center_y(span.start_row);
-        // Successive forks stagger their runs one step per crossed lane;
-        // the drop hides inside the parent's rail. Clamped so the arc
-        // always lands above the child row (below in bottom-up mode).
         let sign = (child_y - parent_y).signum();
-        let room = ((child_y - parent_y).abs() - ARC_RADIUS).max(0.0);
-        let drop = ((span.branch - parent_branch - 1) as f32 * FORK_DROP_STEP).min(room) * sign;
-        let y_run = parent_y + drop;
+        // Clamped so the arc always bends toward the child row.
+        let arc = ARC_RADIUS.min((child_y - parent_y).abs() * 0.5).max(1.0);
+        let y_run = parent_y;
 
         // Straight horizontal run from the parent's rail to the arc.
         painter.line_segment(
-            [
-                egui::pos2(parent_x, y_run),
-                egui::pos2(x - ARC_RADIUS, y_run),
-            ],
+            [egui::pos2(parent_x, y_run), egui::pos2(x - arc, y_run)],
             Stroke::new(2.0, color),
         );
         // Quarter ellipse: horizontal entry, vertical exit toward the row
         // of the fork's first node (kappa = best cubic fit for a quarter
         // circle; an ellipse of radius LANE_STEP/2 fits the lane width).
         let k = 0.552_3;
-        let center = egui::pos2(x - ARC_RADIUS, y_run + sign * ARC_RADIUS);
+        let center = egui::pos2(x - arc, y_run + sign * arc);
         painter.add(Shape::CubicBezier(
             egui::epaint::CubicBezierShape::from_points_stroke(
                 [
                     egui::pos2(center.x, y_run),
-                    egui::pos2(center.x + k * ARC_RADIUS, y_run),
-                    egui::pos2(x, center.y + sign * (ARC_RADIUS - k * ARC_RADIUS)),
+                    egui::pos2(center.x + k * arc, y_run),
+                    egui::pos2(x, center.y + sign * (arc - k * arc)),
                     egui::pos2(x, center.y),
                 ],
                 false,
@@ -618,7 +631,7 @@ fn paint_graph(
         // Straight rail down (up in bottom-up mode) to the branch's tip.
         painter.line_segment(
             [
-                egui::pos2(x, y_run + sign * ARC_RADIUS),
+                egui::pos2(x, y_run + sign * arc),
                 egui::pos2(x, center_y(span.end_row)),
             ],
             Stroke::new(2.0, color),
@@ -626,6 +639,7 @@ fn paint_graph(
     }
 
     // Pass 3: dots, labels, color swatches.
+    let window_fill = ui.visuals().window_fill;
     for (i, row) in rows.iter().enumerate() {
         let rect = rects[i];
         let cy = rect.center().y;
@@ -640,10 +654,15 @@ fn paint_graph(
         }
 
         let node = app.history_tree.node(row.id);
-        let label = node.map_or("pencil", |node| kind_label(node.kind));
-        // The label column sits after the gutter — same x for every row.
-        // Rects are in SCREEN coordinates, so anchor at the row's left.
-        let label_x = rects[0].left() + gutter_end + LABEL_GAP;
+        let (label, label_width) = &labels[i];
+        // The label hugs THIS row's node (owner request 2026-11-13); the
+        // opaque backdrop keeps it readable over rails it crosses.
+        let label_x = rect.left() + label_offset(row.branch);
+        let backdrop = Rect::from_min_size(
+            egui::pos2(label_x - 3.0, rect.top() + 1.0),
+            egui::vec2(label_width + 6.0, row_height - 2.0),
+        );
+        painter.rect_filled(backdrop, 2.0, window_fill);
         painter.text(
             egui::pos2(label_x, cy),
             Align2::LEFT_CENTER,
