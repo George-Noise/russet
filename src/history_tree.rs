@@ -5,15 +5,20 @@
 //! in `app/tree_window.rs`.
 //!
 //! Deliberate prototype limits (owner request 2026-11-12):
-//! - Nodes carry the action KIND and the tool's primary/secondary colors
-//!   only — no geometry, no pixels, nothing the real undo can replay. The
-//!   real snapshot [`crate::history::History`] is untouched and unaware of
-//!   this tree.
+//! - Nodes carry the action KIND and ONE stroke color only (owner request
+//!   2026-11-13: no primary/secondary pair — a stroke is painted with one
+//!   color, so one is displayed and stored) — no geometry, no pixels,
+//!   nothing the real undo can replay. The real snapshot
+//!   [`crate::history::History`] is untouched and unaware of this tree.
 //! - The mirror follows REAL events: a completed pencil gesture appends a
 //!   node, and a successful real undo/redo moves the head back/forward
 //!   (unconditionally — see the caveat in `App::undo`).
 //! - A stroke made after undo forks the tree git-style: the head's parent
 //!   gets a second child, the old tail stays in the graph.
+//! - Branches within one layer NEVER merge (owner request 2026-11-13:
+//!   paint is not a text file — two timelines cannot converge), so every
+//!   branch is a plain rail hanging off the head path and the renderer
+//!   needs no join/convergence handling.
 //! - `remove_last` exists only as a debug hook to exercise the scroll
 //!   fallback; it reattaches the removed node's children to its parent.
 //!
@@ -21,7 +26,7 @@
 //! layers with one GLOBAL active layer, each with its own tree — the
 //! interface the real layer system will take over later.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use eframe::egui::Color32;
 
@@ -43,16 +48,15 @@ pub enum ActionKind {
 pub const PSEUDO_LAYERS: usize = 3;
 pub const LAYER_NAMES: [&str; PSEUDO_LAYERS] = ["Layer 1", "Layer 2", "Layer 3"];
 
-/// One node of the visual tree: what was done and with which colors.
+/// One node of the visual tree: what was done and with which color.
 #[derive(Clone, Copy, Debug)]
 pub struct TreeNode {
     pub id: NodeId,
     pub parent: Option<NodeId>,
     pub kind: ActionKind,
-    /// Primary tool color at the moment of the stroke (upper square).
-    pub primary: Color32,
-    /// Secondary tool color at the moment of the stroke (lower square).
-    pub secondary: Color32,
+    /// The ONE color the gesture painted with (owner request 2026-11-13:
+    /// no primary/secondary distinction in the tree).
+    pub color: Color32,
 }
 
 /// What mutated a layer since the previous generation. The windows use it
@@ -91,24 +95,29 @@ pub struct Removal {
 pub struct Row {
     pub id: NodeId,
     pub parent: Option<NodeId>,
-    /// Branch index == graph lane (column). The first child continues its
-    /// parent's branch; every later child of the same parent starts a new
-    /// branch — the git-style fork.
+    /// Branch index == graph lane (column). The head path owns lane 0
+    /// (owner request 2026-11-13: the CURRENT timeline is the straight
+    /// left edge); every side branch hangs off it to the right. A node
+    /// continues its parent's branch unless it opens a new side branch.
     pub branch: usize,
-    /// True when this node opens a NEW branch (its parent already has an
-    /// earlier child).
+    /// True when this node opens a NEW side branch and needs a connector
+    /// from its parent's lane to its own.
     pub fork: bool,
     pub is_head: bool,
 }
 
 /// Vertical extent of one branch's rail, in row indices (creation order):
-/// the rail starts at the fork's parent row (or the root's own row) and
-/// ends at the branch's tip.
+/// the rail spans the branch's own nodes; a forked branch also knows its
+/// parent's row so the renderer can build the peel-off connector. The
+/// parent row is NOT part of the rail (owner request 2026-11-13: the old
+/// per-row stub through the parent's line was a rendering bug).
 #[derive(Clone, Copy, Debug)]
 pub struct BranchSpan {
     pub branch: usize,
     pub start_row: usize,
     pub end_row: usize,
+    /// Creation row of the fork's parent (forked branches only).
+    pub parent_row: Option<usize>,
 }
 
 /// Graph layout of one layer: rows in creation order plus one rail span
@@ -200,7 +209,7 @@ impl HistoryTree {
     /// One completed pencil gesture = one node appended at the head. If the
     /// head already has a child (the user drew after an undo), the new node
     /// becomes a second child — the fork is implicit in the data.
-    pub fn record_stroke(&mut self, primary: Color32, secondary: Color32) {
+    pub fn record_stroke(&mut self, color: Color32) {
         let layer = &mut self.layers[self.active];
         let id = self.next_id;
         self.next_id += 1;
@@ -208,8 +217,7 @@ impl HistoryTree {
             id,
             parent: layer.head,
             kind: ActionKind::Pencil,
-            primary,
-            secondary,
+            color,
         });
         layer.index.insert(id, layer.nodes.len() - 1);
         layer.head = Some(id);
@@ -349,32 +357,69 @@ fn next_forward(
 /// Branch/lane assignment and rail spans for one layer (see the struct
 /// docs). Parents are always processed before their children (creation
 /// order), so the branch of a parent is always known when needed.
+///
+/// Lane rule (owner request 2026-11-13): the CURRENT timeline (root..head)
+/// owns lane 0 and reads as the straight left edge; side branches hang off
+/// it to the right in the order they were created. Because branches never
+/// merge (paint, not text), a branch is a plain rail: one lane, one span,
+/// one optional connector to its fork parent.
 fn layout_layer(nodes: &[TreeNode], head: Option<NodeId>) -> TreeLayout {
-    // First child of each parent in creation order: it continues the
-    // parent's branch, every later child forks.
-    let mut first_child: HashMap<NodeId, NodeId> = HashMap::new();
+    let index: HashMap<NodeId, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, node)| (node.id, i))
+        .collect();
+
+    // The head path: walk from the head to the root through parents.
+    let mut on_head_path: HashSet<NodeId> = HashSet::new();
+    let mut cursor = head;
+    while let Some(id) = cursor {
+        on_head_path.insert(id);
+        cursor = index.get(&id).and_then(|&i| nodes[i].parent);
+    }
+
+    // First NON-head child of each parent in creation order: on a side
+    // branch it continues its parent's branch; every later child of the
+    // same parent opens yet another branch.
+    let mut first_side_child: HashMap<NodeId, NodeId> = HashMap::new();
     for node in nodes {
-        if let Some(parent) = node.parent {
-            first_child.entry(parent).or_insert(node.id);
+        if !on_head_path.contains(&node.id)
+            && let Some(parent) = node.parent
+        {
+            first_side_child.entry(parent).or_insert(node.id);
         }
     }
 
     let mut rows = Vec::with_capacity(nodes.len());
     let mut branch_of: HashMap<NodeId, usize> = HashMap::new();
-    let mut next_branch = 0usize;
+    // Lane 0 is reserved for the head path when it exists.
+    let mut next_lane = if head.is_some() { 1 } else { 0 };
     for node in nodes {
         let (branch, fork) = match node.parent {
             None => {
-                let branch = next_branch;
-                next_branch += 1;
-                (branch, false)
+                if on_head_path.contains(&node.id) {
+                    (0, false)
+                } else {
+                    let branch = next_lane;
+                    next_lane += 1;
+                    (branch, false)
+                }
             }
             Some(parent) => {
-                if first_child.get(&parent) == Some(&node.id) {
-                    (branch_of.get(&parent).copied().unwrap_or(0), false)
+                let parent_branch = branch_of.get(&parent).copied().unwrap_or(0);
+                if on_head_path.contains(&node.id) {
+                    // The current timeline rides its parent's lane: the
+                    // left rail stays perfectly straight.
+                    (parent_branch, false)
+                } else if !on_head_path.contains(&parent)
+                    && first_side_child.get(&parent) == Some(&node.id)
+                {
+                    // First child of a side branch: continue it.
+                    (parent_branch, false)
                 } else {
-                    let branch = next_branch;
-                    next_branch += 1;
+                    // A new side branch hanging off an existing lane.
+                    let branch = next_lane;
+                    next_lane += 1;
                     (branch, true)
                 }
             }
@@ -398,22 +443,19 @@ fn layout_layer(nodes: &[TreeNode], head: Option<NodeId>) -> TreeLayout {
     for (i, row) in rows.iter().enumerate() {
         match spans.iter_mut().find(|span| span.branch == row.branch) {
             Some(span) => span.end_row = i,
-            None => {
-                // A forked branch's rail starts at its PARENT's row so the
-                // curve joins the parent circle; a root starts at itself.
-                let start_row = if row.fork {
+            None => spans.push(BranchSpan {
+                branch: row.branch,
+                start_row: i,
+                end_row: i,
+                // A forked branch remembers its parent's row so the
+                // renderer can draw the peel-off connector.
+                parent_row: if row.fork {
                     row.parent
                         .and_then(|parent| row_index.get(&parent).copied())
-                        .unwrap_or(i)
                 } else {
-                    i
-                };
-                spans.push(BranchSpan {
-                    branch: row.branch,
-                    start_row,
-                    end_row: i,
-                });
-            }
+                    None
+                },
+            }),
         }
     }
 

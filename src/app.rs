@@ -116,9 +116,11 @@ pub struct App {
     tree_views: Vec<TreeView>,
     /// How many clone windows have been created so far (id + cascade base).
     tree_clones: usize,
-    /// Both tool colors captured at stroke START, recorded as one visual
-    /// node when the gesture completes (`tree_window`/`history_tree`).
-    stroke_colors: Option<(Color32, Color32)>,
+    /// The ONE stroke color captured at stroke START, recorded as one
+    /// visual node when the gesture completes
+    /// (`tree_window`/`history_tree`; owner request 2026-11-13: a stroke
+    /// has a single color, no primary/secondary pair).
+    stroke_paint: Option<Color32>,
     /// §3.11 placement state of the four floating windows (owner request
     /// 2026-11-11 added the History/Layers pair); the Tools one also carries
     /// the one-shot §3.2 first-open vertical ratio (40%/60%).
@@ -218,7 +220,7 @@ impl App {
             tree_window_open: true,
             tree_views: vec![TreeView::main()],
             tree_clones: 0,
-            stroke_colors: None,
+            stroke_paint: None,
             tools_placement: WindowPlacement::first_open_at_ratio(TOOLS_FIRST_OPEN_RATIO),
             palette_placement: WindowPlacement::default(),
             history_placement: WindowPlacement::default(),
@@ -433,7 +435,7 @@ impl App {
             self.is_stroking = false;
             self.last_pos = None;
             self.stroke_button = None;
-            self.stroke_colors = None;
+            self.stroke_paint = None;
             return;
         }
 
@@ -450,15 +452,15 @@ impl App {
         if any_released {
             // One completed gesture = one visual node (the design concept's
             // tldraw-style mark); the prototype records PENCIL strokes only
-            // (owner request 2026-11-12). Colors were captured at stroke
-            // start — they are what the gesture actually painted with.
+            // (owner request 2026-11-12). The color was captured at stroke
+            // start — it is what the gesture actually painted with.
             if self.is_stroking
                 && self.tools.tool == Tool::Pencil
-                && let Some((primary, secondary)) = self.stroke_colors.take()
+                && let Some(color) = self.stroke_paint.take()
             {
-                self.history_tree.record_stroke(primary, secondary);
+                self.history_tree.record_stroke(color);
             }
-            self.stroke_colors = None;
+            self.stroke_paint = None;
             self.is_stroking = false;
             self.last_pos = None;
             self.stroke_button = None;
@@ -483,7 +485,7 @@ impl App {
                 });
                 self.stroke_button = Some(button);
                 self.is_stroking = true;
-                self.stroke_colors = Some((self.tools.primary, self.tools.secondary));
+                self.stroke_paint = Some(self.stroke_color());
                 let pos = self.canvas_pos(rect, cursor);
                 self.last_pos = Some(pos);
                 self.paint_segment(pos, pos);
@@ -815,7 +817,7 @@ impl App {
             self.cancel_preview();
             self.cancel_text_edit();
             // A mid-gesture tool switch abandons the pending visual node.
-            self.stroke_colors = None;
+            self.stroke_paint = None;
         }
         let panning = self.handle_pan(ui, &response);
         let rect = self.canvas_rect(panel_rect);

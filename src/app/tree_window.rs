@@ -15,16 +15,20 @@
 //!   anchor), so the user can watch several places of the same tree.
 //! - Direction toggle per window: "New at bottom" (top-down, gitk-like;
 //!   DEFAULT) and "New at top" (bottom-up, VS Code-like).
-//! - Node rows are NOT interactive: circle + "pencil" + two stacked color
-//!   squares exactly one text line tall. Branches differ by rail color.
+//! - Node rows are NOT interactive: circle + "pencil" + ONE color square
+//!   exactly one text line tall (owner request 2026-11-13: a stroke has a
+//!   single color — no primary/secondary pair). Branches differ by rail
+//!   color; the CURRENT timeline is the straight LEFT edge (lane 0), side
+//!   branches peel off to the right with straight → quarter-ellipse →
+//!   straight connectors (owner request 2026-11-13). All dots and rails
+//!   stay inside a reserved gutter, labels live in a fixed column after
+//!   it, and trees wider than the window scroll horizontally.
 //! - Scroll: while the view sits at the graph's end (where the canvas
 //!   state is), it follows new nodes automatically; once the user scrolls
 //!   elsewhere the view pins to the node at the viewport's top edge and
 //!   stays with it. When a node is deleted (debug "-" button), windows
 //!   pinned to it jump to the nearest action FORWARD (backward as last
 //!   resort) — or keep following the end if they were at the end.
-
-use std::collections::HashMap;
 
 use eframe::egui::{
     self, Align, Align2, Color32, Context, FontId, Id, Pos2, Rect, Sense, Shape, Stroke, TextStyle,
@@ -49,9 +53,20 @@ const LANE_STEP: f32 = 14.0;
 const NODE_RADIUS: f32 = 3.5;
 const HEAD_RING_EXTRA: f32 = 2.0;
 const LABEL_GAP: f32 = 10.0;
-/// The two color squares: stacked into a column exactly ONE text line tall.
-const SQUARE_WIDTH: f32 = 8.0;
-const SQUARE_GAP: f32 = 2.0;
+/// Quarter-ellipse radius of a fork connector: half the lane step, so two
+/// adjacent arcs never overlap (owner request 2026-11-13: the fork path is
+/// a straight run, a quarter ellipse, then a straight rail to the node).
+const ARC_RADIUS: f32 = 7.0;
+/// Vertical stagger between successive forks from one parent: each
+/// additionally crossed lane drops the horizontal run one step further
+/// from the parent dot (the drop itself hides inside the parent's rail),
+/// so the runs never overlap (owner request 2026-11-13).
+const FORK_DROP_STEP: f32 = 9.0;
+/// Padding after the last lane before the label column.
+const GUTTER_TAIL_PAD: f32 = 6.0;
+/// The ONE color swatch of a row, one text line tall (owner request
+/// 2026-11-13: a stroke carries a single color — no pair).
+const SWATCH_WIDTH: f32 = 10.0;
 /// Cascade offset of the Nth clone from the main window's first-open spot.
 const CLONE_CASCADE_STEP: f32 = 24.0;
 
@@ -409,7 +424,9 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
         body_font,
         text_color,
     };
-    let out = egui::ScrollArea::vertical()
+    // Horizontal scrolling (owner request 2026-11-13): deep branch trees
+    // grow to the right, the viewport follows on demand.
+    let out = egui::ScrollArea::both()
         .id_salt(view.id.with("scroll"))
         .max_height(TREE_MAX_HEIGHT)
         .auto_shrink([false, true])
@@ -458,8 +475,14 @@ struct GraphMetrics<'a> {
 }
 
 /// The graph itself: one non-interactive row per action, exactly one text
-/// line tall — branch rails, fork curves, the commit circle, the "pencil"
-/// label and the two stacked color squares.
+/// line tall — branch rails, fork connectors, the commit circle, the
+/// "pencil" label and the single color swatch.
+///
+/// Geometry (owner request 2026-11-13): all rails and dots live inside a
+/// gutter of `lanes * LANE_STEP` pixels; every connector is a straight
+/// horizontal run, a quarter ellipse, then the branch's straight rail.
+/// Branches never merge, so rails are ONE segment each — no per-row
+/// stubs, no seams, nothing crossing the parent's row.
 fn paint_graph(
     app: &App,
     ui: &mut egui::Ui,
@@ -475,11 +498,6 @@ fn paint_graph(
 
     let row_height = metrics.row_height;
     let text_color = metrics.text_color;
-    let display_index: HashMap<NodeId, usize> = rows
-        .iter()
-        .enumerate()
-        .map(|(i, row)| (row.id, i))
-        .collect();
     let label_width = ui
         .painter()
         .layout_no_wrap(
@@ -489,94 +507,29 @@ fn paint_graph(
         )
         .size()
         .x;
-    let mut curves: Vec<([Pos2; 3], usize)> = Vec::new();
-    let row_count = rows.len();
 
-    // One-shot scroll requests must be applied INSIDE this layout pass to
-    // land in the same frame; instant (no animation), so they never fight
-    // the anchor detection with animation frames.
+    // Gutter width from the deepest lane; the label column starts after it
+    // with the SAME x on every row (VS Code style), so labels never
+    // collide with rails regardless of how the tree branches.
+    let lane_count = metrics
+        .spans
+        .iter()
+        .map(|span| span.branch + 1)
+        .max()
+        .unwrap_or(1);
+    let gutter_end = GRAPH_PAD_X + lane_count as f32 * LANE_STEP + GUTTER_TAIL_PAD;
+    let row_width = (gutter_end + LABEL_GAP + label_width + LABEL_GAP + SWATCH_WIDTH + 8.0)
+        .max(ui.available_width());
+
+    // Pass 1: allocate the rows (content size + scroll pins).
+    let mut rects: Vec<Rect> = Vec::with_capacity(rows.len());
     let animation = egui::style::ScrollAnimation::none();
-    for (i, row) in rows.iter().enumerate() {
+    for row in rows {
         let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(ui.available_width(), row_height), Sense::hover());
-        let creation_index = match direction {
-            Direction::TopDown => i,
-            Direction::BottomUp => row_count - 1 - i,
-        };
-        let cy = rect.center().y;
-        let lane_x = |lane: usize| rect.left() + GRAPH_PAD_X + lane as f32 * LANE_STEP;
-
-        // Rails of every branch alive at this row.
-        for span in metrics.spans {
-            if span.start_row <= creation_index && creation_index <= span.end_row {
-                let x = lane_x(span.branch);
-                ui.painter().line_segment(
-                    [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
-                    Stroke::new(2.0, branch_color(span.branch)),
-                );
-            }
-        }
-
-        // Fork curve from the parent circle to this row's circle; painted
-        // after the loop because it may span several rows.
-        if row.fork
-            && let Some(parent) = row.parent
-            && let Some(&parent_display) = display_index.get(&parent)
-        {
-            let parent_branch = rows[parent_display].branch;
-            let parent_y = cy + (parent_display as f32 - i as f32) * row_height;
-            let from = egui::pos2(lane_x(parent_branch), parent_y);
-            let to = egui::pos2(lane_x(row.branch), cy);
-            curves.push(([from, egui::pos2(to.x, from.y), to], row.branch));
-        }
-
-        // Commit circle; the head (the canvas state) gets a ring.
-        let center = egui::pos2(lane_x(row.branch), cy);
-        ui.painter()
-            .circle_filled(center, NODE_RADIUS, branch_color(row.branch));
-        if row.is_head {
-            ui.painter().circle_stroke(
-                center,
-                NODE_RADIUS + HEAD_RING_EXTRA,
-                Stroke::new(1.5, text_color),
-            );
-        }
-
-        let node = app.history_tree.node(row.id);
-        // "pencil" + the two color squares: a column exactly one text line
-        // tall (primary on top, secondary below).
-        let label = node.map_or("pencil", |node| kind_label(node.kind));
-        let label_x = center.x + NODE_RADIUS + LABEL_GAP;
-        ui.painter().text(
-            egui::pos2(label_x, cy),
-            Align2::LEFT_CENTER,
-            label,
-            metrics.body_font.clone(),
-            text_color,
-        );
-        if let Some(node) = node {
-            let square_height = (row_height - SQUARE_GAP) / 2.0;
-            let x = label_x + label_width + LABEL_GAP;
-            for (offset, color) in [
-                (0.0, node.primary),
-                (square_height + SQUARE_GAP, node.secondary),
-            ] {
-                let square = Rect::from_min_size(
-                    egui::pos2(x, rect.top() + offset),
-                    egui::vec2(SQUARE_WIDTH, square_height),
-                );
-                ui.painter().rect_filled(square, 1.0, color);
-                ui.painter().rect_stroke(
-                    square,
-                    1.0,
-                    Stroke::new(1.0, Color32::from_gray(90)),
-                    egui::StrokeKind::Inside,
-                );
-            }
-        }
-
-        // Scroll pins (see `tree_content`): the graph's end is the HEAD row —
-        // bottom edge in top-down mode, top edge in bottom-up mode.
+            ui.allocate_exact_size(egui::vec2(row_width, row_height), Sense::hover());
+        rects.push(rect);
+        // Scroll pins: the graph's end is the HEAD row — bottom edge in
+        // top-down mode, top edge in bottom-up mode.
         if let Some(target) = pin {
             let (hit, align) = match target {
                 Pin::End => (
@@ -594,14 +547,122 @@ fn paint_graph(
         }
     }
 
-    for (points, branch) in curves {
-        ui.painter().add(Shape::QuadraticBezier(
-            egui::epaint::QuadraticBezierShape::from_points_stroke(
-                points,
+    // Creation row -> display row (BottomUp reverses the list).
+    let display_of: Vec<usize> = (0..rows.len())
+        .map(|creation| match direction {
+            Direction::TopDown => creation,
+            Direction::BottomUp => rows.len() - 1 - creation,
+        })
+        .collect();
+    let center_y = |creation: usize| rects[display_of[creation]].center().y;
+    let lane_x = |lane: usize| rects[0].left() + GRAPH_PAD_X + lane as f32 * LANE_STEP;
+    let painter = ui.painter();
+
+    // Pass 2: one rail (and connector) per branch, painted BEFORE the dots.
+    for span in metrics.spans {
+        let color = branch_color(span.branch);
+        let x = lane_x(span.branch);
+        let Some(parent_row) = span.parent_row else {
+            // Root branch (the head path or a detached root): one straight
+            // rail from its first to its last node.
+            painter.line_segment(
+                [
+                    egui::pos2(x, center_y(span.start_row)),
+                    egui::pos2(x, center_y(span.end_row)),
+                ],
+                Stroke::new(2.0, color),
+            );
+            continue;
+        };
+
+        // Fork connector: straight run, quarter ellipse, straight rail.
+        let parent_display = display_of[parent_row];
+        let parent_branch = rows[parent_display].branch;
+        let parent_x = lane_x(parent_branch);
+        let parent_y = rects[parent_display].center().y;
+        let child_y = center_y(span.start_row);
+        // Successive forks stagger their runs one step per crossed lane;
+        // the drop hides inside the parent's rail. Clamped so the arc
+        // always lands above the child row (below in bottom-up mode).
+        let sign = (child_y - parent_y).signum();
+        let room = ((child_y - parent_y).abs() - ARC_RADIUS).max(0.0);
+        let drop = ((span.branch - parent_branch - 1) as f32 * FORK_DROP_STEP).min(room) * sign;
+        let y_run = parent_y + drop;
+
+        // Straight horizontal run from the parent's rail to the arc.
+        painter.line_segment(
+            [
+                egui::pos2(parent_x, y_run),
+                egui::pos2(x - ARC_RADIUS, y_run),
+            ],
+            Stroke::new(2.0, color),
+        );
+        // Quarter ellipse: horizontal entry, vertical exit toward the row
+        // of the fork's first node (kappa = best cubic fit for a quarter
+        // circle; an ellipse of radius LANE_STEP/2 fits the lane width).
+        let k = 0.552_3;
+        let center = egui::pos2(x - ARC_RADIUS, y_run + sign * ARC_RADIUS);
+        painter.add(Shape::CubicBezier(
+            egui::epaint::CubicBezierShape::from_points_stroke(
+                [
+                    egui::pos2(center.x, y_run),
+                    egui::pos2(center.x + k * ARC_RADIUS, y_run),
+                    egui::pos2(x, center.y + sign * (ARC_RADIUS - k * ARC_RADIUS)),
+                    egui::pos2(x, center.y),
+                ],
                 false,
                 Color32::TRANSPARENT,
-                Stroke::new(2.0, branch_color(branch)),
+                Stroke::new(2.0, color),
             ),
         ));
+        // Straight rail down (up in bottom-up mode) to the branch's tip.
+        painter.line_segment(
+            [
+                egui::pos2(x, y_run + sign * ARC_RADIUS),
+                egui::pos2(x, center_y(span.end_row)),
+            ],
+            Stroke::new(2.0, color),
+        );
+    }
+
+    // Pass 3: dots, labels, color swatches.
+    for (i, row) in rows.iter().enumerate() {
+        let rect = rects[i];
+        let cy = rect.center().y;
+        let center = egui::pos2(lane_x(row.branch), cy);
+        painter.circle_filled(center, NODE_RADIUS, branch_color(row.branch));
+        if row.is_head {
+            painter.circle_stroke(
+                center,
+                NODE_RADIUS + HEAD_RING_EXTRA,
+                Stroke::new(1.5, text_color),
+            );
+        }
+
+        let node = app.history_tree.node(row.id);
+        let label = node.map_or("pencil", |node| kind_label(node.kind));
+        // The label column sits after the gutter — same x for every row.
+        // Rects are in SCREEN coordinates, so anchor at the row's left.
+        let label_x = rects[0].left() + gutter_end + LABEL_GAP;
+        painter.text(
+            egui::pos2(label_x, cy),
+            Align2::LEFT_CENTER,
+            label,
+            metrics.body_font.clone(),
+            text_color,
+        );
+        if let Some(node) = node {
+            let swatch = Rect::from_min_size(
+                egui::pos2(label_x + label_width + LABEL_GAP, rect.top() + 2.0),
+                egui::vec2(SWATCH_WIDTH, row_height - 4.0),
+            );
+            painter.rect_filled(swatch, 2.0, node.color);
+            painter.rect_stroke(
+                swatch,
+                2.0,
+                Stroke::new(1.0, Color32::from_gray(90)),
+                egui::StrokeKind::Inside,
+            );
+        }
     }
 }

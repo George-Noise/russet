@@ -29,7 +29,7 @@
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 61 green (2026-11-12, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
+`cargo test --profile gates` — 64 green (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -52,6 +52,41 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
+
+### 2026-11-13 — `Fix:` History Tree rendering rework (owner review of 04_fork screenshot) — owner request
+
+- **What:** seven owner fixes in one pass. (1) Fork connectors: the old per-row rail
+  segments drew a stray stub through the parent's row and the bezier bulged wrong —
+  replaced with ONE rail segment per branch plus an explicit connector: straight
+  horizontal run → quarter ellipse (cubic, r = LANE_STEP/2) → straight rail to the
+  node; successive forks from one parent stagger their runs one step per crossed
+  lane (the drop hides inside the parent's rail). (2) ONE color per action: nodes
+  store/display `TreeNode::color` — no primary/secondary pair (capture via the
+  existing `App::stroke_color()` at stroke start). (3) Horizontal scrolling:
+  `ScrollArea::both`; content width = gutter + label column. (4) No-merge invariant
+  documented (paint branches never converge → rails are plain segments, no join
+  handling). (5) VS Code-style gutter: all dots/rails stay inside
+  `lanes × LANE_STEP`; labels share one aligned x after it — no line/text
+  collisions by construction. (6+7) Lane assignment: the CURRENT timeline
+  (root..head) owns lane 0 as the straight left edge; abandoned tails hang off to
+  the right in creation order (spans now carry `parent_row` for the connector).
+- **Files:** `src/history_tree.rs` (model: one color, head-path lanes, spans),
+  `src/history_tree/tests.rs` (rewrote fork expectations, +3 tests),
+  `src/app/tree_window.rs` (painter rewrite: rails/connectors/gutter/h-scroll,
+  single swatch), `src/app.rs` (stroke_colors → stroke_paint), `PROGRESS.md`.
+- **Verified:** `bash scripts/verify.sh` — ALL GATES GREEN (rules: 0 hard violations;
+  fmt clean; clippy `-D warnings` clean; `cargo test --profile gates` 64 green).
+  Headless Xvfb + xdotool screenshots (reviewed): fork keeps lane 0 straight with
+  the tail peeling off via the quarter ellipse; 11-branch fan renders staggered
+  arcs without overlaps; labels stay aligned and collision-free; shift+wheel
+  scrolls horizontally (labels/swatches revealed); "New at top" mirrors the
+  connectors upward; single swatch per row.
+- **Owner-checks:** `cargo run` on Windows — review the new connector shape and
+  lane order against the taste from the 04_fork screenshot; try many undos+strokes
+  at one node and scroll the tree right; check the single color square reads well.
+  `src/app/tree_window.rs` is 668 lines — still over the soft 500 guard; the
+  proposed `tree_window/paint.rs` split is still pending the owner's OK.
+- **Commit title:** `Rework History Tree rendering: lane-0 head path, quarter-ellipse connectors, single color, guttered labels, horizontal scroll`
 
 ### 2026-11-12 — `Extra:` visual "History Tree" windows (git-style graph prototype) — owner request
 
