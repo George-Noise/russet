@@ -18,6 +18,12 @@
 #      new ones are visible in every review and CI run.
 #   4. src files over 500 lines (app.rs is the owner-approved exception) —
 #      AGENTS.md "Repo facts" file-size guard.
+#   5. PROGRESS.md size and stale material (owner request 2026-11-13: "чтобы
+#      агент и человек не забывали"): warn when the file or its Log section
+#      outgrows its budget, when RESOLVED warnings are still parked in the
+#      Warnings section, and list the live log entries that still carry
+#      owner checks — the open items must be surfaced and asked about (see
+#      DEBTS-verification.md / DEBTS-functional.md).
 set -u
 cd "$(dirname "$0")/.."
 
@@ -66,6 +72,32 @@ for f in src/**/*.rs; do
 done
 if [ "$within" -eq 1 ]; then
     echo "OK: all src files (except owner-exempt app.rs) are within 500 lines"
+fi
+
+echo "== SOFT (report-only): PROGRESS.md size and stale material =="
+if [ ! -f PROGRESS.md ]; then
+    echo "NOTE: PROGRESS.md not found (skipping progress checks)"
+else
+    prog_lines=$(wc -l < PROGRESS.md)
+    echo "PROGRESS.md: $prog_lines lines (budget ~200 total)"
+    if [ "$prog_lines" -gt 200 ]; then
+        echo "OVER BUDGET: compact the Log into PROGRESS-archive.md (newest 3-5 entries stay)"
+    fi
+    log_lines=$(awk '/^## Log/{flag=1; next} flag' PROGRESS.md | wc -l)
+    echo "Log section: $log_lines lines (budget ~150 = newest 3-5 entries)"
+    if [ "$log_lines" -gt 150 ]; then
+        echo "OVER BUDGET: the Log section holds more than the newest 3-5 entries"
+    fi
+    resolved=$(awk '/^## Warnings/{flag=1; next} /^## Log/{flag=0} flag' PROGRESS.md | grep -c 'RESOLVED' || true)
+    if [ "$resolved" -gt 0 ]; then
+        echo "STALE: $resolved RESOLVED warning(s) still parked in Warnings — move them to PROGRESS-archive.md"
+        awk '/^## Warnings/{flag=1; next} /^## Log/{flag=0} flag' PROGRESS.md | grep 'RESOLVED' | while IFS= read -r line; do
+            echo "ARCHIVE ME: $line"
+        done
+    fi
+    owner_checks=$(awk '/^## Log/{flag=1; next} flag' PROGRESS.md | grep -cE 'Owner-checks:|Owner must check:' || true)
+    echo "Live log entries still carrying owner checks: $owner_checks"
+    echo "REMINDER: ask the owner which are human-verified; the live list is DEBTS-verification.md"
 fi
 
 if [ "$hard_fail" -ne 0 ]; then

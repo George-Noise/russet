@@ -6,6 +6,7 @@
 - `PROGRESS.md` is the progress log and the substitute for git history (see "Git & progress log" below). Read it before starting any task and update it after every finished, verified one.
 - Reading is routed by task type (see "Reading routes" below) — do not read the whole SPEC when a task touches one §. Do not add features from §6 (out of scope).
 - `PERF.md` is a **reference backlog** for memory/build-speed work, not an autonomous queue: the owner picks an item, and the agent executes it only when asked. Its §0 has the task details and the owner gates.
+- `DEBTS-verification.md` and `DEBTS-functional.md` are the live debt lists (see "Debts" below): checks awaiting a HUMAN, and deliberate simplifications / postponed decisions. Read both at session start and at task end — and ASK about them.
 
 ## Reading routes — task type → what to read
 
@@ -87,8 +88,41 @@ touching behavior code.
 - After finishing AND verifying a task or milestone: insert one entry at the top of the "Log" section of `PROGRESS.md` (newest first) — date, `M<N>:`-style title (or a short title for non-milestone work), what changed and in which files, how it was verified (commands + result), and what the owner still must check manually. Update the status snapshot and warnings in the same edit.
 - **Commit titles (owner request 2026-11-10):** whenever a task leaves changes that will later go into a commit, ALWAYS propose a commit title for them — one short imperative line in the repo's existing `git log` style (multi-part changes joined with `;`), e.g. `Add Eyedropper, Line/Curve, Shape, Text tools and History/Layers windows`. State it in TWO places: the `PROGRESS.md` log entry (a `Commit title:` line) AND as the **very last line of the chat reply to the owner** (owner request 2026-11-10: always in the same findable place, easy to copy). The agent never commits itself (see above).
 - **Log-entry budget (owner request 2026-11-10):** one entry = at most ~20 lines with the fixed fields (What / Files / Verified / Owner-checks / Commit title). Anything durable learned during a task MUST move to its canonical home in the SAME edit — a new egui quirk → the quirks section below, an owner decision or behavioral law → `SPEC.md` §3.x, a module fact → that module's docstring — and the log entry only references it.
-- **Log compaction:** when the "Log" section of `PROGRESS.md` grows past ~120 lines, move all but the newest 3–5 entries verbatim into `PROGRESS-archive.md` (read it only via grep when investigating history) and note that in the Log heading. The status snapshot carries a one-line verification stamp (`fmt/clippy clean, cargo test: N green — date`), updated in the same edit.
+- **Log compaction:** when the "Log" section of `PROGRESS.md` grows past ~150 lines, move all but the newest 3–5 entries verbatim into `PROGRESS-archive.md` (read it only via grep when investigating history) and note that in the Log heading. The status snapshot carries a one-line verification stamp (`fmt/clippy clean, cargo test: N green — date`), updated in the same edit.
 - Never record work as done in `PROGRESS.md` before its verification commands actually pass.
+
+## Debts — pending human checks & functional debts
+
+Two files carry what would otherwise rot silently inside PROGRESS.md log entries
+(owner decision 2026-11-13):
+
+- **`DEBTS-verification.md`** — checks only the OWNER can do: Windows `cargo run`
+  click-throughs, browser passes, `nix build`, doc wording sign-offs. A log entry's
+  `Owner-checks` line is history; the LIVE tracking of what is still unverified
+  lives in the file.
+- **`DEBTS-functional.md`** — deliberate simplifications, postponed work and open
+  decisions (placeholders, postponed CI jobs, "later" items).
+
+Hard rules:
+
+1. A debt is born in the SAME edit as the task that creates it: every new
+   owner-check item and every deliberate simplification lands in the matching file
+   immediately, with its birth date. Never leave a debt only in the log entry.
+2. **Ask, don't accumulate (owner request 2026-11-13).** At session start and at
+   task end, surface the open items of BOTH files to the owner in ONE batched list
+   and ask which are human-verified / which decisions are made. Never assume a
+   check happened; never remove an item silently. Items unchecked for over a week
+   are flagged explicitly as stale.
+3. A verified item gets `Status: verified <date>`; a paid functional debt gets
+   `Status: paid <date>`; both are dropped at the next compaction. The historical
+   record stays in the PROGRESS.md entries.
+4. `scripts/rules.sh` is the automated reminder: it reports PROGRESS.md size, its
+   Log-section size, RESOLVED-but-unarchived warnings and the count of live
+   owner-checks (report-only).
+5. PROGRESS.md `Warnings` holds ACTIVE blockers only; a warning moves to
+   `PROGRESS-archive.md` in the SAME edit that resolves it. The Log keeps only the
+   newest 3–5 entries (the compaction rule above); `rules.sh` warns when the
+   budgets (~200 file lines, ~150 log lines) are exceeded.
 
 ## Delivery ritual — artifacts sent to the owner
 
@@ -101,9 +135,14 @@ Before calling the delivery ready: with git, apply the patch onto a clean copy o
 
 ## Commands
 
-- Quick loop during development: `cargo check` (owner's time-saving policy 2026-11-09).
-- Done gate: `bash scripts/verify.sh` — first `scripts/rules.sh` (machine rules, no cargo needed: inline test modules and `unwrap()` in `src/` are HARD failures; `expect()` outside tests and the 500-line file-size guard are report-only notes), then `cargo fmt --check`, `cargo clippy --profile gates --all-targets -- -D warnings`, `cargo test --profile gates` (the unoptimized `gates` lane — see "Repo facts"; identical checks, minutes faster to build). Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
-- CI (`.github/workflows/ci.yml`) runs the same gate on GitHub — two jobs, `rules` (grep-level `scripts/rules.sh`, no toolchain) and `native` (`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`) — for every push to `master` and every PR, with Rust pinned to the owner's local toolchain. Keep it green: a red CI on `master` is a stop-everything signal. Editing the workflow (or adding the postponed wasm job) is a build-tooling change and needs the owner's OK. CI keeps the full optimized dev profile on purpose — it stays the independent full-lane verifier, while verify.sh runs the fast unoptimized `gates` lane (owner decision 2026-11-11).
+- Baseline at session start, BEFORE any edit (owner policy 2026-11-13): `bash scripts/rules.sh` and
+  `cargo fmt --check` — nothing else. Both are instant and never compile anything. The tree always
+  arrives green (byte-compared delivery + CI), so pre-edit `cargo check`/clippy/test runs are wasted
+  minutes; if the baseline fails, STOP and tell the owner — a red baseline means a broken delivery,
+  not a task.
+- Quick loop after edits: `cargo check` (owner's time-saving policy 2026-11-09).
+- Done gate: `bash scripts/verify.sh` — first `scripts/rules.sh` (machine rules, no cargo needed: inline test modules and `unwrap()` in `src/` are HARD failures; `expect()` outside tests, the 500-line file-size guard and the PROGRESS.md budget/stale check are report-only notes), then `cargo fmt --check`, `cargo clippy --profile gates --all-targets -- -D warnings`, `cargo test --profile gates` (the unoptimized `gates` lane — see "Repo facts"; identical checks, minutes faster to build). Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
+- CI (`.github/workflows/ci.yml`) runs the same gate on GitHub — two jobs, `rules` (grep-level `scripts/rules.sh`, no toolchain) and `native` (`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` → the same clippy+test pair with `--features mcp`, owner OK 2026-11-13) — for every push to `master` and every PR, with Rust pinned to the owner's local toolchain. Keep it green: a red CI on `master` is a stop-everything signal. Editing the workflow (or adding the postponed wasm job) is a build-tooling change and needs the owner's OK. CI keeps the full optimized dev profile on purpose — it stays the independent full-lane verifier, while verify.sh runs the fast unoptimized `gates` lane (owner decision 2026-11-11).
 - Tests: `cargo test --profile gates` (all — the lane verify.sh uses) / `cargo test app::placement --profile gates` (one module by path fragment). Unit tests live in `<module>/tests.rs` (see "Tests").
 - Docs/comment-only edits: `cargo check` is enough; say so explicitly in the `PROGRESS.md` entry.
 - Daily run: `cargo run` (Windows). Do not run `cargo build --release` during development; release validation belongs to M9.
@@ -147,7 +186,7 @@ flow, so a worthy crate is used instead of being re-invented as an in-house whee
 - File I/O: native uses synchronous `rfd::FileDialog`; WASM must use `rfd::AsyncFileDialog` only.
 - Web page: `web/index.html` is the trunk entry. It declares `<link data-trunk rel="rust" href="../Cargo.toml" data-wasm-opt-params="--all-features" />` on purpose — trunk resolves the manifest relative to the HTML file, so the explicit `href` is what makes `web/` work, and trunk 0.22 runs wasm-opt on release builds where the bundled wasm-opt 131 needs `--all-features` for Rust 1.99's bulk-memory output. `#russet_canvas` is hardcoded in `main.rs`: rename in both or neither. `Trunk.toml` pins `target`/`dist`.
 - Trunk is PINNED to 0.22.1 (owner decision 2026-11-11): `cargo install trunk --locked --version 0.22.1` (README, SPEC §8). The page's `data-wasm-opt-params` is tuned to what trunk 0.22 bundles, so a different trunk can break the release web build. After any trunk upgrade, re-evaluate the flags under PERF.md P9 before trusting the build.
-- CI (owner decision 2026-11-11, the single exception to the no-build-tooling rule): `.github/workflows/ci.yml` runs the done-gate (fmt/clippy/test) on GitHub for every push to `master` and every PR. Native only — the wasm/trunk job is deliberately postponed (owner 2026-11-11). The workflow is build tooling: changing it needs the owner's OK. CI is the independent verifier of the `PROGRESS.md` stamps — agents' claims are checked by GitHub's machines. The `rules` job (owner-approved addition 2026-11-11) runs `scripts/rules.sh` — the machine-checkable subset of this file, single source of truth shared with `verify.sh`: HARD = no inline test modules, no `unwrap()` anywhere in `src/` (tests included); SOFT report-only = `expect()` outside test files (each must stay off user-data paths) and the 500-line guard.
+- CI (owner decision 2026-11-11, the single exception to the no-build-tooling rule): `.github/workflows/ci.yml` runs the done-gate (fmt/clippy/test + the same pair with `--features mcp`, owner OK 2026-11-13) on GitHub for every push to `master` and every PR. Native only — the wasm/trunk job is deliberately postponed (owner 2026-11-11). The workflow is build tooling: changing it needs the owner's OK. CI is the independent verifier of the `PROGRESS.md` stamps — agents' claims are checked by GitHub's machines. The `rules` job (owner-approved addition 2026-11-11) runs `scripts/rules.sh` — the machine-checkable subset of this file, single source of truth shared with `verify.sh`: HARD = no inline test modules, no `unwrap()` anywhere in `src/` (tests included); SOFT report-only = `expect()` outside test files (each must stay off user-data paths) and the 500-line guard.
 - Floating windows ("Tools"/"Palette"/"History"/"Layers"): placement (drop-time edge anchoring — a window keeps the gap the user dropped it at, never pulled flush; left/bottom tie rule — and per-axis repositioning on main-window resize: anchored axis keeps the dropped gap, free axis keeps the gap ratio) is specified in `SPEC.md` §3.11 and implemented in `app/placement.rs` with unit tests in `app/placement/tests.rs`; since the owner request 2026-11-11 it covers ALL FOUR floating windows, and window drop shadows are off (`visuals.window_shadow = Shadow::NONE` in `App::new`; popups/menus untouched). Anchors are decided only when a drag ends — never during drags, never on resizes. First-open positions are §3.2/§3.3 facts: Tools 0.5rem (8 pt) from the left edge with 40% of the free vertical space above / 60% below (one-shot `TOOLS_FIRST_OPEN_RATIO` fix — the exact split needs the auto-sized height, unknown before the first layout), Palette 0.5rem from the left and bottom edges, History 0.5rem from the right edge / below the menu bar, Layers 0.5rem from the right edge with its bottom lifted 2.25rem — set via `Window::pivot` + `default_pos` (1 rem = 16 pt because egui 0.37 has no rem API; the `0.5 * REM` constant is `app/placement.rs::FIRST_OPEN_GAP`, next to the 2rem `WINDOW_SNAP_DISTANCE`); once the window has a stored area position, `default_pos` is dead and the user's placement wins.
 - All user-facing strings are hardcoded English. No i18n/localization.
 - `README.md` is written for HUMANS — people who want to build and run the app. It contains build & run instructions (Windows, NixOS/Linux via `flake.nix`, Web/WASM) and one pointer to `CONTRIBUTING.md` — no feature lists, no changelog, no agent guidance. Agents must read project rules here in AGENTS.md and in SPEC.md, never from README.md. When build/run commands change (SPEC §8, `flake.nix`, Cargo.toml toolchain requirements), update README.md in the same edit.

@@ -5,7 +5,10 @@
 #            modules and no unwrap() anywhere in src/ fail the job; expect()
 #            outside tests and the 500-line file-size guard are report-only.
 #            Needs no Rust toolchain, so it runs in seconds.
-#   native — fmt + clippy + test with the pinned Rust toolchain.
+#   native — fmt + clippy + test with the pinned Rust toolchain, THEN the
+#            same clippy + test pair with --features mcp (owner OK 2026-11-13):
+#            the feature-gated MCP code must stay as green as the default
+#            build, on the independent full-profile lane.
 #
 # Scope (owner decision 2026-11-11): native checks ONLY. The wasm/trunk job is
 # deliberately postponed until the web build has something to be shown.
@@ -52,3 +55,9 @@ jobs:
 
       - name: cargo test
         run: cargo test
+
+      - name: cargo clippy --features mcp --all-targets -- -D warnings
+        run: cargo clippy --features mcp --all-targets -- -D warnings
+
+      - name: cargo test --features mcp
+        run: cargo test --features mcp
