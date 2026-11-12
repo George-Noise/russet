@@ -27,9 +27,10 @@
 | Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
 | Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | done — first CI run GREEN (success for `0188c52`, GitHub Actions) | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
+| Extra: dependency approval flow (owner 2026-11-12) | done | AGENTS.md "Dependencies — approval flow" + SPEC §6 exception + CONTRIBUTING.md — the hard no-deps ban became propose → discuss → owner decides; no code touched |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 64 green (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
+`cargo test --profile gates` — 64 green; with `--features mcp` — clippy clean, 76 green (2026-11-12, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -52,6 +53,46 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
+
+### 2026-11-12 — `Feat:` opt-in MCP stdio server behind the `mcp` feature — owner request
+
+- **What:** a JSON-RPC 2.0 stdio server for agent-driven development, compiled ONLY
+  with `--features mcp`. A reader thread pushes parsed events into an mpsc queue; the
+  UI frame polls it with `try_recv` (main thread never blocks) and executes 8 tools
+  against the live App: get_layers, get_history_tree, add_stroke (the exact
+  hand-gesture path: snapshot → pixels → tree node → forks after undo), undo/redo,
+  set_active_layer, get_canvas_snapshot (PNG image content), export_png. Starts on
+  `--mcp` or piped stdin; menu-bar badge shows "MCP on (N)". serde_json (optional
+  dep) + the thread pump are owner-approved 2026-11-12 via the new approval flow;
+  the default build has NO mcp code/threads/serde_json (`cargo tree` proof) —
+  release: 14.52 MB default vs 14.71 MB mcp (+189 KB).
+- **Files:** Cargo.toml (+`[features] mcp`, optional serde_json, lock updated);
+  NEW src/app/mcp.rs + mcp/tools.rs + mcp/tests.rs + mcp/tools/tests.rs; app.rs (5
+  cfg hooks); history_tree.rs (read-only layer_nodes/layer_head); file_io.rs
+  (pub(crate) encode_png); README.md (MCP build section). tree_window.rs untouched.
+- **Verified:** verify.sh ALL GATES GREEN (64 tests); `--features mcp`: clippy
+  clean, 76 tests. Headless demo: 11/11 JSON-RPC requests OK — house drawn via
+  add_stroke, snapshot decoded to PNG, undo, fork 2:[3,4] confirmed by
+  get_history_tree; 2 screenshots + transcript in download/mcp-demo/.
+- **Owner-checks:** Windows run of the flag build (`cargo build --release --features
+  mcp`, then `--mcp`); badge look; the tree_window.rs review is still pending.
+- **Commit title:** `Add opt-in MCP stdio server behind the mcp feature`
+
+### 2026-11-12 — `Docs:` dependency convention reworked: hard ban → owner approval flow — owner request
+
+- **What:** the "Do not add dependencies" rule is replaced by an approval flow:
+  the agent stops and proposes (why it is needed / candidate crates with
+  trade-offs / the no-dependency alternative / a recommendation), the owner
+  decides. First live case already queued: the MCP server's JSON layer
+  (serde_json vs the official rmcp SDK vs an in-tree codec) — the question goes
+  to the owner before any MCP code lands.
+- **Files:** AGENTS.md (new "Dependencies — approval flow" section + the Repo
+  facts bullet), SPEC.md §6 (approval-flow exception paragraph), CONTRIBUTING.md
+  (outsider rules now point at the flow), PROGRESS.md (this entry).
+- **Verified:** docs-only edit — no cargo run (no source or manifest change;
+  scripts/rules.sh greps src/ only).
+- **Owner-checks:** the wording of the flow; the pending MCP JSON decision.
+- **Commit title:** `Replace the no-dependencies ban with an owner approval flow`
 
 ### 2026-11-13 — `Fix:` History Tree rendering rework (owner review of 04_fork screenshot) — owner request
 

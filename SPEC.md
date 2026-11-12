@@ -448,6 +448,10 @@ Exception (owner decision, 2026-11-09): `flake.nix` for building and running the
 
 Exception (owner request, 2026-11-10): the owner explicitly ordered deliberately simple first iterations of the following §6 items, to be reworked later — **Eyedropper** (canvas picking only), **Line/Curve tool**, **Shapes** (rectangle + ellipse), **Text** (font size only), a **non-clickable action-history log** window, and a **Layers placeholder window** (single implicit layer). New hotkeys `I`/`L`/`U`/`T` (§3.9); no new dependencies; no new `#[cfg]` platform branches. Implemented behavior is described in `PROGRESS.md` (2026-11-10 entry), which is the source of truth for these provisional features until they are formally specified. This does not re-enable anything else from the list.
 
+Exception (owner decision, 2026-11-12): the flat "any new dependencies" item moves from a hard ban to the approval flow in AGENTS.md ("Dependencies — approval flow"): the agent stops and proposes the need, the candidate crates with trade-offs, the no-dependency alternative and a recommendation; the owner decides. Nothing is pre-approved by this exception, and every other §6 item stays out of scope.
+
+Exception (owner request, 2026-11-12): the MCP development feature (owner chat order) ships behind the opt-in `mcp` cargo feature: a JSON-RPC 2.0 stdio server (`src/app/mcp.rs` + children) lets an AI agent drive the running app during development. Inside that feature build ONLY, `serde_json` is an approved optional dependency (the first case of the approval flow above) and one `std::thread` pair pumps stdin/stdout — the main thread stays event-driven and never blocks. The default build compiles none of it: no server code, no threads, no new dependencies.
+
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**

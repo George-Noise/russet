@@ -32,6 +32,8 @@ use crate::tools::{Tool, ToolState, draw_segment, pick_color};
 
 mod camera;
 mod dialogs;
+#[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+mod mcp;
 mod panels;
 mod placement;
 mod preview;
@@ -101,6 +103,11 @@ pub struct App {
     /// Visual mirror of pencil strokes per pseudo-layer (owner request
     /// 2026-11-12) — model in `history_tree`, windows in `app/tree_window`.
     history_tree: HistoryTree,
+    /// MCP stdio server (owner request 2026-11-12, feature `mcp`): events
+    /// from the reader thread are polled at the top of every frame and
+    /// executed against this state. Compiled out without the feature.
+    #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+    mcp: Option<mcp::McpServer>,
     zoom: f32,
     pan: Vec2,
     is_stroking: bool,
@@ -208,6 +215,8 @@ impl App {
             last_tool: Tool::Pencil,
             history: History::new(),
             history_tree: HistoryTree::new(),
+            #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+            mcp: mcp::McpServer::maybe_spawn(cc.egui_ctx.clone()),
             zoom: 1.0,
             pan: Vec2::ZERO,
             is_stroking: false,
@@ -763,6 +772,9 @@ impl App {
                         ui.close();
                     }
                 });
+
+                #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+                self.mcp_badge(ui);
             });
         });
     }
@@ -890,6 +902,9 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // MCP events first: tool calls land before anything else draws.
+        #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+        self.mcp_poll();
         #[cfg(target_arch = "wasm32")]
         self.poll_file_task();
         self.handle_hotkeys(&ctx);

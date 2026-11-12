@@ -32,8 +32,10 @@ work locally, and is the only person who commits and pushes. Therefore:
 - `SPEC.md` is the authoritative product spec; `PROGRESS.md` is the progress
   log; `PERF.md` is a reference backlog the owner picks from.
 - The owner's constraints in `AGENTS.md` ("Repo facts", SPEC §6) apply to you
-  unchanged: no new dependencies, no new top-level directories, no build
-  tooling, no `unwrap()`/`expect()` on user-data paths.
+  unchanged: no silent dependency additions (a dependency lands only through
+  the owner-approval flow in AGENTS.md "Dependencies — approval flow"), no new
+  top-level directories, no build tooling, no `unwrap()`/`expect()` on
+  user-data paths.
 
 ## PR rules (non-owner)
 

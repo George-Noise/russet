@@ -25,6 +25,11 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 rfd = "0.15"
 log = "0.4"
+# MCP (owner request 2026-11-12): JSON-RPC stdio server behind the `mcp`
+# feature — approved via "Dependencies — approval flow" in AGENTS.md. The
+# dependency is OPTIONAL: the default build never compiles it and keeps its
+# dependency graph byte-for-byte unchanged.
+serde_json = { version = "1", optional = true }
 
 # native (Windows):
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -34,6 +39,15 @@ env_logger = "0.11"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
+
+[features]
+# MCP server (owner request 2026-11-12, chat-approved): compiles the in-tree
+# MCP module (src/app/mcp.rs + children) that lets an AI agent drive the
+# running app over stdin/stdout during development. Build with
+# `cargo build --release --features mcp`; run with `--mcp` (or piped stdin).
+# The default build compiles NONE of it: no MCP code, no threads, no
+# serde_json in the dependency graph.
+mcp = ["dep:serde_json"]
 
 # FAST DEVELOPMENT:
 # - own code rebuilds without optimizations (fast);

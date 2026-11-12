@@ -113,9 +113,32 @@ Before calling the delivery ready: with git, apply the patch onto a clean copy o
   `export PATH="$HOME/.cargo/bin:$PATH"`. Release builds run wasm-opt — the page passes the
   required flags (see "Repo facts"). The release web build was verified in Firefox on 2026-11-09.
 
+## Dependencies — approval flow (owner decision 2026-11-12)
+
+The former hard ban ("do not add dependencies") is replaced by an explicit approval
+flow, so a worthy crate is used instead of being re-invented as an in-house wheel:
+
+1. The agent never adds a dependency silently. When a task needs one, it stops and
+   asks the owner FIRST — this includes bumping an existing dependency beyond its
+   pinned version.
+2. The proposal must state: (a) the problem and why it is real; (b) the candidate
+   crates with trade-offs (maintenance, MSRV, weight, transitive dependencies,
+   runtime libs for `flake.nix`, wasm impact); (c) the no-dependency alternative
+   and whether skipping it means re-inventing the wheel; (d) the agent's
+   recommendation.
+3. The owner picks an option or rejects the request. Only then does the code land:
+   the version pinned in `Cargo.toml` (SPEC §1 style), `Cargo.lock` updated in the
+   same task, runtime libs added to `flake.nix` `runtimeLibs`, and README/SPEC
+   updated in the same edit when build/run docs change.
+4. An opt-in capability ships as a feature-gated optional dependency
+   (`dep:name` under a `[features]` flag) so the default build stays light.
+
 ## Repo facts
 
-- Single Rust binary crate `russet`: edition 2024, pinned deps from `SPEC.md` §1. Do not add dependencies.
+- Single Rust binary crate `russet`: edition 2024, pinned deps from `SPEC.md` §1.
+  Dependencies follow the approval flow in "Dependencies — approval flow" above
+  (owner decision 2026-11-12): never added silently, never hand-rolled into an
+  in-house wheel just to avoid asking.
 - Toolchain and gate lane (owner decision 2026-11-11): `rust-toolchain.toml` pins channel 1.99.1 (minimal profile + clippy/rustfmt) — rustup installs that exact compiler automatically on the first cargo command inside the repo; `[profile.gates]` in `Cargo.toml` (inherits dev; opt-level 0, no debuginfo, no incremental — dependencies included) builds gate runs without the egui-template dependency optimization: cold `cargo test --profile gates` on a 2-core sandbox takes minutes instead of ~12, while the GUI dev lane (`[profile.dev]`) stays optimized for responsive `cargo run`. The lanes keep separate `target/` fingerprints — switching between them rebuilds.
 - Required module split (monolith forbidden): `main`, `app`, `canvas`, `tools`, `history` (snapshot undo/redo + `ActionLog`), `file_io`, `palette`, `text` (text rasterization through egui's font atlas — owner request 2026-11-10). `app.rs` is the orchestrator (all `App` state, frame flow, hotkeys, strokes, file glue, menu, canvas widget); cohesive subsystems are its CHILD modules, which can access `App`'s private fields without any visibility churn: `app/camera.rs` (§3.4 viewport/zoom/pan), `app/dialogs.rs` (§3.7–3.8 dialogs), `app/windows.rs` (§3.2–3.3 floating windows), `app/placement.rs` (§3.11 placement), `app/preview.rs` (Line/Curve/Shape preview-then-commit gestures — owner request 2026-11-10), `app/text_tool.rs` (Text tool input window — owner request 2026-11-10), `app/panels.rs` (History log + Layers placeholder windows — owner request 2026-11-10; under §3.11 placement since the owner request 2026-11-11). Keep new subsystems as such child modules instead of growing `app.rs`.
 - File-size guard (soft): when a source file exceeds 500 lines, do not split it right away and never split mid-task. Instead, warn the owner that the file has outgrown the limit and propose a split — at the END of the current task, after the owner has verified that everything works. Split only with the owner's approval. Owner-approved exception (2026-11-09): `app.rs` stays the single orchestrator and may remain over 500 lines — agent readability beats the line count there; do not propose splitting it again unless it roughly doubles. Test files have their own 300-line guard (see "Tests"). Moving inline tests out of `tools.rs` took it from 679 to ~430 lines (2026-11-10), which retired the old proposed `raster.rs` split.

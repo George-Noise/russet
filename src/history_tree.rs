@@ -200,6 +200,19 @@ impl HistoryTree {
         layer.index.get(&id).map(|&i| &layer.nodes[i])
     }
 
+    /// All nodes of one layer in creation order, independent of the active
+    /// layer (read-only: the MCP server dumps them, tests assert on them).
+    #[cfg_attr(not(feature = "mcp"), allow(dead_code))]
+    pub fn layer_nodes(&self, layer: usize) -> Option<&[TreeNode]> {
+        self.layers.get(layer).map(|l| l.nodes.as_slice())
+    }
+
+    /// Head of one layer, independent of the active layer (read-only MCP).
+    #[cfg_attr(not(feature = "mcp"), allow(dead_code))]
+    pub fn layer_head(&self, layer: usize) -> Option<NodeId> {
+        self.layers.get(layer).and_then(|l| l.head)
+    }
+
     /// Graph layout of the active layer (see [`TreeLayout`]).
     pub fn layout(&self) -> TreeLayout {
         let layer = &self.layers[self.active];

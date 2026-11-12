@@ -27,7 +27,9 @@ fn pixmap_from_image(image: image::DynamicImage) -> Result<Pixmap, String> {
     Ok(pixmap)
 }
 
-fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>, String> {
+/// Shared with the MCP server (feature `mcp`): the snapshot tool returns
+/// the canvas as PNG bytes.
+pub(crate) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::with_capacity(pixmap.width() as usize * pixmap.height() as usize * 4);
     for pixel in pixmap.pixels() {
         let color = pixel.demultiply();

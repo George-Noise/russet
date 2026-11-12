@@ -47,6 +47,32 @@ cargo build --release
 
 The finished binary is `target\release\russet.exe`.
 
+## MCP build (optional, development feature)
+
+An optional compile-time feature adds an MCP (Model Context Protocol) stdio
+server so an AI agent can drive the running app (draw strokes, inspect the
+history tree, undo, read the canvas) while you watch the window:
+
+```powershell
+cargo build --release --features mcp
+target\release\russet.exe --mcp
+```
+
+The server speaks JSON-RPC 2.0 on stdin/stdout, one message per line — this is
+what MCP hosts (Claude Desktop etc.) expect:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"demo","version":"0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+```
+
+Without `--features mcp` none of it exists in the binary: no server code, no
+threads, no `serde_json` in the dependency graph — the default build is
+byte-for-byte the light one. With the feature compiled in, the server starts
+only when run with `--mcp` or when stdin is already piped (how MCP hosts spawn
+binaries); a normal terminal launch stays GUI-only.
+
 ## Web (WASM)
 
 One-time setup:
