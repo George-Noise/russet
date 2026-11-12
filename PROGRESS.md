@@ -29,7 +29,7 @@
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 49 green (2026-11-11, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
+`cargo test --profile gates` — 61 green (2026-11-12, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -52,6 +52,40 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > `PROGRESS-archive.md`. The two 2026-11-10 entries below predate the budget and stay
 > until the owner's Windows check of the six UX-fix items is done.
+
+### 2026-11-12 — `Extra:` visual "History Tree" windows (git-style graph prototype) — owner request
+
+- **What:** purely VISUAL history tree per the owner's design concept + live answers:
+  model `src/history_tree.rs` — 3 pseudo-layers with one GLOBAL active layer; nodes carry
+  kind + both tool colors only; undo/redo mirror the real `History` after it succeeded
+  (pencil-only sessions stay exact; interleaved brush/eraser strokes are a known
+  prototype caveat, commented at `App::undo`); a stroke after undo forks the graph,
+  old tail stays; debug `remove_last` returns forward/backward retarget hints; New/Open
+  reset. Window `src/app/tree_window.rs` — floating main window at the OLD History spot;
+  toolbar per window: layer switcher, direction toggle ("New at bottom" top-down default /
+  "New at top" bottom-up), Clone (cascade; inherits direction + scroll anchor), debug "−";
+  rows = commit circle + "pencil" + two stacked color squares exactly one text line tall;
+  branch rails + fork curves (VS Code-graph look), head ring; scrolling: at the graph's
+  end the view auto-follows, scrolled away it pins to the top visible node, removal
+  retargets pins FORWARD (backward as last resort; at-the-end windows keep following).
+  Old "History" window first-opens at the BOTTOM CENTER. View menu: "History Tree" toggle.
+  Not wired to any drawing/undo behavior — a read-only mirror, pencil strokes only.
+- **Files:** new `src/history_tree.rs`, `src/history_tree/tests.rs`, `src/app/tree_window.rs`;
+  `src/app.rs` (fields + stroke/undo/redo/reset hooks + View menu), `src/app/panels.rs`
+  (History first-open → bottom center), `src/app/placement.rs` (`WindowPlacement` gained
+  Clone+Copy), `src/main.rs` (`mod history_tree`), `PROGRESS.md`.
+- **Verified:** `bash scripts/verify.sh` — ALL GATES GREEN (rules: 0 hard violations; fmt
+  clean; clippy `-D warnings` clean; `cargo test --profile gates` 61 green = 49 + 12 new).
+  Headless smoke run under Xvfb + xdotool (screenshots reviewed, app log panic-free):
+  strokes append nodes; Ctrl+Z then a stroke forks with the old tail kept; redo returns
+  via the left-branch hint; Clone inherits direction + anchor; global layer switch resets
+  both windows; at-the-end auto-follow; scrolled-away pin holds through removals; removing
+  nodes keeps pinned windows consistent without jumping to the end; clone X removes it.
+- **Owner-checks:** `cargo run` on Windows — draw pencil strokes, Ctrl+Z/Y, Clone, layer
+  switch, direction toggle, debug "−"; confirm the scroll behavior feels right.
+  `src/app/tree_window.rs` is 607 lines — OVER the soft 500 guard; propose splitting the
+  graph painter into `src/app/tree_window/paint.rs` in a later task (needs owner's OK).
+- **Commit title:** `Add visual History Tree windows with pseudo-layers, clones and anchored scrolling; move History window to bottom center`
 
 ### 2026-11-11 — `Tooling:` Rust pinned via rust-toolchain.toml; unoptimized `gates` profile for gate runs — owner request
 

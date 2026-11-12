@@ -10,6 +10,9 @@
 //!                   (press–drag–release and polyline gestures, overlay
 //!                   preview, commit)
 //!   [`text_tool`] — owner request 2026-11-10: the Text tool input window
+//!   [`tree_window`] — owner request 2026-11-12: the visual "History Tree"
+//!                   windows (git-style graph per pseudo-layer, clones,
+//!                   anchored scrolling); the model lives in `history_tree`
 //!   [`windows`]   — §3.2/§3.3: the floating "Tools" and "Palette" windows
 //!
 //! Keep new subsystems as child modules instead of growing this file.
@@ -24,6 +27,7 @@ use crate::file_io;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::{WebOutcome, WebTask};
 use crate::history::{ActionLog, History};
+use crate::history_tree::HistoryTree;
 use crate::tools::{Tool, ToolState, draw_segment, pick_color};
 
 mod camera;
@@ -32,7 +36,10 @@ mod panels;
 mod placement;
 mod preview;
 mod text_tool;
+mod tree_window;
 mod windows;
+
+use self::tree_window::TreeView;
 
 use self::placement::{TOOLS_FIRST_OPEN_RATIO, WindowPlacement};
 use self::preview::PreviewState;
@@ -91,6 +98,9 @@ pub struct App {
     /// pending preview gesture or text entry (see `draw_canvas`).
     last_tool: Tool,
     history: History,
+    /// Visual mirror of pencil strokes per pseudo-layer (owner request
+    /// 2026-11-12) — model in `history_tree`, windows in `app/tree_window`.
+    history_tree: HistoryTree,
     zoom: f32,
     pan: Vec2,
     is_stroking: bool,
@@ -100,6 +110,15 @@ pub struct App {
     palette_window_open: bool,
     history_window_open: bool,
     layers_window_open: bool,
+    /// Visual "History Tree" windows (owner request 2026-11-12): view 0 is
+    /// the main window (shown while this flag is set), the rest are clones.
+    tree_window_open: bool,
+    tree_views: Vec<TreeView>,
+    /// How many clone windows have been created so far (id + cascade base).
+    tree_clones: usize,
+    /// Both tool colors captured at stroke START, recorded as one visual
+    /// node when the gesture completes (`tree_window`/`history_tree`).
+    stroke_colors: Option<(Color32, Color32)>,
     /// §3.11 placement state of the four floating windows (owner request
     /// 2026-11-11 added the History/Layers pair); the Tools one also carries
     /// the one-shot §3.2 first-open vertical ratio (40%/60%).
@@ -186,6 +205,7 @@ impl App {
             tools: ToolState::new(),
             last_tool: Tool::Pencil,
             history: History::new(),
+            history_tree: HistoryTree::new(),
             zoom: 1.0,
             pan: Vec2::ZERO,
             is_stroking: false,
@@ -195,6 +215,10 @@ impl App {
             palette_window_open: true,
             history_window_open: true,
             layers_window_open: true,
+            tree_window_open: true,
+            tree_views: vec![TreeView::main()],
+            tree_clones: 0,
+            stroke_colors: None,
             tools_placement: WindowPlacement::first_open_at_ratio(TOOLS_FIRST_OPEN_RATIO),
             palette_placement: WindowPlacement::default(),
             history_placement: WindowPlacement::default(),
@@ -294,6 +318,12 @@ impl App {
             self.repaint_full();
             self.dirty = true;
             self.action_log.push("Undo");
+            // Visual mirror (owner request 2026-11-12): the tree head steps
+            // back with every successful real undo. Caveat accepted for the
+            // prototype: the real history is one mixed snapshot stack, so a
+            // brush/eraser stroke interleaved with pencil strokes shifts it
+            // without the tree knowing — pencil-only sessions stay exact.
+            self.history_tree.on_undo();
         }
     }
 
@@ -304,6 +334,7 @@ impl App {
             self.repaint_full();
             self.dirty = true;
             self.action_log.push("Redo");
+            self.history_tree.on_redo();
         }
     }
 
@@ -402,6 +433,7 @@ impl App {
             self.is_stroking = false;
             self.last_pos = None;
             self.stroke_button = None;
+            self.stroke_colors = None;
             return;
         }
 
@@ -416,6 +448,17 @@ impl App {
         });
 
         if any_released {
+            // One completed gesture = one visual node (the design concept's
+            // tldraw-style mark); the prototype records PENCIL strokes only
+            // (owner request 2026-11-12). Colors were captured at stroke
+            // start — they are what the gesture actually painted with.
+            if self.is_stroking
+                && self.tools.tool == Tool::Pencil
+                && let Some((primary, secondary)) = self.stroke_colors.take()
+            {
+                self.history_tree.record_stroke(primary, secondary);
+            }
+            self.stroke_colors = None;
             self.is_stroking = false;
             self.last_pos = None;
             self.stroke_button = None;
@@ -440,6 +483,7 @@ impl App {
                 });
                 self.stroke_button = Some(button);
                 self.is_stroking = true;
+                self.stroke_colors = Some((self.tools.primary, self.tools.secondary));
                 let pos = self.canvas_pos(rect, cursor);
                 self.last_pos = Some(pos);
                 self.paint_segment(pos, pos);
@@ -466,6 +510,9 @@ impl App {
         let height = height.clamp(MIN_CANVAS, MAX_CANVAS);
         self.canvas = Canvas::new(width, height, Color32::WHITE);
         self.history.clear();
+        // New document: the visual trees reset the same way.
+        self.history_tree.reset();
+        self.reset_tree_views();
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.current_path = None;
@@ -507,6 +554,9 @@ impl App {
     fn apply_loaded(&mut self, loaded: file_io::LoadedImage) {
         self.canvas.set_pixmap(loaded.pixmap);
         self.history.clear();
+        // New document: the visual trees reset the same way.
+        self.history_tree.reset();
+        self.reset_tree_views();
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.current_path = Some(loaded.path);
@@ -700,6 +750,7 @@ impl App {
                     ui.separator();
                     ui.checkbox(&mut self.tools_window_open, "Tools");
                     ui.checkbox(&mut self.palette_window_open, "Palette");
+                    ui.checkbox(&mut self.tree_window_open, "History Tree");
                     ui.checkbox(&mut self.history_window_open, "History");
                     ui.checkbox(&mut self.layers_window_open, "Layers");
                 });
@@ -763,6 +814,8 @@ impl App {
             self.last_tool = self.tools.tool;
             self.cancel_preview();
             self.cancel_text_edit();
+            // A mid-gesture tool switch abandons the pending visual node.
+            self.stroke_colors = None;
         }
         let panning = self.handle_pan(ui, &response);
         let rect = self.canvas_rect(panel_rect);
@@ -851,6 +904,7 @@ impl eframe::App for App {
         self.palette_window(&ctx);
         self.history_window(&ctx);
         self.layers_window(&ctx);
+        self.tree_windows(&ctx);
         self.text_tool_window(&ctx);
         // Both windows must observe the resize before the tracker flips.
         self.last_content_rect = Some(ctx.content_rect());

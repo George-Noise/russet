@@ -32,20 +32,19 @@ impl App {
         }
         let mut open = true;
         let content = ctx.content_rect();
-        // First open: 0.5rem from the right edge and exactly 0.5rem below
-        // the "File Edit Canvas View Help" strip. `last_panel_rect` is the
-        // central panel's rect, whose top edge IS the menu bar's bottom
-        // (the no_frame central panel has zero margin), so the window's
-        // title sits just under the menu instead of covering it (owner
-        // request 2026-11-10). Afterwards the same §3.11 magnetism and
-        // resize repositioning as Tools/Palette (owner request 2026-11-11).
+        // First open (owner request 2026-11-12): the OLD History window now
+        // sits at the BOTTOM CENTER of the main window (the new "History
+        // Tree" took its old right-top spot). `CENTER_BOTTOM` pivot +
+        // `default_pos` anchor the bottom edge midpoint 0.5rem above the
+        // bottom edge. Afterwards the same §3.11 magnetism and resize
+        // repositioning as Tools/Palette (owner request 2026-11-11).
         let shown = egui::Window::new("History")
             .id(history_window_id())
             .open(&mut open)
-            .pivot(egui::Align2::RIGHT_TOP)
+            .pivot(egui::Align2::CENTER_BOTTOM)
             .default_pos(egui::pos2(
-                content.right() - FIRST_OPEN_GAP,
-                self.last_panel_rect.top() + FIRST_OPEN_GAP,
+                content.center().x,
+                content.bottom() - FIRST_OPEN_GAP,
             ))
             .default_width(200.0)
             .show(ctx, |ui| {

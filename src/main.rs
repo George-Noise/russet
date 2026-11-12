@@ -5,6 +5,7 @@ mod app;
 mod canvas;
 mod file_io;
 mod history;
+mod history_tree;
 mod palette;
 mod text;
 mod tools;

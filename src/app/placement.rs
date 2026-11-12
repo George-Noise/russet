@@ -46,8 +46,9 @@ const WINDOW_SNAP_DISTANCE: f32 = 2.0 * REM;
 pub(super) const TOOLS_FIRST_OPEN_RATIO: f32 = 0.4;
 
 /// Placement bookkeeping for one floating window ("Tools"/"Palette"/
-/// "History"/"Layers").
-#[derive(Default)]
+/// "History"/"Layers"/"History Tree"). `Copy` so a tree-window render pass
+/// can work on a local copy and write it back (see `app/tree_window.rs`).
+#[derive(Clone, Copy, Default)]
 pub(super) struct WindowPlacement {
     /// Rect of the last frame the window was shown.
     rect: Option<Rect>,
