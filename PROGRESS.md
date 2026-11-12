@@ -30,12 +30,20 @@
 | Extra: dependency approval flow (owner 2026-11-12) | done | AGENTS.md "Dependencies — approval flow" + SPEC §6 exception + CONTRIBUTING.md — the hard no-deps ban became propose → discuss → owner decides; no code touched |
 | Extra: opt-in MCP server (owner 2026-11-12) | done — 9 tools behind `mcp` | default build byte-identical graph (no serde_json/threads); `get_tree_layout` added 2026-11-13; verify.sh gates the feature |
 | Extra: History Tree windows (owner 2026-11-12) | done — lanes reworked 2026-11-13 | divergence-only forks, recency lanes, shared connector exits, per-row labels; MCP-driven scenarios + Xvfb screenshots green |
+| Extra: 500-guard splits (owner 2026-11-13) | done — pure code motion | `history_tree/layout.rs`, `tree_window/paint.rs`, `app/document.rs` + `menu.rs` + `input.rs`; app.rs 936 → ~440, every src file ≤ 500 |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 69 green; with `--features mcp` — clippy clean, 81 green (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux).
+`cargo test --profile gates` — 69 green; with `--features mcp` — clippy clean, 81 green (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; after the 2026-11-13 splits the size guard is fully green — every src file ≤ 500).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
+
+- 2026-11-13 — RESOLVED: the soft 500 guard kept flagging `app/tree_window.rs` (687) and
+  `history_tree.rs` (600). With the owner's approval both are split — painter →
+  `app/tree_window/paint.rs`, layout → `history_tree/layout.rs` — and, also on the owner's
+  request, the owner-exempt `app.rs` (936) was slimmed into `app/document.rs` + `app/menu.rs` +
+  `app/input.rs`. Pure code motion, re-exports keep the old paths, no behavior change; every
+  src file is ≤ ~440 lines now.
 
 - 2026-11-10 — RESOLVED: `src/tools.rs` was **679 lines**; moving its inline tests to
   `src/tools/tests.rs` (2026-11-10, PR rebase) brought it to ~430 lines, so the proposed
@@ -49,6 +57,33 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   (see the exception in AGENTS.md "Repo facts").
 
 ## Log — newest first. Insert a new entry directly under this heading.
+
+### 2026-11-13 — `Refactor:` split the 500-guard files and slim app.rs into child modules — owner request
+
+- **What:** ALL pure code motion, zero behavior change, consumer paths preserved.
+  (1) `history_tree.rs` 600 → 350: `Row`/`BranchSpan`/`TreeLayout` + `layout_layer` moved to
+  child `history_tree/layout.rs` (281) and re-exported, so `tree_window.rs`, the MCP tools and
+  `tests.rs` keep the `history_tree::` paths untouched. (2) `app/tree_window.rs` 687 → 433:
+  the painter + `GraphMetrics` + geometry constants + palette moved to child
+  `app/tree_window/paint.rs` (269); the parent keeps windows/clones/scroll bookkeeping.
+  (3) `app.rs` 936 → 439 (owner request "сделай app.rs меньше"): document lifecycle
+  (New/Open/Save, unsaved-changes gate, window title) → `app/document.rs`; top menu bar →
+  `app/menu.rs`; hotkeys + freehand strokes + Eyedropper → `app/input.rs`. `app.rs` keeps App
+  state, frame flow, undo/redo, canvas widget, texture sync. LLM navigation guarded: every new
+  module's doc states what it owns and what its neighbours own; the module map at the top of
+  `app.rs` lists all 12 child modules; cross-module methods are `pub(super)` with caller notes.
+- **Files:** NEW `src/history_tree/layout.rs`, `src/app/tree_window/paint.rs`,
+  `src/app/document.rs`, `src/app/menu.rs`, `src/app/input.rs`; trimmed `src/history_tree.rs`,
+  `src/app/tree_window.rs`, `src/app.rs`; `src/app/dialogs.rs` (one import now points at
+  `document`); docs synced: AGENTS.md (module split, cfg rule, app.rs exception note), SPEC §2
+  + §3.10, PERF.md path mentions, PROGRESS.md.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default, 81 with
+  `--features mcp`; rules.sh reports the size guard fully green for the first time since the
+  tree landed (no file over 500).
+- **Owner-checks:** `cargo run` must behave exactly as before (menu, hotkeys, undo/redo, tree
+  windows, MCP badge) — nothing was supposed to change; skim the module map at the top of
+  `app.rs` and say if the grouping reads well.
+- **Commit title:** `Split the guarded files and slim app.rs into layout/painter/document/menu/input child modules`
 
 > Budget: ≤ ~20 lines per entry, fixed fields (What / Files / Verified / Owner-checks /
 > Commit title); durable facts move to their canonical home in the same edit (AGENTS.md

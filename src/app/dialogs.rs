@@ -5,7 +5,8 @@
 
 use eframe::egui::{self, Context};
 
-use super::{App, MAX_CANVAS, MIN_CANVAS, PendingAction};
+use super::App;
+use super::document::{MAX_CANVAS, MIN_CANVAS, PendingAction};
 
 impl App {
     pub(super) fn new_dialog(&mut self, ctx: &Context) {

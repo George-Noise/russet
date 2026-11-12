@@ -23,7 +23,8 @@ a suggested order.
    Desired behavior must be reachable with the existing `eframe` / `tiny-skia` / `image` / `rfd`.
 4. **Tests follow `AGENTS.md` "Tests":** one `<module>/tests.rs` per module, `#[cfg(test)] mod
    tests;` in the source, never inline test modules, never widen visibility for a test.
-5. **Platform branches:** only `main.rs` / `file_io.rs` (+ call sites in `app.rs`), `cfg!()` macros
+5. **Platform branches:** only `main.rs` / `file_io.rs` (+ call sites in `app.rs` /
+   `app/document.rs`), `cfg!()` macros
    rather than `#[cfg]` attributes, unless you are editing `Cargo.toml` under P4.
 6. **Verify every task:** `bash scripts/verify.sh` (fmt + clippy + test + size report). For perf
    tasks also re-measure and record numbers (§1).
@@ -171,7 +172,7 @@ never shrinks, so every transient peak is permanent there.
     pixels. Add `Canvas::write_region(x, y, w, h, &[u8])` (row-wise copy, premultiplied).
   - A stroke record = ordered list of `(rect, before: Vec<u8>, after: Vec<u8>)`. Capture `before`
     immediately before each `draw_segment`, `after` immediately after, append to the open stroke.
-  - `app.rs::handle_stroke`: replace `history.push_snapshot(canvas.pixmap().clone())` with
+  - `app/input.rs::handle_stroke`: replace `history.push_snapshot(canvas.pixmap().clone())` with
     `history.begin_stroke()` on mouse-down and `history.commit_stroke()` on mouse-up; a click that
     paints nothing must not commit an empty record.
   - `undo`/`redo` walk patches in reverse/forward order and call `write_region`; they no longer
@@ -220,8 +221,9 @@ never shrinks, so every transient peak is permanent there.
 
 - **Ask first:** "Cap web canvases at 2048 px and/or the web history at 64 MB?" This changes what
   users can do on the web, so it needs an explicit yes and a SPEC note.
-- **Do:** use `cfg!(target_arch = "wasm32")` at the `History`/`MAX_CANVAS` call sites in `app.rs`
-  (no new `#[cfg]` attributes outside `main.rs`/`file_io.rs`).
+- **Do:** use `cfg!(target_arch = "wasm32")` at the `History`/`MAX_CANVAS` call sites in `app.rs` /
+  `app/document.rs`
+  (no new `#[cfg]` attributes outside `main.rs`/`file_io.rs`/`app/document.rs`).
 - **Effect:** a 4096×4096 web session is ~405 MB today; a 2048 cap makes the worst case ~16 MB
   pixmap + ~64 MB history.
 - **Verify:** tests; browser smoke test at the cap.

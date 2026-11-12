@@ -106,14 +106,17 @@ every tested module; they are not listed anywhere.
 
 Mandatory top-level modules: `main` (TWO entry points: native `run_native` and web
 `WebRunner`; template in §2.1), `app` (`struct App` — all state; the ORCHESTRATOR: frame
-flow, hotkeys, strokes, file glue, menu, canvas widget), `canvas` (pixel buffer, resize,
+flow, undo/redo, the canvas widget, texture sync), `canvas` (pixel buffer, resize,
 pixel access), `tools` (enum Tool, struct ToolState, stroke rasterization), `history`
-(snapshot-based undo/redo), `file_io` (open/save PNG/JPEG; the ONLY place with native/web
-cfg branches), `palette` (fixed array of 34 preset colors, 2 rows × 17), `text` (text
+(snapshot-based undo/redo), `file_io` (open/save PNG/JPEG; native/web cfg branches live
+only here, in `app/document.rs` and at `app.rs` call sites — §3.10), `palette` (fixed
+array of 34 preset colors, 2 rows × 17), `text` (text
 rasterization through egui's font atlas). Cohesive subsystems are CHILD modules of `app`
 in `app/` — they see App's private fields; new subsystems are added there, never grown
-into `app.rs` (current ones: viewport/camera, dialogs, floating windows, §3.11 placement,
-preview gestures, text tool, panels). Root web config: `Trunk.toml` targets
+into `app.rs` (current ones: viewport/camera, dialogs, document lifecycle, input
+handling, top menu, floating windows, §3.11 placement, preview gestures, text tool,
+panels, History Tree windows, feature-gated MCP server; see the module map at the top
+of `app.rs`). Root web config: `Trunk.toml` targets
 `web/index.html` → `dist/` (§2.2). `PERF.md` is the RAM / build-speed reference backlog —
 a design note, not a spec.
 
@@ -357,7 +360,9 @@ Implementation: via `ctx.input_mut(|i| i.consume_key(...))` and modifiers; **mus
   - Open: `AsyncFileDialog::new().add_filter("Images", ["png","jpg","jpeg"]).pick_file().await` → `file.read().await` (bytes) → `image::load_from_memory`.
   - Save: `AsyncFileDialog::new().add_filter(...).set_file_name(&display_name).save_file().await` → `handle.write(bytes).await` — the browser downloads the file. `current_path` is not used on web.
 - The async result is placed into `Arc<Mutex<Option<Result<LoadedImage, String>>>>`, then `ctx.request_repaint()` is called after completion; the App retrieves the result on the next frame. Use `spawn_local` from `wasm_bindgen_futures`.
-- Platform cfg branches are allowed only in `file_io.rs` and at call sites in `app.rs`; the rest of the code knows nothing about the platform.
+- Platform cfg branches are allowed only in `file_io.rs`, at call sites in `app.rs`, and in
+  `app/document.rs` (the New/Open/Save glue, split off `app.rs` 2026-11-13); the rest of the code
+  knows nothing about the platform.
 - Exit is not shown in the menu on web; do NOT add beforeunload protection against closing the tab (§6).
 
 ### 3.11 Floating-window placement: drop-time edge anchoring and resize repositioning
