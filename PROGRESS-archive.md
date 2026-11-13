@@ -31,6 +31,63 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `Feat:` real layers + per-node PNG history + node-dot switching — owner request ("кусок большой фичи")
+
+- **What:** owner's staged rollout of the history design, decisions fixed in chat:
+  ALL tools record nodes; fork-after-jump git-style; Start root; no node limit;
+  ALL layers transparent; Resize KEEPS nodes (old PNGs crop/pad-fitted on restore,
+  per his wording). (1) NEW top-level `layers.rs` (+tests): `Layer`/`LayerStack`,
+  lossless fast PNG snapshots (`image` crate `CompressionType::Fast` — roundtrip
+  bit-exact, no new deps), `fit_to_canvas`, premultiplied region composite. (2)
+  `history_tree.rs` became the REAL per-layer DAG (`LayerTree` owned by each layer;
+  ids from one document counter); the 20-snapshot stack in `history.rs` is GONE
+  (only `ActionLog` remains). (3) Canvas = composite display buffer; gestures paint
+  the ACTIVE layer; undo/redo/jump restore from the head's PNG. (4) Layers window:
+  select/rename/visibility/reorder/delete-with-confirm; the tree-window switcher is
+  now a passive label. (5) History Tree windows: LEFT-click a node DOT (not the
+  label) switches the canvas; debug "-" also restores pixels. (6) MCP: tools work on
+  real layers, `add_stroke` records a node. NEW debts F8 (no eviction), F9 (resize
+  interim policy), F10 (undo on the active layer only); F1+F4 paid; V13 born.
+- **Files:** NEW `src/layers.rs`, `src/layers/tests.rs`, `src/history_tree/tests/layout.rs`;
+  rewritten `src/history_tree.rs` (+tests), `src/history.rs` (+tests), `src/app.rs`,
+  `src/app/{input,preview,text_tool,dialogs,document,panels,menu}.rs`,
+  `src/app/tree_window.rs` + `paint.rs`, `src/app/mcp/tools.rs` (+tests), `src/main.rs`
+  (+`mod layers`); docs: SPEC §1/§3.6/§6, AGENTS.md module map, DEBTS-*.md, PROGRESS.md.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 78 tests default, 90 with
+  `--features mcp`; baseline was green before edits (rules.sh + fmt). The GUI could
+  NOT be run in this sandbox (no libxkbcommon-x11, no root — even headless start
+  panics), so no Xvfb/MCP-smoke pass this round; the mcp-gated compile+tests cover
+  the wiring frame-free.
+- **Owner-checks:** V13 click-through (layers ops, node-dot switching, fork after
+  old-node draw, resize-fitted restore, Save composite); say the word if your remark
+  "cargo run отлично работает" closes V4/V7.
+- **Commit title:** `Add real layers, per-node PNG history trees and node-dot canvas switching`
+
+---
+
+### 2026-11-13 — `Docs:` first debt-triage round — owner answered the batched V/F list
+
+- **What:** owner dispositions applied to the two debt files; zero code change.
+  Verified via chat: V1, V2, V3, V11 (Windows tool/UX/About checks), V5+V6 (History
+  Tree — "руками потрогал, устраивает"; later improvements = new tasks), V12 (docs
+  skimmed, dev stable). Closed as not-a-debt: V10 (owner builds on Nix periodically
+  himself), F6 (line-cap circles fine for now), F7 (popup shadow stays). Parked by
+  the owner, stay open: V8 (no Windows MCP pass for now), V9 (no web checks soon).
+  Awaiting a one-word answer after a plain-words explanation: V4 (one `cargo run`
+  after the toolchain pin + `gates` profile) and V7 (`cargo run` after the file
+  splits — nothing was supposed to change). Open tables: V 12 → 4, F 7 → 5.
+- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `PROGRESS.md` (stale
+  "two 2026-11-10 entries" note removed — V1/V2 verified; the 2026-11-12 MCP entry
+  → PROGRESS-archive.md, the Log keeps the newest 5).
+- **Verified:** docs-only edit (AGENTS.md "Docs/comment-only edits" — no cargo run):
+  rules.sh green — PROGRESS.md and Log under budget, no parked RESOLVED warnings,
+  5 live owner-check lines in the Log; `cargo fmt --check` clean.
+- **Owner-checks:** say the word on V4 and V7 (explained in chat) — one word each
+  closes them; V8/V9 stay parked until you plan those checks; F1–F5 unchanged.
+- **Commit title:** `Docs: first debt triage — verify V1-V3 V5 V6 V11 V12, close V10 F6 F7, park V8 V9`
+
+---
+
 ### 2026-11-13 — `Refactor:` split the 500-guard files and slim app.rs into child modules — owner request
 
 - **What:** ALL pure code motion, zero behavior change, consumer paths preserved.
