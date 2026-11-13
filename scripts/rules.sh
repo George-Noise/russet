@@ -24,6 +24,11 @@
 #      Warnings section, and list the live log entries that still carry
 #      owner checks — the open items must be surfaced and asked about (see
 #      DEBTS-verification.md / DEBTS-functional.md).
+#   6. Commit-title reminder (owner request 2026-11-13: the suggested title
+#      was repeatedly left out of the final chat reply): print the newest
+#      log entry's `Commit title:` field so the done-gate hands the exact
+#      string to state verbatim in the reply (AGENTS.md "Delivery ritual");
+#      warn when the field is missing.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -98,6 +103,22 @@ else
     owner_checks=$(awk '/^## Log/{flag=1; next} flag' PROGRESS.md | grep -cE 'Owner-checks:|Owner must check:' || true)
     echo "Live log entries still carrying owner checks: $owner_checks"
     echo "REMINDER: ask the owner which are human-verified; the live list is DEBTS-verification.md"
+    commit_title=$(awk '
+        /^## Log/ { inlog = 1 }
+        inlog && /^### / { entry = 1 }
+        entry && /^- \*\*Commit title:\*\*/ {
+            sub(/^- \*\*Commit title:\*\*[ \t]*/, "")
+            gsub(/`/, "")
+            print
+            exit
+        }
+    ' PROGRESS.md)
+    if [ -n "$commit_title" ]; then
+        echo "Commit title of the newest log entry: $commit_title"
+        echo "REMINDER: state this commit title VERBATIM in the final chat reply (AGENTS.md \"Delivery ritual\")"
+    else
+        echo "STALE: the newest log entry has no **Commit title:** field — fill it in before delivering"
+    fi
 fi
 
 if [ "$hard_fail" -ne 0 ]; then

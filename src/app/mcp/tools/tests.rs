@@ -1,7 +1,12 @@
+use super::edits::{apply_stroke, parse_hex_color, parse_points};
+use super::queries::base64;
 use super::*;
-use crate::layers::decode_snapshot;
+use crate::history::ActionLog;
+use crate::history_tree::{LayerTree, NodeId};
+use crate::layers::{decode_snapshot, encode_snapshot};
+use eframe::egui::{Color32, Pos2};
 use serde_json::Value;
-use tiny_skia::Color;
+use tiny_skia::{Color, Pixmap};
 
 #[test]
 fn parse_points_reads_xy_pairs() {

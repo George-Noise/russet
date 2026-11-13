@@ -34,12 +34,14 @@
 | Extra: agent workflow v2 (owner 2026-11-13) | done | DEBTS-verification.md + DEBTS-functional.md debt lists; rules.sh PROGRESS budget check; baseline-before-edits rule; CI runs the mcp gates; visual_driver.py rewritten as the scenario runner |
 | Extra: REAL layers + per-node PNG history (owner 2026-11-13) | done — gates green | pays F1+F4: interactive Layers window, per-layer git-style trees whose nodes carry full fast-PNG canvases, node-dot LEFT-click switching; SPEC §3.6 rewritten; GUI click-through = V13 (owner) |
 | Extra: headless-GUI sandbox recipe (owner 2026-11-13) | done — driver all green headless | `SANDBOX.md` + `scripts/gui_recipe_test.sh`: raw Xvfb + two user-space .debs, no root; MCP `add_layer` added (10 tools); visual_driver.py 3/3 scenarios green in-sandbox; V13 narrowed to pointer feel |
+| Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title at every done-gate; AGENTS.md Delivery ritual requires it verbatim in the reply |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 78 green; with `--features mcp` — clippy clean, 90 green
 (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500 lines;
 rules.sh reports the PROGRESS.md/Log budgets — green; the GUI runs headless in this sandbox per
-`SANDBOX.md` — visual_driver.py 3/3 scenarios, 14 checks green; V13 remains the owner's pointer-feel check).
+`SANDBOX.md` — visual_driver.py 3/3 scenarios, 14 checks green, re-proven after the mcp/tools
+split; V13 remains the owner's pointer-feel check).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -55,6 +57,29 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-13 — `Refactor:` mcp/tools split into themed modules + commit-title delivery ritual — owner request (3 chat items)
+
+- **What:** (1) `mcp/tools.rs` (499, guard at 500) split PURE CODE MOTION, style of the earlier
+  splits: the root keeps the MAP of the surface — dispatch `tool_call` + `tool_declarations` +
+  reply glue (`tool_text`/`tool_error`/`hex_color`) — 157 lines; handlers themed into
+  `tools/queries.rs` (read-only: layers/trees/layout/snapshot/export, 200) and `tools/edits.rs`
+  (mutating: stroke/undo/redo/add_layer/set_active_layer + frame-free pure helpers, 177).
+  Adding a tool = one dispatch arm + one declaration in the root, one themed handler. LLM
+  navigation guarded: both children's docs state what they own; `pub(super)` with caller notes;
+  `tests.rs` imports the moved helpers explicitly. (2) Commit-title ritual: rules.sh rule 6
+  prints the newest entry's Commit title as a REMINDER at every done-gate — it fires exactly
+  before the final reply is composed; AGENTS.md "Delivery ritual" requires the reply to carry
+  it verbatim (owner: missed repeatedly).
+- **Files:** split `src/app/mcp/tools.rs` → NEW `src/app/mcp/tools/queries.rs`,
+  `src/app/mcp/tools/edits.rs`; `src/app/mcp/tools/tests.rs` (imports); `scripts/rules.sh`
+  (rule 6); `AGENTS.md` (Delivery ritual); PROGRESS.md (entry + archive move + snapshot).
+- **Verified:** verify.sh ALL GATES GREEN — 78 default / 90 mcp; visual_driver.py headless
+  3/3 scenarios, 14 checks green AFTER the split (pure motion proven); rules.sh self-test
+  prints the title.
+- **Owner-checks:** skim `tools.rs` — does the root-as-map layout read well (same ask as V7);
+  the ritual wording in AGENTS.md.
+- **Commit title:** `Split MCP tools into a root map plus queries/edits modules and enforce the commit-title ritual`
 
 ### 2026-11-13 — `Tooling:` headless-GUI recipe — the sandbox CAN run the GUI after all — owner request ("запиши опыт в .md")
 
@@ -157,30 +182,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** answer the batched debt questions (V1–V12, F-decisions) —
   first live run of the ask-don't-accumulate rule; skim the DEBTS wording.
 - **Commit title:** `Add DEBTS files and PROGRESS budget check; baseline rule; CI mcp gates; scenario driver`
-
-### 2026-11-13 — `Refactor:` split the 500-guard files and slim app.rs into child modules — owner request
-
-- **What:** ALL pure code motion, zero behavior change, consumer paths preserved.
-  (1) `history_tree.rs` 600 → 350: `Row`/`BranchSpan`/`TreeLayout` + `layout_layer` moved to
-  child `history_tree/layout.rs` (281) and re-exported, so `tree_window.rs`, the MCP tools and
-  `tests.rs` keep the `history_tree::` paths untouched. (2) `app/tree_window.rs` 687 → 433:
-  the painter + `GraphMetrics` + geometry constants + palette moved to child
-  `app/tree_window/paint.rs` (269); the parent keeps windows/clones/scroll bookkeeping.
-  (3) `app.rs` 936 → 439 (owner request "сделай app.rs меньше"): document lifecycle
-  (New/Open/Save, unsaved-changes gate, window title) → `app/document.rs`; top menu bar →
-  `app/menu.rs`; hotkeys + freehand strokes + Eyedropper → `app/input.rs`. `app.rs` keeps App
-  state, frame flow, undo/redo, canvas widget, texture sync. LLM navigation guarded: every new
-  module's doc states what it owns and what its neighbours own; the module map at the top of
-  `app.rs` lists all 12 child modules; cross-module methods are `pub(super)` with caller notes.
-- **Files:** NEW `src/history_tree/layout.rs`, `src/app/tree_window/paint.rs`,
-  `src/app/document.rs`, `src/app/menu.rs`, `src/app/input.rs`; trimmed `src/history_tree.rs`,
-  `src/app/tree_window.rs`, `src/app.rs`; `src/app/dialogs.rs` (one import now points at
-  `document`); docs synced: AGENTS.md (module split, cfg rule, app.rs exception note), SPEC §2
-  + §3.10, PERF.md path mentions, PROGRESS.md.
-- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default, 81 with
-  `--features mcp`; rules.sh reports the size guard fully green for the first time since the
-  tree landed (no file over 500).
-- **Owner-checks:** `cargo run` must behave exactly as before (menu, hotkeys, undo/redo, tree
-  windows, MCP badge) — nothing was supposed to change; skim the module map at the top of
-  `app.rs` and say if the grouping reads well.
-- **Commit title:** `Split the guarded files and slim app.rs into layout/painter/document/menu/input child modules`

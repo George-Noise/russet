@@ -133,6 +133,8 @@ The owner applies the work locally, so every finished round ships the project as
 
 Before calling the delivery ready: with git, apply the patch onto a clean copy of the base commit and byte-compare the result with the working tree AND with the unpacked zip — all three must match; without git, byte-compare the unpacked zip with the working tree. Always regenerate the artifacts in the same session as the changes — never re-send an artifact from an earlier round. Print the sizes and sha256 checksums of the delivered files so the owner can verify the download.
 
+The final chat reply MUST state the suggested commit title verbatim (owner request 2026-11-13: it was repeatedly left out). Copy it from the newest PROGRESS.md log entry's `Commit title:` field — rules.sh prints it as a REMINDER at every done-gate, so the last verify.sh run hands over the exact string. If the delivery covers several rounds, list every round's title; if a round is docs-only and adds no log entry, say that no commit title is proposed.
+
 ## Commands
 
 - Baseline at session start, BEFORE any edit (owner policy 2026-11-13): `bash scripts/rules.sh` and

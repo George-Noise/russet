@@ -31,6 +31,35 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `Refactor:` split the 500-guard files and slim app.rs into child modules — owner request
+
+- **What:** ALL pure code motion, zero behavior change, consumer paths preserved.
+  (1) `history_tree.rs` 600 → 350: `Row`/`BranchSpan`/`TreeLayout` + `layout_layer` moved to
+  child `history_tree/layout.rs` (281) and re-exported, so `tree_window.rs`, the MCP tools and
+  `tests.rs` keep the `history_tree::` paths untouched. (2) `app/tree_window.rs` 687 → 433:
+  the painter + `GraphMetrics` + geometry constants + palette moved to child
+  `app/tree_window/paint.rs` (269); the parent keeps windows/clones/scroll bookkeeping.
+  (3) `app.rs` 936 → 439 (owner request "сделай app.rs меньше"): document lifecycle
+  (New/Open/Save, unsaved-changes gate, window title) → `app/document.rs`; top menu bar →
+  `app/menu.rs`; hotkeys + freehand strokes + Eyedropper → `app/input.rs`. `app.rs` keeps App
+  state, frame flow, undo/redo, canvas widget, texture sync. LLM navigation guarded: every new
+  module's doc states what it owns and what its neighbours own; the module map at the top of
+  `app.rs` lists all 12 child modules; cross-module methods are `pub(super)` with caller notes.
+- **Files:** NEW `src/history_tree/layout.rs`, `src/app/tree_window/paint.rs`,
+  `src/app/document.rs`, `src/app/menu.rs`, `src/app/input.rs`; trimmed `src/history_tree.rs`,
+  `src/app/tree_window.rs`, `src/app.rs`; `src/app/dialogs.rs` (one import now points at
+  `document`); docs synced: AGENTS.md (module split, cfg rule, app.rs exception note), SPEC §2
+  + §3.10, PERF.md path mentions, PROGRESS.md.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default, 81 with
+  `--features mcp`; rules.sh reports the size guard fully green for the first time since the
+  tree landed (no file over 500).
+- **Owner-checks:** `cargo run` must behave exactly as before (menu, hotkeys, undo/redo, tree
+  windows, MCP badge) — nothing was supposed to change; skim the module map at the top of
+  `app.rs` and say if the grouping reads well.
+- **Commit title:** `Split the guarded files and slim app.rs into layout/painter/document/menu/input child modules`
+
+---
+
 ### 2026-11-12 — `Feat:` opt-in MCP stdio server behind the `mcp` feature — owner request
 
 - **What:** a JSON-RPC 2.0 stdio server for agent-driven development, compiled ONLY
