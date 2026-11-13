@@ -106,9 +106,11 @@ every tested module; they are not listed anywhere.
 
 Mandatory top-level modules: `main` (TWO entry points: native `run_native` and web
 `WebRunner`; template in §2.1), `app` (`struct App` — all state; the ORCHESTRATOR: frame
-flow, undo/redo, the canvas widget, texture sync), `canvas` (pixel buffer, resize,
-pixel access), `tools` (enum Tool, struct ToolState, stroke rasterization), `history`
-(snapshot-based undo/redo), `file_io` (open/save PNG/JPEG; native/web cfg branches live
+flow, undo/redo, the canvas widget, texture sync), `canvas` (the COMPOSITE display
+buffer: visible layers blended, resize, pixel access), `tools` (enum Tool, struct
+ToolState, stroke rasterization), `history` (the read-only `ActionLog` convenience
+view), `layers` (REAL layers: buffers, per-layer PNG-snapshot history trees,
+composite — owner request 2026-11-13), `file_io` (open/save PNG/JPEG; native/web cfg branches live
 only here, in `app/document.rs` and at `app.rs` call sites — §3.10), `palette` (fixed
 array of 34 preset colors, 2 rows × 17), `text` (text
 rasterization through egui's font atlas). Cohesive subsystems are CHILD modules of `app`
@@ -311,13 +313,39 @@ Segment rasterization — in `tools.rs`. Brush and eraser: via `tiny-skia` (`Pat
 
 Coordinate limits: segment points — `f32` in canvas space; clip to `0..width`, `0..height` on the rasterization side (clip the segment or rely on `tiny-skia` bounds checks — at the agent's discretion, but without panics and without going outside the `Pixmap`).
 
-### 3.6 Undo / Redo
+### 3.6 Undo / Redo — per-layer history trees (owner request 2026-11-13)
 
-- A snapshot (the whole `Pixmap`) is pushed to history **before the start of every stroke** and **before changing the canvas size**.
-- History limits: 20 snapshots and a total of ≤ 256 MiB (`width*height*4` per snapshot); on overflow, remove the oldest.
-- A new snapshot clears redo. Open and New **reset history completely**.
-- Undo restores the snapshot; the canvas texture is then updated in full (`set`), not `set_partial`.
-- Undo/redo with empty history — no-op, no panics.
+The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the stack,
+`history_tree.rs` the DAG); the prototype's 20-snapshot stack is gone.
+
+- Every completed drawing gesture is ONE node on the ACTIVE layer's tree: pencil/brush/
+  eraser strokes and the Line/Curve/Shape/Text commits. A node carries the action kind,
+  the ONE stroke color and a full PNG snapshot of the layer's canvas AFTER the action
+  (lossless fast-compressed PNG in RAM, `layers::encode_snapshot`, image crate
+  `CompressionType::Fast`; the roundtrip is bit-exact, so no rebuild exists yet —
+  actions arrive later).
+- Each tree has a permanent **Start root** whose snapshot is the layer's initial canvas:
+  undo past the first stroke lands on it, and clicking it restores the initial canvas.
+- Undo (Ctrl+Z) / redo (Ctrl+Shift+Z, Ctrl+Y) / the Edit menu / the MCP `undo`/`redo`
+  tools move the head one node on the ACTIVE layer's tree and restore the pixels from
+  the target node's PNG (full texture update, `set`, not `set_partial`). Redo follows
+  the "last left branch" rule: the child the last undo left, else the first-created
+  child. No-ops (Start root, no children) never panic.
+- LEFT-clicking a node's DOT in a History Tree window (the label is never a click
+  target) jumps the head there and shows that node's canvas; drawing right after forks
+  the tree git-style — the abandoned tail stays and stays reachable.
+- No node-count limit at this stage (owner decision 2026-11-13): the PNG compression
+  keeps memory small; eviction-by-memory arrives together with the action model.
+- **Resize Canvas keeps every node** (owner decision 2026-11-13, an interim answer to
+  the design doc's open question #9): layer buffers crop/pad to the new size
+  (top-left anchored); old node PNGs keep their original size and are fitted (crop/
+  pad) when restored; drawing on from a fitted node stores the NEXT node at the new
+  size.
+- Open and New rebuild the layer stack (history restarts). Save writes the COMPOSITE
+  of all visible layers as one PNG/JPEG.
+- The debug "-" button of the History Tree windows removes the head node (refused on
+  the Start root); its children reattach to the grandparent and keep their snapshots.
+- The read-only "History" log window is a convenience view, unchanged.
 
 ### 3.7 Files: New / Open / Save / Save As
 
@@ -451,7 +479,7 @@ Layers; selection and moving fragments; text; shapes (line/rectangle/ellipse); f
 
 Exception (owner decision, 2026-11-09): `flake.nix` for building and running the app on **Linux** (Wayland/X11, `nix build` / `nix run` / `nix develop`) is part of the repo and must be kept in sync with `Cargo.toml` (deps, binary name, runtime dlopen libs). This does not re-enable anything else from this list.
 
-Exception (owner request, 2026-11-10): the owner explicitly ordered deliberately simple first iterations of the following §6 items, to be reworked later — **Eyedropper** (canvas picking only), **Line/Curve tool**, **Shapes** (rectangle + ellipse), **Text** (font size only), a **non-clickable action-history log** window, and a **Layers placeholder window** (single implicit layer). New hotkeys `I`/`L`/`U`/`T` (§3.9); no new dependencies; no new `#[cfg]` platform branches. Implemented behavior is described in `PROGRESS.md` (2026-11-10 entry), which is the source of truth for these provisional features until they are formally specified. This does not re-enable anything else from the list.
+Exception (owner request, 2026-11-10): the owner explicitly ordered deliberately simple first iterations of the following §6 items, to be reworked later — **Eyedropper** (canvas picking only), **Line/Curve tool**, **Shapes** (rectangle + ellipse), **Text** (font size only), and a **non-clickable action-history log** window. The **Layers placeholder** left this list on 2026-11-13: REAL layers + the per-layer PNG-snapshot history trees are specified in §3.6 and implemented (`layers.rs`); the History Tree windows switch canvases by node-dot click. New hotkeys `I`/`L`/`U`/`T` (§3.9); no new dependencies; no new `#[cfg]` platform branches. Implemented behavior of the remaining provisional features is described in `PROGRESS.md` (the 2026-11-10 entry), which is the source of truth for them until they are formally specified. This does not re-enable anything else from the list.
 
 Exception (owner decision, 2026-11-12): the flat "any new dependencies" item moves from a hard ban to the approval flow in AGENTS.md ("Dependencies — approval flow"): the agent stops and proposes the need, the candidate crates with trade-offs, the no-dependency alternative and a recommendation; the owner decides. Nothing is pre-approved by this exception, and every other §6 item stays out of scope.
 

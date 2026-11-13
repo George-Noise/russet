@@ -100,13 +100,18 @@ impl App {
         if ok {
             let width = self.resize_width.round() as u32;
             let height = self.resize_height.round() as u32;
-            self.history.push_snapshot(self.canvas.pixmap().clone());
             self.canvas.resize_canvas(width, height);
+            // Owner decision 2026-11-13 ("keep the nodes"): the layer
+            // buffers crop/pad to the new size while every node PNG keeps
+            // its original size — switching to an old node shows the fitted
+            // (cropped/padded) image, and drawing continues from that
+            // fitted state, so the NEXT node is stored at the new size.
+            self.layers.resize_all(width, height);
             // Pending gestures reference canvas coordinates that may no
-            // longer be meaningful — drop them together with the snapshot.
+            // longer be meaningful — drop them.
             self.cancel_preview();
             self.cancel_text_edit();
-            self.repaint_full();
+            self.refresh_composite();
             self.dirty = true;
             self.action_log
                 .push(format!("Canvas resized to {width}×{height}"));

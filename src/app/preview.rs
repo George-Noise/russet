@@ -10,6 +10,7 @@ use eframe::egui::{
 };
 use std::f32::consts::TAU;
 
+use crate::history_tree::ActionKind;
 use crate::tools::{LineMode, ShapeKind, Tool, rasterize_polyline, rasterize_shape};
 
 use super::App;
@@ -243,7 +244,9 @@ impl App {
         }
     }
 
-    /// Commits a finished drag: straight line, rectangle or ellipse.
+    /// Commits a finished drag: straight line, rectangle or ellipse. The
+    /// committed pixels land on the ACTIVE layer and the post-commit
+    /// buffer becomes the node's PNG snapshot (owner request 2026-11-13).
     fn commit_drag(
         &mut self,
         kind: DragKind,
@@ -259,13 +262,18 @@ impl App {
                     return;
                 };
                 // A click without movement draws a dot (round cap).
-                self.history.push_snapshot(self.canvas.pixmap().clone());
-                let dirty =
-                    rasterize_polyline(self.canvas.pixmap_mut(), &[start, current], width, color);
+                let dirty = rasterize_polyline(
+                    self.layers.active_mut().pixmap_mut(),
+                    &[start, current],
+                    width,
+                    color,
+                );
                 if let Some(dirty) = dirty {
+                    self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
                     self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
                     self.dirty = true;
                 }
+                self.record_active_action(ActionKind::Line, color);
                 self.action_log.push("Line");
             }
             DragKind::Shape(shape_kind) => {
@@ -273,9 +281,8 @@ impl App {
                     ShapeKind::Rectangle => "Rectangle",
                     ShapeKind::Ellipse => "Ellipse",
                 };
-                self.history.push_snapshot(self.canvas.pixmap().clone());
                 let dirty = rasterize_shape(
-                    self.canvas.pixmap_mut(),
+                    self.layers.active_mut().pixmap_mut(),
                     shape_kind,
                     start,
                     current,
@@ -284,9 +291,12 @@ impl App {
                     fill,
                 );
                 if let Some(dirty) = dirty {
+                    self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
                     self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
                     self.dirty = true;
                 }
+                let color = outline.or(fill).unwrap_or(self.tools.primary);
+                self.record_active_action(ActionKind::Shape, color);
                 self.action_log.push(label);
             }
         }
@@ -309,12 +319,14 @@ impl App {
         if points.is_empty() {
             return;
         }
-        self.history.push_snapshot(self.canvas.pixmap().clone());
-        let dirty = rasterize_polyline(self.canvas.pixmap_mut(), &points, width, color);
+        let dirty =
+            rasterize_polyline(self.layers.active_mut().pixmap_mut(), &points, width, color);
         if let Some(dirty) = dirty {
+            self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
             self.dirty = true;
         }
+        self.record_active_action(ActionKind::Line, color);
         self.action_log.push("Curve");
     }
 

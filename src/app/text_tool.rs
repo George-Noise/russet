@@ -148,8 +148,8 @@ impl App {
         }
     }
 
-    /// Rasterizes the buffered text at the anchor (snapshot first), then
-    /// closes the input window.
+    /// Rasterizes the buffered text onto the ACTIVE layer (its post-commit
+    /// buffer becomes the node's PNG snapshot), then closes the window.
     fn commit_text(&mut self) {
         let Some(state) = self.text_edit.take() else {
             return;
@@ -157,19 +157,20 @@ impl App {
         if state.buffer.trim().is_empty() {
             return;
         }
-        self.history.push_snapshot(self.canvas.pixmap().clone());
         let dirty = crate::text::rasterize_text(
             &self.ctx,
-            self.canvas.pixmap_mut(),
+            self.layers.active_mut().pixmap_mut(),
             &state.buffer,
             state.anchor,
             self.tools.font_size,
             state.color,
         );
         if let Some(dirty) = dirty {
+            self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
             self.dirty = true;
         }
+        self.record_active_action(crate::history_tree::ActionKind::Text, state.color);
         self.action_log.push("Text");
     }
 

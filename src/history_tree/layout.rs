@@ -92,7 +92,7 @@ pub(super) fn layout_layer(
         .map(|(i, node)| (node.id, i))
         .collect();
 
-    // Children in creation order (the order `on_redo` picks from).
+    // Children in creation order (the order `redo` picks from).
     let mut children: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
     for node in nodes {
         if let Some(parent) = node.parent {
@@ -108,7 +108,7 @@ pub(super) fn layout_layer(
         cursor = index.get(&id).and_then(|&i| nodes[i].parent);
     }
     // ... plus the redo chain beyond the head: the redo hint first (the
-    // child the last undo left, validated like `on_redo`), then always the
+    // child the last undo left, validated like `redo`), then always the
     // FIRST-CREATED child — the walk strictly advances in creation order,
     // so it terminates.
     let mut prefer_hint = redo_hint;

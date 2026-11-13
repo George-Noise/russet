@@ -1,7 +1,7 @@
 //! Tool handlers of the MCP server (feature `mcp` only). Every `tools/call`
 //! lands here and runs against the live `App` inside the UI frame — through
-//! the SAME code paths the hand gestures use, so pixels, the snapshot undo
-//! history and the visual history tree can never disagree.
+//! the SAME code paths the hand gestures use, so pixels, the per-layer PNG
+//! snapshot history and the history tree can never disagree.
 //!
 //! Pure helpers (argument parsing, color hex, base64 and the frame-free
 //! [`apply_stroke`]) live at the bottom; their tests are in `tools/tests.rs`.
@@ -12,8 +12,9 @@ use tiny_skia::Pixmap;
 
 use crate::app::App;
 use crate::file_io;
-use crate::history::{ActionLog, History};
-use crate::history_tree::{HistoryTree, LAYER_NAMES, NodeId, PSEUDO_LAYERS};
+use crate::history::ActionLog;
+use crate::history_tree::{ActionKind, LayerTree, NodeId};
+use crate::layers::encode_snapshot;
 use crate::tools::{Tool, draw_segment};
 
 #[cfg(test)]
@@ -55,13 +56,19 @@ fn tool_error(message: String) -> Value {
 }
 
 fn get_layers(app: &App) -> Result<Value, String> {
-    let layers: Vec<Value> = (0..PSEUDO_LAYERS)
-        .map(|index| json!({ "index": index, "name": LAYER_NAMES[index] }))
+    let layers: Vec<Value> = (0..app.layers.count())
+        .map(|index| {
+            json!({
+                "index": index,
+                "name": app.layers.layer(index).map(|layer| layer.name().to_string()).unwrap_or_default(),
+                "visible": app.layers.layer(index).map(|layer| layer.visible()).unwrap_or(false),
+            })
+        })
         .collect();
     Ok(tool_text(
         json!({
             "canvas": { "width": app.canvas.width, "height": app.canvas.height },
-            "active_layer": app.history_tree.active_layer(),
+            "active_layer": app.layers.active_layer(),
             "layers": layers,
             "tool": tool_name(app.tools.tool),
             "brush_size": app.tools.size,
@@ -86,8 +93,13 @@ fn tool_name(tool: Tool) -> &'static str {
 
 fn get_history_tree(app: &App, args: &Value) -> Result<Value, String> {
     let layer = parse_layer_arg(app, args)?;
-    let nodes = app.history_tree.layer_nodes(layer).unwrap_or(&[]);
-    let head = app.history_tree.layer_head(layer);
+    let nodes = app.layers.layer_nodes(layer).unwrap_or(&[]);
+    let head = app.layers.layer_head(layer);
+    let name = app
+        .layers
+        .layer(layer)
+        .map(|l| l.name().to_string())
+        .unwrap_or_default();
     let tree: Vec<Value> = nodes
         .iter()
         .map(|node| {
@@ -99,7 +111,7 @@ fn get_history_tree(app: &App, args: &Value) -> Result<Value, String> {
             json!({
                 "id": node.id,
                 "parent": node.parent,
-                "kind": "pencil",
+                "kind": node.kind.label(),
                 "color": hex_color(node.color),
                 "is_head": Some(node.id) == head,
                 "children": children,
@@ -109,7 +121,7 @@ fn get_history_tree(app: &App, args: &Value) -> Result<Value, String> {
     Ok(tool_text(
         json!({
             "layer": layer,
-            "name": LAYER_NAMES[layer],
+            "name": name,
             "head": head,
             "nodes": tree,
         })
@@ -118,15 +130,16 @@ fn get_history_tree(app: &App, args: &Value) -> Result<Value, String> {
 }
 
 fn parse_layer_arg(app: &App, args: &Value) -> Result<usize, String> {
+    let count = app.layers.count();
     match args.get("layer") {
-        None | Some(Value::Null) => Ok(app.history_tree.active_layer()),
+        None | Some(Value::Null) => Ok(app.layers.active_layer()),
         Some(value) => {
             let index = value
                 .as_u64()
-                .ok_or_else(|| "layer must be an integer 0..2".to_string())?
+                .ok_or_else(|| "layer must be an integer".to_string())?
                 as usize;
-            if index >= PSEUDO_LAYERS {
-                return Err(format!("layer is out of range 0..{PSEUDO_LAYERS}"));
+            if index >= count {
+                return Err(format!("layer is out of range 0..{count}"));
             }
             Ok(index)
         }
@@ -140,9 +153,14 @@ fn parse_layer_arg(app: &App, args: &Value) -> Result<usize, String> {
 /// out of lane 0 — only a real fork does.
 fn get_tree_layout(app: &App, args: &Value) -> Result<Value, String> {
     let layer = parse_layer_arg(app, args)?;
-    let Some(layout) = app.history_tree.layer_layout(layer) else {
-        return Err(format!("layer is out of range 0..{PSEUDO_LAYERS}"));
+    let Some(layout) = app.layers.layer_layout(layer) else {
+        return Err(format!("layer is out of range 0..{}", app.layers.count()));
     };
+    let name = app
+        .layers
+        .layer(layer)
+        .map(|l| l.name().to_string())
+        .unwrap_or_default();
     let rows: Vec<Value> = layout
         .rows
         .iter()
@@ -171,8 +189,8 @@ fn get_tree_layout(app: &App, args: &Value) -> Result<Value, String> {
     Ok(tool_text(
         json!({
             "layer": layer,
-            "name": LAYER_NAMES[layer],
-            "head": app.history_tree.layer_head(layer),
+            "name": name,
+            "head": app.layers.layer_head(layer),
             "rows": rows,
             "spans": spans,
         })
@@ -188,19 +206,19 @@ fn add_stroke(app: &mut App, args: &Value) -> Result<Value, String> {
         }
         None => app.tools.primary,
     };
-    let node = apply_stroke(
-        app.canvas.pixmap_mut(),
-        &mut app.history,
-        &mut app.history_tree,
-        &mut app.action_log,
-        &points,
-        color,
-    );
-    app.repaint_full();
-    app.dirty = true;
+    let next_id = app.layers.next_node_id();
+    let node = {
+        let (pixmap, tree) = app.layers.active_parts();
+        apply_stroke(pixmap, tree, &mut app.action_log, next_id, &points, color)
+    };
+    if node.is_some() {
+        app.layers.advance_next_node_id();
+        app.refresh_composite();
+        app.dirty = true;
+    }
     Ok(tool_text(
         json!({
-            "added": true,
+            "added": node.is_some(),
             "node": node,
             "points": points.len(),
             "color": hex_color(color),
@@ -210,19 +228,20 @@ fn add_stroke(app: &mut App, args: &Value) -> Result<Value, String> {
 }
 
 /// The exact code path of a real pencil gesture (`App::handle_stroke`),
-/// extracted frame-free: an undo snapshot FIRST, then the pixels, then the
-/// visual node at the head — so an MCP stroke is indistinguishable from a
-/// hand stroke everywhere downstream (undo, the tree, forks after undo).
+/// extracted frame-free: the pixels land on the given layer buffer FIRST,
+/// then the post-stroke buffer becomes the node's PNG snapshot at the head
+/// — so an MCP stroke is indistinguishable from a hand stroke everywhere
+/// downstream (undo, the tree, forks after undo). The caller composites
+/// the layer into the display buffer and consumes the node id.
 pub(crate) fn apply_stroke(
     pixmap: &mut Pixmap,
-    history: &mut History,
-    tree: &mut HistoryTree,
+    tree: &mut LayerTree,
     log: &mut ActionLog,
+    next_id: NodeId,
     points: &[Pos2],
     color: Color32,
 ) -> Option<NodeId> {
     let &first = points.first()?;
-    history.push_snapshot(pixmap.clone());
     log.push("Pencil stroke (MCP)");
     let mut last = first;
     let _ = draw_segment(pixmap, Tool::Pencil, 1.0, color, first, first);
@@ -232,18 +251,19 @@ pub(crate) fn apply_stroke(
             last = point;
         }
     }
-    tree.record_stroke(color);
-    tree.head()
+    let snapshot = encode_snapshot(pixmap);
+    tree.record_action(next_id, ActionKind::Pencil, color, snapshot);
+    Some(next_id)
 }
 
 fn undo(app: &mut App) -> Result<Value, String> {
-    let before = app.history_tree.head();
+    let before = app.layers.head();
     app.undo();
     step_reply(app, before)
 }
 
 fn redo(app: &mut App) -> Result<Value, String> {
-    let before = app.history_tree.head();
+    let before = app.layers.head();
     app.redo();
     step_reply(app, before)
 }
@@ -251,24 +271,25 @@ fn redo(app: &mut App) -> Result<Value, String> {
 fn step_reply(app: &mut App, before: Option<NodeId>) -> Result<Value, String> {
     Ok(tool_text(
         json!({
-            "changed": app.history_tree.head() != before,
-            "head": app.history_tree.head(),
+            "changed": app.layers.head() != before,
+            "head": app.layers.head(),
         })
         .to_string(),
     ))
 }
 
 fn set_active_layer(app: &mut App, args: &Value) -> Result<Value, String> {
+    let count = app.layers.count();
     let index = args
         .get("index")
         .and_then(Value::as_u64)
-        .ok_or_else(|| "index must be an integer 0..2".to_string())? as usize;
-    if index >= PSEUDO_LAYERS {
-        return Err(format!("index is out of range 0..{PSEUDO_LAYERS}"));
+        .ok_or_else(|| "index must be an integer".to_string())? as usize;
+    if index >= count {
+        return Err(format!("index is out of range 0..{count}"));
     }
-    app.history_tree.set_active_layer(index);
+    app.switch_active_layer(index);
     Ok(tool_text(
-        json!({ "active_layer": app.history_tree.active_layer() }).to_string(),
+        json!({ "active_layer": app.layers.active_layer() }).to_string(),
     ))
 }
 
@@ -375,32 +396,32 @@ pub(crate) fn tool_declarations() -> Value {
     json!([
         {
             "name": "get_layers",
-            "description": "Canvas size, the three pseudo-layers, the active one, current tool and colors.",
+            "description": "Canvas size, the real layers (index, name, visibility; index 0 is the composite bottom), the active one, current tool and colors.",
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
             "name": "get_history_tree",
-            "description": "The visual fork history of one pseudo-layer: nodes (id, parent, kind, color, children) and the head, git-style. Pencil strokes only.",
+            "description": "The fork history of one layer: nodes (id, parent, kind, color, children) and the head, git-style. Every node carries a full PNG snapshot of that layer's canvas after the action; every drawing gesture is a node.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "layer": { "type": "integer", "description": "Layer index 0..2; defaults to the active layer." }
+                    "layer": { "type": "integer", "description": "Layer index; defaults to the active layer." }
                 }
             }
         },
         {
             "name": "get_tree_layout",
-            "description": "The graph LAYOUT the History Tree window renders for one pseudo-layer: rows in creation order (id, parent, branch lane, fork flag, is_head) plus one rail span per branch (branch, start_row, end_row, parent_row; rows are 0-based creation indexes). Lane 0 is the current timeline (head path + redo chain) — a plain undo forks nothing; use it to verify forks and lane placement after undo/redo/add_stroke.",
+            "description": "The graph LAYOUT the History Tree window renders for one layer: rows in creation order (id, parent, branch lane, fork flag, is_head) plus one rail span per branch (branch, start_row, end_row, parent_row; rows are 0-based creation indexes). Lane 0 is the current timeline (head path + redo chain) — a plain undo forks nothing; use it to verify forks and lane placement after undo/redo/add_stroke.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "layer": { "type": "integer", "description": "Layer index 0..2; defaults to the active layer." }
+                    "layer": { "type": "integer", "description": "Layer index; defaults to the active layer." }
                 }
             }
         },
         {
             "name": "add_stroke",
-            "description": "Draw a 1px pencil polyline in CANVAS pixel coordinates. Commits a real undo snapshot and a real history-tree node — identical to a hand gesture; strokes made after undo fork the tree exactly like in the GUI.",
+            "description": "Draw a 1px pencil polyline in CANVAS pixel coordinates on the ACTIVE layer. Commits a real history node (the post-stroke canvas as its PNG snapshot) — identical to a hand gesture; strokes made after undo fork the tree exactly like in the GUI.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -418,21 +439,21 @@ pub(crate) fn tool_declarations() -> Value {
         },
         {
             "name": "undo",
-            "description": "Same as Ctrl+Z: steps the pixels back and moves the tree head to the parent.",
+            "description": "Same as Ctrl+Z on the active layer: restores the parent node's PNG canvas and moves the tree head to it.",
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
             "name": "redo",
-            "description": "Same as Ctrl+Y: steps forward again.",
+            "description": "Same as Ctrl+Y: steps forward again (prefers the branch the last undo left).",
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
             "name": "set_active_layer",
-            "description": "Switch the global active pseudo-layer (same as the tree-window switcher).",
+            "description": "Switch the global active layer (same as clicking a row in the Layers window; the History Tree windows follow).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "index": { "type": "integer", "description": "0..2" }
+                    "index": { "type": "integer", "description": "Layer index" }
                 },
                 "required": ["index"]
             }

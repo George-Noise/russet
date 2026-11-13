@@ -1,4 +1,5 @@
 use super::*;
+use crate::layers::decode_snapshot;
 use serde_json::Value;
 use tiny_skia::Color;
 
@@ -73,27 +74,31 @@ fn tool_declarations_have_name_description_schema() {
     }
 }
 
+/// A frame-free tree mirroring `LayerStack::with_root`: Start id 1, strokes
+/// start at 2.
+fn fresh(pixmap: &Pixmap) -> LayerTree {
+    LayerTree::new(1, encode_snapshot(pixmap))
+}
+
 #[test]
 fn apply_stroke_records_node_pixels_and_snapshot() {
     let mut pixmap = Pixmap::new(100, 100).expect("pixmap");
     pixmap.fill(Color::from_rgba8(255, 255, 255, 255));
-    let mut history = History::new();
-    let mut tree = HistoryTree::new();
+    let mut tree = fresh(&pixmap);
     let mut log = ActionLog::new();
 
     let node = apply_stroke(
         &mut pixmap,
-        &mut history,
         &mut tree,
         &mut log,
+        2,
         &[Pos2::new(10.0, 10.0), Pos2::new(50.0, 50.0)],
         Color32::BLACK,
     )
     .expect("node id");
 
-    assert_eq!(node, 1);
-    assert_eq!(tree.head(), Some(1));
-    assert!(history.can_undo());
+    assert_eq!(node, 2);
+    assert_eq!(tree.head(), Some(2));
     assert_eq!(log.items().len(), 1);
     assert_eq!(
         pixel_rgb(&pixmap, 30, 30),
@@ -105,67 +110,71 @@ fn apply_stroke_records_node_pixels_and_snapshot() {
         (255, 255, 255),
         "nothing outside the stroke"
     );
+    // The node's snapshot decodes back to the post-stroke buffer.
+    let snapshot = tree.node(2).expect("recorded").snapshot.clone();
+    let restored = decode_snapshot(&snapshot).expect("decodes");
+    assert_eq!(restored.data(), pixmap.data());
 }
 
 #[test]
 fn apply_stroke_after_undo_forks_like_a_hand_gesture() {
     let mut pixmap = Pixmap::new(100, 100).expect("pixmap");
-    let mut history = History::new();
-    let mut tree = HistoryTree::new();
+    let mut tree = fresh(&pixmap);
     let mut log = ActionLog::new();
 
     apply_stroke(
         &mut pixmap,
-        &mut history,
         &mut tree,
         &mut log,
+        2,
         &[Pos2::new(10.0, 10.0), Pos2::new(20.0, 10.0)],
         Color32::BLACK,
     )
     .expect("first node");
     apply_stroke(
         &mut pixmap,
-        &mut history,
         &mut tree,
         &mut log,
+        3,
         &[Pos2::new(30.0, 10.0), Pos2::new(40.0, 10.0)],
         Color32::BLACK,
     )
     .expect("second node");
 
-    // The real undo (App::undo) moves the pixels AND the tree head; the
-    // tree half of that step is all this frame-free test needs.
-    tree.on_undo();
+    // The real undo (App::undo) restores the parent's PNG AND moves the
+    // tree head; the tree half of that step is all this frame-free test
+    // needs.
+    tree.undo();
 
     let third = apply_stroke(
         &mut pixmap,
-        &mut history,
         &mut tree,
         &mut log,
+        4,
         &[Pos2::new(25.0, 50.0), Pos2::new(28.0, 50.0)],
         Color32::BLACK,
     )
     .expect("third node");
 
-    let nodes = tree.layer_nodes(0).expect("layer 0");
-    assert_eq!(third, 3);
-    assert_eq!(nodes.len(), 3);
+    let nodes = tree.nodes();
+    assert_eq!(third, 4);
+    assert_eq!(nodes.len(), 4, "Start plus three strokes");
     assert_eq!(
-        nodes[2].parent,
-        Some(1),
+        nodes[3].parent,
+        Some(2),
         "the new stroke hangs off the undone-to node"
     );
     let children_of_first: Vec<NodeId> = nodes
         .iter()
-        .filter(|node| node.parent == Some(1))
+        .filter(|node| node.parent == Some(2))
         .map(|node| node.id)
         .collect();
     assert_eq!(
         children_of_first,
-        vec![2, 3],
+        vec![3, 4],
         "two children = a git-style fork"
     );
-    assert_eq!(tree.head(), Some(3));
+    assert_eq!(tree.head(), Some(4));
 }
 
 fn pixel_rgb(pixmap: &Pixmap, x: u32, y: u32) -> (u8, u8, u8) {

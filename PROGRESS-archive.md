@@ -531,3 +531,54 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **Verified:** `cargo check`, `cargo clippy -- -D warnings` (incl. `--all-targets`),
   `cargo test` — green (23 tests at that point).
 - **Owner must check:** §7 checklist items 1–14 (Windows native).
+
+---
+
+## Log entries moved 2026-11-13 (compaction — the live Log keeps the newest 4)
+
+### 2026-11-13 — `Fix:` History Tree lanes: divergence-only forks, recency placement, shared connector exits, per-row labels — owner request
+
+- **What:** five owner points from the live review. (1) A PLAIN UNDO no longer diverts
+  the tail sideways: the main line is now root..head PLUS the redo chain beyond the head
+  (the redo hint first, then always the first-created child — exactly what repeated redo
+  visits), so the undone tail stays on lane 0 until the user really draws past the head.
+  (2) Labels hug EACH row's dot — kind + node id ("pencil 7") on an opaque window-fill
+  backdrop; the swatch follows the text width. (3) ALL connectors leaving one node exit
+  at the same height — the parent dot's center line (the FORK_DROP_STEP stagger is gone;
+  overlapping runs are fine by owner rule). (4) A branch takes the LOWEST lane free at
+  its vertical range (fork parent's row..= tip), so a late fork below early branches
+  reuses lane 1 instead of creeping right. (5) Branches are placed NEWEST first — newer
+  forks hug the trunk, older stack right; a branch forked off a side branch is pinned
+  right of its parent's lane (connectors never run backwards). Spans are per BRANCH now
+  (lane reuse means two spans can share one lane number).
+- **Files:** `src/history_tree.rs` (layout_layer rewrite + layer_layout for MCP),
+  `src/history_tree/tests.rs` (recency expectations reworked, +5 tests),
+  `src/app/tree_window.rs` (connector geometry, per-row labels + backdrop, content
+  width from the widest row), PROGRESS.md.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default, 81 with
+  `--features mcp` (soft notes: tree_window.rs 687 / history_tree.rs 600 lines over the
+  500 guard — report-only). Headless MCP scenarios (scripts/mcp_smoke.py): plain undo →
+  all lane 0; late fork reuses lane 1 ([0,1,0,0,1,0]); newest fork on lane 1
+  ([0,2,2,1,0]). Xvfb screenshots download/tree_stage*.png reviewed.
+- **Owner-checks:** `cargo run` — lane order + label look; "New at top" re-check (sign
+  logic unchanged, not re-captured); tree_window.rs split still pending your OK.
+- **Commit title:** `Rework History Tree lanes: divergence-only forks, recency placement, shared connector exits, per-row labels`
+
+### 2026-11-13 — `Feat:` MCP `get_tree_layout` tool + feature-gated verify gates — owner request ("use MCP, extend it if it helps")
+
+- **What:** (1) the 9th MCP tool `get_tree_layout` — dumps the LAYOUT the History Tree
+  window renders (rows with lane/fork/head flags + one rail span per branch), so an
+  agent asserts forks and lane placement over the wire; layer-arg parsing shared with
+  get_history_tree. (2) verify.sh now also runs clippy+tests with `--features mcp` —
+  the feature code compiled only on manual builds and could rot unseen. (3) NEW
+  scripts/mcp_smoke.py — a ~100-line stdio client (initialize / tools/list /
+  tools/call) with scenario assertions; NEW scripts/visual_driver.py — the Xvfb +
+  ffmpeg screenshot scenario runner used for the tree checks above.
+- **Files:** `src/app/mcp/tools.rs` (+tool, +declaration, tests 8→9), `scripts/verify.sh`
+  (+2 gated steps), NEW `scripts/mcp_smoke.py`, NEW `scripts/visual_driver.py`.
+- **Verified:** verify.sh ALL GATES GREEN; smoke client green against the real binary
+  under Xvfb (9 tools, 9 scenario checks); default-tree `cargo tree` still has no
+  serde_json (781 vs 786 tree lines with the feature).
+- **Owner-checks:** keep the two python helpers in scripts/ or drop them; CI (ci.yml)
+  does not run the mcp gates yet — say the word and they go there too.
+- **Commit title:** `Add get_tree_layout MCP tool and gate the mcp feature in verify.sh`

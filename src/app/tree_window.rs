@@ -1,15 +1,20 @@
-//! The "History Tree" windows (owner request 2026-11-12): a purely visual
-//! git-style graph of pencil actions per pseudo-layer, drawn in the spirit
-//! of the VS Code Source Control Graph. The data model lives in
+//! The "History Tree" windows (owner request 2026-11-12): the git-style
+//! graph of one layer's history, drawn in the spirit of the VS Code Source
+//! Control Graph. Since owner request 2026-11-13 the tree is the REAL
+//! history (one PNG canvas per node) and every window follows the GLOBAL
+//! active layer — switching happens in the Layers window, the graph is a
+//! passenger. LEFT-clicking a node's DOT (never its label) moves the head
+//! there and shows that node's canvas. The data model lives in
 //! [`crate::history_tree`]; this module renders it and owns the per-window
 //! view state (windows, clones, direction, scroll anchoring). The pure
 //! graph painter — rails, connectors, dots, labels — lives in the child
 //! module [`paint`]. Child module of `app`, so it can touch `App`'s
 //! private fields; `app.rs` stays the orchestrator.
 //!
-//! Behavior fixed by the owner's answers (2026-11-12):
-//! - THREE pseudo-layers with one global active layer; the switcher lives
-//!   in the toolbar; switching resets every window's scroll to the end.
+//! Behavior fixed by the owner's answers (2026-11-12, layered 2026-11-13):
+//! - Every window shows the GLOBAL active layer's graph (switched in the
+//!   Layers window since 2026-11-13); switching resets every window's
+//!   scroll to the end. A passive label names the layer.
 //! - Main window: floating, first open at the OLD History spot (right
 //!   edge, just below the menu bar), §3.11 placement afterwards. Clones
 //!   spawn cascaded below it, are closable, and carry the same §3.11
@@ -17,9 +22,11 @@
 //!   anchor), so the user can watch several places of the same tree.
 //! - Direction toggle per window: "New at bottom" (top-down, gitk-like;
 //!   DEFAULT) and "New at top" (bottom-up, VS Code-like).
-//! - Node rows are NOT interactive: circle + "pencil" + ONE color square
-//!   exactly one text line tall (owner request 2026-11-13: a stroke has a
-//!   single color — no primary/secondary pair). Branches differ by rail
+//! - Node rows: circle + "pencil" + ONE color square exactly one text
+//!   line tall (owner request 2026-11-13: a stroke has a single color — no
+//!   primary/secondary pair; the Start root shows no swatch). The DOT is
+//!   interactive since 2026-11-13: LEFT-click moves the head there and the
+//!   canvas shows that node's PNG snapshot; the label stays passive. Branches differ by rail
 //!   color; the CURRENT timeline is the straight LEFT edge (lane 0), side
 //!   branches peel off to the right with straight → quarter-ellipse →
 //!   straight connectors (owner request 2026-11-13), and every connector
@@ -40,7 +47,7 @@ use eframe::egui::{self, Align2, Context, FontId, Id, Pos2, TextStyle};
 
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, WindowPlacement, place_floating_window};
-use crate::history_tree::{self, Change, NodeId, Removal};
+use crate::history_tree::{Change, NodeId, Removal};
 
 mod paint;
 
@@ -122,11 +129,13 @@ impl TreeView {
 }
 
 /// Actions a window's toolbar requested while rendering; applied AFTER the
-/// window is shown (they mutate the view list itself).
+/// window is shown (they mutate the view list itself, and the jump mutates
+/// the canvas).
 #[derive(Default)]
 struct ViewRequest {
     clone: bool,
     remove: bool,
+    jump: Option<NodeId>,
 }
 
 impl App {
@@ -218,6 +227,9 @@ impl App {
         if request.clone {
             self.clone_tree_view(index);
         }
+        if let Some(id) = request.jump {
+            self.jump_to_history_node(id);
+        }
     }
 
     /// The Clone button: a new window with the SAME scroll state (reading
@@ -238,14 +250,19 @@ impl App {
         self.tree_views.push(view);
     }
 
-    /// Debug "-": remove the last action of the active layer and retarget
-    /// every window that was pinned to it (owner rule 2026-11-12: nearest
-    /// action forward, backward as last resort; windows that sat at the
-    /// graph's end keep following the end).
+    /// Debug "-": remove the last action of the active layer (the head's
+    /// PNG goes with it; children keep theirs) and retarget every window
+    /// that was pinned to it (owner rule 2026-11-12: nearest action
+    /// forward, backward as last resort; windows that sat at the graph's
+    /// end keep following the end).
     fn remove_tree_last_action(&mut self) {
-        let Some(removal) = self.history_tree.remove_last() else {
+        let Some(removal) = self.layers.remove_last() else {
             return;
         };
+        // The canvas follows the new head (the removed node's state is
+        // gone from the tree).
+        self.restore_active_layer_state();
+        self.dirty = true;
         self.retarget_views_after_removal(&removal);
     }
 
@@ -269,11 +286,15 @@ impl App {
         }
     }
 
-    /// Global active-layer switch (owner request 2026-11-12): every window
-    /// shows the new layer's graph from its end.
-    fn switch_tree_layer(&mut self, layer: usize) {
-        self.history_tree.set_active_layer(layer);
-        let generation = self.history_tree.generation();
+    /// Global active-layer switch (owner request 2026-11-13): the Layers
+    /// window owns it, and every History Tree window shows the new layer's
+    /// graph from its end.
+    pub(super) fn switch_active_layer(&mut self, layer: usize) {
+        if layer >= self.layers.count() {
+            return;
+        }
+        self.layers.set_active_layer(layer);
+        let generation = self.layers.generation();
         for view in &mut self.tree_views {
             view.anchor = Anchor::End;
             view.pin = Some(Pin::End);
@@ -281,9 +302,9 @@ impl App {
         }
     }
 
-    /// New / Open dropped the document: follow the (now empty) end again.
+    /// New / Open dropped the document: follow the (now fresh) end again.
     pub(super) fn reset_tree_views(&mut self) {
-        let generation = self.history_tree.generation();
+        let generation = self.layers.generation();
         for view in &mut self.tree_views {
             view.anchor = Anchor::End;
             view.pin = Some(Pin::End);
@@ -299,20 +320,9 @@ impl App {
 fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: &mut ViewRequest) {
     ui.set_min_width(200.0);
 
-    // Pseudo-layer switcher: three placeholders, one GLOBAL active layer.
-    ui.horizontal(|ui| {
-        for (i, name) in history_tree::LAYER_NAMES.iter().enumerate() {
-            if ui
-                .selectable_label(app.history_tree.active_layer() == i, *name)
-                .clicked()
-            {
-                app.switch_tree_layer(i);
-                view.anchor = Anchor::End;
-                view.pin = Some(Pin::End);
-                view.seen_generation = app.history_tree.generation();
-            }
-        }
-    });
+    // The ACTIVE layer follows the Layers window (owner request 2026-11-13:
+    // the switcher moved out of here) — a passive label only.
+    ui.weak(format!("Layer: {}", app.layers.active_layer_name()));
 
     // Direction toggle (per window), Clone, debug remove.
     ui.horizontal(|ui| {
@@ -342,7 +352,7 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
             request.clone = true;
         }
         if ui
-            .add_enabled(app.history_tree.head().is_some(), egui::Button::new("-"))
+            .add_enabled(app.layers.can_remove_last(), egui::Button::new("-"))
             .on_hover_text("Remove last action (debug: tests the scroll fallback)")
             .clicked()
         {
@@ -364,9 +374,9 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
     // Content changed since the last frame? Then an anchored view may need
     // re-pinning: only changes that SHIFT earlier rows move it — plain
     // appends in the top-down order do not.
-    let generation = app.history_tree.generation();
+    let generation = app.layers.generation();
     if view.seen_generation != generation {
-        let shifts_rows = match app.history_tree.last_change() {
+        let shifts_rows = match app.layers.last_change() {
             Change::Removed | Change::Reset => true,
             Change::Added => direction == Direction::BottomUp,
             Change::Moved => false,
@@ -377,7 +387,7 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
         view.seen_generation = generation;
     }
 
-    let layout = app.history_tree.layout();
+    let layout = app.layers.layout();
     let mut rows = layout.rows.clone();
     if direction == Direction::BottomUp {
         rows.reverse();
@@ -391,7 +401,8 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
         text_color,
     };
     // Horizontal scrolling (owner request 2026-11-13): deep branch trees
-    // grow to the right, the viewport follows on demand.
+    // grow to the right, the viewport follows on demand. A dot click comes
+    // back as the painter's return value and lands in the request.
     let out = egui::ScrollArea::both()
         .id_salt(view.id.with("scroll"))
         .max_height(TREE_MAX_HEIGHT)
@@ -399,7 +410,10 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
         // Top-down: following the end means following the bottom edge.
         .stick_to_bottom(direction == Direction::TopDown)
         .show(ui, |ui| {
-            paint_graph(app, ui, &rows, direction, &metrics, pin);
+            let clicked = paint_graph(app, ui, &rows, direction, &metrics, pin, view.id);
+            if clicked.is_some() {
+                request.jump = clicked;
+            }
         });
 
     // ---- scroll bookkeeping (after the layout pass) ----

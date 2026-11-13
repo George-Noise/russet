@@ -17,6 +17,7 @@ use crate::canvas::Canvas;
 use crate::file_io;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::WebOutcome;
+use crate::layers::LayerStack;
 
 /// Default document size: the New dialog's initial values and the initial
 /// canvas (see `App::new` in [`super`]).
@@ -36,15 +37,19 @@ pub(super) enum PendingAction {
 }
 
 impl App {
-    /// New-document body shared by "New" and the resize-apply path: a
-    /// fresh white canvas plus every reset that comes with it.
+    /// New-document body shared by "New" and the resize-apply path: one
+    /// transparent layer with a fresh history tree, plus every reset that
+    /// comes with it.
     pub(super) fn reset_canvas(&mut self, width: u32, height: u32) {
         let width = width.clamp(MIN_CANVAS, MAX_CANVAS);
         let height = height.clamp(MIN_CANVAS, MAX_CANVAS);
-        self.canvas = Canvas::new(width, height, Color32::WHITE);
-        self.history.clear();
-        // New document: the visual trees reset the same way.
-        self.history_tree.reset();
+        self.canvas = Canvas::new(width, height, Color32::TRANSPARENT);
+        // A fresh document: ONE transparent layer whose Start root holds
+        // the initial canvas (owner request 2026-11-13: all layers are
+        // transparent — the checkerboard shows through until painted).
+        self.layers = LayerStack::new(width, height);
+        self.layer_delete_confirm = None;
+        self.layer_rename = None;
         self.reset_tree_views();
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -88,10 +93,12 @@ impl App {
     }
 
     fn apply_loaded(&mut self, loaded: file_io::LoadedImage) {
-        self.canvas.set_pixmap(loaded.pixmap);
-        self.history.clear();
-        // New document: the visual trees reset the same way.
-        self.history_tree.reset();
+        // Open: ONE layer whose canvas and Start snapshot are the loaded
+        // picture; the history restarts (SPEC §3.6).
+        self.canvas.set_pixmap(loaded.pixmap.clone());
+        self.layers = LayerStack::with_root(loaded.pixmap);
+        self.layer_delete_confirm = None;
+        self.layer_rename = None;
         self.reset_tree_views();
         #[cfg(not(target_arch = "wasm32"))]
         {

@@ -56,7 +56,7 @@ impl App {
                 });
 
                 ui.menu_button("Edit", |ui| {
-                    let can_undo = self.history.can_undo();
+                    let can_undo = self.layers.can_undo();
                     if ui
                         .add_enabled(can_undo, egui::Button::new("Undo (Ctrl+Z)"))
                         .clicked()
@@ -64,7 +64,7 @@ impl App {
                         self.undo();
                         ui.close();
                     }
-                    let can_redo = self.history.can_redo();
+                    let can_redo = self.layers.can_redo();
                     if ui
                         .add_enabled(can_redo, egui::Button::new("Redo (Ctrl+Y)"))
                         .clicked()

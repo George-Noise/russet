@@ -1,17 +1,12 @@
-use tiny_skia::Pixmap;
-
-const MAX_SNAPSHOTS: usize = 20;
-const MAX_BYTES: usize = 256 * 1024 * 1024;
-
-/// One entry of the read-only action log behind the "History" window
-/// (owner request 2026-11-10). `id` keeps increasing for the lifetime of
-/// the document, so entries stay identifiable even after old ones are
-/// evicted.
-#[derive(Clone, Debug)]
-pub struct LogEntry {
-    pub id: u64,
-    pub label: String,
-}
+//! One entry of the read-only action log behind the "History" window
+//! (owner request 2026-11-10). `id` keeps increasing for the lifetime of
+//! the document, so entries stay identifiable even after old ones are
+//! evicted.
+//!
+//! Owner request 2026-11-13: the snapshot undo/redo stack that used to
+//! share this file is GONE — the per-layer history trees in `layers.rs`
+//! (one PNG canvas per node) ARE the history now, and this module only
+//! keeps the convenience log.
 
 /// A plain, non-interactive log of document actions. The "History" window
 /// renders it newest-first; making entries clickable (undo-to-state) will
@@ -19,6 +14,13 @@ pub struct LogEntry {
 pub struct ActionLog {
     entries: Vec<LogEntry>,
     next_id: u64,
+}
+
+/// One entry of the read-only action log behind the "History" window.
+#[derive(Clone, Debug)]
+pub struct LogEntry {
+    pub id: u64,
+    pub label: String,
 }
 
 /// The log is a memory-bound convenience view, not a document feature: it
@@ -58,77 +60,6 @@ impl ActionLog {
 impl Default for ActionLog {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub struct History {
-    undo: Vec<Pixmap>,
-    redo: Vec<Pixmap>,
-}
-
-impl History {
-    pub fn new() -> Self {
-        Self {
-            undo: Vec::new(),
-            redo: Vec::new(),
-        }
-    }
-
-    pub fn push_snapshot(&mut self, pixmap: Pixmap) {
-        self.redo.clear();
-        self.undo.push(pixmap);
-        self.trim();
-    }
-
-    pub fn undo(&mut self, current: Pixmap) -> Option<Pixmap> {
-        let previous = self.undo.pop()?;
-        self.redo.push(current);
-        self.trim();
-        Some(previous)
-    }
-
-    pub fn redo(&mut self, current: Pixmap) -> Option<Pixmap> {
-        let next = self.redo.pop()?;
-        self.undo.push(current);
-        self.trim();
-        Some(next)
-    }
-
-    pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.undo.clear();
-        self.redo.clear();
-    }
-
-    fn snapshot_bytes(pixmap: &Pixmap) -> usize {
-        pixmap.width() as usize * pixmap.height() as usize * 4
-    }
-
-    fn total_bytes(&self) -> usize {
-        self.undo
-            .iter()
-            .chain(self.redo.iter())
-            .map(Self::snapshot_bytes)
-            .sum()
-    }
-
-    fn trim(&mut self) {
-        while self.undo.len() + self.redo.len() > MAX_SNAPSHOTS || self.total_bytes() > MAX_BYTES {
-            if !self.undo.is_empty() {
-                self.undo.remove(0);
-            } else if !self.redo.is_empty() {
-                self.redo.remove(0);
-            } else {
-                break;
-            }
-        }
     }
 }
 

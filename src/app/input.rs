@@ -11,6 +11,7 @@
 use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect};
 
 use super::App;
+use crate::history_tree::ActionKind;
 use crate::tools::{Tool, draw_segment, pick_color};
 
 impl App {
@@ -70,10 +71,10 @@ impl App {
             let y = i.consume_key(Modifiers::COMMAND, Key::Y);
             shift_z || y
         });
-        if self.history.can_redo() && redo_pressed {
+        if redo_pressed && self.layers.can_redo() {
             self.redo();
         }
-        if self.history.can_undo() && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Z)) {
+        if self.layers.can_undo() && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Z)) {
             self.undo();
         }
     }
@@ -154,15 +155,20 @@ impl App {
 
     fn paint_segment(&mut self, from: Pos2, to: Pos2) {
         let color = self.stroke_color();
+        let tool = self.tools.tool;
+        let size = self.tools.size;
+        // The gesture paints the ACTIVE layer's buffer; the display buffer
+        // is re-blended for the same dirty region right after.
         let dirty = draw_segment(
-            self.canvas.pixmap_mut(),
-            self.tools.tool,
-            self.tools.size,
+            self.layers.active_mut().pixmap_mut(),
+            tool,
+            size,
             color,
             from,
             to,
         );
         if let Some(dirty) = dirty {
+            self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
             self.dirty = true;
         }
@@ -194,15 +200,33 @@ impl App {
         });
 
         if any_released {
-            // One completed gesture = one visual node (the design concept's
-            // tldraw-style mark); the prototype records PENCIL strokes only
-            // (owner request 2026-11-12). The color was captured at stroke
-            // start — it is what the gesture actually painted with.
+            // One completed gesture = one node with the post-stroke canvas
+            // as its PNG snapshot (the design concept's tldraw-style mark).
+            // Owner request 2026-11-13: EVERY freehand tool records — pencil,
+            // brush and eraser alike — on the active layer's tree. The color
+            // was captured at stroke start — it is what the gesture painted
+            // with.
             if self.is_stroking
-                && self.tools.tool == Tool::Pencil
                 && let Some(color) = self.stroke_paint.take()
             {
-                self.history_tree.record_stroke(color);
+                let kind = match self.tools.tool {
+                    Tool::Pencil => Some(ActionKind::Pencil),
+                    Tool::Brush => Some(ActionKind::Brush),
+                    Tool::Eraser => Some(ActionKind::Eraser),
+                    // A mid-gesture tool switch to a preview tool abandons
+                    // the record; the pixels join the next node's snapshot.
+                    Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => None,
+                };
+                if let Some(kind) = kind {
+                    self.record_active_action(kind, color);
+                    let label = match self.tools.tool {
+                        Tool::Pencil => "Pencil stroke",
+                        Tool::Brush => "Brush stroke",
+                        Tool::Eraser => "Eraser stroke",
+                        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => "Stroke",
+                    };
+                    self.action_log.push(label);
+                }
             }
             self.stroke_paint = None;
             self.is_stroking = false;
@@ -219,14 +243,6 @@ impl App {
                 None
             };
             if let (Some(button), Some(cursor)) = (button, cursor) {
-                self.history.push_snapshot(self.canvas.pixmap().clone());
-                self.action_log.push(match self.tools.tool {
-                    Tool::Pencil => "Pencil stroke",
-                    Tool::Brush => "Brush stroke",
-                    Tool::Eraser => "Eraser stroke",
-                    // Guard: the preview tools never reach this path.
-                    Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => "Stroke",
-                });
                 self.stroke_button = Some(button);
                 self.is_stroking = true;
                 self.stroke_paint = Some(self.stroke_color());

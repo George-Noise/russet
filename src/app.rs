@@ -7,19 +7,22 @@
 //!                   Open/Save, the unsaved-changes gate, the window title
 //!   [`input`]     — owner request 2026-11-13: hotkeys (§3.9), freehand
 //!                   strokes, Eyedropper picking
+//!   [`layers`]    — owner request 2026-11-13: REAL layers + per-layer PNG
+//!                   snapshot history (the model, in `crate::layers`)
 //!   [`mcp`]       — owner request 2026-11-12, feature `mcp`: the stdio
 //!                   MCP server (compiled out without the feature)
 //!   [`menu`]      — owner request 2026-11-13: the top menu bar (§3.1)
 //!   [`panels`]    — owner request 2026-11-10: the "History" log and the
-//!                   "Layers" placeholder windows
+//!                   "Layers" windows (Layers interactive since 2026-11-13)
 //!   [`placement`] — §3.11: floating-window edge anchoring + resize repositioning
 //!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
 //!                   (press–drag–release and polyline gestures, overlay
 //!                   preview, commit)
 //!   [`text_tool`] — owner request 2026-11-10: the Text tool input window
 //!   [`tree_window`] — owner request 2026-11-12: the visual "History Tree"
-//!                   windows (git-style graph per pseudo-layer, clones,
-//!                   anchored scrolling); the model lives in `history_tree`
+//!                   windows (git-style graph per layer, node-dot click
+//!                   switches the canvas, clones, anchored scrolling); the
+//!                   model lives in `history_tree`
 //!   [`windows`]   — §3.2/§3.3: the floating "Tools" and "Palette" windows
 //!
 //! Keep new subsystems as child modules instead of growing this file.
@@ -32,8 +35,9 @@ use eframe::egui::{self, Color32, PointerButton, Pos2, Rect, Sense, Vec2};
 use crate::canvas::Canvas;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::WebTask;
-use crate::history::{ActionLog, History};
-use crate::history_tree::HistoryTree;
+use crate::history::ActionLog;
+use crate::history_tree::{ActionKind, NodeId};
+use crate::layers::LayerStack;
 use crate::tools::{Tool, ToolState};
 
 mod camera;
@@ -91,6 +95,9 @@ const KEY_PAN_SPEED: f32 = 600.0;
 
 pub struct App {
     ctx: egui::Context,
+    /// The COMPOSITE display buffer: the visible layers blended into one
+    /// premultiplied pixmap (kept in sync by `composite_dirty` /
+    /// `refresh_composite`); feeds the texture, the Eyedropper and Save.
     canvas: Canvas,
     canvas_tex: egui::TextureHandle,
     checker_tex: egui::TextureHandle,
@@ -98,10 +105,10 @@ pub struct App {
     /// The tool active on the previous frame: switching it cancels any
     /// pending preview gesture or text entry (see `draw_canvas`).
     last_tool: Tool,
-    history: History,
-    /// Visual mirror of pencil strokes per pseudo-layer (owner request
-    /// 2026-11-12) — model in `history_tree`, windows in `app/tree_window`.
-    history_tree: HistoryTree,
+    /// REAL layers with per-layer PNG-snapshot history (owner request
+    /// 2026-11-13) — model in `crate::layers`, windows in `app/panels.rs`
+    /// (Layers) and `app/tree_window.rs` (History Tree).
+    layers: LayerStack,
     /// MCP stdio server (owner request 2026-11-12, feature `mcp`): events
     /// from the reader thread are polled at the top of every frame and
     /// executed against this state. Compiled out without the feature.
@@ -116,6 +123,12 @@ pub struct App {
     palette_window_open: bool,
     history_window_open: bool,
     layers_window_open: bool,
+    /// Pending "delete layer?" confirmation ([`panels`]): the index to
+    /// remove once the user confirms.
+    layer_delete_confirm: Option<usize>,
+    /// In-place layer rename ([`panels`]): (index, current buffer); the
+    /// TextEdit lives in the Layers window rows.
+    layer_rename: Option<(usize, String)>,
     /// Visual "History Tree" windows (owner request 2026-11-12): view 0 is
     /// the main window (shown while this flag is set), the rest are clones.
     tree_window_open: bool,
@@ -176,7 +189,7 @@ impl App {
             style.visuals.window_shadow = egui::Shadow::NONE;
         });
 
-        let canvas = Canvas::new(800, 600, Color32::WHITE);
+        let canvas = Canvas::new(800, 600, Color32::TRANSPARENT);
         let canvas_tex = cc.egui_ctx.load_texture(
             "canvas",
             egui::ColorImage::from_rgba_premultiplied(
@@ -212,8 +225,7 @@ impl App {
             checker_tex,
             tools: ToolState::new(),
             last_tool: Tool::Pencil,
-            history: History::new(),
-            history_tree: HistoryTree::new(),
+            layers: LayerStack::new(800, 600),
             #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
             mcp: mcp::McpServer::maybe_spawn(cc.egui_ctx.clone()),
             zoom: 1.0,
@@ -225,6 +237,8 @@ impl App {
             palette_window_open: true,
             history_window_open: true,
             layers_window_open: true,
+            layer_delete_confirm: None,
+            layer_rename: None,
             tree_window_open: true,
             tree_views: vec![TreeView::main()],
             tree_clones: 0,
@@ -258,34 +272,88 @@ impl App {
     }
 
     /// Shared action behind the Edit menu ([`menu`]) and the hotkeys
-    /// ([`input`]): one snapshot back; mirrors into the visual tree.
+    /// ([`input`]): one node back on the ACTIVE layer's history tree — the
+    /// pixels come from that node's PNG snapshot (owner request 2026-11-13:
+    /// the per-layer trees ARE the history).
     pub(super) fn undo(&mut self) {
-        let current = self.canvas.pixmap().clone();
-        if let Some(previous) = self.history.undo(current) {
-            self.canvas.set_pixmap(previous);
-            self.repaint_full();
+        if self.layers.undo() {
+            self.restore_active_layer_state();
             self.dirty = true;
             self.action_log.push("Undo");
-            // Visual mirror (owner request 2026-11-12): the tree head steps
-            // back with every successful real undo. Caveat accepted for the
-            // prototype: the real history is one mixed snapshot stack, so a
-            // brush/eraser stroke interleaved with pencil strokes shifts it
-            // without the tree knowing — pencil-only sessions stay exact.
-            self.history_tree.on_undo();
         }
     }
 
     /// Shared action behind the Edit menu ([`menu`]) and the hotkeys
-    /// ([`input`]): one snapshot forward; mirrors into the visual tree.
+    /// ([`input`]): one node forward on the ACTIVE layer's history tree
+    /// (the "last left branch" rule lives in `LayerTree::redo`).
     pub(super) fn redo(&mut self) {
-        let current = self.canvas.pixmap().clone();
-        if let Some(next) = self.history.redo(current) {
-            self.canvas.set_pixmap(next);
-            self.repaint_full();
+        if self.layers.redo() {
+            self.restore_active_layer_state();
             self.dirty = true;
             self.action_log.push("Redo");
-            self.history_tree.on_redo();
         }
+    }
+
+    /// Node-dot click in a History Tree window: the head moves to the
+    /// clicked node and the canvas shows its PNG snapshot. A stroke right
+    /// after that forks the tree git-style.
+    pub(super) fn jump_to_history_node(&mut self, id: NodeId) {
+        if self.layers.jump_to(id) {
+            self.restore_active_layer_state();
+            self.dirty = true;
+            self.action_log.push("History jump");
+        }
+    }
+
+    /// Decodes the active layer's head snapshot and fits it onto the
+    /// current canvas (crop/pad — node PNGs may predate a Resize). Called
+    /// after every successful undo / redo / jump / debug removal.
+    pub(super) fn restore_active_layer_state(&mut self) {
+        let Some(head) = self.layers.head() else {
+            return;
+        };
+        let Some(bytes) = self.layers.node(head).map(|node| node.snapshot.clone()) else {
+            return;
+        };
+        match crate::layers::decode_snapshot(&bytes) {
+            Ok(pixmap) => {
+                let fitted =
+                    crate::layers::fit_to_canvas(pixmap, self.canvas.width, self.canvas.height);
+                self.layers.active_mut().set_pixmap(fitted);
+                self.refresh_composite();
+            }
+            Err(error) => self.error_popup = Some(error),
+        }
+    }
+
+    /// One completed gesture on the ACTIVE layer: the post-action buffer
+    /// becomes the node's PNG snapshot. Encoding failures (practically
+    /// impossible) surface through the error popup instead of panicking.
+    pub(super) fn record_active_action(&mut self, kind: ActionKind, color: Color32) {
+        if let Err(error) = self.layers.record_action(kind, color) {
+            self.error_popup = Some(error);
+        }
+    }
+
+    /// Re-blends the whole composite and uploads the full texture — after
+    /// undo/redo/jumps, layer ops and document resets.
+    pub(super) fn refresh_composite(&mut self) {
+        let (width, height) = (self.canvas.width, self.canvas.height);
+        crate::layers::composite(
+            self.layers.stack(),
+            self.canvas.pixmap_mut(),
+            0,
+            0,
+            width,
+            height,
+        );
+        self.repaint_full();
+    }
+
+    /// Re-blends ONLY the stroke's dirty region into the display buffer —
+    /// the per-segment hot path of the freehand tools.
+    pub(super) fn composite_dirty(&mut self, x: u32, y: u32, w: u32, h: u32) {
+        crate::layers::composite(self.layers.stack(), self.canvas.pixmap_mut(), x, y, w, h);
     }
 
     /// Dirty-rect texture update, called from [`input`] after each
@@ -441,6 +509,7 @@ impl eframe::App for App {
         self.discard_dialog(&ctx);
         self.new_dialog(&ctx);
         self.resize_dialog(&ctx);
+        self.layer_delete_dialog(&ctx);
         self.error_dialog(&ctx);
         self.about_dialog(&ctx);
         self.update_title(&ctx);

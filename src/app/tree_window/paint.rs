@@ -1,19 +1,25 @@
 //! The graph painter of the "History Tree" windows: branch rails, fork
-//! connectors, dots, labels and color swatches — one non-interactive row
-//! per action, exactly one text line tall.
+//! connectors, dots, labels and color swatches — one row per action,
+//! exactly one text line tall. Since owner request 2026-11-13 the row's
+//! DOT is interactive: a LEFT click on it (the hit area is the dot plus a
+//! small margin — never the label) asks for a head jump, returned to the
+//! caller as [`NodeId`].
 //!
-//! Pure painting: no state, no input handling, no scroll logic. The window
+//! Pure painting + the one hit-test; no state, no scroll logic. The window
 //! chrome, the toolbar, the scroll bookkeeping and the per-window view
 //! state live in the parent module ([`super`]); the data model and the
 //! branch/lane assignment live in [`crate::history_tree`]. Child module of
 //! `app::tree_window`, so it can read `App`'s private fields (it only ever
-//! needs the shared `history_tree`).
+//! needs the shared layer stack).
 
-use eframe::egui::{self, Align, Align2, Color32, FontId, Rect, Sense, Shape, Stroke};
+use eframe::egui::{
+    self, Align, Align2, Color32, CursorIcon, FontId, Id, PointerButton, Rect, Sense, Shape,
+    Stroke, Vec2,
+};
 
 use super::{Direction, Pin};
 use crate::app::App;
-use crate::history_tree::{self, Row};
+use crate::history_tree::{NodeId, Row};
 
 /// Graph geometry (VS Code-graph-like lanes).
 const GRAPH_PAD_X: f32 = 12.0;
@@ -45,25 +51,24 @@ fn branch_color(branch: usize) -> Color32 {
     BRANCH_COLORS[branch % BRANCH_COLORS.len()]
 }
 
-/// Row label of an action kind (the only info a node carries besides its
-/// colors — owner request 2026-11-12: no author, no extra metadata).
-fn kind_label(kind: history_tree::ActionKind) -> &'static str {
-    match kind {
-        history_tree::ActionKind::Pencil => "pencil",
-    }
-}
+/// The dot's click hit area: the circle plus a small margin on every side
+/// — a 7 px dot is too small a target — while staying clear of the label
+/// that hugs the node (owner request 2026-11-13: the LABEL is never a
+/// click target).
+const DOT_HIT_MARGIN: f32 = 5.0;
 
 /// Everything the graph painter needs besides the rows themselves.
 pub(super) struct GraphMetrics<'a> {
-    pub(super) spans: &'a [history_tree::BranchSpan],
+    pub(super) spans: &'a [crate::history_tree::BranchSpan],
     pub(super) row_height: f32,
     pub(super) body_font: FontId,
     pub(super) text_color: Color32,
 }
 
-/// The graph itself: one non-interactive row per action, exactly one text
-/// line tall — branch rails, fork connectors, the commit circle, the
-/// "pencil" label and the single color swatch.
+/// The graph itself: one row per action, exactly one text line tall —
+/// branch rails, fork connectors, the commit circle (LEFT-click = jump
+/// there), the "pencil" label and the single color swatch. Returns the id
+/// of the node whose dot was clicked this frame, if any.
 ///
 /// Geometry (owner request 2026-11-13): all rails and dots live inside a
 /// gutter of `lanes * LANE_STEP` pixels; every connector is a straight
@@ -79,22 +84,24 @@ pub(super) fn paint_graph(
     direction: Direction,
     metrics: &GraphMetrics<'_>,
     pin: Option<Pin>,
-) {
+    window_id: Id,
+) -> Option<NodeId> {
     if rows.is_empty() {
         ui.weak("No actions yet.");
-        return;
+        return None;
     }
 
     let row_height = metrics.row_height;
     let text_color = metrics.text_color;
     // Per-row labels (owner request 2026-11-13): kind + node id, measured
-    // up front so the row width can fit the widest row.
+    // up front so the row width can fit the widest row. The label text is
+    // `kind id` from the node itself ("pencil 7", "start 1").
     let labels: Vec<(String, f32)> = rows
         .iter()
         .map(|row| {
-            let text = app.history_tree.node(row.id).map_or_else(
-                || "pencil".to_string(),
-                |node| format!("{} {}", kind_label(node.kind), node.id),
+            let text = app.layers.node(row.id).map_or_else(
+                || "action".to_string(),
+                |node| format!("{} {}", node.kind.label(), node.id),
             );
             let width = ui
                 .painter()
@@ -137,7 +144,7 @@ pub(super) fn paint_graph(
         if let Some(target) = pin {
             let (hit, align) = match target {
                 Pin::End => (
-                    app.history_tree.head() == Some(row.id),
+                    app.layers.head() == Some(row.id),
                     match direction {
                         Direction::TopDown => Align::Max,
                         Direction::BottomUp => Align::Min,
@@ -226,8 +233,9 @@ pub(super) fn paint_graph(
         );
     }
 
-    // Pass 3: dots, labels, color swatches.
+    // Pass 3: dots (clickable), labels, color swatches.
     let window_fill = ui.visuals().window_fill;
+    let mut clicked = None;
     for (i, row) in rows.iter().enumerate() {
         let rect = rects[i];
         let cy = rect.center().y;
@@ -241,7 +249,28 @@ pub(super) fn paint_graph(
             );
         }
 
-        let node = app.history_tree.node(row.id);
+        // The dot is the LEFT-click switch (owner request 2026-11-13: the
+        // canvas shows the clicked node's PNG). The hit area is the dot
+        // plus DOT_HIT_MARGIN — never reaching the label. The id is salted
+        // with the window id: clones show the same tree and egui ids must
+        // not collide across windows.
+        let hit_rect =
+            Rect::from_center_size(center, Vec2::splat((NODE_RADIUS + DOT_HIT_MARGIN) * 2.0));
+        let dot = ui.interact(
+            hit_rect,
+            window_id.with(("node_dot", row.id)),
+            Sense::click(),
+        );
+        if dot.clicked_by(PointerButton::Primary) {
+            clicked = Some(row.id);
+        }
+        if dot.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            ui.ctx().request_repaint();
+        }
+        dot.on_hover_text("Left-click: switch the canvas to this node");
+
+        let node = app.layers.node(row.id);
         let (label, label_width) = &labels[i];
         // The label hugs THIS row's node (owner request 2026-11-13); the
         // opaque backdrop keeps it readable over rails it crosses.
@@ -259,17 +288,22 @@ pub(super) fn paint_graph(
             text_color,
         );
         if let Some(node) = node {
-            let swatch = Rect::from_min_size(
-                egui::pos2(label_x + label_width + LABEL_GAP, rect.top() + 2.0),
-                egui::vec2(SWATCH_WIDTH, row_height - 4.0),
-            );
-            painter.rect_filled(swatch, 2.0, node.color);
-            painter.rect_stroke(
-                swatch,
-                2.0,
-                Stroke::new(1.0, Color32::from_gray(90)),
-                egui::StrokeKind::Inside,
-            );
+            // The Start root paints no swatch (it carries no stroke color).
+            if node.kind != crate::history_tree::ActionKind::Start {
+                let swatch = Rect::from_min_size(
+                    egui::pos2(label_x + label_width + LABEL_GAP, rect.top() + 2.0),
+                    egui::vec2(SWATCH_WIDTH, row_height - 4.0),
+                );
+                painter.rect_filled(swatch, 2.0, node.color);
+                painter.rect_stroke(
+                    swatch,
+                    2.0,
+                    Stroke::new(1.0, Color32::from_gray(90)),
+                    egui::StrokeKind::Inside,
+                );
+            }
         }
     }
+
+    clicked
 }

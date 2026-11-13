@@ -6,6 +6,7 @@ mod canvas;
 mod file_io;
 mod history;
 mod history_tree;
+mod layers;
 mod palette;
 mod text;
 mod tools;
