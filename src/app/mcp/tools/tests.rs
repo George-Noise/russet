@@ -50,7 +50,7 @@ fn tool_declarations_have_name_description_schema() {
     let tools = tool_declarations();
     let list = tools.as_array().expect("tools array");
 
-    assert_eq!(list.len(), 9);
+    assert_eq!(list.len(), 10);
     let names: Vec<&str> = list
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))

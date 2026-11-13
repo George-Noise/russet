@@ -146,6 +146,7 @@ Before calling the delivery ready: with git, apply the patch onto a clean copy o
 - Tests: `cargo test --profile gates` (all — the lane verify.sh uses) / `cargo test app::placement --profile gates` (one module by path fragment). Unit tests live in `<module>/tests.rs` (see "Tests").
 - Docs/comment-only edits: `cargo check` is enough; say so explicitly in the `PROGRESS.md` entry.
 - Daily run: `cargo run` (Windows). Do not run `cargo build --release` during development; release validation belongs to M9.
+- Agent sandbox / headless GUI (owner request 2026-11-13): russet CAN run and be scenario-driven in the container — Xvfb plus two user-space .debs, no root needed. The exact recipe, pitfalls and the executable proof (`scripts/gui_recipe_test.sh`) live in `SANDBOX.md`; follow it instead of re-diagnosing, and include a green `visual_driver.py` run in the done-gate for GUI-visible features.
 - Web (M8): `rustup target add wasm32-unknown-unknown`, `cargo install trunk --locked --version 0.22.1` (pinned — see "Repo facts"), then from the repo root
   `trunk serve` / `trunk build --release` (config `Trunk.toml`, page `web/index.html`, output `dist/`).
   Trunk 0.22.1 is installed at `~/.cargo/bin/trunk` (that directory is NOT on `PATH`):

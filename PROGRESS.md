@@ -28,17 +28,18 @@
 | Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | done — first CI run GREEN (success for `0188c52`, GitHub Actions) | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
 | Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
 | Extra: dependency approval flow (owner 2026-11-12) | done | AGENTS.md "Dependencies — approval flow" + SPEC §6 exception + CONTRIBUTING.md — the hard no-deps ban became propose → discuss → owner decides; no code touched |
-| Extra: opt-in MCP server (owner 2026-11-12) | done — 9 tools behind `mcp` | default build byte-identical graph (no serde_json/threads); `get_tree_layout` added 2026-11-13; verify.sh gates the feature |
+| Extra: opt-in MCP server (owner 2026-11-12) | done — 10 tools behind `mcp` | default build byte-identical graph (no serde_json/threads); `get_tree_layout` + `add_layer` added 2026-11-13; verify.sh gates the feature |
 | Extra: History Tree windows (owner 2026-11-12) | done — lanes reworked 2026-11-13 | divergence-only forks, recency lanes, shared connector exits, per-row labels; MCP-driven scenarios + Xvfb screenshots green |
 | Extra: 500-guard splits (owner 2026-11-13) | done — pure code motion | `history_tree/layout.rs`, `tree_window/paint.rs`, `app/document.rs` + `menu.rs` + `input.rs`; app.rs 936 → ~440, every src file ≤ 500 |
 | Extra: agent workflow v2 (owner 2026-11-13) | done | DEBTS-verification.md + DEBTS-functional.md debt lists; rules.sh PROGRESS budget check; baseline-before-edits rule; CI runs the mcp gates; visual_driver.py rewritten as the scenario runner |
 | Extra: REAL layers + per-node PNG history (owner 2026-11-13) | done — gates green | pays F1+F4: interactive Layers window, per-layer git-style trees whose nodes carry full fast-PNG canvases, node-dot LEFT-click switching; SPEC §3.6 rewritten; GUI click-through = V13 (owner) |
+| Extra: headless-GUI sandbox recipe (owner 2026-11-13) | done — driver all green headless | `SANDBOX.md` + `scripts/gui_recipe_test.sh`: raw Xvfb + two user-space .debs, no root; MCP `add_layer` added (10 tools); visual_driver.py 3/3 scenarios green in-sandbox; V13 narrowed to pointer feel |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 78 green; with `--features mcp` — clippy clean, 90 green
 (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500 lines;
-rules.sh reports the PROGRESS.md/Log budgets — green; the GUI could NOT be started in this
-sandbox — no libxkbcommon-x11, no root — so V13 (Windows click-through) is the live human check).
+rules.sh reports the PROGRESS.md/Log budgets — green; the GUI runs headless in this sandbox per
+`SANDBOX.md` — visual_driver.py 3/3 scenarios, 14 checks green; V13 remains the owner's pointer-feel check).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -54,6 +55,27 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-13 — `Tooling:` headless-GUI recipe — the sandbox CAN run the GUI after all — owner request ("запиши опыт в .md")
+
+- **What:** the previous round's "GUI impossible here" was wrong. NEW `SANDBOX.md` records the
+  verified recipe: raw Xvfb (not xvfb-run — no xauth) + two user-space .debs
+  (`libxkbcommon-x11-0`, `libxcb-xkb1`) + unversioned symlink + LD_LIBRARY_PATH /
+  LIBGL_ALWAYS_SOFTWARE, plus pitfalls 1-8 (silent transitive deps, pipe-hanging
+  backgrounds, `timeout -k`, no Wayland fallback). NEW `scripts/gui_recipe_test.sh` is the
+  executable proof (MCP `initialize` answers from a live window). Follow-up fixes it unlocked:
+  MCP `add_layer` (parity with the Layers-window button; 9→10 tools) — without it no scenario
+  could address a second layer, which is why two driver scenarios sat stale; their expectations
+  corrected (tree rows include the Start root).
+- **Files:** NEW `SANDBOX.md`, `scripts/gui_recipe_test.sh`; `src/app/mcp/tools.rs` (+tests:
+  declaration count 9→10), `scripts/visual_driver.py`; AGENTS.md Commands bullet;
+  DEBTS-verification.md V13 narrowed; PROGRESS.md snapshot+stamp.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 78 tests default, 90 with
+  `--features mcp`; `visual_driver.py` headless — ALL 3 scenarios green, 14 checks (strokes,
+  undo/redo pixel restore, git-style fork, per-layer tree independence) through the real binary.
+- **Owner-checks:** V13 narrows to real-pointer feel (node-dot hit areas, double-click rename,
+  row switching); F8/F9/F10 stay open as agreed.
+- **Commit title:** `Add SANDBOX headless-GUI recipe, MCP add_layer tool and green driver scenarios`
 
 ### 2026-11-13 — `Feat:` real layers + per-node PNG history + node-dot switching — owner request ("кусок большой фичи")
 

@@ -143,15 +143,18 @@ def scenario_plain_undo(d, rep):
 
 
 def scenario_fork_after_undo(d, rep):
-    """Layer 1: drawing after undo is what forks; pixels follow the undo."""
-    d.tool("set_active_layer", {"index": 1})
+    """A fresh layer: drawing after undo is what forks; pixels follow the undo."""
+    fresh = len(d.tool("get_layers")["layers"])
+    d.tool("add_layer")
+    d.tool("set_active_layer", {"index": fresh})
     d.stroke(300, 200, 360, 260, "#cc3333")
     d.stroke(380, 200, 440, 260, "#222222")
     d.tool("undo")
     d.stroke(300, 280, 360, 340, "#3388cc")
     rows, _spans = d.layout()
+    # rows include the Start root: root, s1, s2 (peeled), s3 (fork)
     branches = [r["branch"] for r in sorted(rows, key=lambda r: r["id"])]
-    rep.check(branches == [0, 1, 0],
+    rep.check(branches == [0, 0, 1, 0],
               f"the abandoned tail peels to lane 1 only after a post-undo stroke (got {branches})")
     img = d.snapshot()
     rep.check(not any_near(img, 410, 230, rgb("#222222")),
@@ -163,18 +166,20 @@ def scenario_fork_after_undo(d, rep):
 
 
 def scenario_layers_independent(d, rep):
-    """Layer 2: tree layers hold independent node lists (ids are global)."""
+    """A third layer: tree layers hold independent node lists (ids are global)."""
+    while len(d.tool("get_layers")["layers"]) < 3:
+        d.tool("add_layer")
     d.tool("set_active_layer", {"index": 2})
     d.stroke(40, 380, 90, 420, "#33aa55")
     rows, _spans = d.layout()
-    rep.check(len(rows) == 1 and rows[0]["branch"] == 0,
-              f"layer 2 starts from its own root (got {[(r['id'], r['branch']) for r in rows]})")
+    rep.check(len(rows) == 2 and all(r["branch"] == 0 for r in rows),
+              f"the new layer starts from its own root (got {[(r['id'], r['branch']) for r in rows]})")
     d.tool("set_active_layer", {"index": 0})
     rows, _spans = d.layout()
-    rep.check(len(rows) == 3, f"layer 0 still holds its 3 nodes (got {len(rows)})")
+    rep.check(len(rows) == 4, f"layer 0 still holds its root + 3 strokes (got {len(rows)})")
     d.tool("set_active_layer", {"index": 1})
     rows, _spans = d.layout()
-    rep.check(len(rows) == 3, f"layer 1 still holds root+tail+fork (got {len(rows)})")
+    rep.check(len(rows) == 4, f"layer 1 still holds root + tail + fork (got {len(rows)})")
 
 
 SCENARIOS = [

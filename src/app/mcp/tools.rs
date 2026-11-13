@@ -39,6 +39,7 @@ pub(crate) fn tool_call(app: &mut App, params: &Value) -> Value {
         "add_stroke" => add_stroke(app, &args),
         "undo" => undo(app),
         "redo" => redo(app),
+        "add_layer" => add_layer(app),
         "set_active_layer" => set_active_layer(app, &args),
         "get_canvas_snapshot" => get_canvas_snapshot(app),
         "export_png" => export_png(app, &args),
@@ -278,6 +279,21 @@ fn step_reply(app: &mut App, before: Option<NodeId>) -> Result<Value, String> {
     ))
 }
 
+/// The exact code path of the Layers window "+ Add layer" button: a
+/// transparent layer on top, active, with its own fresh history tree.
+fn add_layer(app: &mut App) -> Result<Value, String> {
+    let (width, height) = (app.canvas.width, app.canvas.height);
+    let index = app.layers.add_layer(width, height);
+    app.switch_active_layer(index);
+    app.refresh_composite();
+    app.dirty = true;
+    let name = app.layers.active_layer_name().to_string();
+    Ok(tool_text(
+        json!({ "index": index, "name": name, "active_layer": app.layers.active_layer() })
+            .to_string(),
+    ))
+}
+
 fn set_active_layer(app: &mut App, args: &Value) -> Result<Value, String> {
     let count = app.layers.count();
     let index = args
@@ -445,6 +461,11 @@ pub(crate) fn tool_declarations() -> Value {
         {
             "name": "redo",
             "description": "Same as Ctrl+Y: steps forward again (prefers the branch the last undo left).",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "add_layer",
+            "description": "\"+ Add layer\" from the Layers window: appends a transparent layer on top, makes it active and gives it a fresh history tree. The agent needs this before set_active_layer can address the new index.",
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
