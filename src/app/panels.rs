@@ -1,18 +1,21 @@
-//! The "History" and "Layers" windows. History is the read-only action
-//! log; Layers is the REAL layer system's control panel (owner request
-//! 2026-11-13, paying functional debt F1): rows in display order (top
-//! layer first), click to select the active layer — every History Tree
-//! window follows — plus visibility, rename (double-click), reorder and
-//! delete-with-confirmation. Both are plain floating windows that since
-//! the owner request 2026-11-11 follow the same §3.11 placement as "Tools"
-//! and "Palette" (drop-time edge anchoring + resize repositioning, via
-//! [`place_floating_window`]); their FIRST-open positions stay the edge
-//! anchors below. Child module of `app`, so it can touch `App`'s private
-//! fields; `app.rs` stays the orchestrator.
+//! The "Tool Log" and "Layers" windows. Tool Log is the read-only action
+//! log — it was titled "History" until the owner rename request 2026-11-13
+//! (the egui area id and the internal `history_*` names stay unchanged so
+//! placement / area state survive); Layers is the REAL layer system's
+//! control panel (owner request 2026-11-13, paying functional debt F1):
+//! rows in display order (top layer first), click to select the active
+//! layer — every History Tree window follows — plus visibility, rename
+//! (double-click), reorder and delete-with-confirmation. Both are plain
+//! floating windows that since the owner request 2026-11-11 follow the same
+//! §3.11 placement as "Tools" and "Palette" (drop-time edge anchoring +
+//! resize repositioning, via [`place_floating_window`]); their FIRST-open
+//! positions stay the edge anchors below. Child module of `app`, so it can
+//! touch `App`'s private fields; `app.rs` stays the orchestrator.
 
 use eframe::egui::{self, Color32, Context, Vec2};
 
 use super::App;
+use super::dialogs::dialog_button_row;
 use super::placement::{FIRST_OPEN_GAP, LAYERS_FIRST_OPEN_LIFT, place_floating_window};
 
 /// Stable ids, same idea as `windows.rs`: independent of the title text so
@@ -43,6 +46,19 @@ const LAYERS_DEFAULT_WIDTH: f32 = 240.0;
 /// row's buttons.
 const LAYER_NAME_WIDTH: f32 = 120.0;
 
+/// Max height of the Tool Log's entry list. Was 280 pt, HALVED to 140 pt
+/// by the owner request 2026-11-13 («уменьшить максимальную высоту окошка
+/// вдвое»).
+const TOOL_LOG_MAX_HEIGHT: f32 = 140.0;
+
+/// Font size of the Tool Log's entries: 0.5rem = 8 pt (1 rem = 16 pt — egui
+/// 0.37 has no rem API, the same convention as `placement::REM`; owner
+/// request 2026-11-13). The window's vertical row spacing is zeroed with it
+/// (owner request: «прижать в 0»), so consecutive log lines sit flush — each
+/// row is the 8 pt font's own line height, the closest egui gets to a
+/// 0.5rem line height.
+const TOOL_LOG_FONT_SIZE: f32 = 8.0;
+
 /// What one frame of the Layers window asked for. The rows are rendered
 /// from a CLONED snapshot of the layer list, so every mutation applies
 /// AFTER the window closes its layout pass (no borrow fights inside the
@@ -61,42 +77,48 @@ struct LayerRequest {
 }
 
 impl App {
-    /// Read-only action log (newest first). Entries are plain labels —
-    /// clicking them does nothing yet by design.
+    /// The Tool Log window (owner request 2026-11-13 renamed it from
+    /// "History"): the read-only action log, newest first. Entries are
+    /// plain labels — clicking them does nothing yet by design.
     pub(super) fn history_window(&mut self, ctx: &Context) {
         if !self.history_window_open {
             return;
         }
         let mut open = true;
         let content = ctx.content_rect();
-        // First open (owner request 2026-11-12): the OLD History window now
-        // sits at the BOTTOM CENTER of the main window (the new "History
-        // Tree" took its old right-top spot). `CENTER_BOTTOM` pivot +
-        // `default_pos` anchor the bottom edge midpoint 0.5rem above the
-        // bottom edge. Afterwards the same §3.11 magnetism and resize
-        // repositioning as Tools/Palette (owner request 2026-11-11).
-        let shown = egui::Window::new("History")
+        // First open (owner request 2026-11-12, amended 2026-11-13): the
+        // window sits at the BOTTOM CENTER of the main window and its
+        // bottom edge is FLUSH with the bottom edge — the former 0.5rem
+        // gap is now 0 («прижать в 0 к низу», owner request 2026-11-13).
+        // §3.11 anchors the dropped gap, so it stays flush through
+        // main-window resizes until the user drags it away. Afterwards the
+        // same §3.11 magnetism and resize repositioning as Tools/Palette
+        // (owner request 2026-11-11).
+        let shown = egui::Window::new("Tool Log")
             .id(history_window_id())
             .open(&mut open)
             .pivot(egui::Align2::CENTER_BOTTOM)
-            .default_pos(egui::pos2(
-                content.center().x,
-                content.bottom() - FIRST_OPEN_GAP,
-            ))
+            .default_pos(egui::pos2(content.center().x, content.bottom()))
             .default_width(200.0)
             .show(ctx, |ui| {
                 ui.set_min_width(180.0);
+                // Only this window (owner request 2026-11-13): zero vertical
+                // row spacing, so the 8 pt log lines sit flush.
+                ui.style_mut().spacing.item_spacing.y = 0.0;
                 let entries = self.action_log.items();
                 if entries.is_empty() {
-                    ui.weak("No actions yet.");
+                    ui.label(egui::RichText::new("No actions yet.").size(TOOL_LOG_FONT_SIZE));
                 } else {
                     egui::ScrollArea::vertical()
-                        .max_height(280.0)
+                        .max_height(TOOL_LOG_MAX_HEIGHT)
                         .show(ui, |ui| {
                             // Newest at the top, so the latest action is
                             // always visible without scrolling.
                             for entry in entries.iter().rev() {
-                                ui.label(format!("{}. {}", entry.id, entry.label));
+                                ui.label(
+                                    egui::RichText::new(format!("{}. {}", entry.id, entry.label))
+                                        .size(TOOL_LOG_FONT_SIZE),
+                                );
                             }
                         });
                 }
@@ -451,14 +473,9 @@ impl App {
             .show(ctx, |ui| {
                 ui.label(format!("Delete layer \"{name}\"?"));
                 ui.weak("Its pixels and history will be removed for good.");
-                ui.horizontal(|ui| {
-                    if ui.button("OK").clicked() {
-                        confirmed = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        cancel = true;
-                    }
-                });
+                let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
+                confirmed = ok_hit;
+                cancel = cancel_hit;
             });
         if confirmed {
             self.layer_delete_confirm = None;

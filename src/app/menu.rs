@@ -96,12 +96,14 @@ impl App {
                     ui.checkbox(&mut self.tools_window_open, "Tools");
                     ui.checkbox(&mut self.palette_window_open, "Palette");
                     ui.checkbox(&mut self.tree_window_open, "History Tree");
-                    ui.checkbox(&mut self.history_window_open, "History");
+                    ui.checkbox(&mut self.history_window_open, "Tool Log");
                     ui.checkbox(&mut self.layers_window_open, "Layers");
                 });
 
                 ui.menu_button("Help", |ui| {
-                    if ui.button("About Russet").clicked() {
+                    // Owner request 2026-11-13: the ITEM is just "About";
+                    // the window it opens keeps the "About Russet" title.
+                    if ui.button("About").clicked() {
                         self.show_about = true;
                         ui.close();
                     }

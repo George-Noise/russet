@@ -1,7 +1,11 @@
 //! Modal dialogs (SPEC §3.7 / §3.8): "New", "Resize Canvas", the
-//! unsaved-changes confirmation and the "Error" popup. A child module of
-//! `app`, so it can touch `App`'s private fields; `app.rs` stays the
-//! orchestrator.
+//! unsaved-changes confirmation and the "Error" popup. All their
+//! affirmative/dismissive button rows go through [`dialog_button_row`]
+//! (owner request 2026-11-13: the IBM Carbon / Apple HIG / Google Material
+//! order — right-aligned, the primary button rightmost; the Text tool
+//! window and the Delete-layer confirmation use the same helper). A child
+//! module of `app`, so it can touch `App`'s private fields; `app.rs` stays
+//! the orchestrator.
 
 use eframe::egui::{self, Context};
 
@@ -39,14 +43,9 @@ impl App {
                             .max_decimals(0),
                     );
                 });
-                ui.horizontal(|ui| {
-                    if ui.button("OK").clicked() {
-                        ok = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        cancel = true;
-                    }
-                });
+                let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
+                ok = ok_hit;
+                cancel = cancel_hit;
             });
         if ok {
             let width = self.new_width.round() as u32;
@@ -88,14 +87,9 @@ impl App {
                             .max_decimals(0),
                     );
                 });
-                ui.horizontal(|ui| {
-                    if ui.button("OK").clicked() {
-                        ok = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        cancel = true;
-                    }
-                });
+                let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
+                ok = ok_hit;
+                cancel = cancel_hit;
             });
         if ok {
             let width = self.resize_width.round() as u32;
@@ -132,14 +126,9 @@ impl App {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.label("You have unsaved changes. Discard them and continue?");
-                ui.horizontal(|ui| {
-                    if ui.button("OK").clicked() {
-                        confirmed = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        cancel = true;
-                    }
-                });
+                let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
+                confirmed = ok_hit;
+                cancel = cancel_hit;
             });
         if confirmed {
             self.pending_action = None;
@@ -162,9 +151,8 @@ impl App {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.label(message);
-                if ui.button("OK").clicked() {
-                    close = true;
-                }
+                let (close_hit, _) = dialog_button_row(ui, "OK", "");
+                close = close_hit;
             });
         if close {
             self.error_popup = None;
@@ -193,12 +181,35 @@ impl App {
                 ui.label(format!("Platform: {}", crate::platform_label()));
                 ui.label(format!("Renderer: {}", crate::renderer_label()));
                 ui.add_space(6.0);
-                if ui.button("Close").clicked() {
-                    close = true;
-                }
+                let (close_hit, _) = dialog_button_row(ui, "Close", "");
+                close = close_hit;
             });
         if close {
             self.show_about = false;
         }
     }
+}
+
+/// The affirmative/dismissive button row of every dialog and of the Text
+/// tool window, laid out per the IBM Carbon / Apple HIG / Google Material
+/// convention (owner request 2026-11-13: "чтобы как у всех"): the row is
+/// right-aligned and the AFFIRMATIVE (primary) button is the RIGHTMOST one,
+/// with the dismissive button to its left. Microsoft Windows's opposite
+/// order (primary leftmost) is deliberately not followed. Returns
+/// `(primary_clicked, secondary_clicked)`; pass an empty `secondary` label
+/// for a single-button row.
+pub(super) fn dialog_button_row(ui: &mut egui::Ui, primary: &str, secondary: &str) -> (bool, bool) {
+    let mut primary_clicked = false;
+    let mut secondary_clicked = false;
+    // `right_to_left`: the FIRST widget added lands rightmost, so the
+    // primary button is added first.
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if ui.button(primary).clicked() {
+            primary_clicked = true;
+        }
+        if !secondary.is_empty() && ui.button(secondary).clicked() {
+            secondary_clicked = true;
+        }
+    });
+    (primary_clicked, secondary_clicked)
 }

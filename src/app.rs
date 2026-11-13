@@ -12,7 +12,8 @@
 //!   [`mcp`]       — owner request 2026-11-12, feature `mcp`: the stdio
 //!                   MCP server (compiled out without the feature)
 //!   [`menu`]      — owner request 2026-11-13: the top menu bar (§3.1)
-//!   [`panels`]    — owner request 2026-11-10: the "History" log and the
+//!   [`panels`]    — owner request 2026-11-10: the "Tool Log" (the read-only
+//!                   action log, named "History" until 2026-11-13) and the
 //!                   "Layers" windows (Layers interactive since 2026-11-13)
 //!   [`placement`] — §3.11: floating-window edge anchoring + resize repositioning
 //!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
@@ -85,9 +86,11 @@ const MAX_ZOOM: f32 = 8.0;
 const ZOOM_STEP_FACTOR: f32 = 1.12;
 const ZOOM_SNAP_RATIO: f32 = 0.06;
 /// egui's raw wheel delta (40 pt per notch on native) pans slower than
-/// Paint.NET; scaled up so panning feels ~1.5x slower than Paint.NET
-/// (owner-tuned).
-const SCROLL_PAN_SPEED: f32 = 1.5;
+/// Paint.NET; originally tuned to 1.5 (~1.5x slower than Paint.NET), then
+/// DOUBLED to 3.0 by the owner request 2026-11-13 («ускорить pan на
+/// колёсике в 2 раза») — plain-wheel vertical and Shift+wheel horizontal
+/// alike. Verification of the feel is V15 (DEBTS-verification.md).
+const SCROLL_PAN_SPEED: f32 = 3.0;
 /// WASD pans the viewport continuously (§3.4): screen-space speed in
 /// logical points per second, applied while a pan key is held (owner-tuned;
 /// crossing a 1080p-height main window takes ~1.8 s).
@@ -141,7 +144,7 @@ pub struct App {
     /// has a single color, no primary/secondary pair).
     stroke_paint: Option<Color32>,
     /// §3.11 placement state of the four floating windows (owner request
-    /// 2026-11-11 added the History/Layers pair); the Tools one also carries
+    /// 2026-11-11 added the Tool Log/Layers pair); the Tools one also carries
     /// the one-shot §3.2 first-open vertical ratio (40%/60%).
     tools_placement: WindowPlacement,
     palette_placement: WindowPlacement,
@@ -153,8 +156,8 @@ pub struct App {
     /// Pending text entry of the Text tool (owner request 2026-11-10);
     /// the input window and commit live in [`text_tool`].
     text_edit: Option<TextEditState>,
-    /// Read-only action log behind the "History" window (owner request
-    /// 2026-11-10).
+    /// Read-only action log behind the "Tool Log" window (owner request
+    /// 2026-11-10; the window was named "History" until 2026-11-13).
     action_log: ActionLog,
     last_panel_rect: Rect,
     /// `ctx.content_rect()` of the previous frame; a change means the main
@@ -182,7 +185,7 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Owner request 2026-11-11: NO drop shadows on the app's windows —
         // a flat look. `window_shadow` covers every `egui::Window` (Tools,
-        // Palette, History, Layers, the Text input and all dialogs) in BOTH
+        // Palette, Tool Log, Layers, the Text input and all dialogs) in BOTH
         // themes; menu/popup shadows (`visuals.popup_shadow`) stay as egui
         // draws them — popups are not "windows" in the owner's sense.
         cc.egui_ctx.all_styles_mut(|style| {

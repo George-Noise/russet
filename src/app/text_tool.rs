@@ -8,6 +8,7 @@
 use eframe::egui::{self, Color32, Context, Key, PointerButton, Pos2, Rect};
 
 use super::App;
+use super::dialogs::dialog_button_row;
 
 /// Pending text entry of the Text tool.
 pub(super) struct TextEditState {
@@ -107,14 +108,10 @@ impl App {
                 if state.reposition {
                     response.request_focus();
                 }
-                ui.horizontal(|ui| {
-                    if ui.button("Place (Enter)").clicked() {
-                        commit = true;
-                    }
-                    if ui.button("Cancel (Esc)").clicked() {
-                        cancel = true;
-                    }
-                });
+                let (place_hit, cancel_hit) =
+                    dialog_button_row(ui, "Place (Enter)", "Cancel (Esc)");
+                commit = place_hit;
+                cancel = cancel_hit;
                 ui.weak("Click the canvas to move the text; Enter places, Esc cancels.");
             });
 

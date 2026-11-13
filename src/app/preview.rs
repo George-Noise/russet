@@ -52,6 +52,36 @@ pub(super) enum DragKind {
     Shape(ShapeKind),
 }
 
+/// Wells of a Shape-tool gesture start: the outline comes from the primary
+/// well and the fill from the secondary one, each gated by its Tools-window
+/// checkbox (owner request 2026-11-10). A RIGHT-button gesture swaps the two
+/// wells first (owner request 2026-11-13) — the same persistent
+/// `std::mem::swap` the Palette's "Swap (X)" button does — so the shape
+/// commits with the former secondary in the outline and the former primary
+/// in the fill. Returns `(outline, fill, wells_swapped)`; the CALLER applies
+/// the swap to the wells when `wells_swapped` is true. Pure, so the rule is
+/// unit-testable without an egui context (the tests live in the sibling
+/// `preview/tests.rs`).
+fn shape_gesture_wells(
+    button: PointerButton,
+    shape_outline: bool,
+    shape_fill: bool,
+    primary: Color32,
+    secondary: Color32,
+) -> (Option<Color32>, Option<Color32>, bool) {
+    let swapped = button == PointerButton::Secondary;
+    let (outline_source, fill_source) = if swapped {
+        (secondary, primary)
+    } else {
+        (primary, secondary)
+    };
+    (
+        shape_outline.then_some(outline_source),
+        shape_fill.then_some(fill_source),
+        swapped,
+    )
+}
+
 impl App {
     /// Press/drag/release and click handling for the Line and Shape tools.
     pub(super) fn handle_preview_input(
@@ -148,11 +178,22 @@ impl App {
                     }
                     Tool::Shape => {
                         // Primary paints the outline, secondary the fill
-                        // (owner request 2026-11-10) — regardless of the
-                        // mouse button; the Tools window guarantees at
-                        // least one of the two checkboxes is on.
-                        let outline = self.tools.shape_outline.then_some(self.tools.primary);
-                        let fill = self.tools.shape_fill.then_some(self.tools.secondary);
+                        // (owner request 2026-11-10); a RIGHT-button gesture
+                        // swaps the two wells first (owner request 2026-11-13,
+                        // the same persistent swap the Palette's Swap button
+                        // does). The Tools window guarantees at least one of
+                        // the two checkboxes is on. The rule lives in the pure
+                        // [`shape_gesture_wells`] so it stays unit-testable.
+                        let (outline, fill, swapped) = shape_gesture_wells(
+                            button,
+                            self.tools.shape_outline,
+                            self.tools.shape_fill,
+                            self.tools.primary,
+                            self.tools.secondary,
+                        );
+                        if swapped {
+                            std::mem::swap(&mut self.tools.primary, &mut self.tools.secondary);
+                        }
                         self.preview = PreviewState::Drag {
                             kind: DragKind::Shape(self.tools.shape_kind),
                             start: pos,
@@ -444,3 +485,6 @@ impl App {
         self.is_stroking = false;
     }
 }
+
+#[cfg(test)]
+mod tests;

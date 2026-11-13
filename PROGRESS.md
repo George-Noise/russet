@@ -35,13 +35,14 @@
 | Extra: REAL layers + per-node PNG history (owner 2026-11-13) | done — gates green | pays F1+F4: interactive Layers window, per-layer git-style trees whose nodes carry full fast-PNG canvases, node-dot LEFT-click switching; SPEC §3.6 rewritten; GUI click-through = V13 (owner) |
 | Extra: headless-GUI sandbox recipe (owner 2026-11-13) | done — driver all green headless | `SANDBOX.md` + `scripts/gui_recipe_test.sh`: raw Xvfb + two user-space .debs, no root; MCP `add_layer` added (10 tools); visual_driver.py 3/3 scenarios green in-sandbox; V13 narrowed to pointer feel |
 | Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title (backticks kept) at every done-gate; AGENTS.md Delivery ritual requires it verbatim, backtick-wrapped, in the reply |
+| Extra: UX round (owner 2026-11-13) | done — gates green | History window → Tool Log (list max height halved to 140 pt, 0.5rem entries, zero row spacing, bottom edge flush), Help item → About, dialog button rows per IBM/Apple/Google via shared `dialog_button_row`, Shape RMB-drag swaps the color wells, wheel pan ×2 (`SCROLL_PAN_SPEED` 3.0) |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 78 green; with `--features mcp` — clippy clean, 90 green
-(2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500 lines;
-rules.sh reports the PROGRESS.md/Log budgets — green; the GUI runs headless in this sandbox per
-`SANDBOX.md` — visual_driver.py 3/3 scenarios, 15 checks green, re-proven after the Layers-width /
-white-initial-layer fix; V13/V14 remain the owner's pointer-feel checks).
+`cargo test --profile gates` — 81 green; with `--features mcp` — clippy clean, 93 green
+(2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; layers.rs sits at 504/500 lines —
+over the soft guard, a split is proposed at task end; rules.sh reports the PROGRESS.md/Log budgets —
+green; the GUI runs headless in this sandbox per `SANDBOX.md` — visual_driver.py 3/3 scenarios,
+15 checks green, re-proven after the UX round; V13–V15 are the owner's feel checks).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -57,6 +58,34 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-13 — `UX:` Tool Log restyle, About item, dialog rows, Shape RMB swap, 2x wheel pan — owner request (5 chat items)
+
+- **What:** (1) the "History" window (NOT the History Tree) → "Tool Log" (View
+  checkbox too; egui id + internal `history_*` names unchanged), entry list max
+  height HALVED 280→140 pt, entries at 0.5rem = 8 pt with zero row spacing,
+  first-open bottom edge FLUSH (gap 0; §3.11 keeps the dropped gap). (2) Help
+  item "About Russet" → "About" (the window keeps its title). (3) Every dialog
+  button row → the IBM Carbon / Apple HIG / Google Material order via the new
+  shared `dialog_button_row` (right-aligned, affirmative RIGHTMOST): New, Resize
+  Canvas, Unsaved Changes, Delete Layer, Error, About's Close, Text Place/Cancel.
+  (4) Shape (U) right-button drag swaps the wells first (persistent, like the
+  Palette Swap button) and commits the shape with the swapped wells — pure
+  `shape_gesture_wells` + 3 tests. (5) Wheel pan ×2: `SCROLL_PAN_SPEED` 1.5→3.0.
+  (6) F10 hand-checked by the owner — stays open (DEBTS-functional.md note).
+  Found + reported, NOT fixed: the Palette "Swap (X)" button has no X hotkey
+  behind it (§3.9 has none).
+- **Files:** `src/app.rs`, `src/app/preview.rs` + NEW `src/app/preview/tests.rs`,
+  `dialogs.rs`, `panels.rs`, `text_tool.rs`, `menu.rs`; docs: `SPEC.md`
+  (§3.1–3.2, §3.4, §3.6–3.8, §3.11, §7), `AGENTS.md`, both DEBTS files.
+- **Verified:** verify.sh ALL GATES GREEN — 81 tests default / 93 with
+  `--features mcp` (+3 preview tests); headless `visual_driver.py` 3/3
+  scenarios, 15 checks green after the preview change; rules.sh budgets green.
+- **Owner-checks:** V15 (pan ×2 — the owner-requested check), V16 (Shape RMB
+  swap), V17 (Tool Log restyle), V18 (dialog rows) born in
+  DEBTS-verification.md.
+- **Commit title:** `UX: Tool Log, About, dialog order, Shape RMB swap, 2x wheel pan`
+
 
 ### 2026-11-13 — `Docs:` second debt triage — owner answered the batched V/F list
 
@@ -144,24 +173,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** skim `tools.rs` — does the root-as-map layout read well (same ask as V7);
   the ritual wording in AGENTS.md.
 - **Commit title:** `Split MCP tools into a root map plus queries/edits modules and enforce the commit-title ritual`
-
-### 2026-11-13 — `Tooling:` headless-GUI recipe — the sandbox CAN run the GUI after all — owner request ("запиши опыт в .md")
-
-- **What:** the previous round's "GUI impossible here" was wrong. NEW `SANDBOX.md` records the
-  verified recipe: raw Xvfb (not xvfb-run — no xauth) + two user-space .debs
-  (`libxkbcommon-x11-0`, `libxcb-xkb1`) + unversioned symlink + LD_LIBRARY_PATH /
-  LIBGL_ALWAYS_SOFTWARE, plus pitfalls 1-8 (silent transitive deps, pipe-hanging
-  backgrounds, `timeout -k`, no Wayland fallback). NEW `scripts/gui_recipe_test.sh` is the
-  executable proof (MCP `initialize` answers from a live window). Follow-up fixes it unlocked:
-  MCP `add_layer` (parity with the Layers-window button; 9→10 tools) — without it no scenario
-  could address a second layer, which is why two driver scenarios sat stale; their expectations
-  corrected (tree rows include the Start root).
-- **Files:** NEW `SANDBOX.md`, `scripts/gui_recipe_test.sh`; `src/app/mcp/tools.rs` (+tests:
-  declaration count 9→10), `scripts/visual_driver.py`; AGENTS.md Commands bullet;
-  DEBTS-verification.md V13 narrowed; PROGRESS.md snapshot+stamp.
-- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 78 tests default, 90 with
-  `--features mcp`; `visual_driver.py` headless — ALL 3 scenarios green, 14 checks (strokes,
-  undo/redo pixel restore, git-style fork, per-layer tree independence) through the real binary.
-- **Owner-checks:** V13 narrows to real-pointer feel (node-dot hit areas, double-click rename,
-  row switching); F8/F9/F10 stay open as agreed.
-- **Commit title:** `Add SANDBOX headless-GUI recipe, MCP add_layer tool and green driver scenarios`

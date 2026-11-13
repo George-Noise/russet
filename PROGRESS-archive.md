@@ -31,6 +31,30 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `Tooling:` headless-GUI recipe — the sandbox CAN run the GUI after all — owner request ("запиши опыт в .md")
+
+- **What:** the previous round's "GUI impossible here" was wrong. NEW `SANDBOX.md` records the
+  verified recipe: raw Xvfb (not xvfb-run — no xauth) + two user-space .debs
+  (`libxkbcommon-x11-0`, `libxcb-xkb1`) + unversioned symlink + LD_LIBRARY_PATH /
+  LIBGL_ALWAYS_SOFTWARE, plus pitfalls 1-8 (silent transitive deps, pipe-hanging
+  backgrounds, `timeout -k`, no Wayland fallback). NEW `scripts/gui_recipe_test.sh` is the
+  executable proof (MCP `initialize` answers from a live window). Follow-up fixes it unlocked:
+  MCP `add_layer` (parity with the Layers-window button; 9→10 tools) — without it no scenario
+  could address a second layer, which is why two driver scenarios sat stale; their expectations
+  corrected (tree rows include the Start root).
+- **Files:** NEW `SANDBOX.md`, `scripts/gui_recipe_test.sh`; `src/app/mcp/tools.rs` (+tests:
+  declaration count 9→10), `scripts/visual_driver.py`; AGENTS.md Commands bullet;
+  DEBTS-verification.md V13 narrowed; PROGRESS.md snapshot+stamp.
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 78 tests default, 90 with
+  `--features mcp`; `visual_driver.py` headless — ALL 3 scenarios green, 14 checks (strokes,
+  undo/redo pixel restore, git-style fork, per-layer tree independence) through the real binary.
+- **Owner-checks:** V13 narrows to real-pointer feel (node-dot hit areas, double-click rename,
+  row switching); F8/F9/F10 stay open as agreed.
+- **Commit title:** `Add SANDBOX headless-GUI recipe, MCP add_layer tool and green driver scenarios`
+
+
+---
+
 ### 2026-11-13 — `Feat:` real layers + per-node PNG history + node-dot switching — owner request ("кусок большой фичи")
 
 - **What:** owner's staged rollout of the history design, decisions fixed in chat:

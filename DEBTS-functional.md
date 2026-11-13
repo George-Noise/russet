@@ -24,6 +24,10 @@
 | F10 | 2026-11-13 | Undo/redo act on the ACTIVE layer only; the design doc's cross-layer hint ("последний штрих был на слое …", §8 / open question #3) is not implemented. | Owner's staged rollout: "реализовывать большую фичу по чуть-чуть". | When the owner picks an answer to the design doc's open question #3. |
 
 Owner reconfirmation 2026-11-13: F3, F8, F9, F10 stay open as is («остальное — не сейчас»).
+Owner hand-check 2026-11-13: F10's behavior — undo/redo act on the ACTIVE layer only — was
+verified by the owner manually («это я проверил руками»): it matches this documented
+simplification, nothing to fix on the spot; the debt stays open until the design doc's
+open question #3 is answered.
 
 Paid / closed (kept until the next compaction, then dropped):
 
