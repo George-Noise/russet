@@ -25,6 +25,24 @@ fn layers_window_id() -> egui::Id {
     egui::Id::unique("layers_window")
 }
 
+/// Outer width of the Layers window. The window used to be `.auto_sized()`
+/// while its rows derived their width from `ui.available_width()` — and an
+/// auto-sized window's FIRST layout pass sees `available_width` = the whole
+/// `content_rect` (its `Resize` default size is INFINITY clamped to the
+/// screen) while `desired_size` never shrinks below the first frame. The
+/// row widths then fed themselves every frame: the window opened screen-
+/// wide and grew ~one row-overflow per frame FOREVER, spilling past the
+/// main window (owner report 2026-11-13). A fixed `default_width` with
+/// fixed-width rows cannot feed itself — the quirk is recorded in
+/// AGENTS.md "eframe/egui 0.37 API quirks".
+const LAYERS_DEFAULT_WIDTH: f32 = 240.0;
+
+/// Fixed width of a row's name click target — the former
+/// `available_width - 58.0` was the auto-size feedback loop above.
+/// Long names are clipped to the column instead of running under the
+/// row's buttons.
+const LAYER_NAME_WIDTH: f32 = 120.0;
+
 /// What one frame of the Layers window asked for. The rows are rendered
 /// from a CLONED snapshot of the layer list, so every mutation applies
 /// AFTER the window closes its layout pass (no borrow fights inside the
@@ -100,8 +118,10 @@ impl App {
 
     /// The Layers window (owner request 2026-11-13, real layers): one row
     /// per layer, TOP layer first. The row's click target is the layer
-    /// NAME (a wide selectable label); the eye, arrows and "×" sit next to
-    /// it and never change the active layer.
+    /// NAME (a fixed-width column, [`LAYER_NAME_WIDTH`]); the eye, arrows
+    /// and "×" sit next to it and never change the active layer. Fixed
+    /// width, no resize handle — see [`LAYERS_DEFAULT_WIDTH`] for why the
+    /// former `.auto_sized()` could not stay narrow.
     pub(super) fn layers_window(&mut self, ctx: &Context) {
         if !self.layers_window_open {
             return;
@@ -134,7 +154,8 @@ impl App {
                 content.right() - FIRST_OPEN_GAP,
                 content.bottom() - FIRST_OPEN_GAP - LAYERS_FIRST_OPEN_LIFT,
             ))
-            .auto_sized()
+            .default_width(LAYERS_DEFAULT_WIDTH)
+            .resizable(false) // `.auto_sized()` was non-resizable too; see LAYERS_DEFAULT_WIDTH
             .show(ctx, |ui| {
                 ui.set_min_width(190.0);
                 if ui.button("+ Add layer").clicked() {
@@ -241,14 +262,20 @@ impl App {
                 }
             }
         } else {
-            let width = (ui.available_width() - 58.0).max(40.0);
-            let (rect, label) =
-                ui.allocate_exact_size(Vec2::new(width, row_height), egui::Sense::click());
+            // Fixed-width name column (`LAYER_NAME_WIDTH`): width derived
+            // from `available_width` inside this window fed the auto-size
+            // growth loop (owner report 2026-11-13). The name text is
+            // clipped to the column so a long name cannot run under the
+            // row's buttons.
+            let (rect, label) = ui.allocate_exact_size(
+                Vec2::new(LAYER_NAME_WIDTH, row_height),
+                egui::Sense::click(),
+            );
             if is_active {
                 ui.painter()
                     .rect_filled(rect, 3.0, ui.style().visuals.selection.bg_fill);
             }
-            ui.painter().text(
+            ui.painter().with_clip_rect(rect).text(
                 egui::pos2(rect.left() + 6.0, rect.center().y),
                 egui::Align2::LEFT_CENTER,
                 name,

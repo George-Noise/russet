@@ -44,9 +44,10 @@ impl App {
         let width = width.clamp(MIN_CANVAS, MAX_CANVAS);
         let height = height.clamp(MIN_CANVAS, MAX_CANVAS);
         self.canvas = Canvas::new(width, height, Color32::TRANSPARENT);
-        // A fresh document: ONE transparent layer whose Start root holds
-        // the initial canvas (owner request 2026-11-13: all layers are
-        // transparent — the checkerboard shows through until painted).
+        // A fresh document: ONE WHITE layer whose Start root holds the
+        // initial canvas (owner request 2026-11-13: the initial layer is
+        // filled white — the §3.8 white New canvas — while every layer
+        // added later is transparent).
         self.layers = LayerStack::new(width, height);
         self.layer_delete_confirm = None;
         self.layer_rename = None;
@@ -64,7 +65,9 @@ impl App {
         self.action_log.push(format!("New canvas {width}×{height}"));
         self.set_zoom(1.0, None, self.last_panel_rect);
         self.pan = Vec2::ZERO;
-        self.repaint_full();
+        // The white initial layer must reach the display buffer (the
+        // canvas pixmap was created transparent above): blend + full upload.
+        self.refresh_composite();
     }
 
     /// Fresh dimensions for the New dialog, then show it.

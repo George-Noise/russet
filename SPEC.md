@@ -341,8 +341,11 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   (top-left anchored); old node PNGs keep their original size and are fitted (crop/
   pad) when restored; drawing on from a fitted node stores the NEXT node at the new
   size.
-- Open and New rebuild the layer stack (history restarts). Save writes the COMPOSITE
-  of all visible layers as one PNG/JPEG.
+- Open and New rebuild the layer stack (history restarts). A NEW document's initial
+  layer is filled WHITE — the §3.8 white New canvas, restored by the owner request
+  2026-11-13 after the layers rewrite had made everything transparent — and every
+  layer added later starts fully transparent; Open's initial layer IS the loaded
+  picture. Save writes the COMPOSITE of all visible layers as one PNG/JPEG.
 - The debug "-" button of the History Tree windows removes the head node (refused on
   the Start root); its children reattach to the grandparent and keep their snapshots.
 - The read-only "History" log window is a convenience view, unchanged.

@@ -218,7 +218,7 @@ impl App {
             .egui_ctx
             .load_texture("checker", checker, checker_options);
 
-        Self {
+        let mut app = Self {
             ctx: cc.egui_ctx.clone(),
             canvas,
             canvas_tex,
@@ -268,7 +268,13 @@ impl App {
             error_popup: None,
             show_about: false,
             window_title: String::new(),
-        }
+        };
+        // The canvas pixmap is created TRANSPARENT above, but the fresh
+        // stack's initial layer is WHITE (owner request 2026-11-13): blend
+        // it into the display buffer once, or the first frame would show
+        // the checkerboard through a white layer.
+        app.refresh_composite();
+        app
     }
 
     /// Shared action behind the Edit menu ([`menu`]) and the hotkeys

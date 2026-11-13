@@ -611,3 +611,31 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **Owner-checks:** keep the two python helpers in scripts/ or drop them; CI (ci.yml)
   does not run the mcp gates yet — say the word and they go there too.
 - **Commit title:** `Add get_tree_layout MCP tool and gate the mcp feature in verify.sh`
+
+### 2026-11-13 — `Tooling:` debt lists, PROGRESS budget check, baseline rule, CI mcp gates, scenario driver — owner request
+
+- **What:** agentic-workflow round, zero app-behavior change. (1) NEW
+  `DEBTS-verification.md` (12 open human checks, V1–V12) + `DEBTS-functional.md`
+  (7 open debts F1–F7, 2 paid); AGENTS.md "Debts": the agent surfaces open
+  items in ONE batched list at session start and task end and ASKS which are
+  human-verified. (2) rules.sh reports PROGRESS.md size (~200 budget), Log
+  size (~120), parked RESOLVED warnings and the live owner-check count —
+  report-only reminder. (3) THIS compaction: 15 entries + 3 RESOLVED warnings
+  → archive; Warnings is active-only. (4) Commands: BASELINE before edits =
+  rules.sh + `cargo fmt --check` only — no compiling pre-checks (the tree
+  always lands green). (5) CI `native` runs clippy+test with `--features mcp`
+  (owner OK; verify.sh has gated the pair since 2026-11-13). (6)
+  `visual_driver.py` rewritten: scenarios as data, assertions as text lines —
+  layout via get_tree_layout, committed pixels via get_canvas_snapshot + PIL
+  in canvas space; screenshots only with `--shots`. 3 scenarios, 14 checks,
+  green under Xvfb.
+- **Files:** NEW `DEBTS-verification.md`, `DEBTS-functional.md`;
+  `scripts/rules.sh`, `scripts/visual_driver.py` (rewritten),
+  `.github/workflows/ci.yml`, `AGENTS.md` (Debts section, baseline rule, CI),
+  `PROGRESS.md` (compaction + entry), `PROGRESS-archive.md` (moves in).
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default,
+  81 with `--features mcp`; driver 14/14 checks green under Xvfb; ci.yml
+  parsed with yaml.safe_load.
+- **Owner-checks:** answer the batched debt questions (V1–V12, F-decisions) —
+  first live run of the ask-don't-accumulate rule; skim the DEBTS wording.
+- **Commit title:** `Add DEBTS files and PROGRESS budget check; baseline rule; CI mcp gates; scenario driver`

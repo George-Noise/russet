@@ -40,8 +40,8 @@
 `cargo test --profile gates` — 78 green; with `--features mcp` — clippy clean, 90 green
 (2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500 lines;
 rules.sh reports the PROGRESS.md/Log budgets — green; the GUI runs headless in this sandbox per
-`SANDBOX.md` — visual_driver.py 3/3 scenarios, 14 checks green, re-proven after the mcp/tools
-split; V13 remains the owner's pointer-feel check).
+`SANDBOX.md` — visual_driver.py 3/3 scenarios, 15 checks green, re-proven after the Layers-width /
+white-initial-layer fix; V13/V14 remain the owner's pointer-feel checks).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -57,6 +57,29 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-13 — `Fix:` Layers window width + the white initial layer — owner report (3 chat items)
+
+- **What:** (1) the Layers window smeared screen-wide and did not fit the main window:
+  `.auto_sized()`'s FIRST layout sees `available_width` = the whole screen and
+  `desired_size` never shrinks, while the row names derived their width from it — a
+  self-feeding per-frame growth loop. Now `.default_width(240)` + `.resizable(false)`
+  (auto-sized was non-resizable too) with a FIXED 120 pt name column, text clipped so
+  long names cannot run under the buttons; the egui quirk is recorded in AGENTS.md.
+  (2) A NEW document's initial layer is WHITE again (§3.8): `LayerStack::new` fills
+  the Start canvas, layers added later stay transparent; `App::new`/`reset_canvas`
+  now composite the fresh stack into the display buffer once (it is created
+  transparent). (3) The third item was owner praise for the node-dot history switching
+  (no change needed).
+- **Files:** `src/app/panels.rs`, `src/layers.rs` + tests, `src/app.rs`,
+  `src/app/document.rs` (composite on New), `scripts/visual_driver.py` (+1 check),
+  `SPEC.md` §3.6, `AGENTS.md` (quirk), PROGRESS.md.
+- **Verified:** verify.sh ALL GATES GREEN — 78 default / 90 mcp; headless driver 3/3
+  scenarios, 15 checks incl. the new fresh-white check; Xvfb screenshot: Layers ~240 pt
+  wide, fits the main window, canvas white with strokes.
+- **Owner-checks:** V14 in DEBTS-verification.md (Windows click-through: window fits,
+  New canvas white, added layers transparent).
+- **Commit title:** `Fix the Layers window width and restore the white initial layer`
 
 ### 2026-11-13 — `Refactor:` mcp/tools split into themed modules + commit-title delivery ritual — owner request (3 chat items)
 
@@ -154,31 +177,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** say the word on V4 and V7 (explained in chat) — one word each
   closes them; V8/V9 stay parked until you plan those checks; F1–F5 unchanged.
 - **Commit title:** `Docs: first debt triage — verify V1-V3 V5 V6 V11 V12, close V10 F6 F7, park V8 V9`
-
-### 2026-11-13 — `Tooling:` debt lists, PROGRESS budget check, baseline rule, CI mcp gates, scenario driver — owner request
-
-- **What:** agentic-workflow round, zero app-behavior change. (1) NEW
-  `DEBTS-verification.md` (12 open human checks, V1–V12) + `DEBTS-functional.md`
-  (7 open debts F1–F7, 2 paid); AGENTS.md "Debts": the agent surfaces open
-  items in ONE batched list at session start and task end and ASKS which are
-  human-verified. (2) rules.sh reports PROGRESS.md size (~200 budget), Log
-  size (~120), parked RESOLVED warnings and the live owner-check count —
-  report-only reminder. (3) THIS compaction: 15 entries + 3 RESOLVED warnings
-  → archive; Warnings is active-only. (4) Commands: BASELINE before edits =
-  rules.sh + `cargo fmt --check` only — no compiling pre-checks (the tree
-  always lands green). (5) CI `native` runs clippy+test with `--features mcp`
-  (owner OK; verify.sh has gated the pair since 2026-11-13). (6)
-  `visual_driver.py` rewritten: scenarios as data, assertions as text lines —
-  layout via get_tree_layout, committed pixels via get_canvas_snapshot + PIL
-  in canvas space; screenshots only with `--shots`. 3 scenarios, 14 checks,
-  green under Xvfb.
-- **Files:** NEW `DEBTS-verification.md`, `DEBTS-functional.md`;
-  `scripts/rules.sh`, `scripts/visual_driver.py` (rewritten),
-  `.github/workflows/ci.yml`, `AGENTS.md` (Debts section, baseline rule, CI),
-  `PROGRESS.md` (compaction + entry), `PROGRESS-archive.md` (moves in).
-- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 69 tests default,
-  81 with `--features mcp`; driver 14/14 checks green under Xvfb; ci.yml
-  parsed with yaml.safe_load.
-- **Owner-checks:** answer the batched debt questions (V1–V12, F-decisions) —
-  first live run of the ask-don't-accumulate rule; skim the DEBTS wording.
-- **Commit title:** `Add DEBTS files and PROGRESS budget check; baseline rule; CI mcp gates; scenario driver`

@@ -83,19 +83,30 @@ fn fit_to_canvas_crops_larger_snapshots_and_pads_smaller_ones() {
 }
 
 #[test]
-fn a_new_stack_holds_one_transparent_layer_with_a_start_root() {
-    let stack = LayerStack::new(64, 48);
+fn a_new_stack_starts_white_and_added_layers_stay_transparent() {
+    let mut stack = LayerStack::new(64, 48);
 
     assert_eq!(stack.count(), 1);
     let layer = stack.layer(0).expect("layer exists");
     assert_eq!(layer.name(), "Layer 1");
     assert!(layer.visible());
     assert_eq!(layer.pixmap().width(), 64);
-    assert!(layer.pixmap().data().iter().all(|&byte| byte == 0));
+    assert!(
+        layer.pixmap().data().iter().all(|&byte| byte == 255),
+        "the initial layer is filled white"
+    );
     assert_eq!(stack.head(), Some(1));
     assert_eq!(stack.node(1).map(|node| node.kind), Some(ActionKind::Start));
     assert_eq!(stack.next_node_id(), 2);
     assert!(!stack.can_undo());
+
+    let added = stack.add_layer(64, 48);
+    assert!(
+        stack
+            .layer(added)
+            .is_some_and(|layer| layer.pixmap().data().iter().all(|&byte| byte == 0)),
+        "a layer added later stays fully transparent"
+    );
 }
 
 #[test]

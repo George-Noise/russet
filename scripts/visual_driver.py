@@ -118,6 +118,8 @@ def scenario_plain_undo(d, rep):
     """Layer 0: pixels + lanes of a plain undo/redo cycle."""
     d.tool("set_active_layer", {"index": 0})
     base = d.snapshot()
+    rep.check(base.getpixel((400, 300)) == (255, 255, 255, 255),
+              "a fresh document's canvas is white (the initial layer)")
     for i in range(3):
         d.stroke(50 + 40 * i, 60, 90 + 40 * i, 90)
     mid = mid_of(130, 60, 170, 90)  # the LAST stroke's middle (undo removes it)

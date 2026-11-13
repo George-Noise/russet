@@ -81,11 +81,15 @@ pub struct LayerStack {
 }
 
 impl LayerStack {
-    /// A new document: ONE transparent layer ("Layer 1") whose Start root
-    /// holds the initial canvas. All layers are transparent (owner
-    /// request 2026-11-13) — the checkerboard shows through until painted.
+    /// A new document: ONE layer ("Layer 1") filled WHITE, whose Start root
+    /// holds that white canvas. The initial layer is white AGAIN as of the
+    /// owner request 2026-11-13 — it restores the §3.8 white New canvas
+    /// that the layers rewrite had turned transparent; every layer ADDED
+    /// later is fully transparent (see [`LayerStack::add_layer`]).
     pub fn new(width: u32, height: u32) -> Self {
-        let pixmap = pixmap_of(width, height);
+        let mut pixmap = pixmap_of(width, height);
+        // Opaque white premultiplies to itself, so the fill is bit-exact.
+        pixmap.fill(tiny_skia::Color::WHITE);
         Self::with_root(pixmap)
     }
 
