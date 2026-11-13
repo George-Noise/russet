@@ -34,7 +34,7 @@
 | Extra: agent workflow v2 (owner 2026-11-13) | done | DEBTS-verification.md + DEBTS-functional.md debt lists; rules.sh PROGRESS budget check; baseline-before-edits rule; CI runs the mcp gates; visual_driver.py rewritten as the scenario runner |
 | Extra: REAL layers + per-node PNG history (owner 2026-11-13) | done — gates green | pays F1+F4: interactive Layers window, per-layer git-style trees whose nodes carry full fast-PNG canvases, node-dot LEFT-click switching; SPEC §3.6 rewritten; GUI click-through = V13 (owner) |
 | Extra: headless-GUI sandbox recipe (owner 2026-11-13) | done — driver all green headless | `SANDBOX.md` + `scripts/gui_recipe_test.sh`: raw Xvfb + two user-space .debs, no root; MCP `add_layer` added (10 tools); visual_driver.py 3/3 scenarios green in-sandbox; V13 narrowed to pointer feel |
-| Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title at every done-gate; AGENTS.md Delivery ritual requires it verbatim in the reply |
+| Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title (backticks kept) at every done-gate; AGENTS.md Delivery ritual requires it verbatim, backtick-wrapped, in the reply |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 78 green; with `--features mcp` — clippy clean, 90 green
@@ -57,6 +57,27 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-13 — `Docs:` commit titles are always backtick-wrapped strings — owner request
+
+- **What:** the ritual fixes the title's canonical form as ONE backtick-wrapped
+  string in BOTH places it is stated (the PROGRESS.md `Commit title:` field and the
+  final chat reply's last line): in the chat UI a backticked string is click-to-copy,
+  one click puts the exact title on the owner's clipboard. rules.sh rule 6 stopped
+  stripping the backticks at the done-gate (the hand-over string is now verbatim
+  end-to-end) and warns NOT WRAPPED when the newest entry's title lacks them. The
+  Delivery ritual's patch bullet also documents the new base: with the owner
+  committing deliveries locally, the base is the PRE-EDIT tree object
+  (`git write-tree`, no commit/ref created), not an old sandbox SHA.
+- **Files:** `AGENTS.md` ("Commit titles" bullet + "Delivery ritual"),
+  `scripts/rules.sh` (rule 6: backticks kept + NOT WRAPPED warning),
+  PROGRESS.md (entry + snapshot row).
+- **Verified:** docs-only round (AGENTS.md "Docs/comment-only edits" — no cargo
+  needed): rules.sh green, its reminder now prints the title WITH backticks, no
+  NOT WRAPPED hits; `cargo fmt --check` clean; delivery patch/zip byte-verified.
+- **Owner-checks:** none new; the open V/F lists are unchanged (batched ask in the
+  chat reply).
+- **Commit title:** `Docs: wrap commit titles in backticks for click-to-copy in chat`
 
 ### 2026-11-13 — `Fix:` Layers window width + the white initial layer — owner report (3 chat items)
 

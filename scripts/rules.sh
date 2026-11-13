@@ -26,9 +26,11 @@
 #      DEBTS-verification.md / DEBTS-functional.md).
 #   6. Commit-title reminder (owner request 2026-11-13: the suggested title
 #      was repeatedly left out of the final chat reply): print the newest
-#      log entry's `Commit title:` field so the done-gate hands the exact
-#      string to state verbatim in the reply (AGENTS.md "Delivery ritual");
-#      warn when the field is missing.
+#      log entry's `Commit title:` field — backticks KEPT (owner request
+#      2026-11-13: the canonical title is a backtick-wrapped string,
+#      click-to-copy in the chat UI; AGENTS.md "Delivery ritual") — so the
+#      done-gate hands the exact string to paste as the reply's last line;
+#      warn when the field is missing or not backtick-wrapped.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -108,14 +110,17 @@ else
         inlog && /^### / { entry = 1 }
         entry && /^- \*\*Commit title:\*\*/ {
             sub(/^- \*\*Commit title:\*\*[ \t]*/, "")
-            gsub(/`/, "")
             print
             exit
         }
     ' PROGRESS.md)
     if [ -n "$commit_title" ]; then
         echo "Commit title of the newest log entry: $commit_title"
-        echo "REMINDER: state this commit title VERBATIM in the final chat reply (AGENTS.md \"Delivery ritual\")"
+        if [ "${commit_title:0:1}" = '`' ] && [ "${commit_title: -1}" = '`' ]; then
+            echo "REMINDER: state this commit title VERBATIM, backticks included, as the very last line of the final chat reply (AGENTS.md \"Delivery ritual\")"
+        else
+            echo "NOT WRAPPED: the Commit title must be one backtick-wrapped string (owner request 2026-11-13: click-to-copy in the chat UI) — fix the newest log entry"
+        fi
     else
         echo "STALE: the newest log entry has no **Commit title:** field — fill it in before delivering"
     fi
