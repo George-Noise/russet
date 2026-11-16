@@ -12,6 +12,12 @@ nix run      # build and start the app
 nix develop  # dev shell with cargo/clippy/rustfmt; plain `cargo run` works here too
 ```
 
+For quick functional checks there is a fast dev build (`nix build .#russet-dev`,
+`nix run .#russet-dev`): the same source, lock file and unit tests, compiled in
+the repo's fast `gates` profile (opt-level 0, no LTO) — minutes faster than the
+release lane. The UI is unoptimized, so it is for poking the functionality, not
+for judging the feel; plain `nix build` / `nix run` stay release.
+
 The built binary runs in a Wayland session and under X11 automatically (winit
 tries Wayland first and falls back to X11). To force a specific backend:
 

@@ -124,6 +124,12 @@ Hard rules:
    `PROGRESS-archive.md` in the SAME edit that resolves it. The Log keeps only the
    newest 3–5 entries (the compaction rule above); `rules.sh` warns when the
    budgets (~200 file lines, ~150 log lines) are exceeded.
+6. **Ordering (owner request 2026-11-16).** Open items in BOTH debt files are
+   written sorted: verification checks (V) first, then functional debts (F),
+   then anything else; within each group, NEWEST birth date first (the same
+   newest-first convention as the PROGRESS.md Log). A closed item leaves the
+   open table for the Resolved/Paid section in the SAME edit — it never
+   lingers there.
 
 ## Delivery ritual — artifacts sent to the owner
 

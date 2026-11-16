@@ -50,7 +50,8 @@ with `--features diagnostics` — clippy clean, 99 green; `trunk serve --feature
 smoke-tested earlier 2026-11-16 (build + serve OK, wasm checks green with and without the
 feature); the winit-CSD dependency landed (manifest-only, no new tests — re-gated 2026-11-16)
 (2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500;
-rules.sh reports the PROGRESS.md/Log budgets — green).
+rules.sh reports the PROGRESS.md/Log budgets — green; the later flake/docs round the same
+day touched no Rust — cargo gates not re-run).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -66,6 +67,32 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Feat:` fast dev Nix build (`russet-dev`); V23/V24 verified → F13 paid; the debt-ordering rule — owner request
+
+- **What:** (1) the owner verified V23 + V24 via chat («проверил V23, V24») → both moved to the
+  Resolved list; that satisfied F13's documented LAST pending condition (the owner's Wayland
+  feel pass), so F13 is PAID (the `diagnostics` feature lives until F12 closes); F12 stays open
+  as the final-design decision only. (2) The flake gained `russet-dev` (owner request: a fast
+  non-release build to check that everything builds AND to poke the functionality; plain
+  `nix build` / `nix run` stay release): the SAME source/lock/tests via buildRustPackage's
+  supported profile knobs `buildType = checkType = "gates"` — the repo's gate lane (opt-level 0,
+  no LTO; the nixos-unstable hook sources confirm `--profile $cargoBuildType` for the build,
+  `cargo test --profile $cargoCheckType` for the check and `target/<triple>/$cargoBuildType`
+  for the install) + a `.#russet-dev` app entry; README + SPEC §8 updated in the same edit.
+  No nix in the sandbox → NOT machine-verified → V26 born. (3) AGENTS.md "Debts" gained rule 6
+  (owner request): open items sorted V → F → rest, newest birth date first within a group,
+  closed items leave the open tables the same edit; both DEBTS headers echo it and both files
+  were reordered (V16's closed row → Resolved — bookkeeping, announced in chat).
+- **Files:** `flake.nix`, `README.md`, `SPEC.md` §8, `AGENTS.md`, `DEBTS-verification.md`,
+  `DEBTS-functional.md`, `SANDBOX.md` (pitfall 9: bare-dir `git apply` is a silent no-op),
+  `PROGRESS.md`. NO Rust touched → cargo gates not re-run this round.
+- **Verified:** rules.sh HARD-green before and after; the `--profile` mechanism quoted from the
+  nixos-unstable sources (sparse clone of `pkgs/build-support/rust/`); the delivery
+  byte-compared as usual.
+- **Owner-checks:** V26 born — `nix build .#russet-dev` / `nix run .#russet-dev` on the Nix
+  machine; plain `nix build` unchanged.
+- **Commit title:** `Add the fast russet-dev Nix build (gates profile); docs: verify V23 V24, pay F13, add the debt-ordering rule`
 
 ### 2026-11-16 — `Fix:` GNOME Wayland title bar — winit Adwaita CSD frame (approved dep) — owner request
 
@@ -150,51 +177,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   optional `[diag] wheel` logs) and V24 (no Wayland/Web resize jitter; optional
   `[diag] main resize`/`place` logs) born in DEBTS-verification.md.
 - **Commit title:** `Fix wheel-pan platform parity (fixed 15 pt notch, F12-B interim + F11) and the resize window jitter (F13-A reference-based); add the temporary diag feature`
-
-### 2026-11-16 — `Docs:` V9 verified, the wheel-pan platform gap and the resize jitter analyzed (F12/F13) — owner request
-
-- **What:** (1) the owner's «V9 проверил» closes the M8 web real-mouse check in
-  DEBTS-verification.md. (2) The same pass surfaced TWO platform gaps, born as
-  F12 + F13 (DEBTS-functional.md), analysis-only by request («ничего этого пока
-  исправлять не нужно»). F12 — wheel-pan parity: `app/camera.rs::handle_scroll`
-  reads the RAW `Event::MouseWheel.delta` in EVENT UNITS and ignores `unit`,
-  verified against the pinned sources (egui 0.37.0: delta unconverted, unit
-  Line/Point/Page, its own web=8 vs native=40 line speed; winit 0.30.13:
-  Windows/X11 `LineDelta(±1)` per notch, Wayland discrete-or-pixel; eframe web:
-  DOM pixels as-is) — one notch pans ±3 pt on Windows vs ~±300 pt on the Web.
-  Zoom is immune (it uses only the SIGN). Options A/B/C in F12; the owner's
-  «pan по методу zoom» maps to B/C; F11's ×5 must be RE-DECIDED after the unit
-  fix (measured on the buggy speed). F13 — window jitter on Linux/Web resize:
-  per-frame repositioning (`place_floating_window` → `set_window_pos`) meets
-  non-monotonic content-rect series + auto-sized windows resizing in the same
-  frames; options a/b/c in F13. SPEC §3.4's «40 pt per notch» describes egui's
-  INTERNAL conversion, not the raw delta russet reads — rewrite on the fix.
-- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `PROGRESS.md`,
-  `PROGRESS-archive.md` — docs only, NO code touched (cargo gates not re-run).
-- **Verified:** rules.sh HARD-green before and after the edit; source facts
-  quoted from clones of the pinned versions (egui 0.37.0, winit 0.30.13,
-  sctk 0.19.2); the delivery byte-compared as usual.
-- **Owner-checks:** none born — F12/F13 are open DESIGN decisions for the owner.
-- **Commit title:** `Docs: verify V9, analyze the wheel-pan platform gap and the resize window jitter (F12/F13)`
-
-### 2026-11-16 — `Docs:` third debt triage — 8 checks verified, F11 born, zip-priority rule
-
-- **What:** the owner's «проверил V22, V21, V20, V19, V18, V17, V14, V13» closed those
-  EIGHT owner-checks in DEBTS-verification.md (chat-verified, the V4/V7 precedent).
-  V15's verdict becomes a NEW functional debt F11 — wheel pan ANOTHER ×5 faster:
-  `SCROLL_PAN_SPEED` 3.0 → 15.0 in `src/app.rs` + the two SPEC §3.4 mentions in the
-  same edit — recorded with the how-to and POSTPONED by the owner («запиши как
-  сделать потом»). AGENTS.md "Git & progress log" gained the owner's rule: a
-  delivered `russet.zip` is used IMMEDIATELY — no `git pull`/`git clone` first
-  (the .zip signals priority and saves setup time); the patch base is snapshotted
-  from the unpacked .zip before the first edit. Compaction: the 2026-11-13 `UX:`
-  entry moved verbatim to PROGRESS-archive.md. Open after this edit: V8, V9
-  (both parked by the owner) + F3, F5, F8, F9, F10, F11.
-- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `AGENTS.md`,
-  `PROGRESS.md`, `PROGRESS-archive.md` — docs only, NO Rust code touched (the
-  cargo gates are not re-run: the tree arrived stamped 2026-11-16, 94/106 green).
-- **Verified:** `bash scripts/rules.sh` HARD-green before and after the edit (it
-  needs no toolchain); the delivery patch applied onto the snapshotted base tree
-  and byte-compared with the working tree AND the unpacked zip — all three match.
-- **Owner-checks:** none born — F11 is owner-gated postponed work, not a check.
-- **Commit title:** `Docs: third debt triage — verify V13 V14 V17-V22, record the wheel-pan x5 debt as F11, add the zip-priority rule`

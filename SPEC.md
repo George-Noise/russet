@@ -544,6 +544,17 @@ cargo clippy --profile gates --all-targets -- -D warnings   # same lints, unopti
 # --- Release: MANUALLY, when everything is ready (fat LTO, slow) ---
 cargo build --release
 
+# --- Linux via Nix (flake.nix) ---
+nix build                # release (fat LTO) -> ./result/bin/russet
+nix run                  # build and start the release app
+nix build .#russet-dev   # FAST dev build (owner request 2026-11-16): the repo's
+                         # `gates` profile (opt-level 0, no LTO) + the unit
+                         # tests; the UI is unoptimized — functional checks,
+                         # not feel. Plain `nix build` stays release.
+nix run .#russet-dev     # run the dev binary
+nix develop              # dev shell: cargo/clippy/fmt with the GUI libs on
+                         # LD_LIBRARY_PATH (plain `cargo run` works here)
+
 # --- Web (milestone M8), installed once ---
 # Run from the repo root: Trunk.toml points at web/index.html and dist/.
 rustup target add wasm32-unknown-unknown

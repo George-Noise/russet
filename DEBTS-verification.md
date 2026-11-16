@@ -15,6 +15,10 @@
 >   `PROGRESS.md` log entry — this file only tracks what is STILL open.
 > - Every new verification debt lands here in the SAME edit as the task that
 >   creates it, with the date it was born.
+> - Open items are sorted: V checks first, then F debts (functional), then
+>   anything else — NEWEST birth date first within each group (owner request
+>   2026-11-16, AGENTS.md "Debts" rule 6). A closed row leaves the table for
+>   the Resolved list in the same edit.
 > - `scripts/rules.sh` reports PROGRESS.md size and live owner-checks as a
 >   report-only reminder, so nothing hides.
 > - Milestones (M8/M9) keep their Status-snapshot rows; only their still-open
@@ -22,11 +26,9 @@
 
 | # | Opened | What the human must check | Source (PROGRESS.md log) | Status |
 |---|---|---|---|---|
-| V8 | 2026-11-12 | MCP on Windows: `cargo build --release --features mcp`, run with `--mcp`, check the "MCP on (N)" badge. | 2026-11-12 `Feat:` MCP entry | open — parked by the owner 2026-11-13: no Windows MCP pass for now; the agent-side MCP run is the working state; reconfirmed 2026-11-13 |
-| V16 | 2026-11-13 | Shape tool (U): a right-button drag swaps the primary/secondary wells (like the Palette's Swap button — the swap persists) and the shape commits with the swapped wells: the former secondary in the outline, the former primary in the fill. LMB drawing and the Line/Text RMB behavior unchanged. | 2026-11-13 `UX:` entry | closed 2026-11-15 — superseded by the owner's own request: shapes no longer swap the wells at all; the replacement behavior is V19. |
-| V23 | 2026-11-16 | F12-B wheel-pan parity (variant B is INTERIM, not final): ONE physical wheel notch pans the SAME fixed 15 pt on Windows, Linux Wayland and Web — plain wheel vertical, `Shift`+wheel horizontal — and the folded-in F11 ×5 feels right on Windows (the notch = the old ±3 pt × 5); touchpad/trackpad scrolling stays proportional. Owner pass 2026-11-16: Windows + Chrome approved («скорость pan через scroll устраивает»); Firefox overshot ~3× — FIXED the same day (web `Line` ÷ `WEB_LINE_UNIT_LINES_PER_NOTCH` 3 lines/notch) — re-check Firefox still owed; the Linux/Wayland leg is also open (the owner cannot test Linux yet). OPTIONAL but useful: run with `--features diagnostics` (web: `trunk serve --features diagnostics`, logs → browser console) and paste the `[diagnostics] wheel …` lines from all three platforms — the raw unit/delta values retune the interim constants (web Line 3, Point 100 pt). | 2026-11-16 `Feat:` parity entry | open — Firefox re-check + Linux pending |
-| V24 | 2026-11-16 | F13-A resize: NO floating-window jitter («колбасит») while the main window is resized; Windows behavior unchanged; after the resize ends an anchored window keeps its dropped gap and a free window its relative placement. Owner pass 2026-11-16: Windows, Firefox, Chrome — clean (no jitter reported); ONLY the Linux/Wayland leg remains open (the owner cannot test Linux yet). OPTIONAL: with `--features diagnostics` the `[diagnostics] main resize …` / `[diagnostics] place …` lines pin any residual mechanics. | 2026-11-16 `Feat:` parity entry | open — Linux/Wayland only |
+| V26 | 2026-11-16 | The flake DEV build: `nix build .#russet-dev` on the Nix machine compiles in the fast `gates` profile (the repo's gate lane: opt-level 0, no LTO — minutes faster than the release lane) AND still runs the pure unit tests (doCheck), and the produced binary installs and runs: `nix run .#russet-dev` starts the app (UI UNOPTIMIZED — functional checks, not feel); plain `nix build` / `nix run` must stay release, unchanged. | 2026-11-16 `Feat:` flake dev build entry | open — needs the owner's Nix machine |
 | V25 | 2026-11-16 | GNOME Wayland pass of the new winit Adwaita CSD frame (the owner-approved `winit` dependency, SPEC §1): the title bar shows "Untitled - Russet" / "*name - Russet" and follows New/Open/Save/dirty; a double-click on the bar maximizes and a second double-click restores; the close/minimize buttons work; the bar looks right in both light and dark shell themes. The same pass can close the Linux legs of V23 (wheel-pan feel) and V24 (resize jitter) — until this dep they were blocked: the owner had no usable Linux window bar at all. | 2026-11-16 `Fix:` Wayland CSD entry | open — needs the owner's Linux machine |
+| V8 | 2026-11-12 | MCP on Windows: `cargo build --release --features mcp`, run with `--mcp`, check the "MCP on (N)" badge. | 2026-11-12 `Feat:` MCP entry | open — parked by the owner 2026-11-13: no Windows MCP pass for now; the agent-side MCP run is the working state; reconfirmed 2026-11-13 |
 
 Resolved (kept until the next compaction, then dropped):
 
@@ -57,3 +59,14 @@ Resolved (kept until the next compaction, then dropped):
   surfaced two platform gaps, born as F12 (wheel-pan parity) and F13 (floating-window
   jitter on main-window resize) in DEBTS-functional.md — the M8 human check itself is
   done.
+- V16 — closed 2026-11-15 (superseded by the owner's own request: Shape RMB no longer
+  swaps the wells at all; the replacement behavior was born as V19 and verified
+  2026-11-16). The closed row sat in the open table; it moved here on 2026-11-16 when
+  the debt-ordering rule (AGENTS.md "Debts" rule 6) landed — bookkeeping only.
+- V23, V24 — verified 2026-11-16 via chat (owner: «проверил V23, V24»): the F12-B
+  wheel-pan feel (one notch = the same fixed 15 pt on Windows, Firefox after the
+  Line÷3 retune, Chrome, and the Linux/Wayland leg — testable only once the winit
+  Adwaita CSD frame made the Linux window usable) and the F13-A resize pass (no
+  floating-window jitter on Wayland, Windows unchanged). V24's pass satisfied F13's
+  documented last pending condition → F13 paid in DEBTS-functional.md the same edit;
+  F12 stays open as the final-design decision.

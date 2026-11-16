@@ -9,6 +9,54 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-16 — `Docs:` V9 verified, the wheel-pan platform gap and the resize jitter analyzed (F12/F13) — owner request
+
+- **What:** (1) the owner's «V9 проверил» closes the M8 web real-mouse check in
+  DEBTS-verification.md. (2) The same pass surfaced TWO platform gaps, born as
+  F12 + F13 (DEBTS-functional.md), analysis-only by request («ничего этого пока
+  исправлять не нужно»). F12 — wheel-pan parity: `app/camera.rs::handle_scroll`
+  reads the RAW `Event::MouseWheel.delta` in its EVENT UNIT and ignores `unit`,
+  verified against the pinned sources (egui 0.37.0: delta unconverted, unit
+  Line/Point/Page, its own web=8 vs native=40 line speed; winit 0.30.13:
+  Windows/X11 `LineDelta(±1)` per notch, Wayland discrete-or-pixel; eframe web:
+  DOM pixels as-is) — one notch pans ±3 pt on Windows vs ~±300 pt on the Web.
+  Zoom is immune (it uses only the SIGN). Options A/B/C in F12; the owner's
+  «pan по методу zoom» maps to B/C; F11's ×5 must be RE-DECIDED after the unit
+  fix (measured on the buggy speed). F13 — window jitter on Linux/Web resize:
+  per-frame repositioning (`place_floating_window` → `set_window_pos`) meets
+  non-monotonic content-rect series + auto-sized windows resizing in the same
+  frames; options a/b/c in F13. SPEC §3.4's «40 pt per notch» describes egui's
+  INTERNAL conversion, not the raw delta russet reads — rewrite on the fix.
+- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `PROGRESS.md`,
+  `PROGRESS-archive.md` — docs only, NO code touched (cargo gates not re-run).
+- **Verified:** rules.sh HARD-green before and after the edit; source facts
+  quoted from clones of the pinned versions (egui 0.37.0, winit 0.30.13,
+  sctk 0.19.2); the delivery byte-compared as usual.
+- **Owner-checks:** none born — F12/F13 are open DESIGN decisions for the owner.
+- **Commit title:** `Docs: verify V9, analyze the wheel-pan platform gap and the resize window jitter (F12/F13)`
+
+### 2026-11-16 — `Docs:` third debt triage — 8 checks verified, F11 born, zip-priority rule
+
+- **What:** the owner's «проверил V22, V21, V20, V19, V18, V17, V14, V13» closed those
+  EIGHT owner-checks in DEBTS-verification.md (chat-verified, the V4/V7 precedent).
+  V15's verdict becomes a NEW functional debt F11 — wheel pan ANOTHER ×5 faster:
+  `SCROLL_PAN_SPEED` 3.0 → 15.0 in `src/app.rs` + the two SPEC §3.4 mentions in the
+  same edit — recorded with the how-to and POSTPONED by the owner («запиши как
+  сделать потом»). AGENTS.md "Git & progress log" gained the owner's rule: a
+  delivered `russet.zip` is used IMMEDIATELY — no `git pull`/`git clone` first
+  (the .zip signals priority and saves setup time); the patch base is snapshotted
+  from the unpacked .zip before the first edit. Compaction: the 2026-11-13 `UX:`
+  entry moved verbatim to PROGRESS-archive.md. Open after this edit: V8, V9
+  (both parked by the owner) + F3, F5, F8, F9, F10, F11.
+- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `AGENTS.md`,
+  `PROGRESS.md`, `PROGRESS-archive.md` — docs only, NO Rust code touched (the
+  cargo gates are not re-run: the tree arrived stamped 2026-11-16, 94/106 green).
+- **Verified:** `bash scripts/rules.sh` HARD-green before and after the edit (it
+  needs no toolchain); the delivery patch applied onto the snapshotted base tree
+  and byte-compared with the working tree AND the unpacked zip — all three match.
+- **Owner-checks:** none born — F11 is owner-gated postponed work, not a check.
+- **Commit title:** `Docs: third debt triage — verify V13 V14 V17-V22, record the wheel-pan x5 debt as F11, add the zip-priority rule`
+
 ### 2026-11-16 — `Feat:` Shift makes Shape drags proportional (Paint.NET-style) — owner request
 
 - **What:** holding `Shift` during a Shape (U) drag constrains it to a

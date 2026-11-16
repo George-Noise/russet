@@ -1,7 +1,13 @@
 # Russet — a small bitmap paint program (egui/eframe, OpenGL via glow).
 #
-# Build:   nix build              # result -> ./result/bin/russet
-# Run:     nix run                # builds and starts the app
+# Build:   nix build              # release (fat LTO) -> ./result/bin/russet
+# Dev:     nix build .#russet-dev # fast `gates`-profile build (owner request
+#                                 # 2026-11-16): compiles minutes faster and
+#                                 # still runs the unit tests — for checking
+#                                 # that everything builds AND poking the
+#                                 # functionality (UI unoptimized, not for feel)
+# Run:     nix run                # builds and starts the release app
+#          nix run .#russet-dev   # ... or the dev build
 # Shell:   nix develop            # cargo/clippy/fmt with the GUI libs on
 #                                 # LD_LIBRARY_PATH, so `cargo run` works
 #
@@ -98,6 +104,19 @@
             };
           };
 
+          # The DEV build (owner request 2026-11-16): the SAME source, Cargo.lock
+          # and unit tests as the release package, built in the repo's fast
+          # `gates` profile (Cargo.toml: opt-level 0, no debuginfo, no
+          # incremental — the AGENTS.md gate lane) instead of the release LTO
+          # lane. `buildType`/`checkType` are buildRustPackage's supported
+          # profile knobs: the build hook runs `cargo build --profile gates`,
+          # the check hook runs `cargo test --profile gates`, and the install
+          # hook takes the binary from target/<triple>/gates. One command
+          # therefore proves everything builds (tests included) AND produces a
+          # runnable binary — minutes faster than release on a cold build. The
+          # UI is UNOPTIMIZED: functional checks, not feel.
+          russet-dev = russet.override { buildType = "gates"; checkType = "gates"; };
+
           default = russet;
         });
 
@@ -105,7 +124,12 @@
         default = {
           type = "app";
           program = "${self.packages.${system}.russet}/bin/russet";
-          meta.description = "Run Russet";
+          meta.description = "Run Russet (release)";
+        };
+        russet-dev = {
+          type = "app";
+          program = "${self.packages.${system}.russet-dev}/bin/russet";
+          meta.description = "Run Russet (dev build, fast gates profile)";
         };
       });
 

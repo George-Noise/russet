@@ -98,6 +98,13 @@ pkill -x Xvfb
 7. Wayland is not a fallback here: no compositor binary exists in the image. Don't try.
 8. `pgrep -a russet` after a kill is a cheap sanity check — a leftover instance holds
    :99 and makes the next run look "hung" for unrelated reasons.
+9. `git apply` in a directory WITHOUT its own `.git` (e.g. a tar-unpacked base copy
+   under the sandbox workspace) is a SILENT NO-OP: exit 0, zero files changed —
+   observed twice 2026-11-16 and it burned the delivery byte-compare both times
+   (`--check` passes too, so nothing looks wrong until the diff). Apply delivery
+   patches only in a REAL clone: `git commit-tree <base-tree> -m base` +
+   `git update-ref refs/heads/delivery-base <commit>` in the repo, `git clone
+   --branch delivery-base`, `git apply` there, then `diff -r`.
 
 ## What this unlocked, and what still belongs to the owner
 
