@@ -47,9 +47,9 @@
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 99 green; with `--features mcp` — clippy clean, 111 green;
 with `--features diagnostics` — clippy clean, 99 green; `trunk serve --features diagnostics`
-smoke-tested (build + serve OK, wasm checks green with and without the feature)
-(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; the Firefox web-Line notch
-retune + the `diag` → `diagnostics` rename landed — +1 pure test; every src file ≤ 500;
+smoke-tested earlier 2026-11-16 (build + serve OK, wasm checks green with and without the
+feature); the winit-CSD dependency landed (manifest-only, no new tests — re-gated 2026-11-16)
+(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500;
 rules.sh reports the PROGRESS.md/Log budgets — green).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -66,6 +66,30 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Fix:` GNOME Wayland title bar — winit Adwaita CSD frame (approved dep) — owner request
+
+- **What:** on the owner's GNOME (Wayland) the window had NO title text and a double-click on
+  the title bar did not maximize/restore. Root cause, verified against the pinned sources:
+  eframe 0.37 enables only `winit/wayland` → winit falls back to sctk 0.19.2's `FallbackFrame`,
+  whose `set_title` is a NO-OP and whose title-bar click emits only `Move` (no double-click
+  logic at all); Mutter draws no server-side decorations, so nothing masked it. Fix per the
+  dependency approval flow (the owner picked the option in chat): a Linux-only direct `winit`
+  dependency with `wayland-csd-adwaita` — same 0.30.13 that eframe resolves, cargo unifies
+  them, and winit switches to `AdwaitaFrame` (title text, Adwaita buttons, GTK-like 400 ms
+  double-click maximize). Manifest + lock only, no Rust code touched (a unit test cannot reach
+  winit's internal frame choice — the fix is verified by the gates + `cargo tree` + V25);
+  pure-Rust deps → flake.nix `runtimeLibs` untouched; no commands changed → README untouched;
+  the durable quirk moved to AGENTS.md quirks in the same edit.
+- **Files:** `Cargo.toml`, `Cargo.lock` (+5 packages, 0 version bumps), `SPEC.md` §1,
+  `AGENTS.md` (quirks), `DEBTS-verification.md` (V25 born), `PROGRESS.md`.
+- **Verified:** verify.sh ALL GATES GREEN in-sandbox (toolchain 1.99.1 via rust-toolchain.toml):
+  rules.sh HARD-green before and after, fmt clean, clippy `-D warnings` clean default + mcp +
+  diagnostics, 99 default / 111 mcp tests green; `cargo tree -i sctk-adwaita` shows the feature
+  unified into eframe's winit; the delivery byte-compared as usual.
+- **Owner-checks:** V25 born — the GNOME Wayland pass on the owner's Linux machine (it also
+  unblocks the Linux legs of V23/V24, which had no usable window bar to test against).
+- **Commit title:** `Fix GNOME Wayland title bar: enable the winit Adwaita CSD frame (approved dep)`
 
 ### 2026-11-16 — `Fix:` Firefox scroll-pan notch retune + the diag→diagnostics rename — owner request
 

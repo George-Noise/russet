@@ -35,6 +35,19 @@ serde_json = { version = "1", optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
 
+# Linux/Wayland CSD frame (owner request 2026-11-16): eframe enables only
+# `winit/wayland`, so on Wayland winit falls back to sctk's FallbackFrame,
+# whose `set_title` is a no-op and which has no double-click-to-maximize. On
+# GNOME (Mutter draws no server-side decorations) the window gets a bare bar:
+# no title text, double click does not maximize/unmaximize. This feature
+# switches winit to AdwaitaFrame (title text, Adwaita buttons, double-click
+# maximize with the GTK-like 400 ms threshold). Version matches the one
+# eframe 0.37 / egui-winit 0.37 resolves (see Cargo.lock), so cargo unifies
+# them into a single winit build. Inert outside Unix: winit gates
+# sctk-adwaita by cfg(unix).
+[target.'cfg(all(unix, not(target_arch = "wasm32")))'.dependencies]
+winit = { version = "0.30.13", features = ["wayland-csd-adwaita"] }
+
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"

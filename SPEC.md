@@ -30,6 +30,7 @@ A single-window raster application **"Russet"**: a canvas with drawing via three
 | `image` | `0.25`, `default-features = false`, `features = ["png", "jpeg"]` | PNG and JPEG read/write |
 | `rfd` | `0.15` | open/save dialogs (native: synchronous; web: `AsyncFileDialog` only) |
 | `log` + `env_logger` (native) | `0.4` / `0.11` | logging (on web — `eframe::WebLogger`) |
+| `winit` (native, Unix) | `0.30.13`, feature `wayland-csd-adwaita` | the same crate eframe resolves (cargo unifies them); the feature switches the Wayland CSD frame from sctk's bare `FallbackFrame` (its `set_title` is a no-op, no double-click-to-maximize) to `AdwaitaFrame` — title text + double-click maximize on GNOME (owner-approved 2026-11-16) |
 | `wasm-bindgen-futures`, `web-sys` (web) | `0.4` / `0.3` | web entry-point plumbing |
 
 Web build tool: **trunk** (installed once, §8). It is not a Cargo dependency.
@@ -65,6 +66,12 @@ log = "0.4"
 # native (Windows):
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
+
+# Linux/Wayland CSD frame (owner-approved 2026-11-16 — the full rationale
+# lives in Cargo.toml): AdwaitaFrame instead of sctk's bare FallbackFrame —
+# title text, Adwaita buttons, double-click maximize on GNOME.
+[target.'cfg(all(unix, not(target_arch = "wasm32")))'.dependencies]
+winit = { version = "0.30.13", features = ["wayland-csd-adwaita"] }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
