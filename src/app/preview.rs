@@ -5,7 +5,9 @@
 //! preview never leaves a history snapshot behind. A child module of `app`,
 //! so it can touch `App`'s private fields; `app.rs` stays the orchestrator.
 //! The PURE Shape color rules (which wells a gesture uses, what the commit
-//! records) live in the child [`colors`].
+//! records) live in the child [`colors`]. Holding `Shift` during a Shape
+//! drag constrains it to a proportional square/circle (Paint.NET-style —
+//! owner request 2026-11-16), live, through the pure [`proportional_current`].
 
 mod colors;
 
@@ -58,6 +60,23 @@ pub(super) enum DragKind {
     Shape(ShapeKind),
 }
 
+/// The free drag `current` point pulled onto the proportional square that
+/// grows from `start` along the DOMINANT axis (Paint.NET's Shift-constrained
+/// shapes — owner request 2026-11-16): the larger of the two deltas wins as
+/// the side length, and each axis keeps its drag direction, so the square
+/// always reaches toward the pointer from the anchor corner. A strictly
+/// one-sided drag (one delta zero) still yields a square: the zero axis
+/// extends by the full side in the down/right direction (Rust's
+/// `f32::signum` maps `+0.0` to `1.0`), matching Paint.NET — a Shift drag
+/// never produces a degenerate shape once the pointer has moved. Pure — no
+/// egui, no `App` — so the rule stays unit-testable.
+fn proportional_current(start: Pos2, current: Pos2) -> Pos2 {
+    let dx = current.x - start.x;
+    let dy = current.y - start.y;
+    let side = dx.abs().max(dy.abs());
+    pos2(start.x + side * dx.signum(), start.y + side * dy.signum())
+}
+
 impl App {
     /// Press/drag/release and click handling for the Line and Shape tools.
     pub(super) fn handle_preview_input(
@@ -79,11 +98,12 @@ impl App {
                     i.pointer.any_released(),
                 )
             });
-        let (escape, enter, backspace) = ui.input(|i| {
+        let (escape, enter, backspace, shift) = ui.input(|i| {
             (
                 i.key_pressed(Key::Escape),
                 i.key_pressed(Key::Enter),
                 i.key_pressed(Key::Backspace),
+                i.modifiers.shift,
             )
         });
         let pos = cursor.map(|c| self.canvas_pos(rect, c));
@@ -190,9 +210,23 @@ impl App {
                     return;
                 }
                 if let Some(pos) = pos
-                    && let PreviewState::Drag { current, .. } = &mut self.preview
+                    && let PreviewState::Drag {
+                        kind,
+                        start,
+                        current,
+                        ..
+                    } = &mut self.preview
                 {
-                    *current = pos;
+                    // Shift held mid-drag: a Shape grows proportionally
+                    // (square/circle), live — the free pointer point is
+                    // pulled onto the dominant-axis square each frame. The
+                    // constrained point is STORED, so both the overlay
+                    // preview and the commit rasterize the same geometry.
+                    *current = if shift && matches!(kind, DragKind::Shape(_)) {
+                        proportional_current(*start, pos)
+                    } else {
+                        pos
+                    };
                 }
                 if any_released {
                     let state = std::mem::take(&mut self.preview);

@@ -9,6 +9,26 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `Docs:` second debt triage — owner answered the batched V/F list
+
+- **What:** dispositions applied, zero code change. Verified via chat: V4, V7 (owner:
+  «проверил V4, V7» — one `cargo run` each after the toolchain pin / the file splits).
+  F2 DROPPED from the debts by owner decision: the History window stays AS IS, the
+  owner will say himself when it is no longer needed — not tracked anymore. F5 parked
+  for the long term («долгий ящик»): memory limits not needed during active
+  development. The rest reconfirmed open: V8, V9, V13, V14, F3, F8, F9, F10 — owner:
+  «остальное не сейчас» (statuses carry the date). Open tables: V 6 → 4, F 6 → 5.
+- **Files:** `DEBTS-verification.md` (V4/V7 → Resolved; V8/V9/V13/V14 notes),
+  `DEBTS-functional.md` (F2 → closed; F5 parked), PROGRESS.md (entry + compaction:
+  the `Feat:` real-layers and first-triage entries moved VERBATIM to
+  PROGRESS-archive.md — the Log keeps the newest 5).
+- **Verified:** docs-only round (AGENTS.md "Docs/comment-only edits" — no cargo run):
+  rules.sh green (budgets back under the limits after the compaction, no NOT WRAPPED
+  hits), `cargo fmt --check` clean; delivery patch/zip byte-verified.
+- **Owner-checks:** none new; V13/V14 remain the standing pointer-feel asks for the
+  next Windows pass; F3/F8/F9/F10 stay parked.
+- **Commit title:** `Docs: second debt triage — verify V4 V7, drop F2, park F5`
+
 ### 2026-11-13 — `Docs:` commit titles are always backtick-wrapped strings — owner request
 
 - **What:** the ritual fixes the title's canonical form as ONE backtick-wrapped

@@ -38,15 +38,16 @@
 | Extra: UX round (owner 2026-11-13) | done — gates green | History window → Tool Log (list max height halved to 140 pt, 0.5rem entries, zero row spacing, bottom edge flush), Help item → About, dialog button rows per IBM/Apple/Google via shared `dialog_button_row`, Shape RMB-drag swaps the color wells, wheel pan ×2 (`SCROLL_PAN_SPEED` 3.0) |
 | Extra: dialog epoch + Shape RMB round (owner 2026-11-15) | done — gates green | dialogs arise centered on EVERY open and hug their content (`dialog_window` + `forget_dialog_position`, NOT §3.11); Shape RMB uses the wells inverted WITHOUT swapping; Palette "Swap (X)" → "Swap"; 3 headless-egui regression tests + a scripted 9-check real-binary pass |
 | Extra: layers split + two-color history chips (owner 2026-11-16) | done — gates green | pure code motion into `layers/snapshot.rs` + `layers/composite.rs` (tests split the same way); `TreeNode.color2` + the outline\|fill chip halves for two-color gestures; MCP `get_history_tree` dumps `color2`; preview's pure color rules → `app/preview/colors.rs` |
+| Extra: Shift-proportional shapes (owner 2026-11-16) | done — gates green | Shape (U) drag with held Shift = square/circle, Paint.NET-style, LIVE (mid-drag snap/release); pure `proportional_current` in `app/preview.rs` + 5 unit tests; SPEC §3.2 bullet + §3.9 hold-gesture row; V22 born |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 89 green; with `--features mcp` — clippy clean, 101 green
-(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; the owner-approved layers.rs
-split landed — layers.rs 504 → 354 lines, every src file ≤ 500 again, tests topics under the
-~300 guard; rules.sh reports the PROGRESS.md/Log budgets — green; the GUI runs headless in
-this sandbox per `SANDBOX.md` — visual_driver.py 3/3 scenarios + the scripted 9-check
-two-color pass through the real binary with the chip screenshot; V19–V21 are the owner's
-feel checks).
+`cargo test --profile gates` — 94 green; with `--features mcp` — clippy clean, 106 green
+(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; Shift-proportional shapes
+landed — the pure rule + 5 tests, every src file ≤ 500; rules.sh reports the
+PROGRESS.md/Log budgets — green; the GUI runs headless per `SANDBOX.md` —
+visual_driver.py 3/3 scenarios + the scripted 9-check XTEST Shift pass through the real
+binary (unconstrained 88×38 vs Shift 88×88 vs mid-drag 78×78); V22 is the owner's
+feel check).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -62,6 +63,35 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Feat:` Shift makes Shape drags proportional (Paint.NET-style) — owner request
+
+- **What:** holding `Shift` during a Shape (U) drag constrains it to a
+  proportional shape — a square for the Rectangle, a circle for the Ellipse
+  (owner: «при зажатом Shift фигуры получались пропорциональными, как в
+  Paint Net»). The start point is the anchor corner; the free corner is
+  pulled, LIVE (every frame — pressing/releasing Shift MID-drag snaps and
+  releases instantly), onto the dominant-axis square: side = max(|dx|,|dy|),
+  each axis keeps its drag direction, so the shape always grows toward the
+  pointer; a strictly one-sided drag still yields a square (the zero axis
+  extends down/right — Rust's `signum(+0.0) = 1.0`; the tests caught the
+  wrong first assumption). The constrained point is STORED in the preview
+  state, so the overlay preview and the commit rasterize the same geometry.
+  The pure rule lives in `app/preview.rs::proportional_current`; the Line
+  tool is NOT affected. SPEC §3.2 (Shape bullet) + a §3.9 row (a
+  hold-gesture like Space-pan, not a consumed hotkey); V22 born.
+- **Files:** `src/app/preview.rs` (modifier read, Drag constraint, the pure
+  helper + module doc), `src/app/preview/tests.rs` (+5 tests); docs:
+  `SPEC.md`, `DEBTS-verification.md`, `PROGRESS.md`.
+- **Verified:** verify.sh ALL GATES GREEN — 94 default / 106 mcp; headless
+  real-input pass through the real binary (XTEST via xdotool, a sandbox-only
+  script): unconstrained dx=80/dy=30 commits 88×38, the same drag with Shift
+  commits 88×88, Shift pressed MID-drag commits 78×78 (side 70 = the final
+  dominant delta — the live constraint), undo restores the blank canvas
+  between the drags; visual_driver.py 3/3 scenarios after the change.
+- **Owner-checks:** V22 (the dominant-axis square feels like Paint.NET on
+  Windows) born in DEBTS-verification.md; no other new checks.
+- **Commit title:** `Add Shift-proportional shape drawing (square/circle, Paint.NET-style)`
 
 ### 2026-11-16 — `Refactor:` layers split into snapshot/composite children + two-color history chips — owner request (2 chat items)
 
@@ -162,25 +192,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   swap), V17 (Tool Log restyle), V18 (dialog rows) born in
   DEBTS-verification.md.
 - **Commit title:** `UX: Tool Log, About, dialog order, Shape RMB swap, 2x wheel pan`
-
-
-### 2026-11-13 — `Docs:` second debt triage — owner answered the batched V/F list
-
-- **What:** dispositions applied, zero code change. Verified via chat: V4, V7 (owner:
-  «проверил V4, V7» — one `cargo run` each after the toolchain pin / the file splits).
-  F2 DROPPED from the debts by owner decision: the History window stays AS IS, the
-  owner will say himself when it is no longer needed — not tracked anymore. F5 parked
-  for the long term («долгий ящик»): memory limits not needed during active
-  development. The rest reconfirmed open: V8, V9, V13, V14, F3, F8, F9, F10 — owner:
-  «остальное не сейчас» (statuses carry the date). Open tables: V 6 → 4, F 6 → 5.
-- **Files:** `DEBTS-verification.md` (V4/V7 → Resolved; V8/V9/V13/V14 notes),
-  `DEBTS-functional.md` (F2 → closed; F5 parked), PROGRESS.md (entry + compaction:
-  the `Feat:` real-layers and first-triage entries moved VERBATIM to
-  PROGRESS-archive.md — the Log keeps the newest 5).
-- **Verified:** docs-only round (AGENTS.md "Docs/comment-only edits" — no cargo run):
-  rules.sh green (budgets back under the limits after the compaction, no NOT WRAPPED
-  hits), `cargo fmt --check` clean; delivery patch/zip byte-verified.
-- **Owner-checks:** none new; V13/V14 remain the standing pointer-feel asks for the
-  next Windows pass; F3/F8/F9/F10 stay parked.
-- **Commit title:** `Docs: second debt triage — verify V4 V7, drop F2, park F5`
 
