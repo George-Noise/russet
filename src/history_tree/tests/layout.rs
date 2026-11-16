@@ -15,6 +15,7 @@ fn stroke(tree: &mut LayerTree, next_id: NodeId) -> NodeId {
         next_id,
         super::ActionKind::Pencil,
         Color32::BLACK,
+        None,
         Vec::new(),
     );
     next_id

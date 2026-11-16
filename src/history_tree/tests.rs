@@ -12,7 +12,13 @@ fn fresh_tree() -> LayerTree {
 }
 
 fn stroke(tree: &mut LayerTree, next_id: NodeId) -> NodeId {
-    tree.record_action(next_id, ActionKind::Pencil, Color32::BLACK, Vec::new());
+    tree.record_action(
+        next_id,
+        ActionKind::Pencil,
+        Color32::BLACK,
+        None,
+        Vec::new(),
+    );
     next_id
 }
 
@@ -242,17 +248,36 @@ fn generation_advances_on_every_mutation() {
 }
 
 #[test]
-fn nodes_carry_one_color_and_kind_without_primary_secondary() {
+fn single_color_nodes_carry_one_color_and_two_color_ones_both() {
     let mut tree = fresh_tree();
     tree.record_action(
         2,
         ActionKind::Brush,
         Color32::from_rgb(0x12, 0x34, 0x56),
+        None,
         Vec::new(),
     );
     let node = tree.node(2).expect("recorded node");
     assert_eq!(node.color, Color32::from_rgb(0x12, 0x34, 0x56));
+    assert_eq!(
+        node.color2, None,
+        "a single-color gesture has no second color"
+    );
     assert_eq!(node.kind, ActionKind::Brush);
     assert_eq!(node.kind.label(), "brush");
     assert_eq!(ActionKind::Start.label(), "start");
+
+    // A two-color gesture (a Shape commit with outline AND fill — owner
+    // request 2026-11-16) carries both: outline in `color`, fill in
+    // `color2`.
+    tree.record_action(
+        3,
+        ActionKind::Shape,
+        Color32::from_rgb(0xaa, 0x00, 0x00),
+        Some(Color32::from_rgb(0x00, 0x00, 0xbb)),
+        Vec::new(),
+    );
+    let node = tree.node(3).expect("recorded node");
+    assert_eq!(node.color, Color32::from_rgb(0xaa, 0x00, 0x00));
+    assert_eq!(node.color2, Some(Color32::from_rgb(0x00, 0x00, 0xbb)));
 }

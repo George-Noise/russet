@@ -12,23 +12,25 @@
 //!   the ACTIVE layer, the document-wide node-id counter, the layer
 //!   management ops (add / remove / rename / visibility / reorder /
 //!   resize) and the undo/redo/jump drivers for the active layer.
-//! - Snapshot helpers: [`encode_snapshot`] / [`decode_snapshot`]
-//!   (lossless PNG roundtrip of the raw premultiplied bytes) and
-//!   [`fit_to_canvas`] (crop/pad a node's PNG back onto the current canvas
-//!   size — the Resize policy keeps old nodes).
-//! - [`composite`]: premultiplied src-over blending of the visible layers
-//!   into the display buffer, region-based so strokes stay cheap.
-//!
-//! Snapshot format note: the PNGs are an INTERNAL RAM container, never
-//! shown or saved, so the premultiplied bytes go in and come out untouched
-//! — `decode(encode(x)) == x` bit-for-bit. A straight-alpha PNG of
-//! premultiplied data could NOT roundtrip losslessly (the 8-bit
-//! premultiply/demultiply roundtrip is lossy) — exactly what a snapshot
-//! must not be.
+//! - Child modules (split 2026-11-16, pure code motion — the 500-line
+//!   file guard): [`snapshot`] (the lossless PNG snapshot codec —
+//!   `encode_snapshot` / `decode_snapshot` — and the canvas-fit policy —
+//!   `fit_to_canvas`) and [`composite`] (premultiplied src-over blending
+//!   of the visible layers into the display buffer, region-based so
+//!   strokes stay cheap). Both are re-exported here, so every consumer
+//!   keeps the stable `layers::` paths.
 //!
 //! Neighbours: `canvas.rs` holds the display buffer the composite writes
 //! into; `app.rs` orchestrates gestures and texture sync; the DAG model
 //! lives in `history_tree.rs`.
+
+mod composite;
+mod snapshot;
+
+pub use composite::composite;
+pub use snapshot::{decode_snapshot, encode_snapshot, fit_to_canvas};
+
+use snapshot::{fit_copy, pixmap_of};
 
 use eframe::egui::Color32;
 use tiny_skia::Pixmap;
@@ -217,14 +219,22 @@ impl LayerStack {
 
     /// Records one completed gesture on the ACTIVE layer: encodes the
     /// layer's post-action buffer as its PNG snapshot and appends the node
-    /// at the head. Returns the new node id.
-    pub fn record_action(&mut self, kind: ActionKind, color: Color32) -> Result<NodeId, String> {
+    /// at the head. `color` is the gesture's main color, `color2` the
+    /// second one of a two-color gesture (a Shape commit with both the
+    /// outline and the fill — owner request 2026-11-16). Returns the new
+    /// node id.
+    pub fn record_action(
+        &mut self,
+        kind: ActionKind,
+        color: Color32,
+        color2: Option<Color32>,
+    ) -> Result<NodeId, String> {
         let snapshot = encode_snapshot(&self.layers[self.active].pixmap);
         let id = self.next_node_id;
         self.next_node_id += 1;
         self.layers[self.active]
             .tree
-            .record_action(id, kind, color, snapshot);
+            .record_action(id, kind, color, color2, snapshot);
         Ok(id)
     }
 
@@ -336,166 +346,6 @@ impl LayerStack {
         for layer in &mut self.layers {
             let fitted = fit_copy(&layer.pixmap, width, height);
             layer.pixmap = fitted;
-        }
-    }
-}
-
-/// An empty (fully transparent) pixmap with the Canvas clamps; falls back
-/// to 1×1 like `Canvas::new` when the allocation is refused.
-fn pixmap_of(width: u32, height: u32) -> Pixmap {
-    let width = width.clamp(1, 4096);
-    let height = height.clamp(1, 4096);
-    // Pixmap::new yields a fully transparent buffer.
-    Pixmap::new(width, height).unwrap_or_else(|| unreachable!("1x1 pixmap"))
-}
-
-/// Lossless fast PNG of a pixmap's raw premultiplied bytes (see the module
-/// note on why no premultiply conversion happens here). Uses the `image`
-/// crate's FAST compression (already a dependency — no new crates); an
-/// encoding failure (practically impossible for in-memory RGBA8) yields an
-/// empty snapshot that decodes into a clear error instead of corruption.
-pub fn encode_snapshot(pixmap: &Pixmap) -> Vec<u8> {
-    let mut png = Vec::new();
-    {
-        let encoder = image::codecs::png::PngEncoder::new_with_quality(
-            &mut png,
-            image::codecs::png::CompressionType::Fast,
-            image::codecs::png::FilterType::Up,
-        );
-        let encoded = image::ImageEncoder::write_image(
-            encoder,
-            pixmap.data(),
-            pixmap.width(),
-            pixmap.height(),
-            image::ExtendedColorType::Rgba8,
-        );
-        if encoded.is_err() {
-            png.clear();
-        }
-    }
-    png
-}
-
-/// Decodes a node snapshot back into a pixmap. The bytes come back exactly
-/// as they went in ([`encode_snapshot`] is lossless), so they can be
-/// treated as premultiplied right away.
-pub fn decode_snapshot(bytes: &[u8]) -> Result<Pixmap, String> {
-    let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
-        .map_err(|err| format!("Corrupt history snapshot: {err}"))?;
-    let rgba = image.to_rgba8();
-    let Some(mut pixmap) = Pixmap::new(rgba.width(), rgba.height()) else {
-        return Err("Invalid snapshot size".to_string());
-    };
-    pixmap.data_mut().copy_from_slice(rgba.as_raw());
-    Ok(pixmap)
-}
-
-/// Fits a snapshot onto the current canvas: same size — unchanged; larger
-/// — the top-left crop; smaller — padded with transparency at the
-/// bottom/right. This is what "the nodes keep their sizes" (Resize policy)
-/// shows on restore, and it matches `Canvas::resize_canvas`'s content
-/// placement exactly.
-pub fn fit_to_canvas(pixmap: Pixmap, width: u32, height: u32) -> Pixmap {
-    if pixmap.width() == width && pixmap.height() == height {
-        return pixmap;
-    }
-    fit_copy(&pixmap, width, height)
-}
-
-/// The by-reference variant of [`fit_to_canvas`] (no clone when the sizes
-/// already match — [`LayerStack::resize_all`] uses it for every layer).
-fn fit_copy(src: &Pixmap, width: u32, height: u32) -> Pixmap {
-    if src.width() == width && src.height() == height {
-        return src.clone();
-    }
-    let Some(mut out) = Pixmap::new(width, height) else {
-        return src.clone();
-    };
-    let copy_width = src.width().min(width) as usize * 4;
-    let copy_height = src.height().min(height) as usize;
-    let src_stride = src.width() as usize * 4;
-    let dst_stride = width as usize * 4;
-    let src_data = src.data();
-    let dst = out.data_mut();
-    for row in 0..copy_height {
-        let src_start = row * src_stride;
-        let dst_start = row * dst_stride;
-        dst[dst_start..dst_start + copy_width]
-            .copy_from_slice(&src_data[src_start..src_start + copy_width]);
-    }
-    out
-}
-
-/// Blends the visible layers (bottom first) over the region `x, y, w, h`
-/// of `dst` (the display buffer): clears the region, then premultiplied
-/// src-over per layer. All layer pixmaps are canvas-sized like `dst`.
-pub fn composite(layers: &[Layer], dst: &mut Pixmap, x: u32, y: u32, w: u32, h: u32) {
-    let dst_w = dst.width();
-    let dst_h = dst.height();
-    let x0 = x.min(dst_w);
-    let y0 = y.min(dst_h);
-    let x1 = x.saturating_add(w).min(dst_w);
-    let y1 = y.saturating_add(h).min(dst_h);
-    if x1 <= x0 || y1 <= y0 {
-        return;
-    }
-    clear_region(dst, x0, y0, x1 - x0, y1 - y0);
-    for layer in layers {
-        if !layer.visible() {
-            continue;
-        }
-        blend_region(layer.pixmap(), dst, x0, y0, x1 - x0, y1 - y0);
-    }
-}
-
-/// Zeros the region's bytes (fully transparent).
-fn clear_region(dst: &mut Pixmap, x: u32, y: u32, w: u32, h: u32) {
-    let stride = dst.width() as usize * 4;
-    let data = dst.data_mut();
-    for row in 0..h as usize {
-        let start = (y as usize + row) * stride + x as usize * 4;
-        let end = start + w as usize * 4;
-        data[start..end].fill(0);
-    }
-}
-
-/// Premultiplied src-over of ONE layer's region into `dst`: for every
-/// channel `out = src + dst * (255 - src_alpha) / 255` (rounded). With
-/// premultiplied data this is exact over-blending for all four channels at
-/// once; the alpha-0 and alpha-255 shortcuts keep flat areas bit-exact.
-fn blend_region(src_pixmap: &Pixmap, dst: &mut Pixmap, x: u32, y: u32, w: u32, h: u32) {
-    let src_stride = src_pixmap.width() as usize * 4;
-    let dst_stride = dst.width() as usize * 4;
-    let copy_width = w as usize;
-    let copy_height = h as usize;
-    let src = src_pixmap.data();
-    let dst_data = dst.data_mut();
-    for row in 0..copy_height {
-        let src_row = y as usize + row;
-        // Layer pixmaps are canvas-sized like `dst`, so this never trips;
-        // a hypothetical mismatch skips the out-of-bounds rows instead of
-        // panicking or blending the wrong rows.
-        if src_row >= src_pixmap.height() as usize {
-            continue;
-        }
-        let src_start = src_row * src_stride + x as usize * 4;
-        let dst_start = src_row * dst_stride + x as usize * 4;
-        for px in 0..copy_width {
-            let s = src_start + px * 4;
-            let d = dst_start + px * 4;
-            let sa = src[s + 3] as u32;
-            if sa == 0 {
-                continue;
-            }
-            if sa == 255 {
-                dst_data[d..d + 4].copy_from_slice(&src[s..s + 4]);
-            } else {
-                let inv = 255 - sa;
-                for k in 0..4 {
-                    let kept = (dst_data[d + k] as u32 * inv + 127) / 255;
-                    dst_data[d + k] = src[s + k].saturating_add(kept as u8);
-                }
-            }
         }
     }
 }

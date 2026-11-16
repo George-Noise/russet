@@ -218,7 +218,7 @@ impl App {
                     Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => None,
                 };
                 if let Some(kind) = kind {
-                    self.record_active_action(kind, color);
+                    self.record_active_action(kind, color, None);
                     let label = match self.tools.tool {
                         Tool::Pencil => "Pencil stroke",
                         Tool::Brush => "Brush stroke",

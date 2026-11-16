@@ -167,7 +167,7 @@ impl App {
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
             self.dirty = true;
         }
-        self.record_active_action(crate::history_tree::ActionKind::Text, state.color);
+        self.record_active_action(crate::history_tree::ActionKind::Text, state.color, None);
         self.action_log.push("Text");
     }
 

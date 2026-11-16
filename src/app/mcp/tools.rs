@@ -75,7 +75,7 @@ pub(crate) fn tool_declarations() -> Value {
         },
         {
             "name": "get_history_tree",
-            "description": "The fork history of one layer: nodes (id, parent, kind, color, children) and the head, git-style. Every node carries a full PNG snapshot of that layer's canvas after the action; every drawing gesture is a node.",
+            "description": "The fork history of one layer: nodes (id, parent, kind, color, color2 — the second color of a two-color gesture like a Shape with outline AND fill, else null — children) and the head, git-style. Every node carries a full PNG snapshot of that layer's canvas after the action; every drawing gesture is a node.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

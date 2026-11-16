@@ -70,6 +70,7 @@ pub(super) fn get_history_tree(app: &App, args: &Value) -> Result<Value, String>
                 "parent": node.parent,
                 "kind": node.kind.label(),
                 "color": hex_color(node.color),
+                "color2": node.color2.map(hex_color),
                 "is_head": Some(node.id) == head,
                 "children": children,
             })

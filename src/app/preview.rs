@@ -4,6 +4,12 @@
 //! the canvas `Pixmap` until the gesture is committed, so a cancelled
 //! preview never leaves a history snapshot behind. A child module of `app`,
 //! so it can touch `App`'s private fields; `app.rs` stays the orchestrator.
+//! The PURE Shape color rules (which wells a gesture uses, what the commit
+//! records) live in the child [`colors`].
+
+mod colors;
+
+use colors::{shape_gesture_wells, shape_record_colors};
 
 use eframe::egui::{
     self, Color32, Key, PointerButton, Pos2, Rect, Shape, Stroke, StrokeKind, pos2,
@@ -50,37 +56,6 @@ pub(super) enum PreviewState {
 pub(super) enum DragKind {
     Line,
     Shape(ShapeKind),
-}
-
-/// Wells of a Shape-tool gesture start: the outline comes from the primary
-/// well and the fill from the secondary one, each gated by its Tools-window
-/// checkbox (owner request 2026-11-10). A RIGHT-button gesture USES the two
-/// wells INVERTED (owner request 2026-11-15: "цвета используются наоборот и
-/// без Swap") — the former secondary paints the outline, the former primary
-/// the fill — WITHOUT touching the wells themselves: the Palette's
-/// primary/secondary stay exactly as they are, unlike the persistent swap
-/// the previous behavior performed. The wells cannot be mutated through
-/// this helper (no `&mut` access to them, and the caller does not swap), so
-/// "без Swap" holds by construction. Returns `(outline, fill)`. Pure, so
-/// the rule is unit-testable without an egui context (the tests live in the
-/// sibling `preview/tests.rs`).
-fn shape_gesture_wells(
-    button: PointerButton,
-    shape_outline: bool,
-    shape_fill: bool,
-    primary: Color32,
-    secondary: Color32,
-) -> (Option<Color32>, Option<Color32>) {
-    let inverted = button == PointerButton::Secondary;
-    let (outline_source, fill_source) = if inverted {
-        (secondary, primary)
-    } else {
-        (primary, secondary)
-    };
-    (
-        shape_outline.then_some(outline_source),
-        shape_fill.then_some(fill_source),
-    )
 }
 
 impl App {
@@ -313,7 +288,7 @@ impl App {
                     self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
                     self.dirty = true;
                 }
-                self.record_active_action(ActionKind::Line, color);
+                self.record_active_action(ActionKind::Line, color, None);
                 self.action_log.push("Line");
             }
             DragKind::Shape(shape_kind) => {
@@ -335,8 +310,8 @@ impl App {
                     self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
                     self.dirty = true;
                 }
-                let color = outline.or(fill).unwrap_or(self.tools.primary);
-                self.record_active_action(ActionKind::Shape, color);
+                let (color, color2) = shape_record_colors(outline, fill, self.tools.primary);
+                self.record_active_action(ActionKind::Shape, color, color2);
                 self.action_log.push(label);
             }
         }
@@ -366,7 +341,7 @@ impl App {
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
             self.dirty = true;
         }
-        self.record_active_action(ActionKind::Line, color);
+        self.record_active_action(ActionKind::Line, color, None);
         self.action_log.push("Curve");
     }
 

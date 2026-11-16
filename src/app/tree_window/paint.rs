@@ -1,9 +1,11 @@
 //! The graph painter of the "History Tree" windows: branch rails, fork
-//! connectors, dots, labels and color swatches — one row per action,
+//! connectors, dots, labels and the color chip — one row per action,
 //! exactly one text line tall. Since owner request 2026-11-13 the row's
 //! DOT is interactive: a LEFT click on it (the hit area is the dot plus a
 //! small margin — never the label) asks for a head jump, returned to the
-//! caller as [`NodeId`].
+//! caller as [`NodeId`]. The chip is one fill for a single-color gesture
+//! and splits into outline|fill halves when the gesture used both colors
+//! (a Shape commit with both checkboxes on — owner request 2026-11-16).
 //!
 //! Pure painting + the one hit-test; no state, no scroll logic. The window
 //! chrome, the toolbar, the scroll bookkeeping and the per-window view
@@ -33,8 +35,12 @@ const LABEL_GAP: f32 = 10.0;
 const ARC_RADIUS: f32 = 7.0;
 /// Padding after the deepest lane (the gutter's minimum width).
 const GUTTER_TAIL_PAD: f32 = 6.0;
-/// The ONE color swatch of a row, one text line tall (owner request
-/// 2026-11-13: a stroke carries a single color — no pair).
+/// The color chip of a row, one text line tall: ONE fill for a
+/// single-color gesture; for a two-color one the SAME chip splits into
+/// outline|fill halves (owner request 2026-11-16: a tool that used two
+/// colors shows both — the 2026-11-13 single-color rule stays for the
+/// single-color tools). The width never changes, so the row layout is
+/// identical for both cases.
 const SWATCH_WIDTH: f32 = 10.0;
 
 /// Rail colors per branch (GitHub-graph palette; readable on both themes).
@@ -294,7 +300,35 @@ pub(super) fn paint_graph(
                     egui::pos2(label_x + label_width + LABEL_GAP, rect.top() + 2.0),
                     egui::vec2(SWATCH_WIDTH, row_height - 4.0),
                 );
-                painter.rect_filled(swatch, 2.0, node.color);
+                // A two-color gesture (a Shape commit with outline AND
+                // fill) splits the chip into halves — outline left, fill
+                // right (owner request 2026-11-16); a single-color gesture
+                // stays one fill. The halves stay inside the border that
+                // is drawn over them below, so the corners read the same.
+                match node.color2 {
+                    Some(fill) => {
+                        let mid_x = swatch.center().x;
+                        painter.rect_filled(
+                            Rect::from_min_max(
+                                swatch.left_top(),
+                                egui::pos2(mid_x, swatch.bottom()),
+                            ),
+                            0.0,
+                            node.color,
+                        );
+                        painter.rect_filled(
+                            Rect::from_min_max(
+                                egui::pos2(mid_x, swatch.top()),
+                                swatch.right_bottom(),
+                            ),
+                            0.0,
+                            fill,
+                        );
+                    }
+                    None => {
+                        painter.rect_filled(swatch, 2.0, node.color);
+                    }
+                }
                 painter.rect_stroke(
                     swatch,
                     2.0,

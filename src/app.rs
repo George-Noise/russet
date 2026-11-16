@@ -336,10 +336,18 @@ impl App {
     }
 
     /// One completed gesture on the ACTIVE layer: the post-action buffer
-    /// becomes the node's PNG snapshot. Encoding failures (practically
-    /// impossible) surface through the error popup instead of panicking.
-    pub(super) fn record_active_action(&mut self, kind: ActionKind, color: Color32) {
-        if let Err(error) = self.layers.record_action(kind, color) {
+    /// becomes the node's PNG snapshot. `color` is the gesture's main
+    /// color, `color2` the second one of a two-color gesture (the Shape
+    /// fill next to the outline — owner request 2026-11-16; single-color
+    /// tools pass `None`). Encoding failures (practically impossible)
+    /// surface through the error popup instead of panicking.
+    pub(super) fn record_active_action(
+        &mut self,
+        kind: ActionKind,
+        color: Color32,
+        color2: Option<Color32>,
+    ) {
+        if let Err(error) = self.layers.record_action(kind, color, color2) {
             self.error_popup = Some(error);
         }
     }

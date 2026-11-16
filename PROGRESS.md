@@ -37,13 +37,16 @@
 | Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title (backticks kept) at every done-gate; AGENTS.md Delivery ritual requires it verbatim, backtick-wrapped, in the reply |
 | Extra: UX round (owner 2026-11-13) | done — gates green | History window → Tool Log (list max height halved to 140 pt, 0.5rem entries, zero row spacing, bottom edge flush), Help item → About, dialog button rows per IBM/Apple/Google via shared `dialog_button_row`, Shape RMB-drag swaps the color wells, wheel pan ×2 (`SCROLL_PAN_SPEED` 3.0) |
 | Extra: dialog epoch + Shape RMB round (owner 2026-11-15) | done — gates green | dialogs arise centered on EVERY open and hug their content (`dialog_window` + `forget_dialog_position`, NOT §3.11); Shape RMB uses the wells inverted WITHOUT swapping; Palette "Swap (X)" → "Swap"; 3 headless-egui regression tests + a scripted 9-check real-binary pass |
+| Extra: layers split + two-color history chips (owner 2026-11-16) | done — gates green | pure code motion into `layers/snapshot.rs` + `layers/composite.rs` (tests split the same way); `TreeNode.color2` + the outline\|fill chip halves for two-color gestures; MCP `get_history_tree` dumps `color2`; preview's pure color rules → `app/preview/colors.rs` |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 84 green; with `--features mcp` — clippy clean, 96 green
-(2026-11-15, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; layers.rs sits at 504/500 lines —
-over the soft guard, a split is proposed at task end; rules.sh reports the PROGRESS.md/Log budgets —
-green; the GUI runs headless in this sandbox per `SANDBOX.md` — visual_driver.py 3/3 scenarios
-+ the scripted dlg_verify pass 9/9 through the real binary; V19–V20 are the owner's feel checks).
+`cargo test --profile gates` — 89 green; with `--features mcp` — clippy clean, 101 green
+(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; the owner-approved layers.rs
+split landed — layers.rs 504 → 354 lines, every src file ≤ 500 again, tests topics under the
+~300 guard; rules.sh reports the PROGRESS.md/Log budgets — green; the GUI runs headless in
+this sandbox per `SANDBOX.md` — visual_driver.py 3/3 scenarios + the scripted 9-check
+two-color pass through the real binary with the chip screenshot; V19–V21 are the owner's
+feel checks).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -59,6 +62,43 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Refactor:` layers split into snapshot/composite children + two-color history chips — owner request (2 chat items)
+
+- **What:** (1) `layers.rs` (504/500, the owner-approved split) lost its pixel
+  plumbing to two child modules — PURE code motion: `layers/snapshot.rs`
+  (the PNG codec `encode_snapshot`/`decode_snapshot` + the fit policy
+  `fit_to_canvas`/`fit_copy`/`pixmap_of`) and `layers/composite.rs` (the
+  region src-over blending); both re-exported from `layers.rs`, so every
+  `layers::` path (app.rs call sites, the history_tree doc links) is
+  unchanged — layers.rs 504 → 354. The tests split by topic the same way:
+  `layers/tests/snapshot.rs` + `layers/tests/composite.rs`. (2) A two-color
+  gesture now carries BOTH colors on its history node and the History Tree
+  row's chip shows both — outline\|fill halves (owner: «у тех инструментов
+  у которых использовалось 2 цвета отображалось 2 цвета»): `TreeNode.color2`
+  (Option), threaded `LayerStack::record_action` → `record_active_action`;
+  the pure `shape_record_colors` mapping lives in the NEW child
+  `app/preview/colors.rs` (placed there from the start — the mapping plus
+  the wells rule would have pushed preview.rs over the 500 guard; pure code
+  placement, not a split of grown content); single-color gestures (freehand,
+  Line, Text, one-checkbox shape) keep one color. MCP `get_history_tree`
+  dumps `color2` (null for single-color nodes).
+- **Files:** NEW `src/layers/snapshot.rs`, `src/layers/composite.rs`,
+  `src/layers/tests/{snapshot,composite}.rs`, `src/app/preview/colors.rs`;
+  moved/edited: `layers.rs`, `layers/tests.rs`, `history_tree.rs` + tests,
+  `app.rs`, `app/input.rs`, `app/preview.rs` + tests, `app/text_tool.rs`,
+  `app/tree_window/paint.rs`, `app/mcp/tools.rs` + `tools/queries.rs` +
+  `tools/edits.rs`; docs: SPEC §3.6, AGENTS.md (module map),
+  DEBTS-verification.md (V21 born), PROGRESS.md.
+- **Verified:** verify.sh ALL GATES GREEN — 89 default / 101 mcp; headless
+  visual_driver.py 3/3 scenarios after the record-path change; the scripted
+  9-check real-binary pass (xdotool/XTEST): LMB shape commits black\|white,
+  RMB shape commits them INVERTED with the wells untouched (no swap), an
+  outline-only shape stays single-color; the screenshot shows the
+  outline\|fill chip halves in the History Tree window.
+- **Owner-checks:** V21 (the chip halves feel on Windows) born in
+  DEBTS-verification.md; no other new checks.
+- **Commit title:** `Split layers into snapshot and composite children, show both colors of a two-color shape in the history tree`
 
 ### 2026-11-15 — `Fix:` dialogs centered + content-sized, Shape RMB wells inverted without Swap, Swap button renamed — owner request (4 chat items)
 
@@ -143,25 +183,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none new; V13/V14 remain the standing pointer-feel asks for the
   next Windows pass; F3/F8/F9/F10 stay parked.
 - **Commit title:** `Docs: second debt triage — verify V4 V7, drop F2, park F5`
-
-### 2026-11-13 — `Docs:` commit titles are always backtick-wrapped strings — owner request
-
-- **What:** the ritual fixes the title's canonical form as ONE backtick-wrapped
-  string in BOTH places it is stated (the PROGRESS.md `Commit title:` field and the
-  final chat reply's last line): in the chat UI a backticked string is click-to-copy,
-  one click puts the exact title on the owner's clipboard. rules.sh rule 6 stopped
-  stripping the backticks at the done-gate (the hand-over string is now verbatim
-  end-to-end) and warns NOT WRAPPED when the newest entry's title lacks them. The
-  Delivery ritual's patch bullet also documents the new base: with the owner
-  committing deliveries locally, the base is the PRE-EDIT tree object
-  (`git write-tree`, no commit/ref created), not an old sandbox SHA.
-- **Files:** `AGENTS.md` ("Commit titles" bullet + "Delivery ritual"),
-  `scripts/rules.sh` (rule 6: backticks kept + NOT WRAPPED warning),
-  PROGRESS.md (entry + snapshot row).
-- **Verified:** docs-only round (AGENTS.md "Docs/comment-only edits" — no cargo
-  needed): rules.sh green, its reminder now prints the title WITH backticks, no
-  NOT WRAPPED hits; `cargo fmt --check` clean; delivery patch/zip byte-verified.
-- **Owner-checks:** none new; the open V/F lists are unchanged (batched ask in the
-  chat reply).
-- **Commit title:** `Docs: wrap commit titles in backticks for click-to-copy in chat`
 

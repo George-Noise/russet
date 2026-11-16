@@ -321,10 +321,15 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
 
 - Every completed drawing gesture is ONE node on the ACTIVE layer's tree: pencil/brush/
   eraser strokes and the Line/Curve/Shape/Text commits. A node carries the action kind,
-  the ONE stroke color and a full PNG snapshot of the layer's canvas AFTER the action
+  the stroke colors and a full PNG snapshot of the layer's canvas AFTER the action
   (lossless fast-compressed PNG in RAM, `layers::encode_snapshot`, image crate
   `CompressionType::Fast`; the roundtrip is bit-exact, so no rebuild exists yet —
-  actions arrive later).
+  actions arrive later). Single-color gestures (the freehand tools, Line, Text, and a
+  Shape with only one of the two checkboxes on) carry ONE color; a Shape commit that
+  used BOTH the outline and the fill carries BOTH — outline in `color`, fill in
+  `color2` (owner request 2026-11-16: the History Tree row's color chip shows both —
+  split into outline|fill halves — for the tools that used two colors; the
+  2026-11-13 one-color-per-node rule narrowed to the single-color tools).
 - Each tree has a permanent **Start root** whose snapshot is the layer's initial canvas:
   undo past the first stroke lands on it, and clicking it restores the initial canvas.
 - Undo (Ctrl+Z) / redo (Ctrl+Shift+Z, Ctrl+Y) / the Edit menu / the MCP `undo`/`redo`

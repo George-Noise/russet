@@ -72,7 +72,7 @@ pub(super) fn apply_stroke(
         }
     }
     let snapshot = encode_snapshot(pixmap);
-    tree.record_action(next_id, ActionKind::Pencil, color, snapshot);
+    tree.record_action(next_id, ActionKind::Pencil, color, None, snapshot);
     Some(next_id)
 }
 

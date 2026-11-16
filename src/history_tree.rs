@@ -80,16 +80,24 @@ impl ActionKind {
     }
 }
 
-/// One node of the history tree: what was done, with which color, and the
-/// full PNG snapshot of the layer's canvas AFTER the action.
+/// One node of the history tree: what was done, with which color(s), and
+/// the full PNG snapshot of the layer's canvas AFTER the action.
 #[derive(Clone, Debug)]
 pub struct TreeNode {
     pub id: NodeId,
     pub parent: Option<NodeId>,
     pub kind: ActionKind,
-    /// The ONE color the gesture painted with (owner request 2026-11-13:
-    /// no primary/secondary distinction in the tree). Unused by Start.
+    /// The gesture's MAIN color: the stroke color of the single-color
+    /// tools, the OUTLINE of a Shape commit (owner request 2026-11-16:
+    /// a two-color gesture carries its second color in
+    /// [`TreeNode::color2`]; the 2026-11-13 one-color-per-node rule
+    /// narrowed to the single-color tools). Unused by Start.
     pub color: Color32,
+    /// The SECOND color of a two-color gesture, `None` for single-color
+    /// ones (owner request 2026-11-16: the History Tree row of a Shape
+    /// commit that used BOTH the outline and the fill shows both — the
+    /// row's color chip splits into outline|fill halves).
+    pub color2: Option<Color32>,
     /// Lossless PNG of the layer's full canvas after this action, encoded
     /// with the fast settings of [`crate::layers::encode_snapshot`]. Node
     /// PNGs may carry a different size than the current canvas after a
@@ -153,6 +161,7 @@ impl LayerTree {
                 parent: None,
                 kind: ActionKind::Start,
                 color: Color32::WHITE,
+                color2: None,
                 snapshot: root_snapshot,
             }],
             index: HashMap::from([(root_id, 0)]),
@@ -220,14 +229,18 @@ impl LayerTree {
     }
 
     /// One completed gesture = one node appended at the head, carrying the
-    /// PNG of the post-action canvas. If the head already has a child (the
-    /// user drew after an undo/jump), the new node becomes a second child
-    /// — the fork is implicit in the data.
+    /// PNG of the post-action canvas. `color` is the gesture's main color,
+    /// `color2` the second one of a two-color gesture (the Shape fill next
+    /// to the outline — owner request 2026-11-16), `None` for the
+    /// single-color tools. If the head already has a child (the user drew
+    /// after an undo/jump), the new node becomes a second child — the fork
+    /// is implicit in the data.
     pub fn record_action(
         &mut self,
         id: NodeId,
         kind: ActionKind,
         color: Color32,
+        color2: Option<Color32>,
         snapshot: Vec<u8>,
     ) {
         let parent = self.head;
@@ -236,6 +249,7 @@ impl LayerTree {
             parent,
             kind,
             color,
+            color2,
             snapshot,
         });
         self.index.insert(id, self.nodes.len() - 1);

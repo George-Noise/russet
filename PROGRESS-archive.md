@@ -9,6 +9,27 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `Docs:` commit titles are always backtick-wrapped strings — owner request
+
+- **What:** the ritual fixes the title's canonical form as ONE backtick-wrapped
+  string in BOTH places it is stated (the PROGRESS.md `Commit title:` field and the
+  final chat reply's last line): in the chat UI a backticked string is click-to-copy,
+  one click puts the exact title on the owner's clipboard. rules.sh rule 6 stopped
+  stripping the backticks at the done-gate (the hand-over string is now verbatim
+  end-to-end) and warns NOT WRAPPED when the newest entry's title lacks them. The
+  Delivery ritual's patch bullet also documents the new base: with the owner
+  committing deliveries locally, the base is the PRE-EDIT tree object
+  (`git write-tree`, no commit/ref created), not an old sandbox SHA.
+- **Files:** `AGENTS.md` ("Commit titles" bullet + "Delivery ritual"),
+  `scripts/rules.sh` (rule 6: backticks kept + NOT WRAPPED warning),
+  PROGRESS.md (entry + snapshot row).
+- **Verified:** docs-only round (AGENTS.md "Docs/comment-only edits" — no cargo
+  needed): rules.sh green, its reminder now prints the title WITH backticks, no
+  NOT WRAPPED hits; `cargo fmt --check` clean; delivery patch/zip byte-verified.
+- **Owner-checks:** none new; the open V/F lists are unchanged (batched ask in the
+  chat reply).
+- **Commit title:** `Docs: wrap commit titles in backticks for click-to-copy in chat`
+
 ### 2026-11-13 — `Fix:` Layers window width + the white initial layer — owner report (3 chat items)
 
 - **What:** (1) the Layers window smeared screen-wide and did not fit the main window:
