@@ -23,8 +23,9 @@
 | # | Opened | What the human must check | Source (PROGRESS.md log) | Status |
 |---|---|---|---|---|
 | V8 | 2026-11-12 | MCP on Windows: `cargo build --release --features mcp`, run with `--mcp`, check the "MCP on (N)" badge. | 2026-11-12 `Feat:` MCP entry | open — parked by the owner 2026-11-13: no Windows MCP pass for now; the agent-side MCP run is the working state; reconfirmed 2026-11-13 |
-| V9 | 2026-11-09 | M8 web: a real-mouse pass in a browser — draw, zoom, pan, Open/Save (the 2026-11-09 Firefox check was a headless smoke only). | Status snapshot M8 | open — parked by the owner 2026-11-13: no web checks planned in the near future; reconfirmed 2026-11-13 |
 | V16 | 2026-11-13 | Shape tool (U): a right-button drag swaps the primary/secondary wells (like the Palette's Swap button — the swap persists) and the shape commits with the swapped wells: the former secondary in the outline, the former primary in the fill. LMB drawing and the Line/Text RMB behavior unchanged. | 2026-11-13 `UX:` entry | closed 2026-11-15 — superseded by the owner's own request: shapes no longer swap the wells at all; the replacement behavior is V19. |
+| V23 | 2026-11-16 | F12-B wheel-pan parity (variant B is INTERIM, not final): ONE physical wheel notch pans the SAME fixed 15 pt on Windows, Linux Wayland and Web — plain wheel vertical, `Shift`+wheel horizontal — and the folded-in F11 ×5 feels right on Windows (the notch = the old ±3 pt × 5); touchpad/trackpad scrolling stays proportional. OPTIONAL but useful: run with `--features diag` (web: `trunk serve --features diag`, logs → browser console) and paste the `[diag] wheel …` lines from all three platforms — the raw unit/delta values retune the interim Point-unit notch constant (100 pt). | 2026-11-16 `Feat:` parity entry | open |
+| V24 | 2026-11-16 | F13-A resize: NO floating-window jitter («колбасит») while the main window is resized on Linux (Wayland) and in the browser; Windows behavior unchanged; after the resize ends an anchored window keeps its dropped gap and a free window its relative placement. OPTIONAL: with `--features diag` the `[diag] main resize …` / `[diag] place …` lines pin any residual mechanics. | 2026-11-16 `Feat:` parity entry | open |
 
 Resolved (kept until the next compaction, then dropped):
 
@@ -50,3 +51,8 @@ Resolved (kept until the next compaction, then dropped):
 - V15 — checked 2026-11-16 via chat: the ×2 bump works, but the owner wants wheel pan
   ANOTHER ×5 faster — the follow-up is born as F11 in DEBTS-functional.md (owner:
   «запиши как сделать потом»); the check itself is closed.
+- V9 — verified 2026-11-16 via chat (owner: «V9 проверил»): the owner clicked through
+  the web build in a browser with a real mouse — draw, zoom, pan, Open/Save; the pass
+  surfaced two platform gaps, born as F12 (wheel-pan parity) and F13 (floating-window
+  jitter on main-window resize) in DEBTS-functional.md — the M8 human check itself is
+  done.

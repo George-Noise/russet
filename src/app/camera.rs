@@ -4,12 +4,27 @@
 //! Space+LMB, W/A/S/D). A child module of `app`, so it can touch `App`'s
 //! private fields; `app.rs` stays the orchestrator.
 
-use eframe::egui::{self, Key, PointerButton, Pos2, Rect, Vec2};
+use eframe::egui::{self, Key, MouseWheelUnit, PointerButton, Pos2, Rect, Vec2};
 
 use super::{
     App, CANVAS_TEXTURE_CRISP, CANVAS_TEXTURE_SMOOTH, KEY_PAN_SPEED, MAX_ZOOM, MIN_ZOOM,
-    SCROLL_PAN_SPEED, ZOOM_SNAP_RATIO, ZOOM_STEP_FACTOR,
+    WHEEL_NOTCH_PAN, ZOOM_SNAP_RATIO, ZOOM_STEP_FACTOR,
 };
+
+/// One physical wheel notch of a POINT-unit wheel ≈ 100 pt (F12 variant B,
+/// owner pick 2026-11-16, INTERIM — NOT the final design): eframe-web passes
+/// the DOM wheel delta as-is and Chrome-based browsers emit ≈ 100 px per
+/// notch (`DOM_DELTA_PIXEL` → `MouseWheelUnit::Point`); winit-Wayland sends
+/// the same shape for smooth/high-resolution wheels (logical points). The
+/// constant is calibrated from `--features diag` wheel logs — retune it when
+/// the owner's logs show another per-notch value. F12 stays open.
+const POINT_UNIT_NOTCH_PT: f32 = 100.0;
+
+/// A PAGE-unit wheel notch (practically only old Firefox with a pref) is one
+/// viewport tall — egui itself converts it to `viewport_rect.height()`. For
+/// pan it is capped at 3 notches per page: an interim product choice (F12-B,
+/// not final), never observed in the wild so far.
+const PAGE_UNIT_NOTCHES: f32 = 3.0;
 
 impl App {
     pub(super) fn canvas_rect(&self, panel_rect: Rect) -> Rect {
@@ -87,11 +102,42 @@ impl App {
         let events = ui.input(|i| i.raw.events.clone());
         for event in events {
             let egui::Event::MouseWheel {
-                delta, modifiers, ..
+                unit,
+                delta,
+                source: _source,
+                modifiers,
+                ..
             } = event
             else {
                 continue;
             };
+            // F12 variant B (owner pick 2026-11-16, INTERIM): pan is defined
+            // in PRODUCT NOTCHES, not in the event's raw unit — one physical
+            // notch pans the same distance on every platform. The raw delta
+            // is first converted to notches per its unit (see
+            // [`wheel_notches`]), then each notch pans [`WHEEL_NOTCH_PAN`].
+            // Zoom below is untouched: it reads the SIGN of the raw delta
+            // only, which is why it was always platform-consistent.
+            let notches = wheel_notches(unit, delta);
+            let pan_step = if modifiers.ctrl || modifiers.command {
+                Vec2::ZERO // the ctrl branch below zooms on the sign only
+            } else if modifiers.shift {
+                egui::vec2((notches.x + notches.y) * WHEEL_NOTCH_PAN, 0.0)
+            } else {
+                egui::vec2(0.0, notches.y * WHEEL_NOTCH_PAN)
+            };
+            #[cfg(feature = "diag")]
+            eprintln!(
+                "[diag] wheel unit={unit:?} src={_source:?} delta=({:.2},{:.2}) notches=({:.3},{:.3}) ctrl={} shift={} pan_step=({:.2},{:.2})",
+                delta.x,
+                delta.y,
+                notches.x,
+                notches.y,
+                modifiers.ctrl,
+                modifiers.shift,
+                pan_step.x,
+                pan_step.y
+            );
             if modifiers.ctrl || modifiers.command {
                 let scroll = delta.x + delta.y;
                 if scroll.abs() < f32::EPSILON {
@@ -103,9 +149,9 @@ impl App {
                 let new_zoom = Self::next_zoom(self.zoom, scroll > 0.0);
                 self.set_zoom(new_zoom, Some(cursor), panel_rect);
             } else if modifiers.shift {
-                self.pan.x += (delta.x + delta.y) * SCROLL_PAN_SPEED;
+                self.pan.x += pan_step.x;
             } else {
-                self.pan.y += delta.y * SCROLL_PAN_SPEED;
+                self.pan.y += pan_step.y;
             }
         }
     }
@@ -174,6 +220,22 @@ impl App {
         let sy = rect.height() * ppp / self.canvas.height as f32;
         self.set_zoom(sx.min(sy), None, rect);
         self.pan = Vec2::ZERO;
+    }
+}
+
+/// Wheel delta in its EVENT UNIT → NOTCH count (F12 variant B): `Line` deltas
+/// are already notches (winit sends `LineDelta(±1)` per notch on Windows/X11
+/// and for Wayland discrete events; fractional lines = high-resolution
+/// wheels/touchpads, so panning stays proportional there); `Point` deltas
+/// (eframe-web DOM pixels, Wayland pixel deltas) are divided by
+/// [`POINT_UNIT_NOTCH_PT`]; a `Page` notch is capped at [`PAGE_UNIT_NOTCHES`].
+/// A free function so the convention is unit-testable without an egui
+/// context.
+fn wheel_notches(unit: MouseWheelUnit, delta: Vec2) -> Vec2 {
+    match unit {
+        MouseWheelUnit::Point => delta / POINT_UNIT_NOTCH_PT,
+        MouseWheelUnit::Line => delta,
+        MouseWheelUnit::Page => delta * PAGE_UNIT_NOTCHES,
     }
 }
 

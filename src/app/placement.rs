@@ -69,6 +69,15 @@ pub(super) struct WindowPlacement {
     /// persistence the §3.11 repositioning uses. `None` = no first-open fix
     /// (Palette/History/Layers anchor to window edges instead).
     first_open_ratio_y: Option<f32>,
+    /// Reference state pinned while a main-window resize is in progress (F13
+    /// variant A, owner pick 2026-11-16): `(window rect, content rect)` frozen
+    /// on the FIRST frame whose content rect differs from the previous
+    /// frame's; every resize frame recomputes from this pin (see
+    /// [`resize_step`]) instead of chaining off the previous frame, so the
+    /// non-monotonic content-rect series of Wayland/Web resizes cannot
+    /// accumulate drift — the «колбасит» fix. Cleared on the first stable
+    /// frame; the next resize pins fresh.
+    resizing: Option<(Rect, Rect)>,
 }
 
 impl WindowPlacement {
@@ -173,6 +182,44 @@ fn reposition_axis(old: (f32, f32), new: (f32, f32), win: (f32, f32), anchor: Ax
     }
 }
 
+/// The F13-A repositioning decision for ONE frame (pure, testable without an
+/// egui context): given the window's drawn rect of the previous frame, the
+/// previous and current content rects, the pinned resize reference (if any)
+/// and the window's anchors, returns the NEW pin plus the position to persist
+/// (if the window must move this frame).
+///
+/// - `prev_content` is `None` (first frame ever) or the window has no drawn
+///   rect yet: nothing to compare against — no pin, no move;
+/// - content unchanged from the previous frame (`prev == current`): the main
+///   window is not being resized — any pin clears, no move. The NEXT resize
+///   pins the then-current state fresh;
+/// - first CHANGED frame and no pin yet: the pre-resize state is pinned
+///   (`prev_rect`, `prev_content`);
+/// - later changed frames (pin exists): the position is recomputed FROM THE
+///   PIN every frame — never from the previous frame's drawn rect — so a
+///   non-monotonic resize series (Wayland/Web double-buffered configure
+///   events) re-derives each intermediate target from the same anchor and
+///   cannot accumulate drift.
+fn resize_step(
+    prev_rect: Option<Rect>,
+    prev_content: Option<Rect>,
+    content: Rect,
+    pin: Option<(Rect, Rect)>,
+    anchor: WindowAnchor,
+) -> (Option<(Rect, Rect)>, Option<Pos2>) {
+    let (Some(prev_content), Some(prev_rect)) = (prev_content, prev_rect) else {
+        return (None, None);
+    };
+    if prev_content == content {
+        // Stable frame: the resize is over — the last computed position
+        // persists; drop the reference so the next resize pins fresh.
+        return (None, None);
+    }
+    let reference = pin.unwrap_or((prev_rect, prev_content));
+    let left_top = reposition_window_pos(reference.0, reference.1, content, anchor);
+    (Some(reference), Some(left_top))
+}
+
 /// Left-top position that splits the FREE vertical space of `area` around
 /// `win_rect` into `ratio` above / `1 - ratio` below (§3.2 first open of the
 /// Tools window: 0.4 above, 0.6 below — a bit above center). The horizontal
@@ -242,8 +289,14 @@ pub(super) fn set_window_pos(ctx: &egui::Context, area_id: Id, left_top: Pos2) {
 ///   outside the 2rem zones clears all anchors;
 /// - after a main-window resize — and never while dragging — an anchored
 ///   axis keeps its dropped gap and a free axis keeps its relative
-///   placement via the gap-ratio formula. Resizes never anchor, unanchor
-///   or move anything flush.
+///   placement via the gap-ratio formula, RECOMPUTED FROM A PINNED
+///   PRE-RESIZE REFERENCE every resize frame (F13 variant A, owner pick
+///   2026-11-16): the reference — the window's and the main window's rect
+///   of the last stable frame — is pinned on the first changed frame and
+///   cleared on the first stable one, so the non-monotonic content-rect
+///   series of Wayland/Web resizes cannot accumulate the per-frame drift
+///   that showed as «колбасит». Resizes never anchor, unanchor or move
+///   anything flush.
 /// - on the very first frame a window with a first-open ratio is shown
 ///   (§3.2 Tools window), the ratio is applied exactly — the auto-sized
 ///   height is known only after this first layout, so the position is
@@ -263,10 +316,14 @@ pub(super) fn place_floating_window(
 
     if dragging {
         place.dragging = true;
+        // A user move obsoletes any resize reference; a resize that continues
+        // after the drag re-pins from the then-current state.
+        place.resizing = None;
     } else if place.dragging {
         // Drag just ended: fix the window where the USER dropped it.
         place.anchor = window_anchor(rect, content, WINDOW_SNAP_DISTANCE);
         place.dragging = false;
+        place.resizing = None;
     } else if let Some(ratio) = place.first_open_ratio_y.take() {
         // First frame this window is ever shown: its auto-sized height is
         // now known, so the §3.2 first-open ratio can be applied exactly.
@@ -277,11 +334,28 @@ pub(super) fn place_floating_window(
         set_window_pos(ctx, area_id, left_top);
         place.rect = Some(Rect::from_min_size(left_top, rect.size()));
         return;
-    } else if let (Some(prev_rect), Some(prev_content)) = (place.rect, prev_content)
-        && prev_content != content
-    {
-        let left_top = reposition_window_pos(prev_rect, prev_content, content, place.anchor);
-        set_window_pos(ctx, area_id, left_top);
+    } else {
+        // §3.11 repositioning during a main-window resize — F13 variant A:
+        // recompute from the PINNED pre-resize reference (see [`resize_step`]).
+        let (pin, left_top) = resize_step(
+            place.rect,
+            prev_content,
+            content,
+            place.resizing,
+            place.anchor,
+        );
+        place.resizing = pin;
+        if let Some(left_top) = left_top {
+            #[cfg(feature = "diag")]
+            eprintln!(
+                "[diag] place {} resize: content={:?} pin={:?} -> left_top={:?}",
+                area_id.short_debug_format(),
+                content,
+                place.resizing,
+                left_top
+            );
+            set_window_pos(ctx, area_id, left_top);
+        }
     }
     place.rect = Some(rect);
 }

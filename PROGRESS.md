@@ -40,16 +40,15 @@
 | Extra: layers split + two-color history chips (owner 2026-11-16) | done — gates green | pure code motion into `layers/snapshot.rs` + `layers/composite.rs` (tests split the same way); `TreeNode.color2` + the outline\|fill chip halves for two-color gestures; MCP `get_history_tree` dumps `color2`; preview's pure color rules → `app/preview/colors.rs` |
 | Extra: Shift-proportional shapes (owner 2026-11-16) | done — gates green | Shape (U) drag with held Shift = square/circle, Paint.NET-style, LIVE (mid-drag snap/release); pure `proportional_current` in `app/preview.rs` + 5 unit tests; SPEC §3.2 bullet + §3.9 hold-gesture row; V22 born |
 | Extra: third debt triage (owner 2026-11-16) | done — docs only | V13/V14/V17–V22 verified via chat; V15 closed into the NEW F11 (wheel pan ANOTHER ×5 — `SCROLL_PAN_SPEED` 3.0 → 15.0, how-to recorded in DEBTS-functional.md); AGENTS.md gained the zip-priority rule (a delivered .zip is used immediately — no git pull/clone); open after this edit: V8, V9, F3, F5, F8–F11 |
+| Extra: V9 pass + platform-gap analysis (owner 2026-11-16) | done — docs only | V9 verified via chat (web build clicked through in a browser); the pass surfaced F12 (wheel-pan platform parity — `camera.rs` reads the RAW wheel delta in EVENT UNITS: Line ±1/notch on Windows/X11 vs DOM px as-is on the web) and F13 (window jitter on Wayland/Web resize — per-frame repositioning meets non-monotonic content rects); both analysis-only, fixes postponed by the owner |
+| Extra: wheel-pan parity F12-B + resize-jitter fix F13-A + diag feature (owner 2026-11-16) | done — gates green | owner picked F12 variant B (INTERIM, not final; F11 folded into the math) and F13 variant A, approved the diagnostic patch behind a build flag; `wheel_notches` (unit → notches) + fixed `WHEEL_NOTCH_PAN` 15 pt/notch on every platform; `resize_step` pins the pre-resize rects and recomputes from the pin; temporary `diag` cargo feature ([diag] wheel/resize/reposition logs, compiled out of the default build); SPEC §3.4 + §7 rewritten; V23/V24 born |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 94 green; with `--features mcp` — clippy clean, 106 green
-(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; Shift-proportional shapes
-landed — the pure rule + 5 tests, every src file ≤ 500; rules.sh reports the
-PROGRESS.md/Log budgets — green; the GUI runs headless per `SANDBOX.md` —
-visual_driver.py 3/3 scenarios + the scripted 9-check XTEST Shift pass through the real
-binary (unconstrained 88×38 vs Shift 88×88 vs mid-drag 78×78); V22 is the owner's
-feel check). A docs-only debt-triage round followed the same day: rules.sh
-HARD-green at both gates, no Rust code touched.
+`cargo test --profile gates` — 98 green; with `--features mcp` — clippy clean, 110 green;
+with `--features diag` — clippy clean, 98 green
+(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; wheel-pan parity (F12-B
+interim) + the pin-based resize repositioning (F13-A) + the temporary `diag` feature landed —
+4 new pure tests; every src file ≤ 500; rules.sh reports the PROGRESS.md/Log budgets — green).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -65,6 +64,64 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Feat:` wheel-pan parity (F12-B interim), pin-based resize repositioning (F13-A), the temporary diag feature — owner request
+
+- **What:** the owner picked the designs: F12 → variant B («с пометкой что это не
+  окончательный вариант»; F11 учтён в расчётах — он писался после проверки на Windows),
+  F13 → вариант A, and approved the diagnostic patch ONLY behind a build flag. (1) F12-B:
+  the new pure `app/camera.rs::wheel_notches` converts the raw delta to PRODUCT NOTCHES per
+  its `unit` — `Line` passes through (winit ±1/notch on Windows/X11/Wayland-discrete),
+  `Point` ÷ 100 pt (eframe-web passes the DOM pixels as-is, Chrome ≈ 100/notch — INTERIM
+  calibration), `Page` × 3 — and every notch pans the FIXED `WHEEL_NOTCH_PAN` 15 pt on EVERY
+  platform (`SCROLL_PAN_SPEED` 3.0 superseded; F11 folded: 3.0 × 5 = 15.0). Zoom untouched
+  (sign-only — that is why it was always consistent). F12 STAYS OPEN (not final): the
+  constants are retuned from diag logs. (2) F13-A: the pure `resize_step` (3 tests) pins the
+  PRE-resize (window, content) rects on the FIRST changed frame and recomputes EVERY resize
+  frame from the pin — Wayland/Web non-monotonic content series can no longer accumulate the
+  chain drift («колбасит»); the pin clears on the first stable frame and on title-bar drags.
+  (3) The TEMPORARY `diag` cargo feature (default build compiles NONE of it): one `[diag]`
+  stderr line per wheel event (unit/source/delta → notches → pan step — the calibration
+  data) + per changed content rect + per repositioned floating window; on the web the lines
+  reach the browser console. Removed when F12/F13 close. SPEC §3.4 + the §7 checklist
+  rewritten; F11 paid (folded), F12/F13 statuses updated, V23/V24 born.
+- **Files:** `src/app/camera.rs` (+ tests), `src/app.rs`, `src/app/placement.rs` (+ tests),
+  `Cargo.toml`, `SPEC.md`, `DEBTS-functional.md`, `DEBTS-verification.md`, `PROGRESS.md`,
+  `PROGRESS-archive.md` (the 2026-11-16 Refactor entry moved verbatim).
+- **Verified:** verify.sh ALL GATES GREEN in-sandbox (the pinned 1.99.1 toolchain
+  bootstrapped this session) — fmt clean; clippy -D warnings clean default/mcp/diag;
+  98 default / 110 mcp tests green (+4 new: the unit→notch table, 3 × the pin semantics);
+  rules.sh HARD-green before and after; delivery byte-compared as usual.
+- **Owner-checks:** V23 (one notch = the same 15 pt on Windows/Wayland/Web + the ×5 feel;
+  optional `[diag] wheel` logs) and V24 (no Wayland/Web resize jitter; optional
+  `[diag] main resize`/`place` logs) born in DEBTS-verification.md.
+- **Commit title:** `Fix wheel-pan platform parity (fixed 15 pt notch, F12-B interim + F11) and the resize window jitter (F13-A reference-based); add the temporary diag feature`
+
+### 2026-11-16 — `Docs:` V9 verified, the wheel-pan platform gap and the resize jitter analyzed (F12/F13) — owner request
+
+- **What:** (1) the owner's «V9 проверил» closes the M8 web real-mouse check in
+  DEBTS-verification.md. (2) The same pass surfaced TWO platform gaps, born as
+  F12 + F13 (DEBTS-functional.md), analysis-only by request («ничего этого пока
+  исправлять не нужно»). F12 — wheel-pan parity: `app/camera.rs::handle_scroll`
+  reads the RAW `Event::MouseWheel.delta` in EVENT UNITS and ignores `unit`,
+  verified against the pinned sources (egui 0.37.0: delta unconverted, unit
+  Line/Point/Page, its own web=8 vs native=40 line speed; winit 0.30.13:
+  Windows/X11 `LineDelta(±1)` per notch, Wayland discrete-or-pixel; eframe web:
+  DOM pixels as-is) — one notch pans ±3 pt on Windows vs ~±300 pt on the Web.
+  Zoom is immune (it uses only the SIGN). Options A/B/C in F12; the owner's
+  «pan по методу zoom» maps to B/C; F11's ×5 must be RE-DECIDED after the unit
+  fix (measured on the buggy speed). F13 — window jitter on Linux/Web resize:
+  per-frame repositioning (`place_floating_window` → `set_window_pos`) meets
+  non-monotonic content-rect series + auto-sized windows resizing in the same
+  frames; options a/b/c in F13. SPEC §3.4's «40 pt per notch» describes egui's
+  INTERNAL conversion, not the raw delta russet reads — rewrite on the fix.
+- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `PROGRESS.md`,
+  `PROGRESS-archive.md` — docs only, NO code touched (cargo gates not re-run).
+- **Verified:** rules.sh HARD-green before and after the edit; source facts
+  quoted from clones of the pinned versions (egui 0.37.0, winit 0.30.13,
+  sctk 0.19.2); the delivery byte-compared as usual.
+- **Owner-checks:** none born — F12/F13 are open DESIGN decisions for the owner.
+- **Commit title:** `Docs: verify V9, analyze the wheel-pan platform gap and the resize window jitter (F12/F13)`
 
 ### 2026-11-16 — `Docs:` third debt triage — 8 checks verified, F11 born, zip-priority rule
 
@@ -116,77 +173,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V22 (the dominant-axis square feels like Paint.NET on
   Windows) born in DEBTS-verification.md; no other new checks.
 - **Commit title:** `Add Shift-proportional shape drawing (square/circle, Paint.NET-style)`
-
-### 2026-11-16 — `Refactor:` layers split into snapshot/composite children + two-color history chips — owner request (2 chat items)
-
-- **What:** (1) `layers.rs` (504/500, the owner-approved split) lost its pixel
-  plumbing to two child modules — PURE code motion: `layers/snapshot.rs`
-  (the PNG codec `encode_snapshot`/`decode_snapshot` + the fit policy
-  `fit_to_canvas`/`fit_copy`/`pixmap_of`) and `layers/composite.rs` (the
-  region src-over blending); both re-exported from `layers.rs`, so every
-  `layers::` path (app.rs call sites, the history_tree doc links) is
-  unchanged — layers.rs 504 → 354. The tests split by topic the same way:
-  `layers/tests/snapshot.rs` + `layers/tests/composite.rs`. (2) A two-color
-  gesture now carries BOTH colors on its history node and the History Tree
-  row's chip shows both — outline\|fill halves (owner: «у тех инструментов
-  у которых использовалось 2 цвета отображалось 2 цвета»): `TreeNode.color2`
-  (Option), threaded `LayerStack::record_action` → `record_active_action`;
-  the pure `shape_record_colors` mapping lives in the NEW child
-  `app/preview/colors.rs` (placed there from the start — the mapping plus
-  the wells rule would have pushed preview.rs over the 500 guard; pure code
-  placement, not a split of grown content); single-color gestures (freehand,
-  Line, Text, one-checkbox shape) keep one color. MCP `get_history_tree`
-  dumps `color2` (null for single-color nodes).
-- **Files:** NEW `src/layers/snapshot.rs`, `src/layers/composite.rs`,
-  `src/layers/tests/{snapshot,composite}.rs`, `src/app/preview/colors.rs`;
-  moved/edited: `layers.rs`, `layers/tests.rs`, `history_tree.rs` + tests,
-  `app.rs`, `app/input.rs`, `app/preview.rs` + tests, `app/text_tool.rs`,
-  `app/tree_window/paint.rs`, `app/mcp/tools.rs` + `tools/queries.rs` +
-  `tools/edits.rs`; docs: SPEC §3.6, AGENTS.md (module map),
-  DEBTS-verification.md (V21 born), PROGRESS.md.
-- **Verified:** verify.sh ALL GATES GREEN — 89 default / 101 mcp; headless
-  visual_driver.py 3/3 scenarios after the record-path change; the scripted
-  9-check real-binary pass (xdotool/XTEST): LMB shape commits black\|white,
-  RMB shape commits them INVERTED with the wells untouched (no swap), an
-  outline-only shape stays single-color; the screenshot shows the
-  outline\|fill chip halves in the History Tree window.
-- **Owner-checks:** V21 (the chip halves feel on Windows) born in
-  DEBTS-verification.md; no other new checks.
-- **Commit title:** `Split layers into snapshot and composite children, show both colors of a two-color shape in the history tree`
-
-### 2026-11-15 — `Fix:` dialogs centered + content-sized, Shape RMB wells inverted without Swap, Swap button renamed — owner request (4 chat items)
-
-- **What:** (1) The modal dialogs (New, Resize Canvas, Unsaved Changes, Delete
-  Layer, Error, About) opened at egui's default outer size 340×420 (AGENTS.md
-  quirk: a plain Window never shrinks below the first frame) and at egui's
-  cascade position — the owner's screenshots showed the fields at the top and
-  the button row detached ~3/4 down, stretching toward the main-window bottom
-  edge. Fix: the shared `dialog_window` builder (pivot CENTER_CENTER +
-  `default_pos(content_rect().center())`) + `forget_dialog_position` on every
-  close path — the "dialog epoch": the next open re-centers even after the
-  user dragged the dialog aside; while open it stays draggable; NOT §3.11
-  windows. (2) The stretch's other half: `dialog_button_row`'s bare
-  `with_layout` inherited the whole remaining available rect — replaced with
-  a bounded `allocate_ui_with_layout` row. (3) Shape (U) RMB: the wells are
-  USED inverted (former secondary → outline, former primary → fill) WITHOUT
-  swapping them — the persistent swap is gone (owner: «цвета используются
-  наоборот и без Swap»); pure `shape_gesture_wells` returns `(outline, fill)`
-  and has no `&mut` access to the wells. (4) Palette button "Swap (X)" →
-  "Swap" (no hotkey behind it and none wanted — §3.9 stays exhaustive).
-  NEW file: `src/app/dialogs/tests.rs` — 3 headless-egui regression tests
-  that FAIL on the old code (measured height 420, cascade center).
-- **Files:** `src/app/dialogs.rs` + NEW `dialogs/tests.rs`, `app/panels.rs`
-  (Delete Layer via the builder), `app/preview.rs` + `preview/tests.rs`,
-  `app/windows.rs`; docs: SPEC.md (§3.2–3.3, §3.7–3.8, §7), AGENTS.md (new
-  egui quirk), DEBTS-verification.md (V19/V20 born, V16 closed), PROGRESS.md.
-- **Verified:** verify.sh ALL GATES GREEN — 84 default / 96 mcp; the
-  scripted headless pass (scripts/dlg_verify.py, sandbox-only) through the
-  real binary 9/9: open → centered+compact → title-bar drag away → OK
-  closes → reopen centered again; XTEST RMB shape: the node commits with the
-  former SECONDARY color and the Palette wells read back unchanged;
-  visual_driver.py 3/3 scenarios after the changes.
-- **Owner-checks:** V19 (Shape RMB inverted, wells untouched), V20 (dialogs
-  centered on every open, content-hugging height) born in
-  DEBTS-verification.md; V16 closed as superseded by the owner's request.
-- **Commit title:** `Fix dialogs to arise centered and content-sized, use Shape RMB wells inverted without swap, rename the Swap button`
-

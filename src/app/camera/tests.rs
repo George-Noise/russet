@@ -1,5 +1,5 @@
-use super::{App, key_pan_dir};
-use eframe::egui::Vec2;
+use super::{App, key_pan_dir, wheel_notches};
+use eframe::egui::{MouseWheelUnit, Vec2};
 
 fn percent(zoom: f32) -> i32 {
     (zoom * 100.0).round() as i32
@@ -38,4 +38,34 @@ fn wasd_diagonals_are_normalized() {
     assert!((diag.x + 1.0 / 2.0f32.sqrt()).abs() < 1e-4);
     // No keys — no movement.
     assert_eq!(key_pan_dir(false, false, false, false), Vec2::ZERO);
+}
+
+#[test]
+fn wheel_notches_are_unit_aware() {
+    // F12 variant B: the notch, not the event unit, defines the pan step.
+    // Line (Windows/X11, Wayland discrete): ±1 per physical notch — pass-through.
+    assert_eq!(
+        wheel_notches(MouseWheelUnit::Line, Vec2::new(0.0, 1.0)),
+        Vec2::new(0.0, 1.0)
+    );
+    // Fractional lines (high-resolution wheels/touchpads) stay proportional.
+    assert_eq!(
+        wheel_notches(MouseWheelUnit::Line, Vec2::new(0.0, 0.25)),
+        Vec2::new(0.0, 0.25)
+    );
+    // Point (eframe-web DOM px, Wayland pixel deltas): 100 pt per notch —
+    // Chrome's default wheel notch, the INTERIM F12-B calibration.
+    assert_eq!(
+        wheel_notches(MouseWheelUnit::Point, Vec2::new(0.0, 100.0)),
+        Vec2::new(0.0, 1.0)
+    );
+    assert_eq!(
+        wheel_notches(MouseWheelUnit::Point, Vec2::new(0.0, -100.0)),
+        Vec2::new(0.0, -1.0)
+    );
+    // Page: capped at 3 notches per page (INTERIM, never observed in the wild).
+    assert_eq!(
+        wheel_notches(MouseWheelUnit::Page, Vec2::new(0.0, 1.0)),
+        Vec2::new(0.0, 3.0)
+    );
 }

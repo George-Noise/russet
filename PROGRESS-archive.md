@@ -9,6 +9,78 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-16 — `Refactor:` layers split into snapshot/composite children + two-color history chips — owner request (2 chat items)
+
+- **What:** (1) `layers.rs` (504/500, the owner-approved split) lost its pixel
+  plumbing to two child modules — PURE code motion: `layers/snapshot.rs`
+  (the PNG codec `encode_snapshot`/`decode_snapshot` + the fit policy
+  `fit_to_canvas`/`fit_copy`/`pixmap_of`) and `layers/composite.rs` (the
+  region src-over blending); both re-exported from `layers.rs`, so every
+  `layers::` path (app.rs call sites, the history_tree doc links) is
+  unchanged — layers.rs 504 → 354. The tests split by topic the same way:
+  `layers/tests/snapshot.rs` + `layers/tests/composite.rs`. (2) A two-color
+  gesture now carries BOTH colors on its history node and the History Tree
+  row's chip shows both — outline\|fill halves (owner: «у тех инструментов
+  у которых использовалось 2 цвета отображалось 2 цвета»): `TreeNode.color2`
+  (Option), threaded `LayerStack::record_action` → `record_active_action`;
+  the pure `shape_record_colors` mapping lives in the NEW child
+  `app/preview/colors.rs` (placed there from the start — the mapping plus
+  the wells rule would have pushed preview.rs over the 500 guard; pure code
+  placement, not a split of grown content); single-color gestures (freehand,
+  Line, Text, one-checkbox shape) keep one color. MCP `get_history_tree`
+  dumps `color2` (null for single-color nodes).
+- **Files:** NEW `src/layers/snapshot.rs`, `src/layers/composite.rs`,
+  `src/layers/tests/{snapshot,composite}.rs`, `src/app/preview/colors.rs`;
+  moved/edited: `layers.rs`, `layers/tests.rs`, `history_tree.rs` + tests,
+  `app.rs`, `app/input.rs`, `app/preview.rs` + tests, `app/text_tool.rs`,
+  `app/tree_window/paint.rs`, `app/mcp/tools.rs` + `tools/queries.rs` +
+  `tools/edits.rs`; docs: SPEC §3.6, AGENTS.md (module map),
+  DEBTS-verification.md (V21 born), PROGRESS.md.
+- **Verified:** verify.sh ALL GATES GREEN — 89 default / 101 mcp; headless
+  visual_driver.py 3/3 scenarios after the record-path change; the scripted
+  9-check real-binary pass (xdotool/XTEST): LMB shape commits black\|white,
+  RMB shape commits them INVERTED with the wells untouched (no swap), an
+  outline-only shape stays single-color; the screenshot shows the
+  outline\|fill chip halves in the History Tree window.
+- **Owner-checks:** V21 (the chip halves feel on Windows) born in
+  DEBTS-verification.md; no other new checks.
+- **Commit title:** `Split layers into snapshot and composite children, show both colors of a two-color shape in the history tree`
+### 2026-11-15 — `Fix:` dialogs centered + content-sized, Shape RMB wells inverted without Swap, Swap button renamed — owner request (4 chat items)
+
+- **What:** (1) The modal dialogs (New, Resize Canvas, Unsaved Changes, Delete
+  Layer, Error, About) opened at egui's default outer size 340×420 (AGENTS.md
+  quirk: a plain Window never shrinks below the first frame) and at egui's
+  cascade position — the owner's screenshots showed the fields at the top and
+  the button row detached ~3/4 down, stretching toward the main-window bottom
+  edge. Fix: the shared `dialog_window` builder (pivot CENTER_CENTER +
+  `default_pos(content_rect().center())`) + `forget_dialog_position` on every
+  close path — the "dialog epoch": the next open re-centers even after the
+  user dragged the dialog aside; while open it stays draggable; NOT §3.11
+  windows. (2) The stretch's other half: `dialog_button_row`'s bare
+  `with_layout` inherited the whole remaining available rect — replaced with
+  a bounded `allocate_ui_with_layout` row. (3) Shape (U) RMB: the wells are
+  USED inverted (former secondary → outline, former primary → fill) WITHOUT
+  swapping them — the persistent swap is gone (owner: «цвета используются
+  наоборот и без Swap»); pure `shape_gesture_wells` returns `(outline, fill)`
+  and has no `&mut` access to the wells. (4) Palette button "Swap (X)" →
+  "Swap" (no hotkey behind it and none wanted — §3.9 stays exhaustive).
+  NEW file: `src/app/dialogs/tests.rs` — 3 headless-egui regression tests
+  that FAIL on the old code (measured height 420, cascade center).
+- **Files:** `src/app/dialogs.rs` + NEW `dialogs/tests.rs`, `app/panels.rs`
+  (Delete Layer via the builder), `app/preview.rs` + `preview/tests.rs`,
+  `app/windows.rs`; docs: SPEC.md (§3.2–3.3, §3.7–3.8, §7), AGENTS.md (new
+  egui quirk), DEBTS-verification.md (V19/V20 born, V16 closed), PROGRESS.md.
+- **Verified:** verify.sh ALL GATES GREEN — 84 default / 96 mcp; the
+  scripted headless pass (scripts/dlg_verify.py, sandbox-only) through the
+  real binary 9/9: open → centered+compact → title-bar drag away → OK
+  closes → reopen centered again; XTEST RMB shape: the node commits with the
+  former SECONDARY color and the Palette wells read back unchanged;
+  visual_driver.py 3/3 scenarios after the changes.
+- **Owner-checks:** V19 (Shape RMB inverted, wells untouched), V20 (dialogs
+  centered on every open, content-hugging height) born in
+  DEBTS-verification.md; V16 closed as superseded by the owner's request.
+- **Commit title:** `Fix dialogs to arise centered and content-sized, use Shape RMB wells inverted without swap, rename the Swap button`
+
 ### 2026-11-13 — `UX:` Tool Log restyle, About item, dialog rows, Shape RMB swap, 2x wheel pan — owner request (5 chat items)
 
 - **What:** (1) the "History" window (NOT the History Tree) → "Tool Log" (View

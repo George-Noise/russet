@@ -85,12 +85,15 @@ const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 8.0;
 const ZOOM_STEP_FACTOR: f32 = 1.12;
 const ZOOM_SNAP_RATIO: f32 = 0.06;
-/// egui's raw wheel delta (40 pt per notch on native) pans slower than
-/// Paint.NET; originally tuned to 1.5 (~1.5x slower than Paint.NET), then
-/// DOUBLED to 3.0 by the owner request 2026-11-13 («ускорить pan на
-/// колёсике в 2 раза») — plain-wheel vertical and Shift+wheel horizontal
-/// alike. Verification of the feel is V15 (DEBTS-verification.md).
-const SCROLL_PAN_SPEED: f32 = 3.0;
+/// One physical wheel notch pans a FIXED 15 pt on EVERY platform (F12
+/// variant B, owner pick 2026-11-16, INTERIM — not the final design; see
+/// `app/camera.rs::wheel_notches` for the unit → notch conversion). The
+/// value folds in F11 (owner: wheel pan ×5, calibrated on Windows — the
+/// pre-F12 Windows notch was ±1 line × `SCROLL_PAN_SPEED` 3.0 = ±3 pt, and
+/// 3.0 × 5 = 15.0). Plain-wheel vertical and Shift+wheel horizontal alike.
+/// The feel check is V23 (DEBTS-verification.md); the interim calibration
+/// may be retuned from `--features diag` wheel logs.
+const WHEEL_NOTCH_PAN: f32 = 15.0;
 /// WASD pans the viewport continuously (§3.4): screen-space speed in
 /// logical points per second, applied while a pan key is held (owner-tuned;
 /// crossing a 1080p-height main window takes ~1.8 s).
@@ -494,6 +497,33 @@ impl App {
             }
         }
     }
+
+    /// F13 step-0 diagnostics (owner OK 2026-11-16, temporary `diag` feature):
+    /// one `[diag]` line per frame whose content rect changed — the raw
+    /// material for the Wayland/Web resize-jitter analysis (non-monotonic
+    /// configure series). Compiled out without `--features diag`; removed
+    /// together with the feature when F12/F13 close.
+    #[cfg(feature = "diag")]
+    fn diag_main_resize(&self) {
+        let Some(prev) = self.last_content_rect else {
+            return;
+        };
+        let now = self.ctx.content_rect();
+        if prev == now {
+            return;
+        }
+        eprintln!(
+            "[diag] main resize: content min=({:.0},{:.0}) size=({:.0},{:.0}) -> min=({:.0},{:.0}) size=({:.0},{:.0})",
+            prev.min.x,
+            prev.min.y,
+            prev.width(),
+            prev.height(),
+            now.min.x,
+            now.min.y,
+            now.width(),
+            now.height(),
+        );
+    }
 }
 
 /// The eframe entry point. Runs after `App::new`; owns the whole frame.
@@ -522,6 +552,8 @@ impl eframe::App for App {
         self.tree_windows(&ctx);
         self.text_tool_window(&ctx);
         // Both windows must observe the resize before the tracker flips.
+        #[cfg(feature = "diag")]
+        self.diag_main_resize();
         self.last_content_rect = Some(ctx.content_rect());
         self.discard_dialog(&ctx);
         self.new_dialog(&ctx);
