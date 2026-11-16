@@ -92,7 +92,7 @@ const ZOOM_SNAP_RATIO: f32 = 0.06;
 /// pre-F12 Windows notch was ±1 line × `SCROLL_PAN_SPEED` 3.0 = ±3 pt, and
 /// 3.0 × 5 = 15.0). Plain-wheel vertical and Shift+wheel horizontal alike.
 /// The feel check is V23 (DEBTS-verification.md); the interim calibration
-/// may be retuned from `--features diag` wheel logs.
+/// may be retuned from `--features diagnostics` wheel logs.
 const WHEEL_NOTCH_PAN: f32 = 15.0;
 /// WASD pans the viewport continuously (§3.4): screen-space speed in
 /// logical points per second, applied while a pan key is held (owner-tuned;
@@ -498,13 +498,14 @@ impl App {
         }
     }
 
-    /// F13 step-0 diagnostics (owner OK 2026-11-16, temporary `diag` feature):
-    /// one `[diag]` line per frame whose content rect changed — the raw
-    /// material for the Wayland/Web resize-jitter analysis (non-monotonic
-    /// configure series). Compiled out without `--features diag`; removed
-    /// together with the feature when F12/F13 close.
-    #[cfg(feature = "diag")]
-    fn diag_main_resize(&self) {
+    /// F13 step-0 diagnostics (owner OK 2026-11-16, temporary
+    /// `diagnostics` feature): one `[diagnostics]` line per frame whose
+    /// content rect changed — the raw material for the Wayland/Web
+    /// resize-jitter analysis (non-monotonic configure series). Compiled out
+    /// without `--features diagnostics`; removed together with the feature
+    /// when F12/F13 close.
+    #[cfg(feature = "diagnostics")]
+    fn diagnostics_main_resize(&self) {
         let Some(prev) = self.last_content_rect else {
             return;
         };
@@ -513,7 +514,7 @@ impl App {
             return;
         }
         eprintln!(
-            "[diag] main resize: content min=({:.0},{:.0}) size=({:.0},{:.0}) -> min=({:.0},{:.0}) size=({:.0},{:.0})",
+            "[diagnostics] main resize: content min=({:.0},{:.0}) size=({:.0},{:.0}) -> min=({:.0},{:.0}) size=({:.0},{:.0})",
             prev.min.x,
             prev.min.y,
             prev.width(),
@@ -552,8 +553,8 @@ impl eframe::App for App {
         self.tree_windows(&ctx);
         self.text_tool_window(&ctx);
         // Both windows must observe the resize before the tracker flips.
-        #[cfg(feature = "diag")]
-        self.diag_main_resize();
+        #[cfg(feature = "diagnostics")]
+        self.diagnostics_main_resize();
         self.last_content_rect = Some(ctx.content_rect());
         self.discard_dialog(&ctx);
         self.new_dialog(&ctx);

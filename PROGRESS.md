@@ -42,13 +42,15 @@
 | Extra: third debt triage (owner 2026-11-16) | done — docs only | V13/V14/V17–V22 verified via chat; V15 closed into the NEW F11 (wheel pan ANOTHER ×5 — `SCROLL_PAN_SPEED` 3.0 → 15.0, how-to recorded in DEBTS-functional.md); AGENTS.md gained the zip-priority rule (a delivered .zip is used immediately — no git pull/clone); open after this edit: V8, V9, F3, F5, F8–F11 |
 | Extra: V9 pass + platform-gap analysis (owner 2026-11-16) | done — docs only | V9 verified via chat (web build clicked through in a browser); the pass surfaced F12 (wheel-pan platform parity — `camera.rs` reads the RAW wheel delta in EVENT UNITS: Line ±1/notch on Windows/X11 vs DOM px as-is on the web) and F13 (window jitter on Wayland/Web resize — per-frame repositioning meets non-monotonic content rects); both analysis-only, fixes postponed by the owner |
 | Extra: wheel-pan parity F12-B + resize-jitter fix F13-A + diag feature (owner 2026-11-16) | done — gates green | owner picked F12 variant B (INTERIM, not final; F11 folded into the math) and F13 variant A, approved the diagnostic patch behind a build flag; `wheel_notches` (unit → notches) + fixed `WHEEL_NOTCH_PAN` 15 pt/notch on every platform; `resize_step` pins the pre-resize rects and recomputes from the pin; temporary `diag` cargo feature ([diag] wheel/resize/reposition logs, compiled out of the default build); SPEC §3.4 + §7 rewritten; V23/V24 born |
+| Extra: web-Line notch retune + `diag` → `diagnostics` rename (owner 2026-11-16) | done — gates green | Firefox scroll-pan ~3× overshoot fixed inside F12-B: Firefox emits `DOM_DELTA_LINE` ×3 lines/notch, so web `Line` deltas now divide by `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0 (native pass-through); the approved Windows/Chrome feel UNCHANGED (15 pt/notch); the temporary feature renamed `diag` → `diagnostics` (owner: the abbreviation was unclear) — feature, cfg sites, fn, `[diagnostics]` prefix; trunk-serve how-to: `trunk serve --features diagnostics` (logs → browser console); V23/V24 narrowed, not closed |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 98 green; with `--features mcp` — clippy clean, 110 green;
-with `--features diag` — clippy clean, 98 green
-(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; wheel-pan parity (F12-B
-interim) + the pin-based resize repositioning (F13-A) + the temporary `diag` feature landed —
-4 new pure tests; every src file ≤ 500; rules.sh reports the PROGRESS.md/Log budgets — green).
+`cargo test --profile gates` — 99 green; with `--features mcp` — clippy clean, 111 green;
+with `--features diagnostics` — clippy clean, 99 green; `trunk serve --features diagnostics`
+smoke-tested (build + serve OK, wasm checks green with and without the feature)
+(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; the Firefox web-Line notch
+retune + the `diag` → `diagnostics` rename landed — +1 pure test; every src file ≤ 500;
+rules.sh reports the PROGRESS.md/Log budgets — green).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -64,6 +66,34 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Fix:` Firefox scroll-pan notch retune + the diag→diagnostics rename — owner request
+
+- **What:** the owner's platform pass (Windows/Firefox/Chrome; Linux not yet possible)
+  narrowed V23/V24 and surfaced ONE gap: in Firefox one wheel click panned ~3× the
+  Windows/Chrome notch — Firefox emits `DOM_DELTA_LINE` with 3 lines per click and eframe
+  passes the DOM delta as-is (verified against eframe 0.37.0 sources), so a `Line`-unit
+  delta hit `wheel_notches` as 3 notches. Fix inside the INTERIM F12-B convention: on the
+  WEB backend only (`web_backend` = `cfg!(target_arch = "wasm32")`), `Line` deltas divide
+  by the new `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0; native stays pass-through; the approved
+  Windows/Chrome feel (15 pt/notch, F11 folded) is UNCHANGED; fractional lines stay
+  proportional. (2) The rename (owner: the abbreviation was unclear): cargo feature `diag`
+  → `diagnostics`, fn `diag_main_resize` → `diagnostics_main_resize`, log prefix `[diag]` →
+  `[diagnostics]`; SPEC §3.4 + Cargo.toml + both DEBTS files updated. How-to: native
+  `cargo run --features diagnostics`; web `trunk serve --features diagnostics` → logs in
+  the browser console. F12 STAYS OPEN (the interim constants retune from the logs).
+- **Files:** `src/app/camera.rs` (+ tests — args updated, +1 test), `src/app.rs`,
+  `src/app/placement.rs`, `Cargo.toml`, `SPEC.md`, `DEBTS-functional.md`,
+  `DEBTS-verification.md`, `PROGRESS.md`, `PROGRESS-archive.md` (the Shift-proportional
+  entry moved verbatim).
+- **Verified:** verify.sh ALL GATES GREEN — 99 default / 111 mcp; `--features diagnostics`
+  clippy+test green (99); wasm check green with and without the feature;
+  `trunk serve --features diagnostics` smoke-tested in-sandbox (builds + serves on
+  localhost:8080; trunk 0.22.1 re-installed after the sandbox recycle); rules.sh
+  HARD-green before/after; delivery byte-compared as usual.
+- **Owner-checks:** none born — V23 narrowed (re-check Firefox after the divisor; the
+  Linux leg), V24 narrowed (only the Linux/Wayland leg) — updated in DEBTS-verification.md.
+- **Commit title:** `Fix Firefox wheel-pan overshoot (web Line ÷ 3 lines/notch) and rename the diag feature to diagnostics`
 
 ### 2026-11-16 — `Feat:` wheel-pan parity (F12-B interim), pin-based resize repositioning (F13-A), the temporary diag feature — owner request
 
@@ -144,32 +174,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   and byte-compared with the working tree AND the unpacked zip — all three match.
 - **Owner-checks:** none born — F11 is owner-gated postponed work, not a check.
 - **Commit title:** `Docs: third debt triage — verify V13 V14 V17-V22, record the wheel-pan x5 debt as F11, add the zip-priority rule`
-
-### 2026-11-16 — `Feat:` Shift makes Shape drags proportional (Paint.NET-style) — owner request
-
-- **What:** holding `Shift` during a Shape (U) drag constrains it to a
-  proportional shape — a square for the Rectangle, a circle for the Ellipse
-  (owner: «при зажатом Shift фигуры получались пропорциональными, как в
-  Paint Net»). The start point is the anchor corner; the free corner is
-  pulled, LIVE (every frame — pressing/releasing Shift MID-drag snaps and
-  releases instantly), onto the dominant-axis square: side = max(|dx|,|dy|),
-  each axis keeps its drag direction, so the shape always grows toward the
-  pointer; a strictly one-sided drag still yields a square (the zero axis
-  extends down/right — Rust's `signum(+0.0) = 1.0`; the tests caught the
-  wrong first assumption). The constrained point is STORED in the preview
-  state, so the overlay preview and the commit rasterize the same geometry.
-  The pure rule lives in `app/preview.rs::proportional_current`; the Line
-  tool is NOT affected. SPEC §3.2 (Shape bullet) + a §3.9 row (a
-  hold-gesture like Space-pan, not a consumed hotkey); V22 born.
-- **Files:** `src/app/preview.rs` (modifier read, Drag constraint, the pure
-  helper + module doc), `src/app/preview/tests.rs` (+5 tests); docs:
-  `SPEC.md`, `DEBTS-verification.md`, `PROGRESS.md`.
-- **Verified:** verify.sh ALL GATES GREEN — 94 default / 106 mcp; headless
-  real-input pass through the real binary (XTEST via xdotool, a sandbox-only
-  script): unconstrained dx=80/dy=30 commits 88×38, the same drag with Shift
-  commits 88×88, Shift pressed MID-drag commits 78×78 (side 70 = the final
-  dominant delta — the live constraint), undo restores the blank canvas
-  between the drags; visual_driver.py 3/3 scenarios after the change.
-- **Owner-checks:** V22 (the dominant-axis square feels like Paint.NET on
-  Windows) born in DEBTS-verification.md; no other new checks.
-- **Commit title:** `Add Shift-proportional shape drawing (square/circle, Paint.NET-style)`

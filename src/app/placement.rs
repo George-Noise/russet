@@ -346,9 +346,9 @@ pub(super) fn place_floating_window(
         );
         place.resizing = pin;
         if let Some(left_top) = left_top {
-            #[cfg(feature = "diag")]
+            #[cfg(feature = "diagnostics")]
             eprintln!(
-                "[diag] place {} resize: content={:?} pin={:?} -> left_top={:?}",
+                "[diagnostics] place {} resize: content={:?} pin={:?} -> left_top={:?}",
                 area_id.short_debug_format(),
                 content,
                 place.resizing,

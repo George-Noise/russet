@@ -9,6 +9,35 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-16 — `Feat:` Shift makes Shape drags proportional (Paint.NET-style) — owner request
+
+- **What:** holding `Shift` during a Shape (U) drag constrains it to a
+  proportional shape — a square for the Rectangle, a circle for the Ellipse
+  (owner: «при зажатом Shift фигуры получались пропорциональными, как в
+  Paint Net»). The start point is the anchor corner; the free corner is
+  pulled, LIVE (every frame — pressing/releasing Shift MID-drag snaps and
+  releases instantly), onto the dominant-axis square: side = max(|dx|,|dy|),
+  each axis keeps its drag direction, so the shape always grows toward the
+  pointer; a strictly one-sided drag still yields a square (the zero axis
+  extends down/right — Rust's `signum(+0.0) = 1.0`; the tests caught the
+  wrong first assumption). The constrained point is STORED in the preview
+  state, so the overlay preview and the commit rasterize the same geometry.
+  The pure rule lives in `app/preview.rs::proportional_current`; the Line
+  tool is NOT affected. SPEC §3.2 (Shape bullet) + a §3.9 row (a
+  hold-gesture like Space-pan, not a consumed hotkey); V22 born.
+- **Files:** `src/app/preview.rs` (modifier read, Drag constraint, the pure
+  helper + module doc), `src/app/preview/tests.rs` (+5 tests); docs:
+  `SPEC.md`, `DEBTS-verification.md`, `PROGRESS.md`.
+- **Verified:** verify.sh ALL GATES GREEN — 94 default / 106 mcp; headless
+  real-input pass through the real binary (XTEST via xdotool, a sandbox-only
+  script): unconstrained dx=80/dy=30 commits 88×38, the same drag with Shift
+  commits 88×88, Shift pressed MID-drag commits 78×78 (side 70 = the final
+  dominant delta — the live constraint), undo restores the blank canvas
+  between the drags; visual_driver.py 3/3 scenarios after the change.
+- **Owner-checks:** V22 (the dominant-axis square feels like Paint.NET on
+  Windows) born in DEBTS-verification.md; no other new checks.
+- **Commit title:** `Add Shift-proportional shape drawing (square/circle, Paint.NET-style)`
+
 ### 2026-11-16 — `Refactor:` layers split into snapshot/composite children + two-color history chips — owner request (2 chat items)
 
 - **What:** (1) `layers.rs` (504/500, the owner-approved split) lost its pixel

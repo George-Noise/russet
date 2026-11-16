@@ -50,14 +50,14 @@ web-sys = "0.3"
 mcp = ["dep:serde_json"]
 
 # TEMPORARY cross-platform diagnostics (owner OK 2026-11-16, debts F12/F13):
-# compiles `[diag]` stderr logging of (1) every wheel event — unit, source,
-# raw delta → notches → the applied pan step, the F12-B calibration data —
-# and (2) main-window resizes + floating-window repositions (F13). The
-# DEFAULT build compiles NONE of it. Build with `--features diag`:
-#   cargo run --features diag       (native; logs go to stderr)
-#   trunk serve --features diag     (web; logs go to the browser console)
+# compiles `[diagnostics]` stderr logging of (1) every wheel event — unit,
+# source, raw delta → notches → the applied pan step, the F12-B calibration
+# data — and (2) main-window resizes + floating-window repositions (F13). The
+# DEFAULT build compiles NONE of it. Build with `--features diagnostics`:
+#   cargo run --features diagnostics       (native; logs go to stderr)
+#   trunk serve --features diagnostics     (web; logs go to the browser console)
 # Removed together with the feature when F12/F13 close (the debts track it).
-diag = []
+diagnostics = []
 
 # FAST DEVELOPMENT:
 # - own code rebuilds without optimizations (fast);

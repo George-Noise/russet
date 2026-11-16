@@ -16,9 +16,20 @@ use super::{
 /// the DOM wheel delta as-is and Chrome-based browsers emit ≈ 100 px per
 /// notch (`DOM_DELTA_PIXEL` → `MouseWheelUnit::Point`); winit-Wayland sends
 /// the same shape for smooth/high-resolution wheels (logical points). The
-/// constant is calibrated from `--features diag` wheel logs — retune it when
-/// the owner's logs show another per-notch value. F12 stays open.
+/// constant is calibrated from `--features diagnostics` wheel logs — retune
+/// it when the owner's logs show another per-notch value. F12 stays open.
 const POINT_UNIT_NOTCH_PT: f32 = 100.0;
+
+/// On the WEB backend a Line-unit delta counts LINES: eframe passes the DOM
+/// wheel delta as-is (`DOM_DELTA_LINE` → `MouseWheelUnit::Line`), and Firefox
+/// — the major browser that emits line mode for a classic wheel click —
+/// reports 3 lines per notch (Chrome/Safari use pixel mode there, i.e. the
+/// `Point` branch). Native winit `LineDelta` is already ±1 per notch
+/// (Windows/X11, Wayland discrete), so the divisor applies to the web
+/// backend ONLY. INTERIM F12-B calibration (owner report 2026-11-16: one
+/// Firefox click panned ~3× the Windows/Chrome notch — 3 lines ÷ 3 = 1
+/// notch), retuned from `--features diagnostics` wheel logs. F12 stays open.
+const WEB_LINE_UNIT_LINES_PER_NOTCH: f32 = 3.0;
 
 /// A PAGE-unit wheel notch (practically only old Firefox with a pref) is one
 /// viewport tall — egui itself converts it to `viewport_rect.height()`. For
@@ -118,7 +129,7 @@ impl App {
             // [`wheel_notches`]), then each notch pans [`WHEEL_NOTCH_PAN`].
             // Zoom below is untouched: it reads the SIGN of the raw delta
             // only, which is why it was always platform-consistent.
-            let notches = wheel_notches(unit, delta);
+            let notches = wheel_notches(unit, delta, cfg!(target_arch = "wasm32"));
             let pan_step = if modifiers.ctrl || modifiers.command {
                 Vec2::ZERO // the ctrl branch below zooms on the sign only
             } else if modifiers.shift {
@@ -126,9 +137,9 @@ impl App {
             } else {
                 egui::vec2(0.0, notches.y * WHEEL_NOTCH_PAN)
             };
-            #[cfg(feature = "diag")]
+            #[cfg(feature = "diagnostics")]
             eprintln!(
-                "[diag] wheel unit={unit:?} src={_source:?} delta=({:.2},{:.2}) notches=({:.3},{:.3}) ctrl={} shift={} pan_step=({:.2},{:.2})",
+                "[diagnostics] wheel unit={unit:?} src={_source:?} delta=({:.2},{:.2}) notches=({:.3},{:.3}) ctrl={} shift={} pan_step=({:.2},{:.2})",
                 delta.x,
                 delta.y,
                 notches.x,
@@ -223,18 +234,28 @@ impl App {
     }
 }
 
-/// Wheel delta in its EVENT UNIT → NOTCH count (F12 variant B): `Line` deltas
-/// are already notches (winit sends `LineDelta(±1)` per notch on Windows/X11
-/// and for Wayland discrete events; fractional lines = high-resolution
-/// wheels/touchpads, so panning stays proportional there); `Point` deltas
-/// (eframe-web DOM pixels, Wayland pixel deltas) are divided by
-/// [`POINT_UNIT_NOTCH_PT`]; a `Page` notch is capped at [`PAGE_UNIT_NOTCHES`].
-/// A free function so the convention is unit-testable without an egui
-/// context.
-fn wheel_notches(unit: MouseWheelUnit, delta: Vec2) -> Vec2 {
+/// Wheel delta in its EVENT UNIT → NOTCH count (F12 variant B): native
+/// `Line` deltas are already notches (winit sends `LineDelta(±1)` per notch
+/// on Windows/X11 and for Wayland discrete events; fractional lines =
+/// high-resolution wheels/touchpads, so panning stays proportional there);
+/// on the WEB backend `Line` counts lines, so the delta is divided by
+/// [`WEB_LINE_UNIT_LINES_PER_NOTCH`] (Firefox's 3 lines per notch — the
+/// owner's overshoot report 2026-11-16). `Point` deltas (eframe-web DOM
+/// pixels, Wayland pixel deltas) are divided by [`POINT_UNIT_NOTCH_PT`]; a
+/// `Page` notch is capped at [`PAGE_UNIT_NOTCHES`]. `web_backend` comes from
+/// `cfg!(target_arch = "wasm32")` at the call site. A free function so the
+/// convention is unit-testable without an egui context (both backend
+/// branches are tested on native).
+fn wheel_notches(unit: MouseWheelUnit, delta: Vec2, web_backend: bool) -> Vec2 {
     match unit {
         MouseWheelUnit::Point => delta / POINT_UNIT_NOTCH_PT,
-        MouseWheelUnit::Line => delta,
+        MouseWheelUnit::Line => {
+            if web_backend {
+                delta / WEB_LINE_UNIT_LINES_PER_NOTCH
+            } else {
+                delta
+            }
+        }
         MouseWheelUnit::Page => delta * PAGE_UNIT_NOTCHES,
     }
 }
