@@ -467,21 +467,21 @@ impl App {
             .unwrap_or_else(|| "?".to_string());
         let mut confirmed = false;
         let mut cancel = false;
-        egui::Window::new("Delete Layer")
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.label(format!("Delete layer \"{name}\"?"));
-                ui.weak("Its pixels and history will be removed for good.");
-                let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
-                confirmed = ok_hit;
-                cancel = cancel_hit;
-            });
+        let id = super::dialogs::dialog_id("delete_layer");
+        super::dialogs::dialog_window("Delete Layer", id, ctx).show(ctx, |ui| {
+            ui.label(format!("Delete layer \"{name}\"?"));
+            ui.weak("Its pixels and history will be removed for good.");
+            let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
+            confirmed = ok_hit;
+            cancel = cancel_hit;
+        });
         if confirmed {
             self.layer_delete_confirm = None;
+            super::dialogs::forget_dialog_position(ctx, id);
             self.remove_layer_confirmed(index);
         } else if cancel {
             self.layer_delete_confirm = None;
+            super::dialogs::forget_dialog_position(ctx, id);
         }
     }
 }

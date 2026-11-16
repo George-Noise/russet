@@ -54,23 +54,25 @@ pub(super) enum DragKind {
 
 /// Wells of a Shape-tool gesture start: the outline comes from the primary
 /// well and the fill from the secondary one, each gated by its Tools-window
-/// checkbox (owner request 2026-11-10). A RIGHT-button gesture swaps the two
-/// wells first (owner request 2026-11-13) — the same persistent
-/// `std::mem::swap` the Palette's "Swap (X)" button does — so the shape
-/// commits with the former secondary in the outline and the former primary
-/// in the fill. Returns `(outline, fill, wells_swapped)`; the CALLER applies
-/// the swap to the wells when `wells_swapped` is true. Pure, so the rule is
-/// unit-testable without an egui context (the tests live in the sibling
-/// `preview/tests.rs`).
+/// checkbox (owner request 2026-11-10). A RIGHT-button gesture USES the two
+/// wells INVERTED (owner request 2026-11-15: "цвета используются наоборот и
+/// без Swap") — the former secondary paints the outline, the former primary
+/// the fill — WITHOUT touching the wells themselves: the Palette's
+/// primary/secondary stay exactly as they are, unlike the persistent swap
+/// the previous behavior performed. The wells cannot be mutated through
+/// this helper (no `&mut` access to them, and the caller does not swap), so
+/// "без Swap" holds by construction. Returns `(outline, fill)`. Pure, so
+/// the rule is unit-testable without an egui context (the tests live in the
+/// sibling `preview/tests.rs`).
 fn shape_gesture_wells(
     button: PointerButton,
     shape_outline: bool,
     shape_fill: bool,
     primary: Color32,
     secondary: Color32,
-) -> (Option<Color32>, Option<Color32>, bool) {
-    let swapped = button == PointerButton::Secondary;
-    let (outline_source, fill_source) = if swapped {
+) -> (Option<Color32>, Option<Color32>) {
+    let inverted = button == PointerButton::Secondary;
+    let (outline_source, fill_source) = if inverted {
         (secondary, primary)
     } else {
         (primary, secondary)
@@ -78,7 +80,6 @@ fn shape_gesture_wells(
     (
         shape_outline.then_some(outline_source),
         shape_fill.then_some(fill_source),
-        swapped,
     )
 }
 
@@ -179,21 +180,19 @@ impl App {
                     Tool::Shape => {
                         // Primary paints the outline, secondary the fill
                         // (owner request 2026-11-10); a RIGHT-button gesture
-                        // swaps the two wells first (owner request 2026-11-13,
-                        // the same persistent swap the Palette's Swap button
-                        // does). The Tools window guarantees at least one of
-                        // the two checkboxes is on. The rule lives in the pure
+                        // uses the two wells INVERTED without swapping them
+                        // (owner request 2026-11-15: no persistent swap — the
+                        // Palette wells stay as they are). The Tools window
+                        // guarantees at least one of the two checkboxes is
+                        // on. The rule lives in the pure
                         // [`shape_gesture_wells`] so it stays unit-testable.
-                        let (outline, fill, swapped) = shape_gesture_wells(
+                        let (outline, fill) = shape_gesture_wells(
                             button,
                             self.tools.shape_outline,
                             self.tools.shape_fill,
                             self.tools.primary,
                             self.tools.secondary,
                         );
-                        if swapped {
-                            std::mem::swap(&mut self.tools.primary, &mut self.tools.secondary);
-                        }
                         self.preview = PreviewState::Drag {
                             kind: DragKind::Shape(self.tools.shape_kind),
                             start: pos,

@@ -169,10 +169,12 @@ impl App {
                 // Top: the primary/secondary color wells. A click on a well
                 // opens egui's color picker for that color (the former
                 // "Custom…" button, one per color); Swap sits to the right.
+                // No hotkey behind it — §3.9 stays exhaustive and the label
+                // names no key either (owner request 2026-11-15).
                 ui.horizontal(|ui| {
                     color_swell_button(ui, &mut self.tools.primary, 32.0);
                     color_swell_button(ui, &mut self.tools.secondary, 32.0);
-                    if ui.button("Swap (X)").clicked() {
+                    if ui.button("Swap").clicked() {
                         std::mem::swap(&mut self.tools.primary, &mut self.tools.secondary);
                     }
                 });

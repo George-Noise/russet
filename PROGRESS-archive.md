@@ -9,6 +9,52 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `Fix:` Layers window width + the white initial layer — owner report (3 chat items)
+
+- **What:** (1) the Layers window smeared screen-wide and did not fit the main window:
+  `.auto_sized()`'s FIRST layout sees `available_width` = the whole screen and
+  `desired_size` never shrinks, while the row names derived their width from it — a
+  self-feeding per-frame growth loop. Now `.default_width(240)` + `.resizable(false)`
+  (auto-sized was non-resizable too) with a FIXED 120 pt name column, text clipped so
+  long names cannot run under the buttons; the egui quirk is recorded in AGENTS.md.
+  (2) A NEW document's initial layer is WHITE again (§3.8): `LayerStack::new` fills
+  the Start canvas, layers added later stay transparent; `App::new`/`reset_canvas`
+  now composite the fresh stack into the display buffer once (it is created
+  transparent). (3) The third item was owner praise for the node-dot history switching
+  (no change needed).
+- **Files:** `src/app/panels.rs`, `src/layers.rs` + tests, `src/app.rs`,
+  `src/app/document.rs` (composite on New), `scripts/visual_driver.py` (+1 check),
+  `SPEC.md` §3.6, `AGENTS.md` (quirk), PROGRESS.md.
+- **Verified:** verify.sh ALL GATES GREEN — 78 default / 90 mcp; headless driver 3/3
+  scenarios, 15 checks incl. the new fresh-white check; Xvfb screenshot: Layers ~240 pt
+  wide, fits the main window, canvas white with strokes.
+- **Owner-checks:** V14 in DEBTS-verification.md (Windows click-through: window fits,
+  New canvas white, added layers transparent).
+- **Commit title:** `Fix the Layers window width and restore the white initial layer`
+
+### 2026-11-13 — `Refactor:` mcp/tools split into themed modules + commit-title delivery ritual — owner request (3 chat items)
+
+- **What:** (1) `mcp/tools.rs` (499, guard at 500) split PURE CODE MOTION, style of the earlier
+  splits: the root keeps the MAP of the surface — dispatch `tool_call` + `tool_declarations` +
+  reply glue (`tool_text`/`tool_error`/`hex_color`) — 157 lines; handlers themed into
+  `tools/queries.rs` (read-only: layers/trees/layout/snapshot/export, 200) and `tools/edits.rs`
+  (mutating: stroke/undo/redo/add_layer/set_active_layer + frame-free pure helpers, 177).
+  Adding a tool = one dispatch arm + one declaration in the root, one themed handler. LLM
+  navigation guarded: both children's docs state what they own; `pub(super)` with caller notes;
+  `tests.rs` imports the moved helpers explicitly. (2) Commit-title ritual: rules.sh rule 6
+  prints the newest entry's Commit title as a REMINDER at every done-gate — it fires exactly
+  before the final reply is composed; AGENTS.md "Delivery ritual" requires the reply to carry
+  it verbatim (owner: missed repeatedly).
+- **Files:** split `src/app/mcp/tools.rs` → NEW `src/app/mcp/tools/queries.rs`,
+  `src/app/mcp/tools/edits.rs`; `src/app/mcp/tools/tests.rs` (imports); `scripts/rules.sh`
+  (rule 6); `AGENTS.md` (Delivery ritual); PROGRESS.md (entry + archive move + snapshot).
+- **Verified:** verify.sh ALL GATES GREEN — 78 default / 90 mcp; visual_driver.py headless
+  3/3 scenarios, 14 checks green AFTER the split (pure motion proven); rules.sh self-test
+  prints the title.
+- **Owner-checks:** skim `tools.rs` — does the root-as-map layout read well (same ask as V7);
+  the ritual wording in AGENTS.md.
+- **Commit title:** `Split MCP tools into a root map plus queries/edits modules and enforce the commit-title ritual`
+
 ### Warnings — resolved (moved 2026-11-13 from PROGRESS.md)
 
 - 2026-11-13 — RESOLVED: the soft 500 guard kept flagging `app/tree_window.rs` (687) and

@@ -36,13 +36,14 @@
 | Extra: headless-GUI sandbox recipe (owner 2026-11-13) | done — driver all green headless | `SANDBOX.md` + `scripts/gui_recipe_test.sh`: raw Xvfb + two user-space .debs, no root; MCP `add_layer` added (10 tools); visual_driver.py 3/3 scenarios green in-sandbox; V13 narrowed to pointer feel |
 | Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title (backticks kept) at every done-gate; AGENTS.md Delivery ritual requires it verbatim, backtick-wrapped, in the reply |
 | Extra: UX round (owner 2026-11-13) | done — gates green | History window → Tool Log (list max height halved to 140 pt, 0.5rem entries, zero row spacing, bottom edge flush), Help item → About, dialog button rows per IBM/Apple/Google via shared `dialog_button_row`, Shape RMB-drag swaps the color wells, wheel pan ×2 (`SCROLL_PAN_SPEED` 3.0) |
+| Extra: dialog epoch + Shape RMB round (owner 2026-11-15) | done — gates green | dialogs arise centered on EVERY open and hug their content (`dialog_window` + `forget_dialog_position`, NOT §3.11); Shape RMB uses the wells inverted WITHOUT swapping; Palette "Swap (X)" → "Swap"; 3 headless-egui regression tests + a scripted 9-check real-binary pass |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 81 green; with `--features mcp` — clippy clean, 93 green
-(2026-11-13, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; layers.rs sits at 504/500 lines —
+`cargo test --profile gates` — 84 green; with `--features mcp` — clippy clean, 96 green
+(2026-11-15, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; layers.rs sits at 504/500 lines —
 over the soft guard, a split is proposed at task end; rules.sh reports the PROGRESS.md/Log budgets —
-green; the GUI runs headless in this sandbox per `SANDBOX.md` — visual_driver.py 3/3 scenarios,
-15 checks green, re-proven after the UX round; V13–V15 are the owner's feel checks).
+green; the GUI runs headless in this sandbox per `SANDBOX.md` — visual_driver.py 3/3 scenarios
++ the scripted dlg_verify pass 9/9 through the real binary; V19–V20 are the owner's feel checks).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -58,6 +59,42 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-15 — `Fix:` dialogs centered + content-sized, Shape RMB wells inverted without Swap, Swap button renamed — owner request (4 chat items)
+
+- **What:** (1) The modal dialogs (New, Resize Canvas, Unsaved Changes, Delete
+  Layer, Error, About) opened at egui's default outer size 340×420 (AGENTS.md
+  quirk: a plain Window never shrinks below the first frame) and at egui's
+  cascade position — the owner's screenshots showed the fields at the top and
+  the button row detached ~3/4 down, stretching toward the main-window bottom
+  edge. Fix: the shared `dialog_window` builder (pivot CENTER_CENTER +
+  `default_pos(content_rect().center())`) + `forget_dialog_position` on every
+  close path — the "dialog epoch": the next open re-centers even after the
+  user dragged the dialog aside; while open it stays draggable; NOT §3.11
+  windows. (2) The stretch's other half: `dialog_button_row`'s bare
+  `with_layout` inherited the whole remaining available rect — replaced with
+  a bounded `allocate_ui_with_layout` row. (3) Shape (U) RMB: the wells are
+  USED inverted (former secondary → outline, former primary → fill) WITHOUT
+  swapping them — the persistent swap is gone (owner: «цвета используются
+  наоборот и без Swap»); pure `shape_gesture_wells` returns `(outline, fill)`
+  and has no `&mut` access to the wells. (4) Palette button "Swap (X)" →
+  "Swap" (no hotkey behind it and none wanted — §3.9 stays exhaustive).
+  NEW file: `src/app/dialogs/tests.rs` — 3 headless-egui regression tests
+  that FAIL on the old code (measured height 420, cascade center).
+- **Files:** `src/app/dialogs.rs` + NEW `dialogs/tests.rs`, `app/panels.rs`
+  (Delete Layer via the builder), `app/preview.rs` + `preview/tests.rs`,
+  `app/windows.rs`; docs: SPEC.md (§3.2–3.3, §3.7–3.8, §7), AGENTS.md (new
+  egui quirk), DEBTS-verification.md (V19/V20 born, V16 closed), PROGRESS.md.
+- **Verified:** verify.sh ALL GATES GREEN — 84 default / 96 mcp; the
+  scripted headless pass (scripts/dlg_verify.py, sandbox-only) through the
+  real binary 9/9: open → centered+compact → title-bar drag away → OK
+  closes → reopen centered again; XTEST RMB shape: the node commits with the
+  former SECONDARY color and the Palette wells read back unchanged;
+  visual_driver.py 3/3 scenarios after the changes.
+- **Owner-checks:** V19 (Shape RMB inverted, wells untouched), V20 (dialogs
+  centered on every open, content-hugging height) born in
+  DEBTS-verification.md; V16 closed as superseded by the owner's request.
+- **Commit title:** `Fix dialogs to arise centered and content-sized, use Shape RMB wells inverted without swap, rename the Swap button`
 
 ### 2026-11-13 — `UX:` Tool Log restyle, About item, dialog rows, Shape RMB swap, 2x wheel pan — owner request (5 chat items)
 
@@ -128,48 +165,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   chat reply).
 - **Commit title:** `Docs: wrap commit titles in backticks for click-to-copy in chat`
 
-### 2026-11-13 — `Fix:` Layers window width + the white initial layer — owner report (3 chat items)
-
-- **What:** (1) the Layers window smeared screen-wide and did not fit the main window:
-  `.auto_sized()`'s FIRST layout sees `available_width` = the whole screen and
-  `desired_size` never shrinks, while the row names derived their width from it — a
-  self-feeding per-frame growth loop. Now `.default_width(240)` + `.resizable(false)`
-  (auto-sized was non-resizable too) with a FIXED 120 pt name column, text clipped so
-  long names cannot run under the buttons; the egui quirk is recorded in AGENTS.md.
-  (2) A NEW document's initial layer is WHITE again (§3.8): `LayerStack::new` fills
-  the Start canvas, layers added later stay transparent; `App::new`/`reset_canvas`
-  now composite the fresh stack into the display buffer once (it is created
-  transparent). (3) The third item was owner praise for the node-dot history switching
-  (no change needed).
-- **Files:** `src/app/panels.rs`, `src/layers.rs` + tests, `src/app.rs`,
-  `src/app/document.rs` (composite on New), `scripts/visual_driver.py` (+1 check),
-  `SPEC.md` §3.6, `AGENTS.md` (quirk), PROGRESS.md.
-- **Verified:** verify.sh ALL GATES GREEN — 78 default / 90 mcp; headless driver 3/3
-  scenarios, 15 checks incl. the new fresh-white check; Xvfb screenshot: Layers ~240 pt
-  wide, fits the main window, canvas white with strokes.
-- **Owner-checks:** V14 in DEBTS-verification.md (Windows click-through: window fits,
-  New canvas white, added layers transparent).
-- **Commit title:** `Fix the Layers window width and restore the white initial layer`
-
-### 2026-11-13 — `Refactor:` mcp/tools split into themed modules + commit-title delivery ritual — owner request (3 chat items)
-
-- **What:** (1) `mcp/tools.rs` (499, guard at 500) split PURE CODE MOTION, style of the earlier
-  splits: the root keeps the MAP of the surface — dispatch `tool_call` + `tool_declarations` +
-  reply glue (`tool_text`/`tool_error`/`hex_color`) — 157 lines; handlers themed into
-  `tools/queries.rs` (read-only: layers/trees/layout/snapshot/export, 200) and `tools/edits.rs`
-  (mutating: stroke/undo/redo/add_layer/set_active_layer + frame-free pure helpers, 177).
-  Adding a tool = one dispatch arm + one declaration in the root, one themed handler. LLM
-  navigation guarded: both children's docs state what they own; `pub(super)` with caller notes;
-  `tests.rs` imports the moved helpers explicitly. (2) Commit-title ritual: rules.sh rule 6
-  prints the newest entry's Commit title as a REMINDER at every done-gate — it fires exactly
-  before the final reply is composed; AGENTS.md "Delivery ritual" requires the reply to carry
-  it verbatim (owner: missed repeatedly).
-- **Files:** split `src/app/mcp/tools.rs` → NEW `src/app/mcp/tools/queries.rs`,
-  `src/app/mcp/tools/edits.rs`; `src/app/mcp/tools/tests.rs` (imports); `scripts/rules.sh`
-  (rule 6); `AGENTS.md` (Delivery ritual); PROGRESS.md (entry + archive move + snapshot).
-- **Verified:** verify.sh ALL GATES GREEN — 78 default / 90 mcp; visual_driver.py headless
-  3/3 scenarios, 14 checks green AFTER the split (pure motion proven); rules.sh self-test
-  prints the title.
-- **Owner-checks:** skim `tools.rs` — does the root-as-map layout read well (same ask as V7);
-  the ritual wording in AGENTS.md.
-- **Commit title:** `Split MCP tools into a root map plus queries/edits modules and enforce the commit-title ritual`
