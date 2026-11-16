@@ -39,6 +39,7 @@
 | Extra: dialog epoch + Shape RMB round (owner 2026-11-15) | done — gates green | dialogs arise centered on EVERY open and hug their content (`dialog_window` + `forget_dialog_position`, NOT §3.11); Shape RMB uses the wells inverted WITHOUT swapping; Palette "Swap (X)" → "Swap"; 3 headless-egui regression tests + a scripted 9-check real-binary pass |
 | Extra: layers split + two-color history chips (owner 2026-11-16) | done — gates green | pure code motion into `layers/snapshot.rs` + `layers/composite.rs` (tests split the same way); `TreeNode.color2` + the outline\|fill chip halves for two-color gestures; MCP `get_history_tree` dumps `color2`; preview's pure color rules → `app/preview/colors.rs` |
 | Extra: Shift-proportional shapes (owner 2026-11-16) | done — gates green | Shape (U) drag with held Shift = square/circle, Paint.NET-style, LIVE (mid-drag snap/release); pure `proportional_current` in `app/preview.rs` + 5 unit tests; SPEC §3.2 bullet + §3.9 hold-gesture row; V22 born |
+| Extra: third debt triage (owner 2026-11-16) | done — docs only | V13/V14/V17–V22 verified via chat; V15 closed into the NEW F11 (wheel pan ANOTHER ×5 — `SCROLL_PAN_SPEED` 3.0 → 15.0, how-to recorded in DEBTS-functional.md); AGENTS.md gained the zip-priority rule (a delivered .zip is used immediately — no git pull/clone); open after this edit: V8, V9, F3, F5, F8–F11 |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 94 green; with `--features mcp` — clippy clean, 106 green
@@ -47,7 +48,8 @@ landed — the pure rule + 5 tests, every src file ≤ 500; rules.sh reports the
 PROGRESS.md/Log budgets — green; the GUI runs headless per `SANDBOX.md` —
 visual_driver.py 3/3 scenarios + the scripted 9-check XTEST Shift pass through the real
 binary (unconstrained 88×38 vs Shift 88×88 vs mid-drag 78×78); V22 is the owner's
-feel check).
+feel check). A docs-only debt-triage round followed the same day: rules.sh
+HARD-green at both gates, no Rust code touched.
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -63,6 +65,28 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-16 — `Docs:` third debt triage — 8 checks verified, F11 born, zip-priority rule
+
+- **What:** the owner's «проверил V22, V21, V20, V19, V18, V17, V14, V13» closed those
+  EIGHT owner-checks in DEBTS-verification.md (chat-verified, the V4/V7 precedent).
+  V15's verdict becomes a NEW functional debt F11 — wheel pan ANOTHER ×5 faster:
+  `SCROLL_PAN_SPEED` 3.0 → 15.0 in `src/app.rs` + the two SPEC §3.4 mentions in the
+  same edit — recorded with the how-to and POSTPONED by the owner («запиши как
+  сделать потом»). AGENTS.md "Git & progress log" gained the owner's rule: a
+  delivered `russet.zip` is used IMMEDIATELY — no `git pull`/`git clone` first
+  (the .zip signals priority and saves setup time); the patch base is snapshotted
+  from the unpacked .zip before the first edit. Compaction: the 2026-11-13 `UX:`
+  entry moved verbatim to PROGRESS-archive.md. Open after this edit: V8, V9
+  (both parked by the owner) + F3, F5, F8, F9, F10, F11.
+- **Files:** `DEBTS-verification.md`, `DEBTS-functional.md`, `AGENTS.md`,
+  `PROGRESS.md`, `PROGRESS-archive.md` — docs only, NO Rust code touched (the
+  cargo gates are not re-run: the tree arrived stamped 2026-11-16, 94/106 green).
+- **Verified:** `bash scripts/rules.sh` HARD-green before and after the edit (it
+  needs no toolchain); the delivery patch applied onto the snapshotted base tree
+  and byte-compared with the working tree AND the unpacked zip — all three match.
+- **Owner-checks:** none born — F11 is owner-gated postponed work, not a check.
+- **Commit title:** `Docs: third debt triage — verify V13 V14 V17-V22, record the wheel-pan x5 debt as F11, add the zip-priority rule`
 
 ### 2026-11-16 — `Feat:` Shift makes Shape drags proportional (Paint.NET-style) — owner request
 
@@ -165,31 +189,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   centered on every open, content-hugging height) born in
   DEBTS-verification.md; V16 closed as superseded by the owner's request.
 - **Commit title:** `Fix dialogs to arise centered and content-sized, use Shape RMB wells inverted without swap, rename the Swap button`
-
-### 2026-11-13 — `UX:` Tool Log restyle, About item, dialog rows, Shape RMB swap, 2x wheel pan — owner request (5 chat items)
-
-- **What:** (1) the "History" window (NOT the History Tree) → "Tool Log" (View
-  checkbox too; egui id + internal `history_*` names unchanged), entry list max
-  height HALVED 280→140 pt, entries at 0.5rem = 8 pt with zero row spacing,
-  first-open bottom edge FLUSH (gap 0; §3.11 keeps the dropped gap). (2) Help
-  item "About Russet" → "About" (the window keeps its title). (3) Every dialog
-  button row → the IBM Carbon / Apple HIG / Google Material order via the new
-  shared `dialog_button_row` (right-aligned, affirmative RIGHTMOST): New, Resize
-  Canvas, Unsaved Changes, Delete Layer, Error, About's Close, Text Place/Cancel.
-  (4) Shape (U) right-button drag swaps the wells first (persistent, like the
-  Palette Swap button) and commits the shape with the swapped wells — pure
-  `shape_gesture_wells` + 3 tests. (5) Wheel pan ×2: `SCROLL_PAN_SPEED` 1.5→3.0.
-  (6) F10 hand-checked by the owner — stays open (DEBTS-functional.md note).
-  Found + reported, NOT fixed: the Palette "Swap (X)" button has no X hotkey
-  behind it (§3.9 has none).
-- **Files:** `src/app.rs`, `src/app/preview.rs` + NEW `src/app/preview/tests.rs`,
-  `dialogs.rs`, `panels.rs`, `text_tool.rs`, `menu.rs`; docs: `SPEC.md`
-  (§3.1–3.2, §3.4, §3.6–3.8, §3.11, §7), `AGENTS.md`, both DEBTS files.
-- **Verified:** verify.sh ALL GATES GREEN — 81 tests default / 93 with
-  `--features mcp` (+3 preview tests); headless `visual_driver.py` 3/3
-  scenarios, 15 checks green after the preview change; rules.sh budgets green.
-- **Owner-checks:** V15 (pan ×2 — the owner-requested check), V16 (Shape RMB
-  swap), V17 (Tool Log restyle), V18 (dialog rows) born in
-  DEBTS-verification.md.
-- **Commit title:** `UX: Tool Log, About, dialog order, Shape RMB swap, 2x wheel pan`
 

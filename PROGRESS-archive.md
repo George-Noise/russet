@@ -9,6 +9,33 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-13 — `UX:` Tool Log restyle, About item, dialog rows, Shape RMB swap, 2x wheel pan — owner request (5 chat items)
+
+- **What:** (1) the "History" window (NOT the History Tree) → "Tool Log" (View
+  checkbox too; egui id + internal `history_*` names unchanged), entry list max
+  height HALVED 280→140 pt, entries at 0.5rem = 8 pt with zero row spacing,
+  first-open bottom edge FLUSH (gap 0; §3.11 keeps the dropped gap). (2) Help
+  item "About Russet" → "About" (the window keeps its title). (3) Every dialog
+  button row → the IBM Carbon / Apple HIG / Google Material order via the new
+  shared `dialog_button_row` (right-aligned, affirmative RIGHTMOST): New, Resize
+  Canvas, Unsaved Changes, Delete Layer, Error, About's Close, Text Place/Cancel.
+  (4) Shape (U) right-button drag swaps the wells first (persistent, like the
+  Palette Swap button) and commits the shape with the swapped wells — pure
+  `shape_gesture_wells` + 3 tests. (5) Wheel pan ×2: `SCROLL_PAN_SPEED` 1.5→3.0.
+  (6) F10 hand-checked by the owner — stays open (DEBTS-functional.md note).
+  Found + reported, NOT fixed: the Palette "Swap (X)" button has no X hotkey
+  behind it (§3.9 has none).
+- **Files:** `src/app.rs`, `src/app/preview.rs` + NEW `src/app/preview/tests.rs`,
+  `dialogs.rs`, `panels.rs`, `text_tool.rs`, `menu.rs`; docs: `SPEC.md`
+  (§3.1–3.2, §3.4, §3.6–3.8, §3.11, §7), `AGENTS.md`, both DEBTS files.
+- **Verified:** verify.sh ALL GATES GREEN — 81 tests default / 93 with
+  `--features mcp` (+3 preview tests); headless `visual_driver.py` 3/3
+  scenarios, 15 checks green after the preview change; rules.sh budgets green.
+- **Owner-checks:** V15 (pan ×2 — the owner-requested check), V16 (Shape RMB
+  swap), V17 (Tool Log restyle), V18 (dialog rows) born in
+  DEBTS-verification.md.
+- **Commit title:** `UX: Tool Log, About, dialog order, Shape RMB swap, 2x wheel pan`
+
 ### 2026-11-13 — `Docs:` second debt triage — owner answered the batched V/F list
 
 - **What:** dispositions applied, zero code change. Verified via chat: V4, V7 (owner:
