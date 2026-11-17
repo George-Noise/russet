@@ -56,6 +56,8 @@ day touched no Rust — cargo gates not re-run).
 HARD-green + fmt clean before and after; `trunk build --release` run twice in-sandbox
 (`strip = true` → the warning reproduces; `strip = "debuginfo"` → clean; sizes in PERF §1);
 clippy/test lanes not re-run — no Rust change and the `gates` profile is untouched.
+Later 2026-11-17: V27 + V25 verified via chat → Resolved (docs-only round, no Rust
+touched — rules.sh HARD-green before/after, gates not re-run).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -71,6 +73,21 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-17 — Docs: V27 + V25 verified via chat → Resolved — owner request
+
+- **What:** the owner verified both open checks in one pass («проверил V27, V25»):
+  V27 — his local `trunk build --release` after the strip fix logs NO wasm-bindgen
+  `target_features` warning and the release page passed the browser smoke (loads, draws,
+  zoom/pan); V25 — the GNOME Wayland pass of the winit Adwaita CSD frame (title bar text
+  follows New/Open/Save/dirty, double-click maximizes/restores, close/minimize work,
+  light and dark shell themes look right). Both rows left the open table for the Resolved
+  list in the same edit; no new checks born; no F-debt rode on them (V23/V24 closed and
+  F13 paid 2026-11-16). Open after this edit: V26, V8; F12, F8, F9, F10, F3, F5.
+- **Files:** `DEBTS-verification.md`, `PROGRESS.md`. Docs-only → cargo gates not re-run.
+- **Verified:** rules.sh HARD-green before and after; delivery byte-compared as usual.
+- **Owner-checks:** none born.
+- **Commit title:** `docs: verify V27 V25 (release-strip rebuild, Wayland CSD pass)`
 
 ### 2026-11-17 — `Fix:` release `strip = true` deleted the wasm `target_features` section (the wasm-bindgen warning) — owner request
 

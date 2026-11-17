@@ -26,9 +26,7 @@
 
 | # | Opened | What the human must check | Source (PROGRESS.md log) | Status |
 |---|---|---|---|---|
-| V27 | 2026-11-17 | The release web build after the `strip` fix: run `trunk build --release` locally — the log must NOT contain the wasm-bindgen `target_features` warning — then a browser smoke: the page loads, a stroke draws, zoom/pan work (the release artifact changed: wasm-bindgen now reads the real feature list and names the allocator exports semantically; bundle +869 B wasm / +112 B gzipped JS — PERF §1). | 2026-11-17 `Fix:` release strip entry | open — needs the owner's machine |
 | V26 | 2026-11-16 | The flake DEV build: `nix build .#russet-dev` on the Nix machine compiles in the fast `gates` profile (the repo's gate lane: opt-level 0, no LTO — minutes faster than the release lane) AND still runs the pure unit tests (doCheck), and the produced binary installs and runs: `nix run .#russet-dev` starts the app (UI UNOPTIMIZED — functional checks, not feel); plain `nix build` / `nix run` must stay release, unchanged. | 2026-11-16 `Feat:` flake dev build entry | open — needs the owner's Nix machine |
-| V25 | 2026-11-16 | GNOME Wayland pass of the new winit Adwaita CSD frame (the owner-approved `winit` dependency, SPEC §1): the title bar shows "Untitled - Russet" / "*name - Russet" and follows New/Open/Save/dirty; a double-click on the bar maximizes and a second double-click restores; the close/minimize buttons work; the bar looks right in both light and dark shell themes. The same pass can close the Linux legs of V23 (wheel-pan feel) and V24 (resize jitter) — until this dep they were blocked: the owner had no usable Linux window bar at all. | 2026-11-16 `Fix:` Wayland CSD entry | open — needs the owner's Linux machine |
 | V8 | 2026-11-12 | MCP on Windows: `cargo build --release --features mcp`, run with `--mcp`, check the "MCP on (N)" badge. | 2026-11-12 `Feat:` MCP entry | open — parked by the owner 2026-11-13: no Windows MCP pass for now; the agent-side MCP run is the working state; reconfirmed 2026-11-13 |
 
 Resolved (kept until the next compaction, then dropped):
@@ -71,3 +69,10 @@ Resolved (kept until the next compaction, then dropped):
   floating-window jitter on Wayland, Windows unchanged). V24's pass satisfied F13's
   documented last pending condition → F13 paid in DEBTS-functional.md the same edit;
   F12 stays open as the final-design decision.
+- V27, V25 — verified 2026-11-17 via chat (owner: «проверил V27, V25»): V27 — the release
+  web build after the `strip` fix: the owner's local `trunk build --release` logs NO
+  wasm-bindgen `target_features` warning and the release page passed the browser smoke
+  (page loads, a stroke draws, zoom/pan); V25 — the GNOME Wayland pass of the winit
+  Adwaita CSD frame (title text follows New/Open/Save/dirty, double-click
+  maximize/restore, close/minimize buttons, light and dark shell themes). Nothing else
+  rode on these two — V23/V24 and F13 were already closed 2026-11-16.
