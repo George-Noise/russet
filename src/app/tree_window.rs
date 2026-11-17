@@ -46,7 +46,9 @@
 use eframe::egui::{self, Align2, Context, FontId, Id, Pos2, TextStyle};
 
 use super::App;
-use super::placement::{FIRST_OPEN_GAP, WindowPlacement, place_floating_window};
+use super::placement::{
+    AxisAnchor, FIRST_OPEN_GAP, WindowAnchor, WindowPlacement, place_floating_window,
+};
 use crate::history_tree::{Change, NodeId, Removal};
 
 mod paint;
@@ -123,7 +125,14 @@ impl TreeView {
             pin: None,
             seen_generation: 0,
             cascade: 0.0,
-            placement: WindowPlacement::default(),
+            // First-open spot (0.5rem from the right edge, just below the
+            // menu bar): those gaps are dropped gaps — kept on resizes even
+            // before the first drag (owner bug fix 2026-11-17, like every
+            // floating window). A drag-end overwrites them, as always.
+            placement: WindowPlacement::default().with_first_open_anchors(WindowAnchor {
+                x: AxisAnchor::Max,
+                y: AxisAnchor::Min,
+            }),
         }
     }
 }
@@ -241,7 +250,13 @@ impl App {
         view.id = Id::unique(("history_tree_clone_window", self.tree_clones));
         view.open = true;
         view.cascade = CLONE_CASCADE_STEP * self.tree_clones as f32;
-        view.placement = WindowPlacement::default();
+        // Same first-open spot as the main window, stepped down-left by the
+        // cascade — the stepped gaps are dropped gaps too (owner bug fix
+        // 2026-11-17).
+        view.placement = WindowPlacement::default().with_first_open_anchors(WindowAnchor {
+            x: AxisAnchor::Max,
+            y: AxisAnchor::Min,
+        });
         view.prev_offset = None;
         view.pin = Some(match view.anchor {
             Anchor::End => Pin::End,

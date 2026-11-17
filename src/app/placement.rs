@@ -95,6 +95,24 @@ impl WindowPlacement {
             ..Self::default()
         }
     }
+
+    /// Sets the FIRST-OPEN anchors of a window whose first-open position
+    /// sits at fixed gaps to main-window edges (§3.2/§3.3 Tools/Palette,
+    /// Tool Log, Layers, History Tree): those gaps are treated as DROPPED
+    /// gaps — an anchored axis keeps its first-open gap on main-window
+    /// resizes even before the user's first drag. Owner bug report
+    /// 2026-11-17: the never-dragged windows had FREE axes (anchors are
+    /// decided only on drag-end), so their first-open gaps scaled with the
+    /// free space and the windows drifted off their magnet boundaries on
+    /// the very first main-window resize; a manual re-drag re-anchored
+    /// them, which is how the bug showed. A drag-end still overwrites the
+    /// anchor with the user's dropped gaps — the user's placement always
+    /// wins (see [`Self::first_open_at_ratio`] for the Tools window, whose
+    /// vertical placement is a free-axis ratio by design).
+    pub(super) fn with_first_open_anchors(mut self, anchor: WindowAnchor) -> Self {
+        self.anchor = anchor;
+        self
+    }
 }
 
 /// Placement bookkeeping of the magnetized tool-settings panel (owner
@@ -172,8 +190,10 @@ pub(super) fn magnet_settings_pos(
 }
 
 /// Per-axis anchor of a floating window to one main-window edge (§3.11).
+/// `pub(super)`: `app.rs` builds the FIRST-OPEN anchors of its windows with
+/// it (see [`WindowPlacement::with_first_open_anchors`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum AxisAnchor {
+pub(super) enum AxisAnchor {
     /// Free axis: keeps its relative placement (gap-ratio formula) on
     /// main-window resizes.
     #[default]
@@ -185,11 +205,13 @@ enum AxisAnchor {
     Max,
 }
 
-/// Anchors of one floating window, fixed when its last title-bar drag ended.
+/// Anchors of one floating window, fixed when its last title-bar drag ended
+/// (and at FIRST OPEN for windows with a first-open edge position — see
+/// [`WindowPlacement::with_first_open_anchors`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct WindowAnchor {
-    x: AxisAnchor,
-    y: AxisAnchor,
+pub(super) struct WindowAnchor {
+    pub(super) x: AxisAnchor,
+    pub(super) y: AxisAnchor,
 }
 
 /// One axis of the drop-time magnetism: the axis anchors to an edge if the

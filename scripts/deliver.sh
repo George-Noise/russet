@@ -59,7 +59,12 @@ fi
 
 # 2. russet.patch (only with git — no git, no patch, zip is the sole artifact)
 if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-  git diff --binary "$BASE" > "$OUT/russet.patch"
+  # --no-renames: a rename-form diff ("rename from/to" + a partial body) is
+  # mis-applied by non-git patchers — one such apply left the rename SOURCE
+  # (the old panels.rs) alive in the owner's commit 3be38d4 as a 504-line
+  # dead orphan next to its split successors. Plain delete+add diffs apply
+  # unambiguously everywhere. Caught live 2026-11-17.
+  git diff --binary --no-renames "$BASE" > "$OUT/russet.patch"
 else
   echo "deliver.sh: NO git here — russet.patch skipped, russet.zip is the only artifact" >&2
 fi

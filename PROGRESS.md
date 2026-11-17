@@ -68,6 +68,38 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
 
+### 2026-11-17 — `Fix:` first-open window gaps drift on the first main-window resize — owner bug report — owner request
+
+- **What:** the owner's report (fresh launch → resize the main window → the windows slid off their
+  magnet boundaries; a manual re-drag re-anchored them). ROOT CAUSE: §3.11 anchors are decided only
+  on drag-end, so a never-dragged window had FREE axes — and the free-axis gap-ratio formula scales
+  the gaps with the free space (Layers right gap 8 pt → 8.83 on a 1200→1300 grow), while the SPEC
+  promises «§3.11 keeps the dropped gap afterwards» for the first-open positions. FIX: explicit
+  FIRST-OPEN anchors per window — `WindowPlacement::with_first_open_anchors` (placement.rs;
+  `AxisAnchor`/`WindowAnchor` become pub(super) for the app-level init) applied in `App::new`:
+  Tools x=Min/y=free (the 40/60 ratio is a free-axis placement BY DESIGN), Palette Min/Max, Tool
+  Log free-x (stays centered)/Max, Layers Max/Max (the 36 pt zoom-label lift is KEPT, not scaled);
+  tree_window.rs: main tree + clones Max/Min (right edge + below the menu bar). A drag-end still
+  overwrites the anchor with the user's dropped gaps — the user's placement always wins.
+- **Tests:** three regression tests in `placement/tests.rs` (143/155 total now): the anchored
+  first-open gaps survive grow+shrink; WITHOUT anchors they drift (the bug, pinned); the Tools
+  window keeps the left gap AND the vertical ratio. ALSO: the owner's commit `3be38d4` carried the
+  old `panels.rs` as a DEAD ORPHAN next to its split successors (the rename-form patch was applied
+  by a tool that skipped the rename deletion; the file had no `mod` declaration, so everything
+  still compiled) — the orphan is deleted in this round, and `deliver.sh` now emits
+  `--no-renames` patches so plain delete+add diffs apply unambiguously in any patcher. V30 parked
+  by the owner (light-tasks mode); V32 born (the fix's manual pass).
+- **Files:** `src/app/placement.rs` (+builder, visibility), `src/app.rs` (anchor init + import),
+  `src/app/tree_window.rs` (2 sites + import), `src/app/placement/tests.rs` (+3 tests; 518 lines —
+  over the 500 guard: the topic split per "Tests" rule 7 is PROPOSED, awaiting the owner's OK),
+  `scripts/deliver.sh` (--no-renames), `DEBTS-verification.md`, `PROGRESS.md`.
+- **Verified:** rules.sh HARD-green (OVER GUARD: the orphan panels.rs is GONE, history_tree.rs is
+  the owner-deferred one, placement/tests.rs 518 — proposed split), fmt clean, clippy `-D warnings`
+  clean default+mcp, tests 143/155 green, wasm check green. verify.sh 13 s.
+- **Owner-checks:** V32 born (the fresh-launch resize pass, see DEBTS-verification.md). Open: V32,
+  V30 (parked), V8 (parked).
+- **Commit title:** `Fix first-open window gaps drifting on resize (explicit first-open anchors); drop the panels.rs orphan`
+
 ### 2026-11-17 — `Refactor:` panels.rs split into tool_log.rs + layers_window.rs — owner-approved — owner request
 
 - **What:** the 500-line file guard debt paid for `app/panels.rs` (504 lines, owner: «делай сплит
@@ -151,39 +183,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   the cold cost (debug/deps 2.0 G + gates/deps 1.3 G + wasm deps 96 M raw); the smallest useful
   artifact is the whole store (1.2 G zip); wasm-only (~40 M zip) warms nothing native.
 - **Commit title:** `Automate the delivery ritual (scripts/deliver.sh); drag-probe template in scripts; fix russet-dev override error`
-
-### 2026-11-17 — `Tooling:` sandbox probe, timing log, warm-target store, V29 closed — owner request
-
-
-
-- **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
-  carried the applied magnet-panel patch (`3dcad27` — the previous delivery, commit title verbatim);
-  the sandbox worktree was already byte-identical to it, so this round's base is `3dcad27`.
-  (2) NEW `scripts/sandbox_check.sh` — the session-start environment probe (base tools, pinned
-  toolchain + wasm target + rustfmt/clippy components, network reachability, per-lane `target/`
-  warmth via `.fingerprint` counts, the Xvfb xkbfix fix presence) with exact fix hints; report-only,
-  always exit 0. (3) NEW `TIMING.md` — the cold/hot duration log of heavy commands (two tables, 5
-  newest rows each, same-edit rule), seeded with this session's numbers (hot `verify.sh` 14 s; hot
-  clippy after real changes 59 s; ≈ 8–12 min cold dep build; `touch` of an unchanged file does NOT
-  invalidate cargo's fingerprints — 13 s). (4) `AGENTS.md` "Commands": a Session-start bullet
-  (probe first; when `target/` is cold restore the owner-hosted `russet-target.zip` from the release
-  `target-store`) + the heavy-command timing duty; the baseline rule reconfirmed by the owner
-  2026-11-17 (NO pre-edit test/compile runs — tests run at task end and land in the repo; the only
-  exception is a toolchain/target warm-up, which is environment work, not a test baseline); the
-  Delivery ritual gained the note that `russet-target.zip` is a requested-only artifact, not a
-  routine one. `SANDBOX.md`: the restore + probe pointer in the Rust bullet. (5) V29 → verified
-  2026-11-17 via chat (owner: «проверил V29»). (6) The warm-up artifact BUILT and delivered this
-  round on request: `russet-target.zip` 1.2 GiB (the 3.8 G `target/` minus the `*incremental*`
-  caches; dev + gates + wasm lanes, the GUI binary included) — the owner uploads it to the release
-  `target-store`.
-- **Files:** NEW `TIMING.md`, NEW `scripts/sandbox_check.sh`; `AGENTS.md` (Commands: Session start
-  + timing duty + baseline reconfirmation; Delivery ritual note), `SANDBOX.md` (Rust bullet: restore
-  + probe), `DEBTS-verification.md` (V29 → verified), `PROGRESS.md` (this entry).
-- **Verified:** `bash scripts/sandbox_check.sh` run live — every lane [yes] (705/634/99 fingerprints;
-  two false negatives found and fixed on the way: the `rustfmt-.* (installed)` grep pattern and the
-  triple-lane `.fingerprint` depth); `bash scripts/verify.sh` ALL GATES GREEN, time'd twice: 14 s
-  (nothing changed) and 13 s (after `touch src/app.rs`); `cargo test --profile gates` 140 default /
-  152 mcp green; the zip built and CRC-tested (`unzip -t`), 141 s zip time recorded in TIMING.md.
-- **Owner-checks:** none born. The owner uploads `russet-target.zip` to the GitHub release
-  `target-store`; when ready: V26 (Nix), V30/V31 approval in chat.
-- **Commit title:** `Add sandbox_check.sh and TIMING.md; session-start probe and warm-target restore rules; V29 verified via chat`

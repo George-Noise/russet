@@ -70,7 +70,9 @@ mod windows;
 
 use self::document::{MAX_CANVAS, MIN_CANVAS, NEW_HEIGHT, NEW_WIDTH, PendingAction};
 use self::launch::LaunchConfig;
-use self::placement::{TOOLS_FIRST_OPEN_RATIO, ToolSettingsPlacement, WindowPlacement};
+use self::placement::{
+    AxisAnchor, TOOLS_FIRST_OPEN_RATIO, ToolSettingsPlacement, WindowAnchor, WindowPlacement,
+};
 use self::preview::PreviewState;
 use self::text_tool::TextEditState;
 use self::tree_window::TreeView;
@@ -317,11 +319,33 @@ impl App {
             tree_views: vec![TreeView::main()],
             tree_clones: 0,
             stroke_paint: None,
-            tools_placement: WindowPlacement::first_open_at_ratio(TOOLS_FIRST_OPEN_RATIO),
+            // The first-open gaps are DROPPED gaps (owner bug fix 2026-11-17:
+            // a never-dragged window had free axes, so its first-open gaps
+            // scaled with the free space and drifted off the magnet
+            // boundaries on the first main-window resize). Per-window:
+            // Tools — 0.5rem from the LEFT edge (§3.2), vertical stays a
+            // free 40/60 ratio; Palette — 0.5rem from LEFT and BOTTOM
+            // (§3.3); Tool Log — bottom edge FLUSH (gap 0), horizontal
+            // stays centered (free); Layers — 0.5rem from the RIGHT edge,
+            // 2.25rem above the bottom edge (the zoom % label).
+            tools_placement: WindowPlacement::first_open_at_ratio(TOOLS_FIRST_OPEN_RATIO)
+                .with_first_open_anchors(WindowAnchor {
+                    x: AxisAnchor::Min,
+                    y: AxisAnchor::None,
+                }),
             tool_settings_placement: ToolSettingsPlacement::default(),
-            palette_placement: WindowPlacement::default(),
-            history_placement: WindowPlacement::default(),
-            layers_placement: WindowPlacement::default(),
+            palette_placement: WindowPlacement::default().with_first_open_anchors(WindowAnchor {
+                x: AxisAnchor::Min,
+                y: AxisAnchor::Max,
+            }),
+            history_placement: WindowPlacement::default().with_first_open_anchors(WindowAnchor {
+                x: AxisAnchor::None,
+                y: AxisAnchor::Max,
+            }),
+            layers_placement: WindowPlacement::default().with_first_open_anchors(WindowAnchor {
+                x: AxisAnchor::Max,
+                y: AxisAnchor::Max,
+            }),
             preview: PreviewState::None,
             text_edit: None,
             action_log: ActionLog::new(),
