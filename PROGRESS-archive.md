@@ -9,6 +9,38 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+
+
+---
+
+### 2026-11-16 — `Feat:` fast dev Nix build (`russet-dev`); V23/V24 verified → F13 paid; the debt-ordering rule — owner request
+
+- **What:** (1) the owner verified V23 + V24 via chat («проверил V23, V24») → both moved to the
+  Resolved list; that satisfied F13's documented LAST pending condition (the owner's Wayland
+  feel pass), so F13 is PAID (the `diagnostics` feature lives until F12 closes); F12 stays open
+  as the final-design decision only. (2) The flake gained `russet-dev` (owner request: a fast
+  non-release build to check that everything builds AND to poke the functionality; plain
+  `nix build` / `nix run` stay release): the SAME source/lock/tests via buildRustPackage's
+  supported profile knobs `buildType = checkType = "gates"` — the repo's gate lane (opt-level 0,
+  no LTO; the nixos-unstable hook sources confirm `--profile $cargoBuildType` for the build,
+  `cargo test --profile $cargoCheckType` for the check and `target/<triple>/$cargoBuildType`
+  for the install) + a `.#russet-dev` app entry; README + SPEC §8 updated in the same edit.
+  No nix in the sandbox → NOT machine-verified → V26 born. (3) AGENTS.md "Debts" gained rule 6
+  (owner request): open items sorted V → F → rest, newest birth date first within a group,
+  closed items leave the open tables the same edit; both DEBTS headers echo it and both files
+  were reordered (V16's closed row → Resolved — bookkeeping, announced in chat).
+- **Files:** `flake.nix`, `README.md`, `SPEC.md` §8, `AGENTS.md`, `DEBTS-verification.md`,
+  `DEBTS-functional.md`, `SANDBOX.md` (pitfall 9: bare-dir `git apply` is a silent no-op),
+  `PROGRESS.md`. NO Rust touched → cargo gates not re-run this round.
+- **Verified:** rules.sh HARD-green before and after; the `--profile` mechanism quoted from the
+  nixos-unstable sources (sparse clone of `pkgs/build-support/rust/`); the delivery
+  byte-compared as usual.
+- **Owner-checks:** V26 born — `nix build .#russet-dev` / `nix run .#russet-dev` on the Nix
+  machine; plain `nix build` unchanged.
+- **Commit title:** `Add the fast russet-dev Nix build (gates profile); docs: verify V23 V24, pay F13, add the debt-ordering rule`
+
+---
+
 ### 2026-11-16 — `Fix:` GNOME Wayland title bar — winit Adwaita CSD frame (approved dep) — owner request
 
 - **What:** on the owner's GNOME (Wayland) the window had NO title text and a double-click on

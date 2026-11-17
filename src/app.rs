@@ -19,6 +19,10 @@
 //!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
 //!                   (press–drag–release and polyline gestures, overlay
 //!                   preview, commit)
+//!   [`scenarios`] — owner request 2026-11-17: the OWNER-LOCKED whole-app
+//!                   scenario suite (tests only — the automated counterpart
+//!                   of the owner's manual resize × history walkthrough;
+//!                   edit it ONLY with the owner's permission)
 //!   [`text_tool`] — owner request 2026-11-10: the Text tool input window
 //!   [`tree_window`] — owner request 2026-11-12: the visual "History Tree"
 //!                   windows (git-style graph per layer, node-dot click
@@ -51,6 +55,7 @@ mod menu;
 mod panels;
 mod placement;
 mod preview;
+mod scenarios;
 mod text_tool;
 mod tree_window;
 mod windows;
@@ -199,17 +204,36 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::build(cc.egui_ctx.clone())
+    }
+
+    /// Test-only constructor of the whole-app scenario suite
+    /// ([`scenarios`], owner request 2026-11-17): the REAL build path with
+    /// a default egui `Context` — no renderer, no egui passes (a bare
+    /// `CreationContext` is not constructible outside eframe: its window
+    /// handles are `pub(crate)`). With the `mcp` feature this spawns the
+    /// stdio server reader on the test process's piped stdin — harmless
+    /// (immediate EOF, nothing joins the thread).
+    #[cfg(test)]
+    fn new_headless() -> Self {
+        Self::build(egui::Context::default())
+    }
+
+    /// Every field of a fresh `App`, shared by the native entry point and
+    /// the test-only constructor above (ONE point of maintenance: a new
+    /// field lands here and both constructors stay in sync).
+    fn build(ctx: egui::Context) -> Self {
         // Owner request 2026-11-11: NO drop shadows on the app's windows —
         // a flat look. `window_shadow` covers every `egui::Window` (Tools,
         // Palette, Tool Log, Layers, the Text input and all dialogs) in BOTH
         // themes; menu/popup shadows (`visuals.popup_shadow`) stay as egui
         // draws them — popups are not "windows" in the owner's sense.
-        cc.egui_ctx.all_styles_mut(|style| {
+        ctx.all_styles_mut(|style| {
             style.visuals.window_shadow = egui::Shadow::NONE;
         });
 
         let canvas = Canvas::new(800, 600, Color32::TRANSPARENT);
-        let canvas_tex = cc.egui_ctx.load_texture(
+        let canvas_tex = ctx.load_texture(
             "canvas",
             egui::ColorImage::from_rgba_premultiplied(
                 [canvas.width as usize, canvas.height as usize],
@@ -233,12 +257,10 @@ impl App {
             wrap_mode: egui::TextureWrapMode::Repeat,
             mipmap_mode: None,
         };
-        let checker_tex = cc
-            .egui_ctx
-            .load_texture("checker", checker, checker_options);
+        let checker_tex = ctx.load_texture("checker", checker, checker_options);
 
         let mut app = Self {
-            ctx: cc.egui_ctx.clone(),
+            ctx: ctx.clone(),
             canvas,
             canvas_tex,
             checker_tex,
@@ -246,7 +268,7 @@ impl App {
             last_tool: Tool::Pencil,
             layers: LayerStack::new(800, 600),
             #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
-            mcp: mcp::McpServer::maybe_spawn(cc.egui_ctx.clone()),
+            mcp: mcp::McpServer::maybe_spawn(ctx.clone()),
             zoom: 1.0,
             pan: Vec2::ZERO,
             is_stroking: false,
@@ -269,7 +291,7 @@ impl App {
             preview: PreviewState::None,
             text_edit: None,
             action_log: ActionLog::new(),
-            last_panel_rect: cc.egui_ctx.content_rect(),
+            last_panel_rect: ctx.content_rect(),
             last_content_rect: None,
             #[cfg(not(target_arch = "wasm32"))]
             current_path: None,

@@ -372,6 +372,12 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   (the 2026-11-13 crop/pad-fit restore is retired) — a bottom-layer restore resizes the
   canvas with it (the bottom layer owns the size), a non-bottom one just becomes
   smaller/larger and the composite clips it.
+- The owner's manual walkthrough scenarios of the resize × history coupling (chat,
+  2026-11-17) have an automated counterpart: the OWNER-LOCKED whole-app scenario suite
+  `app/scenarios` (headless real-`App` tests, one scenario = one continuous run). New
+  scenarios land there on the owner's request only; the file is exempt from the size
+  guards and must not be edited without the owner's explicit permission (AGENTS.md
+  "Tests" rule 7).
 - Open and New rebuild the layer stack (history restarts). A NEW document's initial
   layer is filled WHITE — the §3.8 white New canvas, restored by the owner request
   2026-11-13 after the layers rewrite had made everything transparent — and every

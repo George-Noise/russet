@@ -60,6 +60,7 @@ clippy/test lanes not re-run — no Rust change and the `gates` profile is untou
 Later 2026-11-17: V27 + V25 verified via chat → Resolved (docs-only round, no Rust
 touched — rules.sh HARD-green before/after, gates not re-run).
 2026-11-17 (resize round): fmt clean, clippy `-D warnings` clean default+mcp+diagnostics, `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green (+12), `cargo check --target wasm32-unknown-unknown` green, the headless MCP driver pass ALL GREEN (15 checks, real binary, Xvfb recipe of SANDBOX.md).
+2026-11-17 (scenario-suite round): rules.sh HARD-green before and after; fmt clean, clippy `-D warnings` clean default+mcp, `cargo test --profile gates` 119 default / 131 mcp (+8 whole-app scenario tests) green, `cargo check --target wasm32-unknown-unknown` green.
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -75,6 +76,38 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-17 — `Test:` the whole-app scenario suite — owner-locked, size-guard exempt — owner request
+
+- **What:** while the owner walks the 8 manual chat scenarios by hand, ONE automated
+  whole-app suite lands: `app/scenarios.rs` + its `tests.rs` (8 tests) driving a REAL
+  headless `App` (no renderer, no egui passes) through the resize × history coupling:
+  mid-chain undo/redo, bottom-layer canvas ownership, a fork of two resizes, node jumps
+  + branch pixels, chained resizes step-by-step, bottom-layer deletion (same/different
+  size), "Use layer as base" (no node) vs "Keep canvas size" (own node + the undo
+  re-expand). OWNER-LOCKED (owner request 2026-11-17): edits only on the owner's
+  explicit permission, the agent only APPENDS new scenarios on request; exempt from
+  BOTH size guards, NO split debt (AGENTS.md "Tests" rule 7 + "Repo facts"; rules.sh
+  skips the file). Dialog CLICKS stay owner-manual: the suite asserts the dialog
+  trigger (the successor-size condition) and runs the exact branch bodies the buttons
+  call. `App::new` refactored (pure code motion) into `build(ctx)` + a cfg(test)
+  `new_headless()` — eframe's `CreationContext` is not constructible outside the crate.
+  The chat walkthrough had three expectations the CODE corrected: the BR crop lands the
+  dab at (100,100) (not (300,300)); reaching 800×600 in scenario 5 takes THREE undos
+  (the head steps onto the dab first); scenario 3's fork hangs off the mark's node, not
+  the Start root — the owner's manual pass should use the corrected steps.
+- **Files:** `src/app.rs` (build refactor + mod), `src/app/scenarios.rs` (new),
+  `src/app/scenarios/tests.rs` (new, owner-locked), `scripts/rules.sh`, `AGENTS.md`,
+  `SPEC.md` §3.6, `PROGRESS.md`.
+- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after:
+  rules.sh HARD-green, fmt clean, clippy `-D warnings` clean default + mcp,
+  `cargo test --profile gates` 119 default / 131 mcp (+8 scenarios) green,
+  `cargo check --target wasm32-unknown-unknown` green. Delivery byte-compared.
+- **Owner-checks:** none born (V28 already tracks the manual resize walkthrough; this
+  suite is its automated counterpart). SOFT notes to relay: `panels.rs` 504 and
+  `history_tree.rs` 569 lines over the 500 guard (pre-existing from the resize round;
+  splits only on the owner's approval).
+- **Commit title:** `Add the owner-locked whole-app scenario suite (resize x history walkthrough); App::new build() refactor`
 
 ### 2026-11-17 — `Feat:` Resize dialog modes — canvas anchor grid, image resample filters, per-layer resize nodes, bottom layer owns the canvas — owner request
 
@@ -153,29 +186,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V27 born — rebuild `trunk build --release` + a browser smoke (load, draw,
   zoom/pan) on the owner's machine.
 - **Commit title:** `Fix the wasm-bindgen target_features warning: release strip=true → debuginfo`
-
-### 2026-11-16 — `Feat:` fast dev Nix build (`russet-dev`); V23/V24 verified → F13 paid; the debt-ordering rule — owner request
-
-- **What:** (1) the owner verified V23 + V24 via chat («проверил V23, V24») → both moved to the
-  Resolved list; that satisfied F13's documented LAST pending condition (the owner's Wayland
-  feel pass), so F13 is PAID (the `diagnostics` feature lives until F12 closes); F12 stays open
-  as the final-design decision only. (2) The flake gained `russet-dev` (owner request: a fast
-  non-release build to check that everything builds AND to poke the functionality; plain
-  `nix build` / `nix run` stay release): the SAME source/lock/tests via buildRustPackage's
-  supported profile knobs `buildType = checkType = "gates"` — the repo's gate lane (opt-level 0,
-  no LTO; the nixos-unstable hook sources confirm `--profile $cargoBuildType` for the build,
-  `cargo test --profile $cargoCheckType` for the check and `target/<triple>/$cargoBuildType`
-  for the install) + a `.#russet-dev` app entry; README + SPEC §8 updated in the same edit.
-  No nix in the sandbox → NOT machine-verified → V26 born. (3) AGENTS.md "Debts" gained rule 6
-  (owner request): open items sorted V → F → rest, newest birth date first within a group,
-  closed items leave the open tables the same edit; both DEBTS headers echo it and both files
-  were reordered (V16's closed row → Resolved — bookkeeping, announced in chat).
-- **Files:** `flake.nix`, `README.md`, `SPEC.md` §8, `AGENTS.md`, `DEBTS-verification.md`,
-  `DEBTS-functional.md`, `SANDBOX.md` (pitfall 9: bare-dir `git apply` is a silent no-op),
-  `PROGRESS.md`. NO Rust touched → cargo gates not re-run this round.
-- **Verified:** rules.sh HARD-green before and after; the `--profile` mechanism quoted from the
-  nixos-unstable sources (sparse clone of `pkgs/build-support/rust/`); the delivery
-  byte-compared as usual.
-- **Owner-checks:** V26 born — `nix build .#russet-dev` / `nix run .#russet-dev` on the Nix
-  machine; plain `nix build` unchanged.
-- **Commit title:** `Add the fast russet-dev Nix build (gates profile); docs: verify V23 V24, pay F13, add the debt-ordering rule`

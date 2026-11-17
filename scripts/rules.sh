@@ -16,8 +16,9 @@
 #      and internal invariants ("checked above") pass; file open/parse/decode
 #      of user data must use error_popup, not a panic. Each hit is listed so
 #      new ones are visible in every review and CI run.
-#   4. src files over 500 lines (app.rs is the owner-approved exception) —
-#      AGENTS.md "Repo facts" file-size guard.
+#   4. src files over 500 lines (owner-exempt: app.rs and the owner-locked
+#      app/scenarios/tests.rs, owner request 2026-11-17) — AGENTS.md "Repo
+#      facts" file-size guard.
 #   5. PROGRESS.md size and stale material (owner request 2026-11-13: "чтобы
 #      агент и человек не забывали"): warn when the file or its Log section
 #      outgrows its budget, when RESOLVED warnings are still parked in the
@@ -66,11 +67,15 @@ while IFS= read -r hit; do
 done < <(grep -rnE --include='*.rs' --exclude='tests.rs' '[.]expect\(' src || true)
 echo "expect() outside tests: $expect_hits site(s) — each must stay off user-data paths"
 
-echo "== SOFT (report-only): file-size guard, 500 lines (app.rs owner-exempt) =="
+echo "== SOFT (report-only): file-size guard, 500 lines (owner-exempt: app.rs, app/scenarios/tests.rs) =="
 shopt -s globstar nullglob
 within=1
 for f in src/**/*.rs; do
     [ "$f" = "src/app.rs" ] && continue
+    # Owner request 2026-11-17: the whole-app scenario suite grows scenario
+    # by scenario with NO line limit and NO split debt — owner-locked, edits
+    # only with the owner's explicit permission (AGENTS.md "Tests" rule 7).
+    [ "$f" = "src/app/scenarios/tests.rs" ] && continue
     lines=$(wc -l < "$f")
     if [ "$lines" -gt 500 ]; then
         echo "OVER GUARD: $f ($lines lines) — warn the owner, propose a split at task end"
@@ -78,7 +83,7 @@ for f in src/**/*.rs; do
     fi
 done
 if [ "$within" -eq 1 ]; then
-    echo "OK: all src files (except owner-exempt app.rs) are within 500 lines"
+    echo "OK: all src files (except owner-exempt app.rs and app/scenarios/tests.rs) are within 500 lines"
 fi
 
 echo "== SOFT (report-only): PROGRESS.md size and stale material =="
