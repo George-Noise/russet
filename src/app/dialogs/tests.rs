@@ -139,3 +139,30 @@ fn the_dialog_window_recenters_when_reopened_after_a_move() {
     let rect = show_once(&ctx, &input, id);
     assert_centered(rect, "reopened after close");
 }
+
+// ---- the Resize dialog's aspect-ratio lock (owner request 2026-11-17) ----
+
+#[test]
+fn the_aspect_lock_drives_the_untouched_field() {
+    // Canvas 800×600 → ratio 0.75; the user changed only the width.
+    let (w, h) = super::aspect_linked(800.0, 600.0, 400.0, 600.0, 0.75);
+    assert_eq!((w, h), (400.0, 300.0), "the height follows the width");
+
+    // Only the height changed: the width follows.
+    let (w, h) = super::aspect_linked(800.0, 600.0, 800.0, 200.0, 0.75);
+    assert_eq!((w, h), (267.0, 200.0), "200 / 0.75 rounds to 267");
+
+    // Both changed (or neither): the fields win as-is.
+    assert_eq!(
+        super::aspect_linked(800.0, 600.0, 100.0, 50.0, 0.75),
+        (100.0, 50.0)
+    );
+    assert_eq!(
+        super::aspect_linked(800.0, 600.0, 800.0, 600.0, 0.75),
+        (800.0, 600.0)
+    );
+
+    // The driven value never drops below 1.
+    let (w, h) = super::aspect_linked(800.0, 600.0, 0.2, 600.0, 0.75);
+    assert_eq!((w, h), (0.2, 1.0));
+}

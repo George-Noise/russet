@@ -1,7 +1,7 @@
 //! The snapshot codec of the layers: lossless PNG roundtrips of a layer's
-//! raw premultiplied bytes plus the canvas-fit policy for restored nodes.
-//! Split from `layers.rs` 2026-11-16 (pure code motion, the 500-line file
-//! guard): the pixel plumbing lives here, the layer state
+//! raw premultiplied bytes plus the top-left crop/pad helper
+//! ([`fit_copy`]). Split from `layers.rs` 2026-11-16 (pure code motion, the
+//! 500-line file guard): the pixel plumbing lives here, the layer state
 //! ([`super::Layer`], [`super::LayerStack`]) stays in the parent module.
 //!
 //! Snapshot format note: the PNGs are an INTERNAL RAM container, never
@@ -58,31 +58,13 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<Pixmap, String> {
     Ok(pixmap)
 }
 
-/// Fits a snapshot onto the current canvas: same size — unchanged; larger
-/// — the top-left crop; smaller — padded with transparency at the
-/// bottom/right. This is what "the nodes keep their sizes" (Resize policy)
-/// shows on restore, and it matches `Canvas::resize_canvas`'s content
-/// placement exactly.
-pub fn fit_to_canvas(pixmap: Pixmap, width: u32, height: u32) -> Pixmap {
-    if pixmap.width() == width && pixmap.height() == height {
-        return pixmap;
-    }
-    fit_copy(&pixmap, width, height)
-}
-
-/// An empty (fully transparent) pixmap with the Canvas clamps; falls back
-/// to 1×1 like `Canvas::new` when the allocation is refused.
-pub(super) fn pixmap_of(width: u32, height: u32) -> Pixmap {
-    let width = width.clamp(1, 4096);
-    let height = height.clamp(1, 4096);
-    // Pixmap::new yields a fully transparent buffer.
-    Pixmap::new(width, height).unwrap_or_else(|| unreachable!("1x1 pixmap"))
-}
-
-/// The by-reference variant of [`fit_to_canvas`] (no clone when the sizes
-/// already match — [`super::LayerStack::resize_all`] uses it for every
-/// layer).
-pub(super) fn fit_copy(src: &Pixmap, width: u32, height: u32) -> Pixmap {
+/// Fits a pixmap onto a target size, TOP-LEFT anchored: same size —
+/// unchanged; larger — the top-left crop; smaller — padded with
+/// transparency at the bottom/right. This is the "keep the canvas size"
+/// branch of the base-choice dialog (the new bottom layer must match the
+/// canvas without shifting the composite) and the zero-offset case of
+/// `resize::fit_copy_at`.
+pub fn fit_copy(src: &Pixmap, width: u32, height: u32) -> Pixmap {
     if src.width() == width && src.height() == height {
         return src.clone();
     }
@@ -102,4 +84,13 @@ pub(super) fn fit_copy(src: &Pixmap, width: u32, height: u32) -> Pixmap {
             .copy_from_slice(&src_data[src_start..src_start + copy_width]);
     }
     out
+}
+
+/// An empty (fully transparent) pixmap with the Canvas clamps; falls back
+/// to 1×1 like `Canvas::new` when the allocation is refused.
+pub(super) fn pixmap_of(width: u32, height: u32) -> Pixmap {
+    let width = width.clamp(1, 4096);
+    let height = height.clamp(1, 4096);
+    // Pixmap::new yields a fully transparent buffer.
+    Pixmap::new(width, height).unwrap_or_else(|| unreachable!("1x1 pixmap"))
 }

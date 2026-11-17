@@ -8,10 +8,11 @@
 //! the same helpers). A child module of `app`, so it can touch `App`'s
 //! private fields; `app.rs` stays the orchestrator.
 
-use eframe::egui::{self, Align2, AreaState, Context, Id, LayerId, Order};
+use eframe::egui::{self, Align2, AreaState, Context, Id, LayerId, Order, Vec2};
 
 use super::App;
 use super::document::{MAX_CANVAS, MIN_CANVAS, PendingAction};
+use crate::history_tree::{ResizeAnchor, ResizeFilter, ResizeMode};
 
 /// Stable area id of a modal dialog (needed to reset its stored position
 /// on close — see [`forget_dialog_position`]).
@@ -109,6 +110,19 @@ impl App {
         }
     }
 
+    /// "Resize Canvas…" (the Canvas menu): prefill the fields from the
+    /// current canvas and reset every choice to its default (Canvas mode,
+    /// center anchor, bicubic filter, aspect lock on).
+    pub(super) fn open_resize_dialog(&mut self) {
+        self.resize_width = self.canvas.width as f32;
+        self.resize_height = self.canvas.height as f32;
+        self.resize_mode = ResizeMode::Canvas;
+        self.resize_anchor = ResizeAnchor::Center;
+        self.resize_filter = ResizeFilter::Bicubic;
+        self.resize_aspect = true;
+        self.show_resize_dialog = true;
+    }
+
     pub(super) fn resize_dialog(&mut self, ctx: &Context) {
         if !self.show_resize_dialog {
             return;
@@ -117,9 +131,18 @@ impl App {
         let mut ok = false;
         let mut cancel = false;
         let id = dialog_id("resize");
+        // Aspect-lock anchor: the canvas ratio at dialog open (the fields
+        // are prefilled from the canvas, so the lock keeps THAT ratio).
+        let canvas_ratio = self.canvas.height as f32 / self.canvas.width as f32;
+        let (w0, h0) = (self.resize_width, self.resize_height);
         dialog_window("Resize Canvas", id, ctx)
             .open(&mut open)
             .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Mode");
+                    ui.radio_value(&mut self.resize_mode, ResizeMode::Canvas, "Canvas size");
+                    ui.radio_value(&mut self.resize_mode, ResizeMode::Image, "Image size");
+                });
                 ui.horizontal(|ui| {
                     ui.label("Width");
                     ui.add(
@@ -128,8 +151,6 @@ impl App {
                             .speed(1.0)
                             .max_decimals(0),
                     );
-                });
-                ui.horizontal(|ui| {
                     ui.label("Height");
                     ui.add(
                         egui::DragValue::new(&mut self.resize_height)
@@ -138,33 +159,106 @@ impl App {
                             .max_decimals(0),
                     );
                 });
+                if self.resize_mode == ResizeMode::Canvas {
+                    // The Paint.NET 3×3 anchor: which part of the picture
+                    // stays in place while the rest crops/pads.
+                    ui.label("Anchor — the part that stays in place");
+                    anchor_grid(ui, &mut self.resize_anchor);
+                } else {
+                    ui.checkbox(&mut self.resize_aspect, "Maintain aspect ratio");
+                    ui.label("Resampling");
+                    ui.horizontal(|ui| {
+                        ui.radio_value(
+                            &mut self.resize_filter,
+                            ResizeFilter::Nearest,
+                            "Nearest neighbor",
+                        );
+                        ui.radio_value(&mut self.resize_filter, ResizeFilter::Bilinear, "Bilinear");
+                    });
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut self.resize_filter, ResizeFilter::Bicubic, "Bicubic");
+                        ui.radio_value(&mut self.resize_filter, ResizeFilter::Lanczos3, "Lanczos3");
+                    });
+                }
                 let (ok_hit, cancel_hit) = dialog_button_row(ui, "OK", "Cancel");
                 ok = ok_hit;
                 cancel = cancel_hit;
             });
+        // Aspect lock (Image mode only): whichever field the user CHANGED
+        // this frame drives the other one along the canvas ratio.
+        if self.resize_mode == ResizeMode::Image && self.resize_aspect && !ok && !cancel {
+            let (w, h) = aspect_linked(w0, h0, self.resize_width, self.resize_height, canvas_ratio);
+            self.resize_width = w;
+            self.resize_height = h;
+        }
         if ok {
-            let width = self.resize_width.round() as u32;
-            let height = self.resize_height.round() as u32;
-            self.canvas.resize_canvas(width, height);
-            // Owner decision 2026-11-13 ("keep the nodes"): the layer
-            // buffers crop/pad to the new size while every node PNG keeps
-            // its original size — switching to an old node shows the fitted
-            // (cropped/padded) image, and drawing continues from that
-            // fitted state, so the NEXT node is stored at the new size.
-            self.layers.resize_all(width, height);
-            // Pending gestures reference canvas coordinates that may no
-            // longer be meaningful — drop them.
-            self.cancel_preview();
-            self.cancel_text_edit();
-            self.refresh_composite();
-            self.dirty = true;
-            self.action_log
-                .push(format!("Canvas resized to {width}×{height}"));
+            self.apply_resize(
+                self.resize_mode,
+                self.resize_width.round() as u32,
+                self.resize_height.round() as u32,
+                self.resize_anchor,
+                self.resize_filter,
+            );
             self.show_resize_dialog = false;
             forget_dialog_position(ctx, id);
         } else if cancel || !open {
             self.show_resize_dialog = false;
             forget_dialog_position(ctx, id);
+        }
+    }
+
+    /// The base-choice dialog after deleting the BOTTOM layer whose
+    /// successor has a DIFFERENT size (owner request 2026-11-17): keep the
+    /// canvas size (the new bottom layer crop/pads to it, top-left — the
+    /// composite never shifts) or use the layer's size as the new canvas.
+    /// No dismiss button: the deletion already happened, the size model
+    /// needs a decision (same-size successors never open this dialog).
+    pub(super) fn layer_base_dialog(&mut self, ctx: &Context) {
+        if !self.layer_base_choice {
+            return;
+        }
+        let (name, layer_w, layer_h) = self
+            .layers
+            .layer(0)
+            .map(|l| {
+                (
+                    l.name().to_string(),
+                    l.pixmap().width(),
+                    l.pixmap().height(),
+                )
+            })
+            .unwrap_or_else(|| ("?".to_string(), 0, 0));
+        let (canvas_w, canvas_h) = (self.canvas.width, self.canvas.height);
+        let mut keep = false;
+        let mut use_layer = false;
+        let id = dialog_id("layer_base");
+        dialog_window("Canvas Size Source", id, ctx).show(ctx, |ui| {
+            ui.label(format!(
+                "Layer \"{name}\" is {layer_w}×{layer_h}, the canvas is {canvas_w}×{canvas_h}."
+            ));
+            ui.weak("Keep the canvas size, or make this layer's size the canvas size?");
+            let (primary_hit, secondary_hit) =
+                dialog_button_row(ui, "Keep canvas size", "Use layer as base");
+            keep = primary_hit;
+            use_layer = secondary_hit;
+        });
+        if keep || use_layer {
+            self.layer_base_choice = false;
+            forget_dialog_position(ctx, id);
+            if keep {
+                self.layers.fit_bottom_to(canvas_w, canvas_h);
+                self.refresh_composite();
+                self.action_log.push(format!(
+                    "Canvas kept at {canvas_w}×{canvas_h} (layer adapted)"
+                ));
+            } else {
+                self.sync_canvas_to_bottom();
+                self.refresh_composite();
+                self.action_log.push(format!(
+                    "Canvas sized to the base layer {layer_w}×{layer_h}"
+                ));
+            }
+            self.dirty = true;
         }
     }
 
@@ -238,6 +332,90 @@ impl App {
             self.show_about = false;
             forget_dialog_position(ctx, id);
         }
+    }
+}
+
+/// The Paint.NET-style 3×3 anchor grid of the Canvas-mode resize (owner
+/// request 2026-11-17): nine clickable cells, one painted dot each — the
+/// selected cell's dot is filled with the selection color plus a ring, the
+/// others stay small text-colored dots. Painted (no font glyphs), like the
+/// Layers window's eye and triangle buttons.
+fn anchor_grid(ui: &mut egui::Ui, selected: &mut ResizeAnchor) {
+    const CELL: f32 = 18.0;
+    let rows: [[ResizeAnchor; 3]; 3] = [
+        [
+            ResizeAnchor::TopLeft,
+            ResizeAnchor::TopCenter,
+            ResizeAnchor::TopRight,
+        ],
+        [
+            ResizeAnchor::MiddleLeft,
+            ResizeAnchor::Center,
+            ResizeAnchor::MiddleRight,
+        ],
+        [
+            ResizeAnchor::BottomLeft,
+            ResizeAnchor::BottomCenter,
+            ResizeAnchor::BottomRight,
+        ],
+    ];
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(3.0, 3.0);
+        for row in rows {
+            ui.horizontal(|ui| {
+                for anchor in row {
+                    let (rect, response) =
+                        ui.allocate_exact_size(Vec2::splat(CELL), egui::Sense::click());
+                    let is_selected = *selected == anchor;
+                    let cell_fill = if response.hovered() {
+                        ui.visuals().widgets.hovered.bg_fill
+                    } else {
+                        ui.visuals().extreme_bg_color
+                    };
+                    ui.painter().rect_filled(rect, 3.0, cell_fill);
+                    ui.painter().rect_stroke(
+                        rect,
+                        3.0,
+                        egui::Stroke::new(1.0, ui.visuals().widgets.inactive.bg_stroke.color),
+                        egui::StrokeKind::Inside,
+                    );
+                    let center = rect.center();
+                    if is_selected {
+                        ui.painter()
+                            .circle_filled(center, 5.0, ui.visuals().selection.bg_fill);
+                        ui.painter().circle_stroke(
+                            center,
+                            5.0,
+                            egui::Stroke::new(1.5, ui.visuals().text_color()),
+                        );
+                    } else {
+                        ui.painter()
+                            .circle_filled(center, 2.5, ui.visuals().text_color());
+                    }
+                    if response.clicked() {
+                        *selected = anchor;
+                    }
+                    if response.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    response.on_hover_text(anchor.label());
+                }
+            });
+        }
+    });
+}
+
+/// The Image mode's aspect-ratio lock: whichever field the user changed
+/// this frame drives the other one along the canvas ratio (`ratio` =
+/// canvas height / width); a field the user did not touch follows, a
+/// simultaneous edit of both wins as-is. Rounded to whole points, min 1.
+fn aspect_linked(w0: f32, h0: f32, w1: f32, h1: f32, ratio: f32) -> (f32, f32) {
+    let width_changed = (w1 - w0).abs() > f32::EPSILON;
+    let height_changed = (h1 - h0).abs() > f32::EPSILON;
+    match (width_changed, height_changed) {
+        (true, false) => (w1, (w1 * ratio).round().max(1.0)),
+        (false, true) => ((h1 / ratio).round().max(1.0), h1),
+        _ => (w1, h1),
     }
 }
 

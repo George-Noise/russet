@@ -71,6 +71,16 @@ pub(super) fn get_history_tree(app: &App, args: &Value) -> Result<Value, String>
                 "kind": node.kind.label(),
                 "color": hex_color(node.color),
                 "color2": node.color2.map(hex_color),
+                "resize": node.resize.map(|info| {
+                    json!({
+                        "mode": info.mode.label(),
+                        "from": [info.from_w, info.from_h],
+                        "to": [info.to_w, info.to_h],
+                        "anchor": info.anchor.map(|a| a.label()),
+                        "filter": info.filter.map(|f| f.label()),
+                        "summary": info.summary(),
+                    })
+                }),
                 "is_head": Some(node.id) == head,
                 "children": children,
             })

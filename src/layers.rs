@@ -14,32 +14,50 @@
 //!   resize) and the undo/redo/jump drivers for the active layer.
 //! - Child modules (split 2026-11-16, pure code motion — the 500-line
 //!   file guard): [`snapshot`] (the lossless PNG snapshot codec —
-//!   `encode_snapshot` / `decode_snapshot` — and the canvas-fit policy —
-//!   `fit_to_canvas`) and [`composite`] (premultiplied src-over blending
+//!   `encode_snapshot` / `decode_snapshot` — and the top-left crop/pad
+//!   helper `fit_copy`), [`composite`] (premultiplied src-over blending
 //!   of the visible layers into the display buffer, region-based so
-//!   strokes stay cheap). Both are re-exported here, so every consumer
-//!   keeps the stable `layers::` paths.
+//!   strokes stay cheap) and [`resize`] (2026-11-17, owner request: the
+//!   Resize-dialog pixel plumbing — the 3×3 anchor crop/pad, the
+//!   `image`-backed resampling filters, the per-layer proportional target
+//!   size). All are re-exported or imported here, so every consumer keeps
+//!   the stable `layers::` paths.
+//!
+//! SIZE MODEL (owner request 2026-11-17): the BOTTOM layer (index 0) owns
+//! the canvas size — its pixmap IS the canvas; every OTHER layer keeps its
+//! own pixmap size, and the composite draws them at (0,0), clipped to the
+//! canvas (mixed-size layers are legal). A Resize-dialog commit adapts
+//! every layer (Canvas mode: the same anchor crop/pad; Image mode: the
+//! same proportional rescale) and records ONE `resize` node PER LAYER with
+//! the full dialog choices. Restoring an old node restores its NATIVE
+//! size — a bottom-layer restore resizes the canvas with it.
 //!
 //! Neighbours: `canvas.rs` holds the display buffer the composite writes
 //! into; `app.rs` orchestrates gestures and texture sync; the DAG model
 //! lives in `history_tree.rs`.
 
 mod composite;
+mod resize;
 mod snapshot;
 
 pub use composite::composite;
-pub use snapshot::{decode_snapshot, encode_snapshot, fit_to_canvas};
+pub use snapshot::{decode_snapshot, encode_snapshot};
 
+use resize::{anchor_offset, fit_copy_at, rescale, scaled_layer_size};
 use snapshot::{fit_copy, pixmap_of};
 
 use eframe::egui::Color32;
 use tiny_skia::Pixmap;
 
-use crate::history_tree::{ActionKind, Change, LayerTree, NodeId, Removal, TreeLayout, TreeNode};
+use crate::history_tree::{
+    ActionKind, Change, LayerTree, NodeId, Removal, ResizeAnchor, ResizeFilter, ResizeInfo,
+    ResizeMode, TreeLayout, TreeNode,
+};
 
-/// One layer: a pixel buffer plus its own history. `pixmap` is always the
-/// CURRENT canvas size; node snapshots may differ after a Resize (they are
-/// fitted back on restore).
+/// One layer: a pixel buffer plus its own history. The BOTTOM layer's
+/// pixmap is the canvas; other layers keep their own sizes (clipped at
+/// composite time). Node snapshots may differ after a Resize — they carry
+/// their own size and restore as-is.
 pub struct Layer {
     name: String,
     visible: bool,
@@ -64,8 +82,9 @@ impl Layer {
         &mut self.pixmap
     }
 
-    /// Replaces the buffer (used by the snapshot-restore path; the caller
-    /// passes a canvas-sized pixmap).
+    /// Replaces the buffer (the snapshot-restore path keeps the node's
+    /// native size; the caller syncs the canvas when the BOTTOM layer
+    /// changed size).
     pub fn set_pixmap(&mut self, pixmap: Pixmap) {
         self.pixmap = pixmap;
     }
@@ -338,15 +357,108 @@ impl LayerStack {
         }
     }
 
-    /// Resize Canvas policy (owner decision 2026-11-13, "keep the nodes"):
-    /// every layer's buffer crops/pads to the new size (top-left anchored)
-    /// while the node PNGs keep their original sizes — switching to an old
-    /// node fits it back through [`fit_to_canvas`].
-    pub fn resize_all(&mut self, width: u32, height: u32) {
+    // ---- resize (owner request 2026-11-17: the Resize dialog) ----
+
+    /// The bottom layer's pixmap size — THE canvas size (the ownership
+    /// invariant of the size model).
+    pub fn bottom_size(&self) -> (u32, u32) {
+        let bottom = &self.layers[0];
+        (bottom.pixmap.width(), bottom.pixmap.height())
+    }
+
+    /// True when every layer's buffer already has the requested size (the
+    /// Resize dialog's no-op check).
+    pub fn all_layers_match(&self, width: u32, height: u32) -> bool {
+        self.layers
+            .iter()
+            .all(|layer| layer.pixmap.width() == width && layer.pixmap.height() == height)
+    }
+
+    /// One Resize-dialog commit across the WHOLE stack (owner request
+    /// 2026-11-17). The BOTTOM layer's current size is the old canvas; the
+    /// dialog's target `(width, height)` is the new one.
+    ///
+    /// Canvas mode: every layer crop/pads by the SAME anchor geometry
+    /// (offsets derived from the canvas's old→new mapping), so pixels keep
+    /// their positions relative to the anchor corner. Image mode: every
+    /// layer rescales proportionally by the canvas factor with the chosen
+    /// filter (the bottom layer lands exactly on the target).
+    ///
+    /// EVERY layer gets ONE `resize` node carrying the layer's before/after
+    /// sizes and the dialog choices (`ResizeInfo`) — jumping a layer back
+    /// beyond the resize node shows exactly what that resize did to THIS
+    /// layer. The caller rebuilds the display buffer and the texture.
+    pub fn resize_all(
+        &mut self,
+        mode: ResizeMode,
+        width: u32,
+        height: u32,
+        anchor: ResizeAnchor,
+        filter: ResizeFilter,
+    ) {
+        let (old_w, old_h) = self.bottom_size();
+        let (ox, oy) = anchor_offset(anchor, old_w, old_h, width, height);
         for layer in &mut self.layers {
-            let fitted = fit_copy(&layer.pixmap, width, height);
-            layer.pixmap = fitted;
+            let from = (layer.pixmap.width(), layer.pixmap.height());
+            let next = match mode {
+                ResizeMode::Canvas => fit_copy_at(&layer.pixmap, width, height, ox, oy),
+                ResizeMode::Image => {
+                    let (new_w, new_h) =
+                        scaled_layer_size(from.0, from.1, old_w, old_h, width, height);
+                    rescale(&layer.pixmap, filter, new_w, new_h)
+                }
+            };
+            let info = ResizeInfo {
+                mode,
+                from_w: from.0,
+                from_h: from.1,
+                to_w: next.width(),
+                to_h: next.height(),
+                anchor: match mode {
+                    ResizeMode::Canvas => Some(anchor),
+                    ResizeMode::Image => None,
+                },
+                filter: match mode {
+                    ResizeMode::Canvas => None,
+                    ResizeMode::Image => Some(filter),
+                },
+            };
+            let snapshot = encode_snapshot(&next);
+            let id = self.next_node_id;
+            self.next_node_id += 1;
+            layer.tree.record_resize(id, info, snapshot);
+            layer.pixmap = next;
         }
+    }
+
+    /// The "Keep the canvas size" branch of the base-choice dialog: the new
+    /// bottom layer (its size ≠ the canvas) crop/pads to the canvas size,
+    /// TOP-LEFT anchored — the composite never shifts, because every layer
+    /// sits at (0,0). The adaptation is a real pixel change, so it records
+    /// a `resize` node like a Canvas-mode dialog commit would.
+    pub fn fit_bottom_to(&mut self, width: u32, height: u32) {
+        let Some(bottom) = self.layers.first_mut() else {
+            return;
+        };
+        let from = (bottom.pixmap.width(), bottom.pixmap.height());
+        if from == (width, height) {
+            return;
+        }
+        let next = fit_copy(&bottom.pixmap, width, height);
+        let info = ResizeInfo {
+            mode: ResizeMode::Canvas,
+            from_w: from.0,
+            from_h: from.1,
+            to_w: next.width(),
+            to_h: next.height(),
+            anchor: Some(ResizeAnchor::TopLeft),
+            filter: None,
+        };
+        let snapshot = encode_snapshot(&next);
+        let id = self.next_node_id;
+        self.next_node_id += 1;
+        bottom.tree.record_resize(id, info, snapshot);
+        bottom.pixmap = next;
     }
 }
 

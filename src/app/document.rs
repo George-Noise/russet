@@ -50,6 +50,7 @@ impl App {
         // added later is transparent).
         self.layers = LayerStack::new(width, height);
         self.layer_delete_confirm = None;
+        self.layer_base_choice = false;
         self.layer_rename = None;
         self.reset_tree_views();
         #[cfg(not(target_arch = "wasm32"))]
@@ -101,6 +102,7 @@ impl App {
         self.canvas.set_pixmap(loaded.pixmap.clone());
         self.layers = LayerStack::with_root(loaded.pixmap);
         self.layer_delete_confirm = None;
+        self.layer_base_choice = false;
         self.layer_rename = None;
         self.reset_tree_views();
         #[cfg(not(target_arch = "wasm32"))]

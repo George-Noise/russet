@@ -1,6 +1,8 @@
-//! Snapshot half of the layers tests: the PNG snapshot codec roundtrips
-//! and the canvas-fit policy. The layer-stack tests live in the parent
-//! `tests.rs`, the region-blending tests in the sibling `composite.rs`.
+//! Snapshot half of the layers tests: the PNG snapshot codec roundtrips.
+//! The layer-stack tests live in the parent `tests.rs`, the region-blending
+//! tests in the sibling `composite.rs`, the resize plumbing in the sibling
+//! `resize.rs` (the former `fit_to_canvas` restore-fit was retired
+//! 2026-11-17: restores keep the node's native size).
 
 use super::*;
 
@@ -63,17 +65,17 @@ fn decode_snapshot_reports_corrupt_bytes() {
 }
 
 #[test]
-fn fit_to_canvas_crops_larger_snapshots_and_pads_smaller_ones() {
+fn fit_copy_crops_larger_pixmaps_and_pads_smaller_ones_top_left() {
     let big = filled_pixmap(50, 40, Color::from_rgba8(255, 0, 0, 255));
     let small = filled_pixmap(20, 10, Color::from_rgba8(0, 255, 0, 255));
 
-    let cropped = fit_to_canvas(big, 30, 25);
+    let cropped = fit_copy(&big, 30, 25);
     assert_eq!(cropped.width(), 30);
     assert_eq!(cropped.height(), 25);
     let inside = cropped.pixel(29, 24).expect("in bounds").demultiply();
     assert_eq!((inside.red(), inside.green(), inside.blue()), (255, 0, 0));
 
-    let padded = fit_to_canvas(small, 40, 30);
+    let padded = fit_copy(&small, 40, 30);
     assert_eq!(padded.width(), 40);
     assert_eq!(padded.height(), 30);
     let content = padded.pixel(5, 5).expect("in bounds").demultiply();

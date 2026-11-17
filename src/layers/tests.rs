@@ -3,9 +3,10 @@ use super::*;
 use eframe::egui::Color32;
 use tiny_skia::Color;
 
-// The snapshot-codec and composite assertions live in their own topic
-// files (the ~300-line test guard).
+// The snapshot-codec, composite and resize assertions live in their own
+// topic files (the ~300-line test guard).
 mod composite;
+mod resize;
 mod snapshot;
 
 fn pixmap(width: u32, height: u32) -> Pixmap {
@@ -172,20 +173,33 @@ fn move_layer_reorders_the_composite_and_follows_the_active() {
 }
 
 #[test]
-fn resize_all_fits_every_buffer_and_keeps_the_trees() {
+fn resize_all_adapts_every_layer_and_records_one_node_each() {
     let mut stack = LayerStack::new(32, 32);
     stack
         .record_action(ActionKind::Pencil, Color32::BLACK, None)
         .expect("encoded");
-    let nodes_before = stack.layer_nodes(0).map(|nodes| nodes.len());
+    let added = stack.add_layer(32, 32);
+    // A mixed-size model (2026-11-17): a non-bottom layer may differ from
+    // the canvas — resize_all adapts it like every other layer.
+    stack.set_active_layer(added);
+    stack
+        .active_mut()
+        .set_pixmap(Pixmap::new(16, 16).expect("test pixmap"));
 
-    stack.resize_all(48, 24);
-
-    assert_eq!(stack.active().pixmap().width(), 48);
-    assert_eq!(stack.active().pixmap().height(), 24);
-    assert_eq!(
-        stack.layer_nodes(0).map(|nodes| nodes.len()),
-        nodes_before,
-        "nodes stay"
+    stack.resize_all(
+        ResizeMode::Canvas,
+        48,
+        24,
+        ResizeAnchor::TopLeft,
+        ResizeFilter::Bicubic,
     );
+
+    assert_eq!(stack.layer(0).map(|l| l.pixmap().width()), Some(48));
+    assert_eq!(stack.layer(0).map(|l| l.pixmap().height()), Some(24));
+    assert_eq!(stack.layer(added).map(|l| l.pixmap().width()), Some(48));
+    assert_eq!(stack.layer(added).map(|l| l.pixmap().height()), Some(24));
+    // The resize itself commits ONE node per layer (owner request
+    // 2026-11-17) — both trees grew by one, nothing was lost.
+    assert_eq!(stack.layer_nodes(0).map(|nodes| nodes.len()), Some(3));
+    assert_eq!(stack.layer_nodes(added).map(|nodes| nodes.len()), Some(2));
 }

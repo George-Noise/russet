@@ -101,13 +101,19 @@ pub(super) fn paint_graph(
     let text_color = metrics.text_color;
     // Per-row labels (owner request 2026-11-13): kind + node id, measured
     // up front so the row width can fit the widest row. The label text is
-    // `kind id` from the node itself ("pencil 7", "start 1").
+    // `kind id` from the node itself ("pencil 7", "start 1"); a resize
+    // node appends the dialog's choices (owner request 2026-11-17:
+    // "canvas 800×600→1000×800 (TL)" / "image … (bicubic)") — jumping a
+    // layer back beyond the resize shows what it did.
     let labels: Vec<(String, f32)> = rows
         .iter()
         .map(|row| {
             let text = app.layers.node(row.id).map_or_else(
                 || "action".to_string(),
-                |node| format!("{} {}", node.kind.label(), node.id),
+                |node| match node.resize {
+                    Some(info) => format!("{} {} {}", node.kind.label(), node.id, info.summary()),
+                    None => format!("{} {}", node.kind.label(), node.id),
+                },
             );
             let width = ui
                 .painter()
@@ -274,9 +280,20 @@ pub(super) fn paint_graph(
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             ui.ctx().request_repaint();
         }
-        dot.on_hover_text("Left-click: switch the canvas to this node");
-
         let node = app.layers.node(row.id);
+        // The hover text is node-aware: a resize node explains what that
+        // resize did to THIS layer (mode, sizes, anchor/filter).
+        let hover = node.and_then(|node| node.resize).map_or_else(
+            || "Left-click: switch the canvas to this node".to_string(),
+            |info| {
+                format!(
+                    "Left-click: switch the canvas to this node\n{}",
+                    info.summary()
+                )
+            },
+        );
+        dot.on_hover_text(hover);
+
         let (label, label_width) = &labels[i];
         // The label hugs THIS row's node (owner request 2026-11-13); the
         // opaque backdrop keeps it readable over rails it crosses.
@@ -294,8 +311,10 @@ pub(super) fn paint_graph(
             text_color,
         );
         if let Some(node) = node {
-            // The Start root paints no swatch (it carries no stroke color).
-            if node.kind != crate::history_tree::ActionKind::Start {
+            // The Start root paints no swatch (it carries no stroke color);
+            // a resize node has none either (owner request 2026-11-17 —
+            // the choices live in the label instead).
+            if node.kind != crate::history_tree::ActionKind::Start && node.resize.is_none() {
                 let swatch = Rect::from_min_size(
                     egui::pos2(label_x + label_width + LABEL_GAP, rect.top() + 2.0),
                     egui::vec2(SWATCH_WIDTH, row_height - 4.0),

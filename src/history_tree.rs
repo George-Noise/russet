@@ -62,6 +62,10 @@ pub enum ActionKind {
     Shape,
     /// Text commits.
     Text,
+    /// A Resize-dialog commit (owner request 2026-11-17): one node PER
+    /// LAYER, each carrying the layer's post-resize canvas and the full
+    /// [`ResizeInfo`] of what was chosen in the dialog.
+    Resize,
 }
 
 impl ActionKind {
@@ -76,7 +80,153 @@ impl ActionKind {
             ActionKind::Line => "line",
             ActionKind::Shape => "shape",
             ActionKind::Text => "text",
+            ActionKind::Resize => "resize",
         }
+    }
+}
+
+/// Which part of the image stays fixed in a Canvas-mode resize (the
+/// Paint.NET 3×3 anchor grid — owner request 2026-11-17). Growing adds the
+/// new space on the sides AWAY from the anchor; shrinking crops them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizeAnchor {
+    TopLeft,
+    TopCenter,
+    TopRight,
+    MiddleLeft,
+    Center,
+    MiddleRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+}
+
+impl ResizeAnchor {
+    /// Full label for the action log and the MCP dump.
+    pub fn label(self) -> &'static str {
+        match self {
+            ResizeAnchor::TopLeft => "top-left",
+            ResizeAnchor::TopCenter => "top-center",
+            ResizeAnchor::TopRight => "top-right",
+            ResizeAnchor::MiddleLeft => "middle-left",
+            ResizeAnchor::Center => "center",
+            ResizeAnchor::MiddleRight => "middle-right",
+            ResizeAnchor::BottomLeft => "bottom-left",
+            ResizeAnchor::BottomCenter => "bottom-center",
+            ResizeAnchor::BottomRight => "bottom-right",
+        }
+    }
+
+    /// Two-letter code of the tree-node row summary ("canvas 800×600→1000×800 (TL)").
+    pub fn code(self) -> &'static str {
+        match self {
+            ResizeAnchor::TopLeft => "TL",
+            ResizeAnchor::TopCenter => "TC",
+            ResizeAnchor::TopRight => "TR",
+            ResizeAnchor::MiddleLeft => "ML",
+            ResizeAnchor::Center => "C",
+            ResizeAnchor::MiddleRight => "MR",
+            ResizeAnchor::BottomLeft => "BL",
+            ResizeAnchor::BottomCenter => "BC",
+            ResizeAnchor::BottomRight => "BR",
+        }
+    }
+}
+
+/// The resampling filter of an Image-mode resize (owner request
+/// 2026-11-17: "метод соседних пикселей и другие"). Backed by the already
+/// pinned `image` crate's `imageops` filters — no new dependencies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizeFilter {
+    /// One source pixel per target pixel — hard edges, no smoothing.
+    Nearest,
+    /// `imageops::Triangle` — smooth two-pixel window.
+    Bilinear,
+    /// `imageops::CatmullRom` — the Paint.NET default quality.
+    Bicubic,
+    /// `imageops::Lanczos3` — the sharpest of the four, slowest.
+    Lanczos3,
+}
+
+impl ResizeFilter {
+    /// Label for the action log, the tree row and the MCP dump.
+    pub fn label(self) -> &'static str {
+        match self {
+            ResizeFilter::Nearest => "nearest neighbor",
+            ResizeFilter::Bilinear => "bilinear",
+            ResizeFilter::Bicubic => "bicubic",
+            ResizeFilter::Lanczos3 => "Lanczos3",
+        }
+    }
+
+    /// The `image`-crate filter that backs this choice (glue used by the
+    /// layers' rescale path).
+    pub(crate) fn image_filter(self) -> image::imageops::FilterType {
+        match self {
+            ResizeFilter::Nearest => image::imageops::FilterType::Nearest,
+            ResizeFilter::Bilinear => image::imageops::FilterType::Triangle,
+            ResizeFilter::Bicubic => image::imageops::FilterType::CatmullRom,
+            ResizeFilter::Lanczos3 => image::imageops::FilterType::Lanczos3,
+        }
+    }
+}
+
+/// The two modes of the Resize dialog (owner request 2026-11-17).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizeMode {
+    /// Crop/pad the canvas to the new size around a 3×3 anchor; every
+    /// layer follows the same geometry, so pixels keep their positions.
+    Canvas,
+    /// Rescale every layer's content to the new size with a resampling
+    /// filter (the bottom layer lands exactly on the target size).
+    Image,
+}
+
+impl ResizeMode {
+    /// Lowercase label for the action log, the tree row and the MCP dump.
+    pub fn label(self) -> &'static str {
+        match self {
+            ResizeMode::Canvas => "canvas",
+            ResizeMode::Image => "image",
+        }
+    }
+}
+
+/// Everything the Resize dialog chose for ONE layer's node (owner request
+/// 2026-11-17: "записывать в узел дерева истории для каждого слоя все
+/// выборы которые были сделаны в окошке resize"): the mode, the layer's
+/// before/after sizes and the mode-specific parameter. The History Tree
+/// row shows [`ResizeInfo::summary`], so jumping a layer back beyond a
+/// resize node explains what that resize did to THIS layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResizeInfo {
+    pub mode: ResizeMode,
+    pub from_w: u32,
+    pub from_h: u32,
+    pub to_w: u32,
+    pub to_h: u32,
+    /// Canvas mode only.
+    pub anchor: Option<ResizeAnchor>,
+    /// Image mode only.
+    pub filter: Option<ResizeFilter>,
+}
+
+impl ResizeInfo {
+    /// Compact one-line summary for the tree row ("canvas 800×600→1000×800 (TL)").
+    pub fn summary(&self) -> String {
+        let detail = match (self.mode, self.anchor, self.filter) {
+            (ResizeMode::Canvas, Some(anchor), _) => anchor.code().to_string(),
+            (ResizeMode::Image, _, Some(filter)) => filter.label().to_string(),
+            _ => "?".to_string(),
+        };
+        format!(
+            "{} {}×{}→{}×{} ({detail})",
+            self.mode.label(),
+            self.from_w,
+            self.from_h,
+            self.to_w,
+            self.to_h
+        )
     }
 }
 
@@ -100,10 +250,14 @@ pub struct TreeNode {
     pub color2: Option<Color32>,
     /// Lossless PNG of the layer's full canvas after this action, encoded
     /// with the fast settings of [`crate::layers::encode_snapshot`]. Node
-    /// PNGs may carry a different size than the current canvas after a
-    /// Resize Canvas — restoring one crops/pads it back (owner decision
-    /// 2026-11-13: "Resive keeps the nodes").
+    /// PNGs keep the layer's size AT COMMIT TIME — a resize commits its own
+    /// node, and restoring an older node restores that node's NATIVE size
+    /// (owner request 2026-11-17: the bottom layer's node size IS the canvas
+    /// size; other layers are clipped at composite time).
     pub snapshot: Vec<u8>,
+    /// The Resize-dialog choices, `Some` ONLY on [`ActionKind::Resize`]
+    /// nodes (owner request 2026-11-17). Everything else carries `None`.
+    pub resize: Option<ResizeInfo>,
 }
 
 /// What mutated a layer since the previous generation. The windows use it
@@ -162,6 +316,7 @@ impl LayerTree {
                 kind: ActionKind::Start,
                 color: Color32::WHITE,
                 color2: None,
+                resize: None,
                 snapshot: root_snapshot,
             }],
             index: HashMap::from([(root_id, 0)]),
@@ -250,6 +405,30 @@ impl LayerTree {
             kind,
             color,
             color2,
+            resize: None,
+            snapshot,
+        });
+        self.index.insert(id, self.nodes.len() - 1);
+        self.head = Some(id);
+        self.redo_hint = None;
+        self.generation += 1;
+        self.last_change = Change::Added;
+    }
+
+    /// One Resize-dialog commit (owner request 2026-11-17): like
+    /// [`LayerTree::record_action`], but the node is an
+    /// [`ActionKind::Resize`] carrying the full [`ResizeInfo`]. No gesture
+    /// color exists — the node stays colorless (the row paints no swatch,
+    /// like the Start root). Appends at the head like every action.
+    pub fn record_resize(&mut self, id: NodeId, info: ResizeInfo, snapshot: Vec<u8>) {
+        let parent = self.head;
+        self.nodes.push(TreeNode {
+            id,
+            parent,
+            kind: ActionKind::Resize,
+            color: Color32::WHITE,
+            color2: None,
+            resize: Some(info),
             snapshot,
         });
         self.index.insert(id, self.nodes.len() - 1);

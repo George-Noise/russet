@@ -37,7 +37,7 @@ use crate::canvas::Canvas;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::WebTask;
 use crate::history::ActionLog;
-use crate::history_tree::{ActionKind, NodeId};
+use crate::history_tree::{ActionKind, NodeId, ResizeAnchor, ResizeFilter, ResizeMode};
 use crate::layers::LayerStack;
 use crate::tools::{Tool, ToolState};
 
@@ -55,7 +55,7 @@ mod text_tool;
 mod tree_window;
 mod windows;
 
-use self::document::{NEW_HEIGHT, NEW_WIDTH, PendingAction};
+use self::document::{MAX_CANVAS, MIN_CANVAS, NEW_HEIGHT, NEW_WIDTH, PendingAction};
 use self::placement::{TOOLS_FIRST_OPEN_RATIO, WindowPlacement};
 use self::preview::PreviewState;
 use self::text_tool::TextEditState;
@@ -178,6 +178,19 @@ pub struct App {
     show_resize_dialog: bool,
     resize_width: f32,
     resize_height: f32,
+    /// Resize-dialog choices that outlive the open dialog (owner request
+    /// 2026-11-17): the mode (Canvas / Image), the 3×3 anchor of the
+    /// Canvas mode, the resampling filter of the Image mode and the Image
+    /// mode's aspect-ratio lock. Defaults are (re)set on every open.
+    resize_mode: ResizeMode,
+    resize_anchor: ResizeAnchor,
+    resize_filter: ResizeFilter,
+    resize_aspect: bool,
+    /// Pending base choice after deleting the BOTTOM layer whose successor
+    /// has a DIFFERENT size (owner request 2026-11-17): the user picks
+    /// "keep the canvas size" (adapt the new bottom layer) or "use the
+    /// layer as the base" (the canvas takes the layer's size).
+    layer_base_choice: bool,
     pending_action: Option<PendingAction>,
     error_popup: Option<String>,
     show_about: bool,
@@ -270,6 +283,11 @@ impl App {
             show_resize_dialog: false,
             resize_width: NEW_WIDTH as f32,
             resize_height: NEW_HEIGHT as f32,
+            resize_mode: ResizeMode::Canvas,
+            resize_anchor: ResizeAnchor::Center,
+            resize_filter: ResizeFilter::Bicubic,
+            resize_aspect: true,
+            layer_base_choice: false,
             pending_action: None,
             error_popup: None,
             show_about: false,
@@ -317,9 +335,12 @@ impl App {
         }
     }
 
-    /// Decodes the active layer's head snapshot and fits it onto the
-    /// current canvas (crop/pad — node PNGs may predate a Resize). Called
-    /// after every successful undo / redo / jump / debug removal.
+    /// Decodes the active layer's head snapshot and restores it at its
+    /// NATIVE size (owner request 2026-11-17: nodes keep the size at commit
+    /// time). A bottom-layer restore also resizes the CANVAS — the bottom
+    /// layer owns it — while any other layer just becomes smaller/larger
+    /// than the canvas and the composite clips it at (0,0). Called after
+    /// every successful undo / redo / jump / debug removal.
     pub(super) fn restore_active_layer_state(&mut self) {
         let Some(head) = self.layers.head() else {
             return;
@@ -329,13 +350,67 @@ impl App {
         };
         match crate::layers::decode_snapshot(&bytes) {
             Ok(pixmap) => {
-                let fitted =
-                    crate::layers::fit_to_canvas(pixmap, self.canvas.width, self.canvas.height);
-                self.layers.active_mut().set_pixmap(fitted);
+                self.layers.active_mut().set_pixmap(pixmap);
+                // The bottom layer owns the canvas size — a bottom restore
+                // may grow or shrink the display buffer (and the texture).
+                self.sync_canvas_to_bottom();
                 self.refresh_composite();
             }
             Err(error) => self.error_popup = Some(error),
         }
+    }
+
+    /// Enforces the size model's invariant: the display buffer matches the
+    /// BOTTOM layer's pixmap size. No-op when they already match. The
+    /// caller refreshes the composite (this only rebuilds the buffer).
+    pub(super) fn sync_canvas_to_bottom(&mut self) {
+        let (width, height) = self.layers.bottom_size();
+        if (width, height) != (self.canvas.width, self.canvas.height) {
+            // The content is overwritten by the caller's composite anyway;
+            // `resize_canvas` keeps the Canvas invariants (clamps + size
+            // fields) in one place.
+            self.canvas.resize_canvas(width, height);
+        }
+    }
+
+    /// One Resize-dialog commit (owner request 2026-11-17): adapts every
+    /// layer (Canvas mode: the same anchor crop/pad; Image mode: the
+    /// proportional rescale with the chosen filter), records ONE `resize`
+    /// node PER LAYER carrying the full dialog choices, rebuilds the
+    /// display buffer at the new size and drops pending gestures whose
+    /// canvas coordinates may no longer be meaningful. Zoom and pan do not
+    /// change (SPEC §3.8). A request that would change nothing (the size
+    /// already matches everywhere) is a silent no-op — no nodes, no dirty.
+    pub(super) fn apply_resize(
+        &mut self,
+        mode: ResizeMode,
+        width: u32,
+        height: u32,
+        anchor: ResizeAnchor,
+        filter: ResizeFilter,
+    ) {
+        let width = width.clamp(MIN_CANVAS, MAX_CANVAS);
+        let height = height.clamp(MIN_CANVAS, MAX_CANVAS);
+        if width == self.canvas.width
+            && height == self.canvas.height
+            && self.layers.all_layers_match(width, height)
+        {
+            return;
+        }
+        self.layers.resize_all(mode, width, height, anchor, filter);
+        self.cancel_preview();
+        self.cancel_text_edit();
+        self.canvas.resize_canvas(width, height);
+        self.refresh_composite();
+        self.dirty = true;
+        let detail = match mode {
+            ResizeMode::Canvas => anchor.label().to_string(),
+            ResizeMode::Image => filter.label().to_string(),
+        };
+        self.action_log.push(format!(
+            "{} resized to {width}×{height} ({detail})",
+            mode.label(),
+        ));
     }
 
     /// One completed gesture on the ACTIVE layer: the post-action buffer
@@ -560,6 +635,7 @@ impl eframe::App for App {
         self.new_dialog(&ctx);
         self.resize_dialog(&ctx);
         self.layer_delete_dialog(&ctx);
+        self.layer_base_dialog(&ctx);
         self.error_dialog(&ctx);
         self.about_dialog(&ctx);
         self.update_title(&ctx);

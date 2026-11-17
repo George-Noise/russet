@@ -43,6 +43,7 @@
 | Extra: V9 pass + platform-gap analysis (owner 2026-11-16) | done — docs only | V9 verified via chat (web build clicked through in a browser); the pass surfaced F12 (wheel-pan platform parity — `camera.rs` reads the RAW wheel delta in EVENT UNITS: Line ±1/notch on Windows/X11 vs DOM px as-is on the web) and F13 (window jitter on Wayland/Web resize — per-frame repositioning meets non-monotonic content rects); both analysis-only, fixes postponed by the owner |
 | Extra: wheel-pan parity F12-B + resize-jitter fix F13-A + diag feature (owner 2026-11-16) | done — gates green | owner picked F12 variant B (INTERIM, not final; F11 folded into the math) and F13 variant A, approved the diagnostic patch behind a build flag; `wheel_notches` (unit → notches) + fixed `WHEEL_NOTCH_PAN` 15 pt/notch on every platform; `resize_step` pins the pre-resize rects and recomputes from the pin; temporary `diag` cargo feature ([diag] wheel/resize/reposition logs, compiled out of the default build); SPEC §3.4 + §7 rewritten; V23/V24 born |
 | Extra: web-Line notch retune + `diag` → `diagnostics` rename (owner 2026-11-16) | done — gates green | Firefox scroll-pan ~3× overshoot fixed inside F12-B: Firefox emits `DOM_DELTA_LINE` ×3 lines/notch, so web `Line` deltas now divide by `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0 (native pass-through); the approved Windows/Chrome feel UNCHANGED (15 pt/notch); the temporary feature renamed `diag` → `diagnostics` (owner: the abbreviation was unclear) — feature, cfg sites, fn, `[diagnostics]` prefix; trunk-serve how-to: `trunk serve --features diagnostics` (logs → browser console); V23/V24 narrowed, not closed |
+| Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 99 green; with `--features mcp` — clippy clean, 111 green;
@@ -58,6 +59,7 @@ HARD-green + fmt clean before and after; `trunk build --release` run twice in-sa
 clippy/test lanes not re-run — no Rust change and the `gates` profile is untouched.
 Later 2026-11-17: V27 + V25 verified via chat → Resolved (docs-only round, no Rust
 touched — rules.sh HARD-green before/after, gates not re-run).
+2026-11-17 (resize round): fmt clean, clippy `-D warnings` clean default+mcp+diagnostics, `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green (+12), `cargo check --target wasm32-unknown-unknown` green, the headless MCP driver pass ALL GREEN (15 checks, real binary, Xvfb recipe of SANDBOX.md).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -73,6 +75,44 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-17 — `Feat:` Resize dialog modes — canvas anchor grid, image resample filters, per-layer resize nodes, bottom layer owns the canvas — owner request
+
+- **What:** the owner's 4-point request (chat, 2026-11-17). (1) The dialog gained a MODE
+  radio: "Canvas size" — the Paint.NET-style 3×3 painted-dot ANCHOR grid (center = floor:
+  an odd crop takes the extra pixel left/top, an odd pad adds it right/bottom) — vs
+  "Image size" — a resampling radio Nearest neighbor / Bilinear / Bicubic (default) /
+  Lanczos3 via the PINNED `image` crate's `imageops` on PREMULTIPLIED bytes (no new deps,
+  approval flow not needed) + a "Maintain aspect ratio" lock (the changed field drives the
+  other along the canvas ratio). (2) EVERY layer's tree records ONE `resize` node — new
+  `ActionKind::Resize` + `TreeNode::resize: Option<ResizeInfo>` (mode, the layer's
+  from→to, anchor/filter); the tree row prints the summary, the dot hover explains it, the
+  MCP `get_history_tree` dumps the struct — jumping back beyond the resize shows what it
+  did to THAT layer. (3) SIZE MODEL: the BOTTOM layer owns the canvas size; other layers
+  composite at (0,0) clipped (`composite` learned to clip — mixed sizes are legal);
+  restores keep the node's NATIVE size (the 2026-11-13 crop/pad fit retired — F9 updated;
+  a bottom-layer restore resizes the canvas with it). (4) Deleting the bottom layer:
+  same-size successor = silent new base; different size = the "Canvas Size Source" dialog
+  ("Keep canvas size" = top-left adaptation + its own resize node / "Use layer as base" =
+  the canvas takes the size; no dismiss). New `layers/resize.rs` (anchor_offset,
+  fit_copy_at, rescale, scaled_layer_size); OK on an unchanged size is a silent no-op;
+  `fit_to_canvas` removed. SPEC §3.6/§3.7/§3.8/§6 exception/§7 item 11 rewritten.
+- **Files:** `src/history_tree.rs`, `src/layers.rs`, `src/layers/resize.rs` (new),
+  `src/layers/snapshot.rs`, `src/layers/composite.rs`, `src/app.rs`, `src/app/dialogs.rs`,
+  `src/app/menu.rs`, `src/app/panels.rs`, `src/app/tree_window/paint.rs`,
+  `src/app/mcp/tools/queries.rs`, `src/app/document.rs`, `src/canvas.rs` (unchanged),
+  `SPEC.md`, `DEBTS-verification.md` (V28 born), `DEBTS-functional.md` (F9 update),
+  `PROGRESS.md` (+ archive: the Wayland-CSD and Firefox-retune entries compacted verbatim).
+- **Verified:** rules.sh HARD-green; fmt clean; clippy `-D warnings` clean default + mcp +
+  diagnostics; `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green
+  (+12 new: the anchor table, crop/pad offsets, nearest ×2, ×1 identity, proportional
+  rounding, per-layer resize nodes, undo/redo over a resize node, fit_bottom_to, the
+  summaries, the aspect lock, record_resize); `cargo check --target wasm32-unknown-unknown`
+  green; the headless MCP driver pass — ALL 3 scenarios green (15 checks) through the real
+  gates-profile binary under Xvfb (the SANDBOX.md recipe). Delivery byte-compared as usual.
+- **Owner-checks:** V28 born — the resize pass (Windows, optionally browser): anchors,
+  filters, per-layer nodes + native-size jumps, the base-choice dialog branches.
+- **Commit title:** `Add Resize modes (canvas anchor grid, image resample filters), per-layer resize nodes, bottom-layer canvas ownership`
 
 ### 2026-11-17 — Docs: V27 + V25 verified via chat → Resolved — owner request
 
@@ -139,55 +179,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V26 born — `nix build .#russet-dev` / `nix run .#russet-dev` on the Nix
   machine; plain `nix build` unchanged.
 - **Commit title:** `Add the fast russet-dev Nix build (gates profile); docs: verify V23 V24, pay F13, add the debt-ordering rule`
-
-### 2026-11-16 — `Fix:` GNOME Wayland title bar — winit Adwaita CSD frame (approved dep) — owner request
-
-- **What:** on the owner's GNOME (Wayland) the window had NO title text and a double-click on
-  the title bar did not maximize/restore. Root cause, verified against the pinned sources:
-  eframe 0.37 enables only `winit/wayland` → winit falls back to sctk 0.19.2's `FallbackFrame`,
-  whose `set_title` is a NO-OP and whose title-bar click emits only `Move` (no double-click
-  logic at all); Mutter draws no server-side decorations, so nothing masked it. Fix per the
-  dependency approval flow (the owner picked the option in chat): a Linux-only direct `winit`
-  dependency with `wayland-csd-adwaita` — same 0.30.13 that eframe resolves, cargo unifies
-  them, and winit switches to `AdwaitaFrame` (title text, Adwaita buttons, GTK-like 400 ms
-  double-click maximize). Manifest + lock only, no Rust code touched (a unit test cannot reach
-  winit's internal frame choice — the fix is verified by the gates + `cargo tree` + V25);
-  pure-Rust deps → flake.nix `runtimeLibs` untouched; no commands changed → README untouched;
-  the durable quirk moved to AGENTS.md quirks in the same edit.
-- **Files:** `Cargo.toml`, `Cargo.lock` (+5 packages, 0 version bumps), `SPEC.md` §1,
-  `AGENTS.md` (quirks), `DEBTS-verification.md` (V25 born), `PROGRESS.md`.
-- **Verified:** verify.sh ALL GATES GREEN in-sandbox (toolchain 1.99.1 via rust-toolchain.toml):
-  rules.sh HARD-green before and after, fmt clean, clippy `-D warnings` clean default + mcp +
-  diagnostics, 99 default / 111 mcp tests green; `cargo tree -i sctk-adwaita` shows the feature
-  unified into eframe's winit; the delivery byte-compared as usual.
-- **Owner-checks:** V25 born — the GNOME Wayland pass on the owner's Linux machine (it also
-  unblocks the Linux legs of V23/V24, which had no usable window bar to test against).
-- **Commit title:** `Fix GNOME Wayland title bar: enable the winit Adwaita CSD frame (approved dep)`
-
-### 2026-11-16 — `Fix:` Firefox scroll-pan notch retune + the diag→diagnostics rename — owner request
-
-- **What:** the owner's platform pass (Windows/Firefox/Chrome; Linux not yet possible)
-  narrowed V23/V24 and surfaced ONE gap: in Firefox one wheel click panned ~3× the
-  Windows/Chrome notch — Firefox emits `DOM_DELTA_LINE` with 3 lines per click and eframe
-  passes the DOM delta as-is (verified against eframe 0.37.0 sources), so a `Line`-unit
-  delta hit `wheel_notches` as 3 notches. Fix inside the INTERIM F12-B convention: on the
-  WEB backend only (`web_backend` = `cfg!(target_arch = "wasm32")`), `Line` deltas divide
-  by the new `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0; native stays pass-through; the approved
-  Windows/Chrome feel (15 pt/notch, F11 folded) is UNCHANGED; fractional lines stay
-  proportional. (2) The rename (owner: the abbreviation was unclear): cargo feature `diag`
-  → `diagnostics`, fn `diag_main_resize` → `diagnostics_main_resize`, log prefix `[diag]` →
-  `[diagnostics]`; SPEC §3.4 + Cargo.toml + both DEBTS files updated. How-to: native
-  `cargo run --features diagnostics`; web `trunk serve --features diagnostics` → logs in
-  the browser console. F12 STAYS OPEN (the interim constants retune from the logs).
-- **Files:** `src/app/camera.rs` (+ tests — args updated, +1 test), `src/app.rs`,
-  `src/app/placement.rs`, `Cargo.toml`, `SPEC.md`, `DEBTS-functional.md`,
-  `DEBTS-verification.md`, `PROGRESS.md`, `PROGRESS-archive.md` (the Shift-proportional
-  entry moved verbatim).
-- **Verified:** verify.sh ALL GATES GREEN — 99 default / 111 mcp; `--features diagnostics`
-  clippy+test green (99); wasm check green with and without the feature;
-  `trunk serve --features diagnostics` smoke-tested in-sandbox (builds + serves on
-  localhost:8080; trunk 0.22.1 re-installed after the sandbox recycle); rules.sh
-  HARD-green before/after; delivery byte-compared as usual.
-- **Owner-checks:** none born — V23 narrowed (re-check Firefox after the divisor; the
-  Linux leg), V24 narrowed (only the Linux/Wayland leg) — updated in DEBTS-verification.md.
-- **Commit title:** `Fix Firefox wheel-pan overshoot (web Line ÷ 3 lines/notch) and rename the diag feature to diagnostics`

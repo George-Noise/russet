@@ -440,8 +440,20 @@ impl App {
     }
 
     /// The confirmed half of layer deletion ([`layer_delete_dialog`] did
-    /// the asking).
+    /// the asking). Deleting the BOTTOM layer (owner request 2026-11-17:
+    /// the bottom layer owns the canvas size) checks the successor: the
+    /// SAME-size successor silently becomes the new base, a DIFFERENT-size
+    /// one opens the base-choice dialog ([`super::dialogs::layer_base_dialog`]).
     fn remove_layer_confirmed(&mut self, index: usize) {
+        // The successor's size, read BEFORE the removal (it is the layer
+        // at index 1 when the bottom one goes).
+        let successor = if index == 0 {
+            self.layers
+                .layer(1)
+                .map(|layer| (layer.pixmap().width(), layer.pixmap().height()))
+        } else {
+            None
+        };
         if !self.layers.remove_layer(index) {
             return;
         }
@@ -452,6 +464,11 @@ impl App {
         self.refresh_composite();
         self.dirty = true;
         self.action_log.push("Layer deleted");
+        if let Some((width, height)) = successor
+            && (width, height) != (self.canvas.width, self.canvas.height)
+        {
+            self.layer_base_choice = true;
+        }
     }
 
     /// "Delete layer?" confirmation (mirrors the unsaved-changes dialog):

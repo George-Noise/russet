@@ -354,11 +354,24 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   the tree git-style — the abandoned tail stays and stays reachable.
 - No node-count limit at this stage (owner decision 2026-11-13): the PNG compression
   keeps memory small; eviction-by-memory arrives together with the action model.
-- **Resize Canvas keeps every node** (owner decision 2026-11-13, an interim answer to
-  the design doc's open question #9): layer buffers crop/pad to the new size
-  (top-left anchored); old node PNGs keep their original size and are fitted (crop/
-  pad) when restored; drawing on from a fitted node stores the NEXT node at the new
-  size.
+- **Sizes (owner request 2026-11-17): the BOTTOM layer owns the canvas size** — its buffer
+  IS the canvas; every other layer keeps its own size and the composite draws layers at
+  (0,0), clipped to the canvas (mixed-size layers are legal). New layers are canvas-sized;
+  New/Open rebuild the stack with the one layer that IS the canvas.
+- **Resize commits ONE `resize` node PER LAYER** (owner request 2026-11-17: «записывать в
+  узел дерева истории для каждого слоя все выборы которые были сделаны в окошке resize»):
+  the new `ActionKind::Resize` carries a full `ResizeInfo` — the mode (canvas/image), the
+  layer's before/after sizes and the mode parameter (the 3×3 anchor or the resampling
+  filter). The History Tree row prints the summary ("resize 12 canvas 800×600→1000×800
+  (TL)"), the dot hover explains it, the MCP `get_history_tree` dumps the whole struct —
+  jumping a layer back beyond the resize tells the user what that resize did to THIS
+  layer. Canvas mode adapts every layer by the SAME anchor geometry (pixels keep their
+  positions relative to the anchor corner); Image mode rescales every layer
+  proportionally by the canvas factor with the chosen filter (premultiplied-correct,
+  the pinned `image` crate's `imageops`). Restoring an old node restores its NATIVE size
+  (the 2026-11-13 crop/pad-fit restore is retired) — a bottom-layer restore resizes the
+  canvas with it (the bottom layer owns the size), a non-bottom one just becomes
+  smaller/larger and the composite clips it.
 - Open and New rebuild the layer stack (history restarts). A NEW document's initial
   layer is filled WHITE — the §3.8 white New canvas, restored by the owner request
   2026-11-13 after the layers rewrite had made everything transparent — and every
@@ -370,7 +383,8 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
 
 ### 3.7 Files: New / Open / Save / Save As
 
-- **New…** — dialog with Width/Height fields (default 800×600; min 1, max 4096; non-numeric input is impossible — `DragValue` or filtered `TextEdit`), OK/Cancel buttons. If `dirty` — confirmation first: "You have unsaved changes. Discard them and continue?" (OK/Cancel). The new canvas is filled white, history is reset, `display_name = "Untitled"`, `current_path = None`. Every dialog button row — New, the unsaved-changes confirmation, Resize Canvas (§3.8), the Delete-layer confirmation, the Error popup, About's Close and the Text tool's Place/Cancel — follows the IBM Carbon / Apple HIG / Google Material convention (owner request 2026-11-13: «чтобы как у всех»; the Resize Canvas dialog was the owner's example): the row is right-aligned, the AFFIRMATIVE button is the RIGHTMOST one, the dismissive button sits to its left; Microsoft Windows's opposite order (primary leftmost) is deliberately not followed. Implemented as the shared `app/dialogs.rs::dialog_button_row`. Every MODAL dialog (New, unsaved-changes, Resize Canvas, Delete Layer, Error, About) is built by the same module's `dialog_window` builder and arises CENTERED on the main window on EVERY open (owner request 2026-11-15: dialogs «возникают по центру главного окна», not at egui's cascade position slightly right/below of the floating windows): `pivot(CENTER_CENTER)` + `default_pos(content_rect().center())` place the dialog's center exactly, and every close path calls `forget_dialog_position`, which wipes the stored area state so the next open consumes `default_pos` again — a dialog the user dragged aside re-centers when reopened (the "dialog epoch" rule). While open the dialog stays draggable like any other window. Dialogs are NOT §3.11 windows: no edge anchoring, no resize repositioning. The dialog's height hugs its content — never egui's default 340×420 outer size (the bounded `dialog_button_row` keeps the measured content from inheriting the whole available rect).
+- **New…** — dialog with Width/Height fields (default 800×600; min 1, max 4096; non-numeric input is impossible — `DragValue` or filtered `TextEdit`), OK/Cancel buttons. If `dirty` — confirmation first: "You have unsaved changes. Discard them and continue?" (OK/Cancel). The new canvas is filled white, history is reset, `display_name = "Untitled"`, `current_path = None`. Every dialog button row — New, the unsaved-changes confirmation, Resize Canvas (§3.8), the Delete-layer confirmation, the Error popup, About's Close and the Text tool's Place/Cancel — follows the IBM Carbon / Apple HIG / Google Material convention (owner request 2026-11-13: «чтобы как у всех»; the Resize Canvas dialog was the owner's example): the row is right-aligned, the AFFIRMATIVE button is the RIGHTMOST one, the dismissive button sits to its left; Microsoft Windows's opposite order (primary leftmost) is deliberately not followed. Implemented as the shared `app/dialogs.rs::dialog_button_row`. Every MODAL dialog (New, unsaved-changes, Resize Canvas, Delete Layer, the Delete-bottom
+"Canvas Size Source" choice, Error, About) is built by the same module's `dialog_window` builder and arises CENTERED on the main window on EVERY open (owner request 2026-11-15: dialogs «возникают по центру главного окна», not at egui's cascade position slightly right/below of the floating windows): `pivot(CENTER_CENTER)` + `default_pos(content_rect().center())` place the dialog's center exactly, and every close path calls `forget_dialog_position`, which wipes the stored area state so the next open consumes `default_pos` again — a dialog the user dragged aside re-centers when reopened (the "dialog epoch" rule). While open the dialog stays draggable like any other window. Dialogs are NOT §3.11 windows: no edge anchoring, no resize repositioning. The dialog's height hugs its content — never egui's default 340×420 outer size (the bounded `dialog_button_row` keeps the measured content from inheriting the whole available rect).
 - **Open…** — if `dirty`, confirmation as above. Native: `rfd::FileDialog::new().add_filter("Images", ["png", "jpg", "jpeg"])` + `image::open`. Web: `rfd::AsyncFileDialog` (§3.10, milestone M8) + `image::load_from_memory`. Then: `to_rgba8` → `Pixmap::from_vec`; canvas size = file size; zoom 100%, pan (0,0), history reset, `display_name` = file name, on native `current_path = Some(path)`, `dirty = false`.
 - **Save (Ctrl+S)** — if `current_path == None` (native) — behave like Save As. Write according to the path extension: `.png` — PNG RGBA; `.jpg`/`.jpeg` — JPEG (alpha composited onto a white background, quality 90). On success `dirty = false`. On web, Save always downloads a file to the browser using the current `display_name` (§3.10).
 - **Save As…** — save dialog with "PNG image" and "JPEG image" filters; if the user did not enter an extension — add the one matching the selected filter. Update `display_name` and (native) `current_path`.
@@ -380,8 +394,35 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
 
 ### 3.8 "Resize Canvas" dialog
 
-`egui::Window` "Resize Canvas": Width/Height fields (prefilled with current values, min 1, max 4096), OK/Cancel buttons (the §3.7 IBM/Apple/Google row: right-aligned, OK rightmost); opened centered on the main window with a content-hugging height (§3.7, owner request 2026-11-15).
-On OK: `history.push_snapshot()`, then `canvas.resize_canvas(w, h)` — content is preserved, top-left anchor, added area transparent; the texture is recreated in full; zoom and pan do not change.
+`egui::Window` "Resize Canvas" (centered, content-hugging — §3.7): a MODE radio —
+"Canvas size" / "Image size" (owner request 2026-11-17) — Width/Height fields
+(prefilled with the current values, min 1, max 4096), and the mode's parameter:
+
+- **Canvas size** — the Paint.NET-style 3×3 ANCHOR grid of painted dots: which part of
+  the picture stays in place while the rest crops (shrink) or pads (grow, transparent).
+  Center uses floor semantics (an odd crop takes the extra pixel from the left/top, an
+  odd pad adds it on the right/bottom). Every layer follows the same anchor geometry, so
+  pixels keep their positions relative to the anchor corner.
+- **Image size** — a "Maintain aspect ratio" checkbox (on by default; the ratio is the
+  canvas's at dialog open and the field the user changed drives the other) and a
+  resampling radio: "Nearest neighbor" (hard pixels), "Bilinear", "Bicubic" (the default,
+  the Paint.NET default quality), "Lanczos3". Backed by the already-pinned `image`
+  crate's `imageops` filters applied to the PREMULTIPLIED bytes (linear filtering
+  commutes with premultiplication — the alpha stays correct).
+
+OK/Cancel per §3.7 (OK rightmost). OK with the size already matching everywhere is a
+silent no-op (no nodes, not dirty). On OK (`App::apply_resize`): every layer adapts
+(Canvas: the same anchor crop/pad; Image: the proportional rescale), ONE `resize` node
+per layer records the choices (§3.6), the display buffer rebuilds at the new size with a
+full texture upload; zoom and pan do not change; pending gestures are dropped. The
+bottom layer defines the new canvas size (the §3.6 size model).
+
+Deleting the BOTTOM layer whose successor has a DIFFERENT size opens the "Canvas Size
+Source" dialog (§3.7's builder and button row): "Keep canvas size" (the new base
+crop/pads to the canvas, top-left — the composite never shifts; the adaptation records
+its own resize node) or "Use layer as base" (the canvas takes the layer's size). A
+SAME-size successor becomes the base silently. There is no dismiss: the deletion already
+happened and the size model needs a decision.
 
 ### 3.9 Hotkeys — ONLY this list
 
@@ -507,6 +548,12 @@ Exception (owner decision, 2026-11-12): the flat "any new dependencies" item mov
 
 Exception (owner request, 2026-11-12): the MCP development feature (owner chat order) ships behind the opt-in `mcp` cargo feature: a JSON-RPC 2.0 stdio server (`src/app/mcp.rs` + children) lets an AI agent drive the running app during development. Inside that feature build ONLY, `serde_json` is an approved optional dependency (the first case of the approval flow above) and one `std::thread` pair pumps stdin/stdout — the main thread stays event-driven and never blocks. The default build compiles none of it: no server code, no threads, no new dependencies.
 
+Exception (owner request, 2026-11-17): the Resize dialog's IMAGE mode — image rescale
+with a resampling filter — is ordered by the owner in chat (the message that requested
+the whole resize feature); it narrows the "transforms (rotate/flip/image scale)" item to
+exactly this dialog and reuses the pinned `image` crate (`imageops` — no new
+dependencies). Nothing else on this list is re-enabled.
+
 ## 7. Acceptance checklist — run manually at the end of M9
 
 **Windows (native):**
@@ -520,7 +567,13 @@ Exception (owner request, 2026-11-12): the MCP development feature (owner chat o
 8. New: 300×200 gives a white canvas; values 0 and 5000 are rejected; when dirty, a confirmation is shown.
 9. Open: a PNG with alpha is displayed correctly on the checkerboard (colors are not distorted — premultiplied check).
 10. Save PNG → the file opens in an external viewer, transparency is intact; Save JPEG → background is white.
-11. Resize Canvas: content is not lost, the new area is transparent, undo restores the old size.
+11. Resize Canvas: Canvas mode — content is not lost, the new area is transparent, the
+3×3 anchor moves the crop/pad to the chosen corner/edge/center, undo restores the old
+size (a bottom-layer undo also restores the old canvas size); Image mode —
+Nearest/Bilinear/Bicubic/Lanczos3 differ visibly (nearest stays pixel-hard), the aspect
+lock links W/H; every layer's History Tree gains ONE `resize` row printing the choices;
+deleting a bottom layer followed by a DIFFERENT-size layer asks "Keep canvas size / Use
+layer as base" and both branches are correct (a same-size successor switches silently).
 12. Hotkeys do not fire while focus is in a dialog input field.
 13. Title looks like `*Untitled - Russet` when there are unsaved changes; Save removes the `*`.
 14. Floating-window placement (§3.11, all four floating windows Tools/Palette/Tool Log/Layers): dropping any of them within 2rem of a main-window edge anchors that axis at the dropped gap — the window is NOT pulled flush to the edge (gap 0 only if it was dropped flush); when both edges of one axis are within 2rem, it anchors left (x) / bottom (y); re-dropping the window farther than 2rem from all edges clears the anchors; after resizing the main window an anchored window keeps its dropped gap to that edge (both when growing and shrinking), a free window keeps its relative placement (top-left stays top-left, centered stays centered, bottom-right stays bottom-right), and resizing never anchors, unanchors or pulls anything flush.

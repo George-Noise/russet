@@ -9,6 +9,58 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-16 — `Fix:` GNOME Wayland title bar — winit Adwaita CSD frame (approved dep) — owner request
+
+- **What:** on the owner's GNOME (Wayland) the window had NO title text and a double-click on
+  the title bar did not maximize/restore. Root cause, verified against the pinned sources:
+  eframe 0.37 enables only `winit/wayland` → winit falls back to sctk 0.19.2's `FallbackFrame`,
+  whose `set_title` is a NO-OP and whose title-bar click emits only `Move` (no double-click
+  logic at all); Mutter draws no server-side decorations, so nothing masked it. Fix per the
+  dependency approval flow (the owner picked the option in chat): a Linux-only direct `winit`
+  dependency with `wayland-csd-adwaita` — same 0.30.13 that eframe resolves, cargo unifies
+  them, and winit switches to `AdwaitaFrame` (title text, Adwaita buttons, GTK-like 400 ms
+  double-click maximize). Manifest + lock only, no Rust code touched (a unit test cannot reach
+  winit's internal frame choice — the fix is verified by the gates + `cargo tree` + V25);
+  pure-Rust deps → flake.nix `runtimeLibs` untouched; no commands changed → README untouched;
+  the durable quirk moved to AGENTS.md quirks in the same edit.
+- **Files:** `Cargo.toml`, `Cargo.lock` (+5 packages, 0 version bumps), `SPEC.md` §1,
+  `AGENTS.md` (quirks), `DEBTS-verification.md` (V25 born), `PROGRESS.md`.
+- **Verified:** verify.sh ALL GATES GREEN in-sandbox (toolchain 1.99.1 via rust-toolchain.toml):
+  rules.sh HARD-green before and after, fmt clean, clippy `-D warnings` clean default + mcp +
+  diagnostics, 99 default / 111 mcp tests green; `cargo tree -i sctk-adwaita` shows the feature
+  unified into eframe's winit; the delivery byte-compared as usual.
+- **Owner-checks:** V25 born — the GNOME Wayland pass on the owner's Linux machine (it also
+  unblocks the Linux legs of V23/V24, which had no usable window bar to test against).
+- **Commit title:** `Fix GNOME Wayland title bar: enable the winit Adwaita CSD frame (approved dep)`
+
+### 2026-11-16 — `Fix:` Firefox scroll-pan notch retune + the diag→diagnostics rename — owner request
+
+- **What:** the owner's platform pass (Windows/Firefox/Chrome; Linux not yet possible)
+  narrowed V23/V24 and surfaced ONE gap: in Firefox one wheel click panned ~3× the
+  Windows/Chrome notch — Firefox emits `DOM_DELTA_LINE` with 3 lines per click and eframe
+  passes the DOM delta as-is (verified against eframe 0.37.0 sources), so a `Line`-unit
+  delta hit `wheel_notches` as 3 notches. Fix inside the INTERIM F12-B convention: on the
+  WEB backend only (`web_backend` = `cfg!(target_arch = "wasm32")`), `Line` deltas divide
+  by the new `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0; native stays pass-through; the approved
+  Windows/Chrome feel (15 pt/notch, F11 folded) is UNCHANGED; fractional lines stay
+  proportional. (2) The rename (owner: the abbreviation was unclear): cargo feature `diag`
+  → `diagnostics`, fn `diag_main_resize` → `diagnostics_main_resize`, log prefix `[diag]` →
+  `[diagnostics]`; SPEC §3.4 + Cargo.toml + both DEBTS files updated. How-to: native
+  `cargo run --features diagnostics`; web `trunk serve --features diagnostics` → logs in
+  the browser console. F12 STAYS OPEN (the interim constants retune from the logs).
+- **Files:** `src/app/camera.rs` (+ tests — args updated, +1 test), `src/app.rs`,
+  `src/app/placement.rs`, `Cargo.toml`, `SPEC.md`, `DEBTS-functional.md`,
+  `DEBTS-verification.md`, `PROGRESS.md`, `PROGRESS-archive.md` (the Shift-proportional
+  entry moved verbatim).
+- **Verified:** verify.sh ALL GATES GREEN — 99 default / 111 mcp; `--features diagnostics`
+  clippy+test green (99); wasm check green with and without the feature;
+  `trunk serve --features diagnostics` smoke-tested in-sandbox (builds + serves on
+  localhost:8080; trunk 0.22.1 re-installed after the sandbox recycle); rules.sh
+  HARD-green before/after; delivery byte-compared as usual.
+- **Owner-checks:** none born — V23 narrowed (re-check Firefox after the divisor; the
+  Linux leg), V24 narrowed (only the Linux/Wayland leg) — updated in DEBTS-verification.md.
+- **Commit title:** `Fix Firefox wheel-pan overshoot (web Line ÷ 3 lines/notch) and rename the diag feature to diagnostics`
+
 ### 2026-11-16 — `Feat:` wheel-pan parity (F12-B interim), pin-based resize repositioning (F13-A), the temporary diag feature — owner request
 
 - **What:** the owner picked the designs: F12 → variant B («с пометкой что это не

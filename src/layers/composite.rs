@@ -15,7 +15,10 @@ use super::Layer;
 
 /// Blends the visible layers (bottom first) over the region `x, y, w, h`
 /// of `dst` (the display buffer): clears the region, then premultiplied
-/// src-over per layer. All layer pixmaps are canvas-sized like `dst`.
+/// src-over per layer. Layers composite at (0,0) — a layer smaller than
+/// `dst` only contributes its overlap, a larger one is clipped to the
+/// region (owner request 2026-11-17: mixed-size layers are legal — the
+/// BOTTOM layer owns the canvas size).
 pub fn composite(layers: &[Layer], dst: &mut Pixmap, x: u32, y: u32, w: u32, h: u32) {
     let dst_w = dst.width();
     let dst_h = dst.height();
@@ -50,7 +53,20 @@ fn clear_region(dst: &mut Pixmap, x: u32, y: u32, w: u32, h: u32) {
 /// channel `out = src + dst * (255 - src_alpha) / 255` (rounded). With
 /// premultiplied data this is exact over-blending for all four channels at
 /// once; the alpha-0 and alpha-255 shortcuts keep flat areas bit-exact.
+/// The layer's pixmap may be ANY size (mixed sizes are legal since the
+/// 2026-11-17 resize model): the region is clipped to the layer's bounds —
+/// rows and columns outside it are skipped, never read.
 fn blend_region(src_pixmap: &Pixmap, dst: &mut Pixmap, x: u32, y: u32, w: u32, h: u32) {
+    // Clip the region to BOTH pixmaps: `dst` is the canvas (already
+    // clamped by `composite`), the layer may be smaller (or larger — then
+    // the region is inside its bounds by definition of the clip below).
+    let src_w = src_pixmap.width();
+    let src_h = src_pixmap.height();
+    if x >= src_w || y >= src_h {
+        return; // the layer does not even reach the region
+    }
+    let w = w.min(src_w - x);
+    let h = h.min(src_h - y);
     let src_stride = src_pixmap.width() as usize * 4;
     let dst_stride = dst.width() as usize * 4;
     let copy_width = w as usize;
@@ -59,12 +75,6 @@ fn blend_region(src_pixmap: &Pixmap, dst: &mut Pixmap, x: u32, y: u32, w: u32, h
     let dst_data = dst.data_mut();
     for row in 0..copy_height {
         let src_row = y as usize + row;
-        // Layer pixmaps are canvas-sized like `dst`, so this never trips;
-        // a hypothetical mismatch skips the out-of-bounds rows instead of
-        // panicking or blending the wrong rows.
-        if src_row >= src_pixmap.height() as usize {
-            continue;
-        }
         let src_start = src_row * src_stride + x as usize * 4;
         let dst_start = src_row * dst_stride + x as usize * 4;
         for px in 0..copy_width {

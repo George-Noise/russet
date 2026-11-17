@@ -76,9 +76,7 @@ impl App {
 
                 ui.menu_button("Canvas", |ui| {
                     if ui.button("Resize Canvas…").clicked() {
-                        self.resize_width = self.canvas.width as f32;
-                        self.resize_height = self.canvas.height as f32;
-                        self.show_resize_dialog = true;
+                        self.open_resize_dialog();
                         ui.close();
                     }
                 });

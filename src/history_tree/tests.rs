@@ -35,6 +35,42 @@ fn the_start_root_is_the_first_head() {
 }
 
 #[test]
+fn a_resize_node_carries_the_dialog_choices_and_resets_the_redo_hint() {
+    let mut tree = fresh_tree();
+    stroke(&mut tree, 2);
+    tree.undo();
+    // Undo moved the head to the Start root — a NEW action always appends
+    // at the CURRENT head, so the resize forks off the abandoned stroke.
+    let head_after_undo = tree.head();
+
+    let info = ResizeInfo {
+        mode: ResizeMode::Image,
+        from_w: 800,
+        from_h: 600,
+        to_w: 400,
+        to_h: 300,
+        anchor: None,
+        filter: Some(ResizeFilter::Lanczos3),
+    };
+    tree.record_resize(3, info, Vec::new());
+
+    let node = tree.node(3).expect("recorded");
+    assert_eq!(node.kind, ActionKind::Resize);
+    assert_eq!(node.parent, head_after_undo);
+    assert_eq!(node.resize, Some(info));
+    assert_eq!(
+        node.resize.expect("some").summary(),
+        "image 800×600→400×300 (Lanczos3)"
+    );
+    assert_eq!(tree.head(), Some(3));
+    assert!(!tree.can_redo(), "a new action resets the redo hint");
+
+    // A gesture node stays resize-free.
+    let plain = stroke(&mut tree, 4);
+    assert_eq!(tree.node(plain).expect("known").resize, None);
+}
+
+#[test]
 fn strokes_chain_linearly_on_one_branch() {
     let mut tree = fresh_tree();
     let a = stroke(&mut tree, 2);
