@@ -4,7 +4,7 @@ use tiny_skia::{
     Transform,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
     Pencil,
     Brush,

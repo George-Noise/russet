@@ -13,6 +13,33 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-17 — `Fix:` release `strip = true` deleted the wasm `target_features` section (the wasm-bindgen warning) — owner request
+
+- **What:** every `trunk build --release` warned "the `target_features` custom section is
+  missing, likely due to `strip = true`": symbols-stripping is `--strip-all`, which deletes
+  ALL wasm custom sections — including the `target_features` list rustc embeds so wasm-bindgen
+  can detect the enabled Wasm features (here: bulk-memory, reference-types, multivalue,
+  sign-ext). Harmless today (nothing non-default is enabled), but bindgen silently mis-glues
+  the day simd128/atomics/threads land, and it already served a guessed empty-default section.
+  Fix per wasm-bindgen's own advice: `strip = true` → `strip = "debuginfo"` — keeps the custom
+  sections (release `debug` is 0, nothing extra to strip; Windows/MSVC unaffected), the size
+  cut stays with wasm-opt AFTER wasm-bindgen (trunk 0.22 runs it on every release build —
+  PERF P5). No Rust code touched — manifest + docs only.
+- **Files:** `Cargo.toml`, `SPEC.md` §1, `PERF.md` §1 + §4, `DEBTS-verification.md` (V27 born),
+  `PROGRESS.md` (+ `PROGRESS-archive.md`: the 2026-11-16 wheel-pan-parity entry compacted
+  verbatim — the file hit the ~200-line budget).
+- **Verified:** baseline rules.sh HARD-green + fmt clean before the edit; three in-sandbox
+  `trunk build --release` runs (trunk 0.22.1, bindgen 0.2.130, wasm-opt 131, toolchain 1.99.1):
+  the warning reproduces with `strip = true` and is gone with `"debuginfo"`; dist/ wasm
+  5,155,501 → 5,156,370 B (+869 B — the real feature section), JS 76,952 → 78,750 B raw
+  (+112 B gzipped) — measured pairs in PERF §1. Manifest-only change → clippy/test lanes not
+  re-run (no Rust touched, the `gates` profile untouched); rules.sh + fmt re-run after.
+- **Owner-checks:** V27 born — rebuild `trunk build --release` + a browser smoke (load, draw,
+  zoom/pan) on the owner's machine.
+- **Commit title:** `Fix the wasm-bindgen target_features warning: release strip=true → debuginfo`
+
+---
+
 ### 2026-11-16 — `Feat:` fast dev Nix build (`russet-dev`); V23/V24 verified → F13 paid; the debt-ordering rule — owner request
 
 - **What:** (1) the owner verified V23 + V24 via chat («проверил V23, V24») → both moved to the

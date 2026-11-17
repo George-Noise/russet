@@ -19,8 +19,9 @@ use crate::file_io;
 use crate::file_io::WebOutcome;
 use crate::layers::LayerStack;
 
-/// Default document size: the New dialog's initial values and the initial
-/// canvas (see `App::new` in [`super`]).
+/// Default document size: the New dialog's initial values and the default
+/// startup canvas (see `App::build` in [`super`]; the native launch
+/// arguments `--canvas-size` override the startup part — `app/launch.rs`).
 pub(super) const NEW_WIDTH: u32 = 800;
 pub(super) const NEW_HEIGHT: u32 = 600;
 /// Canvas dimension clamps of the New / Resize dialogs ([`super::dialogs`]).

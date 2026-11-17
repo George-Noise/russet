@@ -105,6 +105,13 @@ pkill -x Xvfb
    patches only in a REAL clone: `git commit-tree <base-tree> -m base` +
    `git update-ref refs/heads/delivery-base <commit>` in the repo, `git clone
    --branch delivery-base`, `git apply` there, then `diff -r`.
+10. `cargo test --features mcp` (and with it `verify.sh`) HANGS after the tests
+    already pass in a RECYCLED sandbox: the session's stdin is an open pipe/pty,
+    every `App::build` compiled with the feature spawns the MCP stdin reader on it,
+    and the cargo ↔ test-binary teardown never returns (observed 2026-11-17: the
+    log already showed "143 passed … finished in 3.4 s" while the tool call still
+    burned its whole timeout). Pipe `< /dev/null` into `cargo test` / `verify.sh`
+    — the reader sees an immediate EOF and everything exits in seconds.
 
 ## What this unlocked, and what still belongs to the owner
 

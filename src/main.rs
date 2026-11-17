@@ -12,8 +12,35 @@ mod text;
 mod tools;
 
 use app::App;
+use app::launch::LaunchConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use eframe::egui;
+
+/// The `--help` text of the native launch arguments (owner request
+/// 2026-11-17, parsed in `app/launch.rs`). The string lives HERE because
+/// printing is entry-point logic and web-only-by-cfg is allowed only in
+/// main.rs (AGENTS.md "Repo facts") — the web build has no argv and never
+/// prints it. The tool-name list stays in sync with `app/launch.rs`'s
+/// `TOOL_NAMES` — pinned by a test.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const USAGE: &str = "\
+russet — a small layered paint program (native build)
+
+Usage: russet [ARGS]
+
+Launch arguments:
+  --primary <hex>      the primary (stroke) color well: hex RRGGBB, also
+                       #RGB, RRGGBB or RRGGBBAA, e.g. FF0000 or #00FF00
+  --secondary <hex>    the secondary color well, the same formats
+  --tool <name>        the startup tool: pencil, brush, eraser, eyedropper,
+                       line, shape, text
+  --canvas-size <WxH>  the startup canvas in pixels, e.g. 1024x768
+                       (1..=4096 per side)
+  -h, --help           print this help and exit
+
+Both `--flag value` and `--flag=value` work. An invalid value is reported
+to stderr and the built-in default stays. The web (WASM) build takes no
+arguments.";
 
 /// Human-readable name of the platform/windowing system the app runs on,
 /// shown in the About window: Web (WASM build), Windows, macOS, or — on
@@ -64,6 +91,15 @@ pub(crate) fn renderer_label() -> &'static str {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init();
+    // Launch arguments (owner request 2026-11-17, `app/launch.rs`): parsed
+    // BEFORE the window opens, so `--help` prints and exits without one;
+    // parse problems go to stderr, the defaults stay.
+    let launch = LaunchConfig::from_env();
+    launch.report_warnings();
+    if launch.help {
+        print!("{USAGE}");
+        return Ok(());
+    }
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -74,7 +110,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Russet",
         native_options,
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+        Box::new(move |cc| Ok(Box::new(App::new_with(cc, &launch)))),
     )
 }
 
@@ -97,7 +133,20 @@ fn main() {
             .start(
                 canvas,
                 web_options,
-                Box::new(|cc| Ok(Box::new(App::new(cc)))),
+                // The web takes no arguments: `from_env` yields nothing on
+                // wasm, so the defaults stay (ONE code path with the native
+                // entry, no cfg here). `--help` cannot be set on the web —
+                // the native build prints the help text instead.
+                Box::new(|cc| {
+                    let launch = LaunchConfig::from_env();
+                    launch.report_warnings();
+                    if launch.help {
+                        log::info!(
+                            "--help has no web equivalent — the native build prints the launch-arguments help to stdout"
+                        );
+                    }
+                    Ok(Box::new(App::new_with(cc, &launch)))
+                }),
             )
             .await;
         if let Some(loading_text) = document.get_element_by_id("loading_text") {

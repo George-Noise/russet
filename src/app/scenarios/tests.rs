@@ -12,6 +12,21 @@
 //! AGENTS.md "Tests" rule 7 + "Repo facts") and splitting it is NOT a debt —
 //! `scripts/rules.sh` skips it in the size-guard loop.
 //!
+//! SCENARIO CONFIRMATION LEDGER (owner request 2026-11-17: «пометь каждый
+//! текущий сценарий, что они мной пока не подтверждены»): every scenario
+//! below is the AGENT'S coding of the chat walkthrough — the owner approves
+//! them ONE BY ONE, and only his word flips the per-scenario marker to
+//! CONFIRMED <date>. Status as of 2026-11-17 — 0 of 8 approved, all NOT YET
+//! CONFIRMED: scenario_1 (resize in a chain), scenario_2 (bottom layer owns
+//! the canvas size), scenario_3 (two resizes fork), scenario_4 (node jumps
+//! keep branch pixels), scenario_5 (chained resizes step by step),
+//! scenario_6 (same-size bottom deletion), scenario_7 (use layer as base),
+//! scenario_8 (keep canvas size + undo re-expand). Before approving, note
+//! the three CODE-CORRECTED steps of the chat round (the BR crop lands the
+//! dab at (100,100); scenario 5 needs THREE undos to reach 800×600;
+//! scenario 3's fork hangs off the mark's node) — see the 2026-11-17
+//! PROGRESS entry.
+//!
 //! Automation boundary (read before extending): the suite drives a REAL `App`
 //! built by `App::new_headless` — no renderer and NO egui passes (`Window::
 //! show` panics outside a pass). Everything a dialog does through `App`
@@ -112,6 +127,8 @@ fn resize_summary(app: &App, layer: usize, node_index: usize) -> String {
 // of ONE layer's chain — undo/redo across it moves the canvas size, the mark
 // positions and the tree head together.
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_1_resize_in_a_chain_steps_back_and_forward_with_the_canvas() {
     let mut app = app();
@@ -179,6 +196,8 @@ fn scenario_1_resize_in_a_chain_steps_back_and_forward_with_the_canvas() {
 // undo/jump never moves the canvas; only a step of the BOTTOM layer's history
 // does (the bottom layer owns the canvas size).
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_2_only_a_bottom_layer_history_step_changes_the_canvas_size() {
     let mut app = app();
@@ -257,6 +276,8 @@ fn scenario_2_only_a_bottom_layer_history_step_changes_the_canvas_size() {
 // two BRANCHES of one tree (undo between them forks the Start root) — the
 // branch dots switch the canvas between the branches like slides.
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_3_two_resizes_fork_into_branches_and_jumps_switch_the_canvas() {
     let mut app = app();
@@ -339,6 +360,8 @@ fn scenario_3_two_resizes_fork_into_branches_and_jumps_switch_the_canvas() {
 // ready chain `Start → dot → resize → dab` — a fork drawn after the jump
 // keeps the other branch's pixels untouched.
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_4_jumping_between_nodes_keeps_each_branch_pixels() {
     let mut app = app();
@@ -416,6 +439,8 @@ fn scenario_4_jumping_between_nodes_keeps_each_branch_pixels() {
 // mark before each — undo/redo steps ONE node at a time; every step moves the
 // canvas with it; both resize rows stay readable (the orientation info).
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_5_chained_resizes_undo_and_redo_one_step_at_a_time() {
     let mut app = app();
@@ -499,6 +524,8 @@ fn scenario_5_chained_resizes_undo_and_redo_one_step_at_a_time() {
 // silently (no dialog), the survivor keeps its whole tree and inherits the
 // size duty; the deletion itself is NOT undoable.
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_6_deleting_the_bottom_layer_hands_the_size_duty_to_the_survivor() {
     let mut app = app();
@@ -559,6 +586,8 @@ fn scenario_6_deleting_the_bottom_layer_hands_the_size_duty_to_the_survivor() {
 // recording any history node, and a later undo cannot bring the mark back
 // once its layer stands at the Start root.
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_7_use_layer_as_base_resizes_the_canvas_without_a_node() {
     let mut app = app();
@@ -634,6 +663,8 @@ fn scenario_7_use_layer_as_base_resizes_the_canvas_without_a_node() {
 // the mark's node whose NATIVE snapshot is 800×600, so the canvas RE-EXPANDS
 // with it (the surprise the owner asked about).
 // ---------------------------------------------------------------------------
+// OWNER STATUS: NOT YET CONFIRMED — the owner approves this scenario
+// individually; only his word flips this marker to CONFIRMED <date>.
 #[test]
 fn scenario_8_keep_canvas_size_adapts_the_layer_and_undo_reexpands() {
     let mut app = app();

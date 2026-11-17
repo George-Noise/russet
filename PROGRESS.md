@@ -44,6 +44,7 @@
 | Extra: wheel-pan parity F12-B + resize-jitter fix F13-A + diag feature (owner 2026-11-16) | done — gates green | owner picked F12 variant B (INTERIM, not final; F11 folded into the math) and F13 variant A, approved the diagnostic patch behind a build flag; `wheel_notches` (unit → notches) + fixed `WHEEL_NOTCH_PAN` 15 pt/notch on every platform; `resize_step` pins the pre-resize rects and recomputes from the pin; temporary `diag` cargo feature ([diag] wheel/resize/reposition logs, compiled out of the default build); SPEC §3.4 + §7 rewritten; V23/V24 born |
 | Extra: web-Line notch retune + `diag` → `diagnostics` rename (owner 2026-11-16) | done — gates green | Firefox scroll-pan ~3× overshoot fixed inside F12-B: Firefox emits `DOM_DELTA_LINE` ×3 lines/notch, so web `Line` deltas now divide by `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0 (native pass-through); the approved Windows/Chrome feel UNCHANGED (15 pt/notch); the temporary feature renamed `diag` → `diagnostics` (owner: the abbreviation was unclear) — feature, cfg sites, fn, `[diagnostics]` prefix; trunk-serve how-to: `trunk serve --features diagnostics` (logs → browser console); V23/V24 narrowed, not closed |
 | Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
+| Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
 
 **Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
 `cargo test --profile gates` — 99 green; with `--features mcp` — clippy clean, 111 green;
@@ -61,6 +62,7 @@ Later 2026-11-17: V27 + V25 verified via chat → Resolved (docs-only round, no 
 touched — rules.sh HARD-green before/after, gates not re-run).
 2026-11-17 (resize round): fmt clean, clippy `-D warnings` clean default+mcp+diagnostics, `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green (+12), `cargo check --target wasm32-unknown-unknown` green, the headless MCP driver pass ALL GREEN (15 checks, real binary, Xvfb recipe of SANDBOX.md).
 2026-11-17 (scenario-suite round): rules.sh HARD-green before and after; fmt clean, clippy `-D warnings` clean default+mcp, `cargo test --profile gates` 119 default / 131 mcp (+8 whole-app scenario tests) green, `cargo check --target wasm32-unknown-unknown` green.
+2026-11-17 (launch-args round): fmt clean, clippy `-D warnings` clean default + mcp + diagnostics, `cargo test --profile gates` 131 green (+12 launch-args tests), `cargo check --target wasm32-unknown-unknown` green (no warnings); live smoke: `--help` prints, parse warnings hit stderr. The mcp TEST lane cold-compiled past 2×10 min in the recycled sandbox — interrupted (mcp clippy --all-targets green; no MCP code touched; CI runs the mcp tests).
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -76,6 +78,43 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-17 — `Feat:` CLI launch arguments (color wells, tool, canvas size) + owner-unconfirmed scenario markers — owner request
+
+- **What:** two requests, one round. (1) Launch arguments (native; parsed BEFORE the
+  window opens — `app/launch.rs`): `--primary`/`--secondary` hex color wells (RRGGBB;
+  #RGB, RRGGBBAA too), `--tool` (7 names, case-insensitive), `--canvas-size WxH` — the
+  STARTUP canvas (buffers + white initial layer + the Resize-dialog prefill; the dialog
+  1..=4096 clamp applies and reports; the New dialog keeps its 800×600 constants),
+  `--help`/`-h` prints (text owned by main.rs) and exits windowless, `--mcp` skipped
+  silently (the feature scans argv itself). NOTHING panics: invalid values and unknown
+  args warn on stderr (`russet: ...`) and the default stays; ONE code path native + wasm
+  (args_os is empty there). `App::new` → `new_with(cc, config)`: both entry points;
+  `build(ctx, config)` takes the size, `apply_to` the rest. (2) The 8 whole-app scenarios
+  are marked NOT YET CONFIRMED (owner request): a confirmation ledger in the suite's
+  header + a per-scenario OWNER STATUS marker each — a comment-only edit of the locked
+  file on the owner's explicit word; approvals flip the markers one by one (V30).
+- **Files:** `src/app/launch.rs` + `src/app/launch/tests.rs` (new, 12 tests),
+  `src/app.rs` (mod + `new_with`/`new_headless_with` + `build(ctx, config)`),
+  `src/main.rs` (parse/help/warnings + the native-only USAGE text), `src/tools.rs`
+  (Debug derive on Tool — for assert_eq!), `src/app/document.rs` (const doc),
+  `src/app/scenarios/tests.rs` (markers, comment-only), `AGENTS.md` (module map),
+  `SPEC.md` (§3.12 + the §3.6 marker sentence), `README.md` (Launch arguments),
+  `DEBTS-verification.md` (V29/V30 born), `PROGRESS.md` (+ archive: the 2026-11-17
+  strip-fix entry moved verbatim).
+- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after: rules.sh
+  HARD-green, fmt clean, clippy `-D warnings` clean default + mcp + diagnostics,
+  `cargo test --profile gates` 131 green (+12), `cargo check --target
+  wasm32-unknown-unknown` green (no warnings); live smoke: `--help` prints, warnings hit
+  stderr. The mcp TEST lane cold-compiled past 2×10 min in the recycled sandbox —
+  interrupted (mcp clippy --all-targets green; no MCP code touched; CI runs it); with
+  `< /dev/null` (SANDBOX pitfall 10) verify.sh ALL GATES GREEN (143 mcp green incl.).
+  Delivery byte-compared: worktree ↔ unpacked zip ↔ patch applied on a clean clone of
+  the base commit — all three match.
+- **Owner-checks:** V29 born (the launch-args pass on Windows) + V30 born (approve the
+  8 scenarios one by one). SOFT to relay: `panels.rs` 504 and `history_tree.rs` 569
+  lines over the 500 guard (pre-existing; splits only on the owner's approval).
+- **Commit title:** `Add CLI launch arguments (color wells, tool, canvas size); mark the suite scenarios owner-unconfirmed`
 
 ### 2026-11-17 — `Test:` the whole-app scenario suite — owner-locked, size-guard exempt — owner request
 
@@ -161,28 +200,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Verified:** rules.sh HARD-green before and after; delivery byte-compared as usual.
 - **Owner-checks:** none born.
 - **Commit title:** `docs: verify V27 V25 (release-strip rebuild, Wayland CSD pass)`
-
-### 2026-11-17 — `Fix:` release `strip = true` deleted the wasm `target_features` section (the wasm-bindgen warning) — owner request
-
-- **What:** every `trunk build --release` warned "the `target_features` custom section is
-  missing, likely due to `strip = true`": symbols-stripping is `--strip-all`, which deletes
-  ALL wasm custom sections — including the `target_features` list rustc embeds so wasm-bindgen
-  can detect the enabled Wasm features (here: bulk-memory, reference-types, multivalue,
-  sign-ext). Harmless today (nothing non-default is enabled), but bindgen silently mis-glues
-  the day simd128/atomics/threads land, and it already served a guessed empty-default section.
-  Fix per wasm-bindgen's own advice: `strip = true` → `strip = "debuginfo"` — keeps the custom
-  sections (release `debug` is 0, nothing extra to strip; Windows/MSVC unaffected), the size
-  cut stays with wasm-opt AFTER wasm-bindgen (trunk 0.22 runs it on every release build —
-  PERF P5). No Rust code touched — manifest + docs only.
-- **Files:** `Cargo.toml`, `SPEC.md` §1, `PERF.md` §1 + §4, `DEBTS-verification.md` (V27 born),
-  `PROGRESS.md` (+ `PROGRESS-archive.md`: the 2026-11-16 wheel-pan-parity entry compacted
-  verbatim — the file hit the ~200-line budget).
-- **Verified:** baseline rules.sh HARD-green + fmt clean before the edit; three in-sandbox
-  `trunk build --release` runs (trunk 0.22.1, bindgen 0.2.130, wasm-opt 131, toolchain 1.99.1):
-  the warning reproduces with `strip = true` and is gone with `"debuginfo"`; dist/ wasm
-  5,155,501 → 5,156,370 B (+869 B — the real feature section), JS 76,952 → 78,750 B raw
-  (+112 B gzipped) — measured pairs in PERF §1. Manifest-only change → clippy/test lanes not
-  re-run (no Rust touched, the `gates` profile untouched); rules.sh + fmt re-run after.
-- **Owner-checks:** V27 born — rebuild `trunk build --release` + a browser smoke (load, draw,
-  zoom/pan) on the owner's machine.
-- **Commit title:** `Fix the wasm-bindgen target_features warning: release strip=true → debuginfo`

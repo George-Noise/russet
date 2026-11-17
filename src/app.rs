@@ -7,6 +7,10 @@
 //!                   Open/Save, the unsaved-changes gate, the window title
 //!   [`input`]     — owner request 2026-11-13: hotkeys (§3.9), freehand
 //!                   strokes, Eyedropper picking
+//!   [`launch`]    — owner request 2026-11-17: the native launch arguments
+//!                   (--primary/--secondary color wells, --tool,
+//!                   --canvas-size, --help); parsed in `app/launch.rs`,
+//!                   applied by `build`; the web build takes no arguments
 //!   [`layers`]    — owner request 2026-11-13: REAL layers + per-layer PNG
 //!                   snapshot history (the model, in `crate::layers`)
 //!   [`mcp`]       — owner request 2026-11-12, feature `mcp`: the stdio
@@ -49,6 +53,7 @@ mod camera;
 mod dialogs;
 mod document;
 mod input;
+pub(crate) mod launch;
 #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
 mod mcp;
 mod menu;
@@ -61,6 +66,7 @@ mod tree_window;
 mod windows;
 
 use self::document::{MAX_CANVAS, MIN_CANVAS, NEW_HEIGHT, NEW_WIDTH, PendingAction};
+use self::launch::LaunchConfig;
 use self::placement::{TOOLS_FIRST_OPEN_RATIO, WindowPlacement};
 use self::preview::PreviewState;
 use self::text_tool::TextEditState;
@@ -203,8 +209,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        Self::build(cc.egui_ctx.clone())
+    /// The eframe entry constructor: the REAL launch arguments of this
+    /// process (`app/launch.rs`; empty on wasm — the web build takes no
+    /// arguments) applied to a fresh `App`. Both entry points in `main.rs`
+    /// go through here.
+    pub fn new_with(cc: &eframe::CreationContext<'_>, launch: &LaunchConfig) -> Self {
+        Self::build(cc.egui_ctx.clone(), launch)
     }
 
     /// Test-only constructor of the whole-app scenario suite
@@ -216,13 +226,24 @@ impl App {
     /// (immediate EOF, nothing joins the thread).
     #[cfg(test)]
     fn new_headless() -> Self {
-        Self::build(egui::Context::default())
+        Self::build(egui::Context::default(), &LaunchConfig::default())
     }
 
-    /// Every field of a fresh `App`, shared by the native entry point and
-    /// the test-only constructor above (ONE point of maintenance: a new
-    /// field lands here and both constructors stay in sync).
-    fn build(ctx: egui::Context) -> Self {
+    /// Same with explicit launch arguments: the launch-arguments tests
+    /// ([`launch::tests`]) drive the REAL build path with a non-default
+    /// config.
+    #[cfg(test)]
+    fn new_headless_with(launch: &LaunchConfig) -> Self {
+        Self::build(egui::Context::default(), launch)
+    }
+
+    /// Every field of a fresh `App`, shared by both entry points and the
+    /// test-only constructors above (ONE point of maintenance: a new field
+    /// lands here and every constructor stays in sync). The launch
+    /// arguments ([`launch`], owner request 2026-11-17) are applied here:
+    /// the canvas size constructs the buffers, the color wells and the
+    /// startup tool land via `apply_to` after the literal.
+    fn build(ctx: egui::Context, launch: &LaunchConfig) -> Self {
         // Owner request 2026-11-11: NO drop shadows on the app's windows —
         // a flat look. `window_shadow` covers every `egui::Window` (Tools,
         // Palette, Tool Log, Layers, the Text input and all dialogs) in BOTH
@@ -232,7 +253,12 @@ impl App {
             style.visuals.window_shadow = egui::Shadow::NONE;
         });
 
-        let canvas = Canvas::new(800, 600, Color32::TRANSPARENT);
+        // The STARTUP canvas (owner request 2026-11-17): the parsed launch
+        // arguments (`--canvas-size`, already clamped 1..=4096 at parse
+        // time) override the default; the New dialog keeps its
+        // NEW_WIDTH/NEW_HEIGHT constants — see `document::open_new_dialog`.
+        let (width, height) = launch.canvas.unwrap_or((NEW_WIDTH, NEW_HEIGHT));
+        let canvas = Canvas::new(width, height, Color32::TRANSPARENT);
         let canvas_tex = ctx.load_texture(
             "canvas",
             egui::ColorImage::from_rgba_premultiplied(
@@ -266,7 +292,7 @@ impl App {
             checker_tex,
             tools: ToolState::new(),
             last_tool: Tool::Pencil,
-            layers: LayerStack::new(800, 600),
+            layers: LayerStack::new(width, height),
             #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
             mcp: mcp::McpServer::maybe_spawn(ctx.clone()),
             zoom: 1.0,
@@ -315,6 +341,9 @@ impl App {
             show_about: false,
             window_title: String::new(),
         };
+        // The parsed launch arguments land AFTER the literal (the config
+        // tweaks existing fields; see `launch::LaunchConfig::apply_to`).
+        launch.apply_to(&mut app);
         // The canvas pixmap is created TRANSPARENT above, but the fresh
         // stack's initial layer is WHITE (owner request 2026-11-13): blend
         // it into the display buffer once, or the first frame would show

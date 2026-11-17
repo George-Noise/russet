@@ -53,6 +53,25 @@ cargo build --release
 
 The finished binary is `target\release\russet.exe`.
 
+## Launch arguments (native)
+
+The Windows/Linux binary takes launch arguments; the web build does not:
+
+```powershell
+cargo run -- --tool brush --primary FF0000 --canvas-size 1024x768
+.\target\debug\russet.exe --secondary "#00FF00AA" --tool pencil --canvas-size 640x480
+```
+
+- `--primary` / `--secondary <hex>` — the color wells: `RRGGBB`, also
+  `#RGB` and `RRGGBBAA`.
+- `--tool <name>` — pencil, brush, eraser, eyedropper, line, shape, text.
+- `--canvas-size <WxH>` — the startup canvas, 1..=4096 per side.
+- `-h` / `--help` — the full list; prints and exits without a window.
+
+Both `--flag value` and `--flag=value` work. An invalid value prints a
+warning to stderr and the built-in default stays. The Nix build's binary
+(`./result/bin/russet`) takes the same arguments.
+
 ## MCP build (optional, development feature)
 
 An optional compile-time feature adds an MCP (Model Context Protocol) stdio

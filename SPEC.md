@@ -377,7 +377,11 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   `app/scenarios` (headless real-`App` tests, one scenario = one continuous run). New
   scenarios land there on the owner's request only; the file is exempt from the size
   guards and must not be edited without the owner's explicit permission (AGENTS.md
-  "Tests" rule 7).
+  "Tests" rule 7). Every scenario carries an OWNER-CONFIRMATION marker (owner request
+  2026-11-17, the ledger in the suite's header): the automated expectations stay the
+  agent's coding of the chat walkthrough until the owner approves each scenario one by
+  one — then the marker flips to CONFIRMED <date>; the live approvals queue is V30
+  (DEBTS-verification.md).
 - Open and New rebuild the layer stack (history restarts). A NEW document's initial
   layer is filled WHITE — the §3.8 white New canvas, restored by the owner request
   2026-11-13 after the layers rewrite had made everything transparent — and every
@@ -480,6 +484,17 @@ pos      = clamp(new.min + ratio * free_new, new.min, new.min + free_new)
 so a top-left window stays top-left, a centered one stays centered, a bottom-right one stays bottom-right. Resizes never set, clear or change anchors and never pull a free window flush: shrinking the main window must not snap windows at 2rem — anchoring is a decision the user makes only by dropping the window.
 
 **Implementation notes.** Per-window `WindowPlacement` (fields in `App`) stores the last shown rect, whether the window is being dragged, and the `WindowAnchor` fixed when the last drag ended (`window_anchor`); `place_floating_window` (in `app/placement.rs`, together with all §3.11 math and its unit tests) runs right after each `Window::show`; the title-bar drag response is read as `area_id.with("__title_click")` (the id `window.rs` uses internally); a reposition is persisted into the next frame by rewriting the window's `AreaState` (`set_left_top_pos` + `areas_mut().set_state`, layer `Order::Middle`) — `Window::current_pos` is discarded every frame in title-bar mode and cannot be used. Repositioning compares the previous frame's window rect and `content_rect`.
+
+### 3.12 Launch arguments (native — owner request 2026-11-17)
+
+The native binary parses argv BEFORE the window opens (`app/launch.rs`; both `--flag value` and `--flag=value` forms). `main.rs` owns the `--help` TEXT (printing is entry-point logic; the platform cfg lives there per AGENTS.md "Repo facts"): `--help` / `-h` prints the list to stdout and exits WITHOUT opening a window. Flags:
+
+- `--primary <hex>` / `--secondary <hex>` — the color wells of the Tools window. Hex `RRGGBB`, optionally with a leading `#`; `RGB` (3 digits, each doubled) and `RRGGBBAA` (explicit alpha) also work; alpha defaults to 255.
+- `--tool <name>` — the tool active on the first frame: pencil, brush, eraser, eyedropper, line, shape, text (case-insensitive; `last_tool` is set to match, so the first frame never sees a phantom tool switch).
+- `--canvas-size <WxH>` — the STARTUP canvas (e.g. `1024x768`; `X` and `×` separators work): the composite buffer, the initial white layer AND the Resize-dialog prefill all follow it. Clamped to the same 1..=4096 per-side limits the dialogs enforce, clamps reported. The New dialog keeps its NEW_WIDTH/NEW_HEIGHT constants — the arguments set the STARTUP document, not the New-dialog defaults.
+- `--mcp` is skipped silently here (the `mcp` feature scans argv itself in `app/mcp.rs`).
+
+NOTHING panics and nothing aborts: an invalid value or an unrecognized argument prints a `russet: ...` warning to stderr and the built-in default stays (a release build on Windows has no console by `windows_subsystem` — the warnings live in the `cargo run` dev lane). The web build takes no arguments: `std::env::args_os` yields nothing on wasm — ONE code path for both targets. Tests: `app/launch/tests.rs` (pure parsing + the real headless `App` build path through `new_headless_with`).
 
 ## 4. Milestones — do them in order
 
