@@ -129,7 +129,7 @@ rasterization through egui's font atlas). Cohesive subsystems are CHILD modules 
 in `app/` — they see App's private fields; new subsystems are added there, never grown
 into `app.rs` (current ones: viewport/camera, dialogs, document lifecycle, input
 handling, top menu, floating windows, §3.11 placement, preview gestures, text tool,
-panels, History Tree windows, feature-gated MCP server; see the module map at the top
+the Tool Log and Layers windows (the former `panels` module, split 2026-11-17), History Tree windows, feature-gated MCP server; see the module map at the top
 of `app.rs`). Root web config: `Trunk.toml` targets
 `web/index.html` → `dist/` (§2.2). `PERF.md` is the RAM / build-speed reference backlog —
 a design note, not a spec.

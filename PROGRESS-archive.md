@@ -9,6 +9,35 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-17 — `Feat:` magnetized tool-settings panel detached from the Tools window — owner request
+
+- **What:** the per-tool settings (Size, Line Mode + curve hints, Shape Kind + Fill/Outline, Text hints)
+  moved OUT of the Tools window into their own title-bar-less, immovable, content-hugging window glued to
+  the Tools window with NO way to detach («без возможности отлипания пока что»): `Window::fixed_pos`
+  re-applies the position EVERY frame (an egui 0.37 fact, pinned by a headless regression test) from the
+  pure `app/placement.rs::magnet_settings_pos` + the `ToolSettingsPlacement` state (the panel's last drawn
+  size). Vertically: below the Tools window at a `TOOL_SETTINGS_GAP` 0.25rem (4 pt); no room below → flips
+  above. Horizontally: Tools window left of the main-window center → left edges align, right of center →
+  right edges align (exact center = right); the result is clamped into the main window. The Size slider is
+  SHOWN (enabled) only for Brush/Eraser/Line/Shape — the disabled-when-unapplicable slider is retired;
+  Pencil/Eyedropper have no settings → the panel is not drawn at all. The Tools window is now only the
+  tool list (§3.2 first-open ratio + §3.11 placement unchanged — they govern the smaller window).
+- **Files:** `src/app/placement.rs` + `placement/tests.rs` (+5 magnet tests), `src/app/windows.rs` +
+  NEW `src/app/windows/tests.rs` (+4: per-tool helpers + headless-egui magnet/hug regressions),
+  `src/app.rs` (field), `SPEC.md` §3.2 (panel spec, stale Size bullet rewritten), `AGENTS.md` (module
+  map + floating-windows fact), `DEBTS-verification.md` (V31 born), `PROGRESS.md` (+ archive: the
+  resize-dialog and V27/V25 entries moved verbatim).
+- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after: rules.sh HARD-green,
+  fmt clean, clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 140 default / 152
+  mcp green (+9), `cargo check --target wasm32-unknown-unknown` green; the headless MCP driver pass ALL
+  GREEN under Xvfb (the SANDBOX.md recipe) with pixel-measured x11grab captures of the magnet behavior (gap 4 px exact, both edge alignments).
+- **Owner-checks:** V31 born — the magnet pass on Windows: drag the Tools window (the panel follows
+  same-frame), park it near the bottom edge (the panel flips above), move it across the screen center
+  (left/right alignment switches), switch tools (panel content follows; Pencil/Eyedropper → no panel).
+- **Commit title:** `Split tool settings into a magnetized panel under the Tools window (0.25rem gap, below/above flip, edge alignment)`
+
+---
+
 ### 2026-11-17 — `Feat:` CLI launch arguments (color wells, tool, canvas size) + owner-unconfirmed scenario markers — owner request
 - **What:** two requests, one round. (1) Launch arguments (native; parsed BEFORE the
   window opens — `app/launch.rs`): `--primary`/`--secondary` hex color wells (RRGGBB;

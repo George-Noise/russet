@@ -19,9 +19,17 @@ BASE="${1:-origin/master}"
 OUT="${2:-/tmp/russet-delivery}"
 TMP="$(mktemp -d)"
 STAGE="$TMP/stage"
+# What is untracked NOW (before this script intent-adds anything): the cleanup
+# resets ONLY these index entries (dropping the markers this script created).
+# A blunt `git reset` here would also undo whatever the CALLER had already
+# staged — e.g. a `git rm`'d file — and silently corrupt the next run (the
+# index would list a file the worktree no longer has). Caught live 2026-11-17.
+# The list goes to a FILE: a $(...) substitution would drop the NUL separators.
+UNTRACKED_BEFORE="$TMP/untracked_before.list"
+git ls-files --others --exclude-standard -z > "$UNTRACKED_BEFORE" 2>/dev/null || : > "$UNTRACKED_BEFORE"
 cleanup() {
+  xargs -0 -r git reset -q -- < "$UNTRACKED_BEFORE" 2>/dev/null || true
   rm -rf "$TMP"
-  git reset -q -- > /dev/null 2>&1 || true   # drop intent-to-add markers
 }
 trap cleanup EXIT
 

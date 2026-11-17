@@ -13,12 +13,14 @@
 //!                   applied by `build`; the web build takes no arguments
 //!   [`layers`]    — owner request 2026-11-13: REAL layers + per-layer PNG
 //!                   snapshot history (the model, in `crate::layers`)
+//!   [`layers_window`] — owner request 2026-11-13: the "Layers" window
+//!                   (select/rename/visibility/reorder/delete-with-confirm)
 //!   [`mcp`]       — owner request 2026-11-12, feature `mcp`: the stdio
 //!                   MCP server (compiled out without the feature)
 //!   [`menu`]      — owner request 2026-11-13: the top menu bar (§3.1)
-//!   [`panels`]    — owner request 2026-11-10: the "Tool Log" (the read-only
-//!                   action log, named "History" until 2026-11-13) and the
-//!                   "Layers" windows (Layers interactive since 2026-11-13)
+//!   [`tool_log`]  — owner request 2026-11-10: the "Tool Log" window (the
+//!                   read-only action log, named "History" until 2026-11-13)
+//!                   — both were `app/panels.rs` until the 2026-11-17 split
 //!   [`placement`] — §3.11: floating-window edge anchoring + resize repositioning
 //!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
 //!                   (press–drag–release and polyline gestures, overlay
@@ -54,14 +56,15 @@ mod dialogs;
 mod document;
 mod input;
 pub(crate) mod launch;
+mod layers_window;
 #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
 mod mcp;
 mod menu;
-mod panels;
 mod placement;
 mod preview;
 mod scenarios;
 mod text_tool;
+mod tool_log;
 mod tree_window;
 mod windows;
 
@@ -123,7 +126,7 @@ pub struct App {
     /// pending preview gesture or text entry (see `draw_canvas`).
     last_tool: Tool,
     /// REAL layers with per-layer PNG-snapshot history (owner request
-    /// 2026-11-13) — model in `crate::layers`, windows in `app/panels.rs`
+    /// 2026-11-13) — model in `crate::layers`, windows in `app/layers_window.rs`
     /// (Layers) and `app/tree_window.rs` (History Tree).
     layers: LayerStack,
     /// MCP stdio server (owner request 2026-11-12, feature `mcp`): events
@@ -140,10 +143,10 @@ pub struct App {
     palette_window_open: bool,
     history_window_open: bool,
     layers_window_open: bool,
-    /// Pending "delete layer?" confirmation ([`panels`]): the index to
+    /// Pending "delete layer?" confirmation ([`layers_window`]): the index to
     /// remove once the user confirms.
     layer_delete_confirm: Option<usize>,
-    /// In-place layer rename ([`panels`]): (index, current buffer); the
+    /// In-place layer rename ([`layers_window`]): (index, current buffer); the
     /// TextEdit lives in the Layers window rows.
     layer_rename: Option<(usize, String)>,
     /// Visual "History Tree" windows (owner request 2026-11-12): view 0 is

@@ -32,17 +32,19 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-17 | `bash scripts/verify.sh` after a SMALL code change (the panels split: 2 new files, deps hot, gates profile) | **18 s** | time'd exactly |
 | 2026-11-17 | `bash scripts/verify.sh` after docs/script-only changes (no src/ touched — no rebuild; same after a bare `touch` of an unchanged file: cargo detects identical content) | **9 s** | time'd exactly |
-| 2026-11-17 | `bash scripts/verify.sh` (nothing changed since the last green run) | **14 s** | time'd exactly |
 | 2026-11-17 | `cargo clippy --profile gates --all-targets` after real code changes (the magnet round) | 59 s | cargo's own "Finished in" |
 | 2026-11-17 | `cargo test --profile gates` after real code changes (the magnet round) | ≈ 3–4 min | ≈ (background poll) |
 | 2026-11-17 | `cargo build --features mcp` (dev GUI binary, nothing changed) | **2 s** | time'd exactly |
 
 ## Reading the numbers
 
-- The done-gate (`verify.sh`) after an ACTUAL code change is dominated by the
-  gates-lane rebuild of the `russet` crate itself (deps stay cached): expect
-  ~1–3 min total; 14 s means cargo saw nothing new.
+- The done-gate (`verify.sh`) after an ACTUAL code change recompiles the
+  `russet` crate itself per stage (clippy, test, mcp-clippy, mcp-test — deps
+  stay cached): a small change (a couple of files) costs ~20 s total; bigger
+  change sets cost proportionally more (the magnet round: clippy 59 s, tests
+  ≈ 3–4 min). ~10 s means cargo saw nothing new.
 - A COLD session (fresh sandbox, no `target/`) costs ~15–20 min of dep
   compilation before the first useful command; the store that used to skip it
   is retired (owner decision 2026-11-17) — a warm `target/` carried over from

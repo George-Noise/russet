@@ -68,6 +68,37 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
 
+### 2026-11-17 — `Refactor:` panels.rs split into tool_log.rs + layers_window.rs — owner-approved — owner request
+
+- **What:** the 500-line file guard debt paid for `app/panels.rs` (504 lines, owner: «делай сплит
+  panels.rs но не в ущерб агентной разработке»). PURE code motion, zero behavior change: the file
+  becomes TWO DIRECT children of `app` — `app/tool_log.rs` (102: the Tool Log window, its id fn and
+  the TOOL_LOG_* consts) and `app/layers_window.rs` (430: the Layers window, LayerRequest, the row/
+  arrow helpers, the layer ops and the delete dialog). The two-direct-children shape (no panels.rs
+  shell, no grandchild `impl App`) was chosen over a child-module split DELIBERATELY so nothing
+  changes for future agents: every `impl App` stays in `app.rs` or its direct children (the repo
+  convention), every visibility stays `pub(super)`, every `use super::...` line moves over verbatim,
+  the app.rs call sites (`self.history_window` / `self.layers_window` / `self.layer_delete_dialog`)
+  are untouched. The `panels` name survives only in split-history notes (both new module docs,
+  app.rs module map, AGENTS.md/SPEC.md pointers updated). history_tree.rs (569) is NOT split —
+  owner deferral (his unfinished task lives there); AGENTS.md "File-size guard" now records the
+  deferral so the split is not re-proposed. `git pull`: the owner's master carried the store-
+  retirement round as `cc2734d` (commit title verbatim); the worktree was byte-identical — this
+  round's base is `cc2734d`.
+- **Files:** NEW `src/app/tool_log.rs`, NEW `src/app/layers_window.rs`; DELETED `src/app/panels.rs`;
+  `src/app.rs` (mod decls + module map + 3 doc refs), `AGENTS.md` (pattern table, module list,
+  file-size guard bullet, egui quirk pointer), `SPEC.md` (§1 module list), `TIMING.md` (new hot row +
+  the done-gate note corrected to the measured ~20 s small-change cost), `PROGRESS.md`.
+- **Verified:** the baseline was the byte-identical-to-origin `cc2734d` (CI-green commit; the
+  pre-edit rules.sh/fmt baseline was skipped this round — nothing had touched the tree). After:
+  rules.sh HARD-green
+  (the only OVER GUARD left is the owner-deferred history_tree.rs), fmt clean, clippy `-D warnings`
+  clean default + mcp, `cargo test --profile gates` 140 default / 152 mcp green (counts unchanged —
+  the suite is byte-identical), `cargo check --target wasm32-unknown-unknown` green. verify.sh 18 s
+  for a small change. Delivery byte-compared via deliver.sh.
+- **Owner-checks:** none born. Open: V30 (8 scenario markers), V8 (parked).
+- **Commit title:** `Split app/panels.rs into tool_log.rs + layers_window.rs (pure code motion); defer history_tree.rs split`
+
 ### 2026-11-17 — `Docs:` V26/V28/V31 verified in chat; warm-target store retired — owner request
 
 - **What:** bookkeeping round, zero repo-behavior change. (1) `git pull`: the owner's master carried
@@ -156,30 +187,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none born. The owner uploads `russet-target.zip` to the GitHub release
   `target-store`; when ready: V26 (Nix), V30/V31 approval in chat.
 - **Commit title:** `Add sandbox_check.sh and TIMING.md; session-start probe and warm-target restore rules; V29 verified via chat`
-
-### 2026-11-17 — `Feat:` magnetized tool-settings panel detached from the Tools window — owner request
-
-- **What:** the per-tool settings (Size, Line Mode + curve hints, Shape Kind + Fill/Outline, Text hints)
-  moved OUT of the Tools window into their own title-bar-less, immovable, content-hugging window glued to
-  the Tools window with NO way to detach («без возможности отлипания пока что»): `Window::fixed_pos`
-  re-applies the position EVERY frame (an egui 0.37 fact, pinned by a headless regression test) from the
-  pure `app/placement.rs::magnet_settings_pos` + the `ToolSettingsPlacement` state (the panel's last drawn
-  size). Vertically: below the Tools window at a `TOOL_SETTINGS_GAP` 0.25rem (4 pt); no room below → flips
-  above. Horizontally: Tools window left of the main-window center → left edges align, right of center →
-  right edges align (exact center = right); the result is clamped into the main window. The Size slider is
-  SHOWN (enabled) only for Brush/Eraser/Line/Shape — the disabled-when-unapplicable slider is retired;
-  Pencil/Eyedropper have no settings → the panel is not drawn at all. The Tools window is now only the
-  tool list (§3.2 first-open ratio + §3.11 placement unchanged — they govern the smaller window).
-- **Files:** `src/app/placement.rs` + `placement/tests.rs` (+5 magnet tests), `src/app/windows.rs` +
-  NEW `src/app/windows/tests.rs` (+4: per-tool helpers + headless-egui magnet/hug regressions),
-  `src/app.rs` (field), `SPEC.md` §3.2 (panel spec, stale Size bullet rewritten), `AGENTS.md` (module
-  map + floating-windows fact), `DEBTS-verification.md` (V31 born), `PROGRESS.md` (+ archive: the
-  resize-dialog and V27/V25 entries moved verbatim).
-- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after: rules.sh HARD-green,
-  fmt clean, clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 140 default / 152
-  mcp green (+9), `cargo check --target wasm32-unknown-unknown` green; the headless MCP driver pass ALL
-  GREEN under Xvfb (the SANDBOX.md recipe) with pixel-measured x11grab captures of the magnet behavior (gap 4 px exact, both edge alignments).
-- **Owner-checks:** V31 born — the magnet pass on Windows: drag the Tools window (the panel follows
-  same-frame), park it near the bottom edge (the panel flips above), move it across the screen center
-  (left/right alignment switches), switch tools (panel content follows; Pencil/Eyedropper → no panel).
-- **Commit title:** `Split tool settings into a magnetized panel under the Tools window (0.25rem gap, below/above flip, edge alignment)`
