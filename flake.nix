@@ -68,8 +68,15 @@
     in
     {
       packages = forSystems (system:
-        let pkgs = pkgsFor system; in rec {
-          russet = pkgs.rustPlatform.buildRustPackage {
+        let
+          pkgs = pkgsFor system;
+          # Shared derivation arguments for BOTH packages. They were previously
+          # one package plus `russet.override { ... }` — but recent nixpkgs
+          # builds buildRustPackage through lib.extendMkDerivation, whose
+          # results no longer carry `.override` (owner hit
+          # "error: attribute 'override' missing" on 2026-11-17), so the dev
+          # build is now its own call over the same arguments.
+          commonArgs = {
             pname = "russet";
             version = "0.1.0";
 
@@ -103,19 +110,26 @@
               mainProgram = "russet";
             };
           };
+        in
+        rec {
+          russet = pkgs.rustPlatform.buildRustPackage commonArgs;
 
           # The DEV build (owner request 2026-11-16): the SAME source, Cargo.lock
           # and unit tests as the release package, built in the repo's fast
           # `gates` profile (Cargo.toml: opt-level 0, no debuginfo, no
           # incremental — the AGENTS.md gate lane) instead of the release LTO
           # lane. `buildType`/`checkType` are buildRustPackage's supported
-          # profile knobs: the build hook runs `cargo build --profile gates`,
-          # the check hook runs `cargo test --profile gates`, and the install
-          # hook takes the binary from target/<triple>/gates. One command
+          # profile knobs (build-rust-package/default.nix: the build hook runs
+          # `cargo build --profile gates`, the check hook runs
+          # `cargo test --profile gates`, and the install hook takes the binary
+          # from target/<triple>/gates); doCheck defaults to true. One command
           # therefore proves everything builds (tests included) AND produces a
           # runnable binary — minutes faster than release on a cold build. The
           # UI is UNOPTIMIZED: functional checks, not feel.
-          russet-dev = russet.override { buildType = "gates"; checkType = "gates"; };
+          russet-dev = pkgs.rustPlatform.buildRustPackage (commonArgs // {
+            buildType = "gates";
+            checkType = "gates";
+          });
 
           default = russet;
         });

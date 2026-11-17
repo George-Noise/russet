@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Delivery ritual in one command (owner request 2026-11-17 — AGENTS.md
+# "Delivery ritual"): builds BOTH fixed-name artifacts from the current
+# worktree, byte-compares all three copies (patched clean base <-> worktree
+# <-> unpacked zip) and prints sizes + sha256 checksums.
+#
+# Usage: bash scripts/deliver.sh [base-ref] [out-dir]
+#   base-ref  what the owner's local tree is right now (default: origin/master
+#             — his latest pushed commit; pass the SHA stated by the previous
+#             session if the sandbox has no origin/master)
+#   out-dir   where the artifacts go (default: /tmp/russet-delivery)
+#
+# Exit 0 only when every byte-compare matched; any mismatch exits 1 and the
+# artifacts in out-dir are NOT to be sent.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+BASE="${1:-origin/master}"
+OUT="${2:-/tmp/russet-delivery}"
+TMP="$(mktemp -d)"
+STAGE="$TMP/stage"
+cleanup() {
+  rm -rf "$TMP"
+  git reset -q -- > /dev/null 2>&1 || true   # drop intent-to-add markers
+}
+trap cleanup EXIT
+
+if git rev-parse --verify --quiet "$BASE^{commit}" > /dev/null; then
+  BASE_SHA=$(git rev-parse --short "$BASE")
+else
+  echo "deliver.sh: base '$BASE' does not resolve" >&2
+  exit 1
+fi
+rm -f "$OUT/russet.zip" "$OUT/russet.patch" && mkdir -p "$OUT"
+
+# Stage the worktree exactly: with git — tracked + untracked-but-not-ignored
+# files (gitignore keeps target/, .git, result* out), intent-to-add first so
+# NEW files enter the patch too; without git — plain tar with explicit
+# excludes.
+rm -rf "$STAGE" && mkdir -p "$STAGE/russet"
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  git ls-files --others --exclude-standard -z | xargs -0 -r git add -N --
+  git ls-files --cached --others --exclude-standard -z | tar --null -T - -cf - | tar -xf - -C "$STAGE/russet"
+else
+  tar -cf - --exclude=.git --exclude=target --exclude=__pycache__ \
+      --exclude='result*' --exclude='.env' . | tar -xf - -C "$STAGE/russet"
+fi
+
+# 1. russet.zip
+(cd "$STAGE" && zip -qr "$OUT/russet.zip" russet)
+
+# 2. russet.patch (only with git — no git, no patch, zip is the sole artifact)
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  git diff --binary "$BASE" > "$OUT/russet.patch"
+else
+  echo "deliver.sh: NO git here — russet.patch skipped, russet.zip is the only artifact" >&2
+fi
+
+# 3. Byte-compares (all must match).
+if [ -f "$OUT/russet.patch" ]; then
+  mkdir -p "$TMP/base"
+  git archive "$BASE" | tar -xf - -C "$TMP/base"
+  if [ -s "$OUT/russet.patch" ]; then
+    git -C "$TMP/base" apply "$OUT/russet.patch"
+  fi
+  diff -r "$TMP/base" "$STAGE/russet" > /dev/null \
+    || { echo "deliver.sh: MISMATCH patched-base <-> worktree" >&2; exit 1; }
+  echo "byte-compare: patched $BASE_SHA <-> worktree — MATCH"
+fi
+mkdir -p "$TMP/unzip" && (cd "$TMP/unzip" && unzip -q "$OUT/russet.zip")
+diff -r "$TMP/unzip/russet" "$STAGE/russet" > /dev/null \
+  || { echo "deliver.sh: MISMATCH unpacked zip <-> worktree" >&2; exit 1; }
+echo "byte-compare: unpacked zip <-> worktree — MATCH"
+
+# 4. The hand-over numbers.
+echo "deliver.sh: DELIVERY READY (base $BASE_SHA) — artifacts in $OUT"
+ls -la "$OUT"
+sha256sum "$OUT"/russet.zip "$OUT"/russet.patch 2>/dev/null || sha256sum "$OUT"/russet.zip

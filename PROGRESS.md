@@ -68,7 +68,42 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
 
+### 2026-11-17 — `Tooling:` deliver.sh, drag-probe template, flake dev-build fix — owner request
+
+- **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
+  carried the tooling round as `e364221` (commit title verbatim); the worktree was byte-identical —
+  this round's base is `e364221`. (2) NEW `scripts/deliver.sh` (owner request): the delivery ritual
+  in one command — stages the worktree exactly (tracked + untracked-not-ignored via git, plain-tar
+  fallback without .git), builds `russet.zip` + `russet.patch` under the FIXED names, runs BOTH
+  byte-compares (patched clean base ↔ worktree ↔ unpacked zip), prints sizes + sha256; exit 1 on any
+  mismatch. AGENTS.md "Delivery ritual" points every delivery at it. (3) NEW `scripts/
+  gui_magnet_check.sh` in the repo (owner request "keep it if useful"): the drag-probe TEMPLATE from
+  the magnet round (Xvfb + ffmpeg x11grab + xdotool drags) — copy per GUI feature whose behavior is
+  only visible through window drags; AGENTS.md GUI bullet references it. (4) V26 flake fix (owner
+  hit `error: attribute 'override' missing` on `nix build .#russet-dev`): recent nixpkgs builds
+  buildRustPackage through `lib.extendMkDerivation`, whose results no longer carry `.override` —
+  verified against nixos-unstable sources (build-rust-package/default.nix, cargo-build/check-hook.sh);
+  `russet-dev` is now its OWN `buildRustPackage (commonArgs // { buildType = "gates"; checkType =
+  "gates"; })` call sharing `commonArgs` with `russet`; the knobs are unchanged upstream args
+  (`--profile gates` in both hooks, doCheck defaults true). Release lane untouched.
+  (5) Mini-compaction: the scenario-suite entry moved verbatim to PROGRESS-archive.md (the live log
+  held 4 entries; V30's pointer updated).
+- **Files:** NEW `scripts/deliver.sh`, NEW `scripts/gui_magnet_check.sh`; `flake.nix` (packages
+  restructure), `AGENTS.md` (delivery ritual + GUI bullet), `DEBTS-verification.md` (V30 pointer),
+  `PROGRESS-archive.md` (+1 entry), `PROGRESS.md` (this entry).
+- **Verified:** `bash scripts/deliver.sh origin/master /tmp/deliv_test` — both byte-compares MATCH,
+  artifacts + checksums printed; flake brace/paren balance 0/0 and no `.override` remains; the
+  upstream knobs re-checked in the fetched nixpkgs sources (NOT from memory); rules.sh HARD-green,
+  fmt clean, clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 140/152 green.
+- **Owner-checks:** none born. V26: apply this patch, then `nix build .#russet-dev` and `nix run
+  .#russet-dev` on the Nix machine. The <100MB cold-start question: NO — the compiled dep tree is
+  the cold cost (debug/deps 2.0 G + gates/deps 1.3 G + wasm deps 96 M raw); the smallest useful
+  artifact is the whole store (1.2 G zip); wasm-only (~40 M zip) warms nothing native.
+- **Commit title:** `Automate the delivery ritual (scripts/deliver.sh); drag-probe template in scripts; fix russet-dev override error`
+
 ### 2026-11-17 — `Tooling:` sandbox probe, timing log, warm-target store, V29 closed — owner request
+
+
 
 - **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
   carried the applied magnet-panel patch (`3dcad27` — the previous delivery, commit title verbatim);
@@ -130,7 +165,6 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Commit title:** `Split tool settings into a magnetized panel under the Tools window (0.25rem gap, below/above flip, edge alignment)`
 
 ### 2026-11-17 — `Feat:` CLI launch arguments (color wells, tool, canvas size) + owner-unconfirmed scenario markers — owner request
-
 - **What:** two requests, one round. (1) Launch arguments (native; parsed BEFORE the
   window opens — `app/launch.rs`): `--primary`/`--secondary` hex color wells (RRGGBB;
   #RGB, RRGGBBAA too), `--tool` (7 names, case-insensitive), `--canvas-size WxH` — the
@@ -165,36 +199,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   8 scenarios one by one). SOFT to relay: `panels.rs` 504 and `history_tree.rs` 569
   lines over the 500 guard (pre-existing; splits only on the owner's approval).
 - **Commit title:** `Add CLI launch arguments (color wells, tool, canvas size); mark the suite scenarios owner-unconfirmed`
-
-### 2026-11-17 — `Test:` the whole-app scenario suite — owner-locked, size-guard exempt — owner request
-
-- **What:** while the owner walks the 8 manual chat scenarios by hand, ONE automated
-  whole-app suite lands: `app/scenarios.rs` + its `tests.rs` (8 tests) driving a REAL
-  headless `App` (no renderer, no egui passes) through the resize × history coupling:
-  mid-chain undo/redo, bottom-layer canvas ownership, a fork of two resizes, node jumps
-  + branch pixels, chained resizes step-by-step, bottom-layer deletion (same/different
-  size), "Use layer as base" (no node) vs "Keep canvas size" (own node + the undo
-  re-expand). OWNER-LOCKED (owner request 2026-11-17): edits only on the owner's
-  explicit permission, the agent only APPENDS new scenarios on request; exempt from
-  BOTH size guards, NO split debt (AGENTS.md "Tests" rule 7 + "Repo facts"; rules.sh
-  skips the file). Dialog CLICKS stay owner-manual: the suite asserts the dialog
-  trigger (the successor-size condition) and runs the exact branch bodies the buttons
-  call. `App::new` refactored (pure code motion) into `build(ctx)` + a cfg(test)
-  `new_headless()` — eframe's `CreationContext` is not constructible outside the crate.
-  The chat walkthrough had three expectations the CODE corrected: the BR crop lands the
-  dab at (100,100) (not (300,300)); reaching 800×600 in scenario 5 takes THREE undos
-  (the head steps onto the dab first); scenario 3's fork hangs off the mark's node, not
-  the Start root — the owner's manual pass should use the corrected steps.
-- **Files:** `src/app.rs` (build refactor + mod), `src/app/scenarios.rs` (new),
-  `src/app/scenarios/tests.rs` (new, owner-locked), `scripts/rules.sh`, `AGENTS.md`,
-  `SPEC.md` §3.6, `PROGRESS.md`.
-- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after:
-  rules.sh HARD-green, fmt clean, clippy `-D warnings` clean default + mcp,
-  `cargo test --profile gates` 119 default / 131 mcp (+8 scenarios) green,
-  `cargo check --target wasm32-unknown-unknown` green. Delivery byte-compared.
-- **Owner-checks:** none born (V28 already tracks the manual resize walkthrough; this
-  suite is its automated counterpart). SOFT notes to relay: `panels.rs` 504 and
-  `history_tree.rs` 569 lines over the 500 guard (pre-existing from the resize round;
-  splits only on the owner's approval).
-- **Commit title:** `Add the owner-locked whole-app scenario suite (resize x history walkthrough); App::new build() refactor`
 

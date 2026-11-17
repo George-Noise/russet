@@ -31,8 +31,8 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-17 | `bash scripts/verify.sh` after docs/script-only changes (no src/ touched — no rebuild; same after a bare `touch` of an unchanged file: cargo detects identical content) | **9 s** | time'd exactly |
 | 2026-11-17 | `bash scripts/verify.sh` (nothing changed since the last green run) | **14 s** | time'd exactly |
-| 2026-11-17 | `bash scripts/verify.sh` after `touch src/app.rs` (cargo detects identical content — NO rebuild) | **13 s** | time'd exactly |
 | 2026-11-17 | `cargo clippy --profile gates --all-targets` after real code changes (the magnet round) | 59 s | cargo's own "Finished in" |
 | 2026-11-17 | `cargo test --profile gates` after real code changes (the magnet round) | ≈ 3–4 min | ≈ (background poll) |
 | 2026-11-17 | `cargo build --features mcp` (dev GUI binary, nothing changed) | **2 s** | time'd exactly |

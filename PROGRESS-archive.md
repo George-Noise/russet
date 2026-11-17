@@ -9,7 +9,37 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-17 — `Test:` the whole-app scenario suite — owner-locked, size-guard exempt — owner request
 
+- **What:** while the owner walks the 8 manual chat scenarios by hand, ONE automated
+  whole-app suite lands: `app/scenarios.rs` + its `tests.rs` (8 tests) driving a REAL
+  headless `App` (no renderer, no egui passes) through the resize × history coupling:
+  mid-chain undo/redo, bottom-layer canvas ownership, a fork of two resizes, node jumps
+  + branch pixels, chained resizes step-by-step, bottom-layer deletion (same/different
+  size), "Use layer as base" (no node) vs "Keep canvas size" (own node + the undo
+  re-expand). OWNER-LOCKED (owner request 2026-11-17): edits only on the owner's
+  explicit permission, the agent only APPENDS new scenarios on request; exempt from
+  BOTH size guards, NO split debt (AGENTS.md "Tests" rule 7 + "Repo facts"; rules.sh
+  skips the file). Dialog CLICKS stay owner-manual: the suite asserts the dialog
+  trigger (the successor-size condition) and runs the exact branch bodies the buttons
+  call. `App::new` refactored (pure code motion) into `build(ctx)` + a cfg(test)
+  `new_headless()` — eframe's `CreationContext` is not constructible outside the crate.
+  The chat walkthrough had three expectations the CODE corrected: the BR crop lands the
+  dab at (100,100) (not (300,300)); reaching 800×600 in scenario 5 takes THREE undos
+  (the head steps onto the dab first); scenario 3's fork hangs off the mark's node, not
+  the Start root — the owner's manual pass should use the corrected steps.
+- **Files:** `src/app.rs` (build refactor + mod), `src/app/scenarios.rs` (new),
+  `src/app/scenarios/tests.rs` (new, owner-locked), `scripts/rules.sh`, `AGENTS.md`,
+  `SPEC.md` §3.6, `PROGRESS.md`.
+- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after:
+  rules.sh HARD-green, fmt clean, clippy `-D warnings` clean default + mcp,
+  `cargo test --profile gates` 119 default / 131 mcp (+8 scenarios) green,
+  `cargo check --target wasm32-unknown-unknown` green. Delivery byte-compared.
+- **Owner-checks:** none born (V28 already tracks the manual resize walkthrough; this
+  suite is its automated counterpart). SOFT notes to relay: `panels.rs` 504 and
+  `history_tree.rs` 569 lines over the 500 guard (pre-existing from the resize round;
+  splits only on the owner's approval).
+- **Commit title:** `Add the owner-locked whole-app scenario suite (resize x history walkthrough); App::new build() refactor`
 
 ---
 
