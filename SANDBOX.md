@@ -21,7 +21,13 @@ doubt; do not re-derive the steps below.
   `scripts/verify.sh` exports `PATH="$HOME/.cargo/bin:$PATH"` itself; for ad-hoc
   commands do the same.
 - `target/` persists with the project directory between sessions — builds stay warm;
-  do not clean it to "fix" anything.
+  do not clean it to "fix" anything. A FRESH clone has no `target/` (a ~15–20 min
+  cold dep build): restore the owner-hosted prebuilt tree instead — download
+  `russet-target.zip` from the GitHub release `target-store` and unzip it in the
+  repo root (see AGENTS.md "Commands — Session start"). `scripts/sandbox_check.sh`
+  (owner request 2026-11-17) probes all of this at session start; its verdict
+  tells which lanes are warm, and every heavy command's duration lands in
+  `TIMING.md` (the sleep-chunk source).
 
 ## What the GUI needs that the image lacks — and the fix
 

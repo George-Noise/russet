@@ -144,17 +144,31 @@ The owner applies the work locally, so every finished round ships the project as
 - **`russet.zip`** — the full project tree, NEVER containing `.git`, `target/` or other build junk. It applies on any owner state: unpack and replace the tree.
 - **`russet.patch`** — `git diff <base-commit>` with new files intent-to-add (`git add -N` first, so they are included), base commit stated in the reply. Prepare it ONLY when `.git` is present in the sandbox copy; without git there is no patch — say so plainly in the reply and `russet.zip` is the only artifact. When the owner has already committed the previous delivery locally (the normal state — his commits never reach the sandbox), the base is NOT an old sandbox SHA: snapshot the PRE-EDIT tree first (`git add -A; git write-tree > /tmp/base_tree; git reset` — a tree object, no commit or ref is created) and diff against it; the reply states that the patch applies on top of the owner's latest local commit, which must byte-match the previous delivery.
 
-Before calling the delivery ready: with git, apply the patch onto a clean copy of the base commit and byte-compare the result with the working tree AND with the unpacked zip — all three must match; without git, byte-compare the unpacked zip with the working tree. Always regenerate the artifacts in the same session as the changes — never re-send an artifact from an earlier round. Print the sizes and sha256 checksums of the delivered files so the owner can verify the download.
+Before calling the delivery ready: with git, apply the patch onto a clean copy of the base commit and byte-compare the result with the working tree AND with the unpacked zip — all three must match; without git, byte-compare the unpacked zip with the working tree. Always regenerate the artifacts in the same session as the changes — never re-send an artifact from an earlier round. Print the sizes and sha256 checksums of the delivered files so the owner can verify the download. **`russet-target.zip` is NOT part of this ritual**: it is the agent-sandbox warm-up artifact (see "Commands — Session start"), built and delivered only when the owner asks for a fresh one.
 
 The final chat reply MUST state the suggested commit title verbatim (owner request 2026-11-13: it was repeatedly left out), backtick-wrapped so the chat UI's click-to-copy hands the exact title to the owner (owner request 2026-11-13; see "Commit titles" above). Copy it from the newest PROGRESS.md log entry's `Commit title:` field — rules.sh rule 6 prints it as a REMINDER at every done-gate with the backticks kept, so the last verify.sh run hands over the exact string to paste as the reply's last line. If the delivery covers several rounds, list every round's title (each backtick-wrapped); if a round is docs-only and adds no log entry, say that no commit title is proposed.
 
 ## Commands
 
+- Session start, BEFORE anything else (owner request 2026-11-17): run `bash scripts/sandbox_check.sh`
+  (report-only probe of the agent sandbox: base tools, pinned toolchain + wasm target, network,
+  `target/` warmth per lane, the Xvfb GUI fix) and read its verdict before launching any heavy
+  command — never start a build/test lane whose missing prerequisites are not accounted for. If
+  `target/` is cold or missing (fresh clone / recycled sandbox), restore the owner-hosted
+  prebuilt target: download `russet-target.zip` (GitHub release `target-store` of this repo) into
+  the repo root and unzip it there (`unzip -q russet-target.zip` — it contains `target/`); log the
+  restore itself into TIMING.md. Producing a fresh `russet-target.zip` is an owner-requested task,
+  not a routine delivery artifact (see "Delivery ritual").
+- Heavy-command timing (owner request 2026-11-17): every command that ran longer than ~1 minute
+  gets a row in `TIMING.md` (cold vs hot tables, 5 newest per table, same edit). The newest row is
+  what the agent picks its `sleep` chunks from (see "Long-running and background commands").
 - Baseline at session start, BEFORE any edit (owner policy 2026-11-13): `bash scripts/rules.sh` and
   `cargo fmt --check` — nothing else. Both are instant and never compile anything. The tree always
   arrives green (byte-compared delivery + CI), so pre-edit `cargo check`/clippy/test runs are wasted
-  minutes; if the baseline fails, STOP and tell the owner — a red baseline means a broken delivery,
-  not a task.
+  minutes — reconfirmed by the owner 2026-11-17 («тесты до задачи не нужны — в конце задачи тесты и
+  так делаются»): NO pre-edit test/compile runs; the only exception is a toolchain/target warm-up in
+  a fresh sandbox, which is environment work, not a test baseline. If the baseline fails, STOP and
+  tell the owner — a red baseline means a broken delivery, not a task.
 - Quick loop after edits: `cargo check` (owner's time-saving policy 2026-11-09).
 - Done gate: `bash scripts/verify.sh` — first `scripts/rules.sh` (machine rules, no cargo needed: inline test modules and `unwrap()` in `src/` are HARD failures; `expect()` outside tests, the 500-line file-size guard and the PROGRESS.md budget/stale check are report-only notes), then `cargo fmt --check`, `cargo clippy --profile gates --all-targets -- -D warnings`, `cargo test --profile gates` (the unoptimized `gates` lane — see "Repo facts"; identical checks, minutes faster to build). Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
 - CI (`.github/workflows/ci.yml`) runs the same gate on GitHub — two jobs, `rules` (grep-level `scripts/rules.sh`, no toolchain) and `native` (`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` → the same clippy+test pair with `--features mcp`, owner OK 2026-11-13) — for every push to `master` and every PR, with Rust pinned to the owner's local toolchain. Keep it green: a red CI on `master` is a stop-everything signal. Editing the workflow (or adding the postponed wasm job) is a build-tooling change and needs the owner's OK. CI keeps the full optimized dev profile on purpose — it stays the independent full-lane verifier, while verify.sh runs the fast unoptimized `gates` lane (owner decision 2026-11-11).

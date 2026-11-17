@@ -68,6 +68,40 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
 
+### 2026-11-17 — `Tooling:` sandbox probe, timing log, warm-target store, V29 closed — owner request
+
+- **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
+  carried the applied magnet-panel patch (`3dcad27` — the previous delivery, commit title verbatim);
+  the sandbox worktree was already byte-identical to it, so this round's base is `3dcad27`.
+  (2) NEW `scripts/sandbox_check.sh` — the session-start environment probe (base tools, pinned
+  toolchain + wasm target + rustfmt/clippy components, network reachability, per-lane `target/`
+  warmth via `.fingerprint` counts, the Xvfb xkbfix fix presence) with exact fix hints; report-only,
+  always exit 0. (3) NEW `TIMING.md` — the cold/hot duration log of heavy commands (two tables, 5
+  newest rows each, same-edit rule), seeded with this session's numbers (hot `verify.sh` 14 s; hot
+  clippy after real changes 59 s; ≈ 8–12 min cold dep build; `touch` of an unchanged file does NOT
+  invalidate cargo's fingerprints — 13 s). (4) `AGENTS.md` "Commands": a Session-start bullet
+  (probe first; when `target/` is cold restore the owner-hosted `russet-target.zip` from the release
+  `target-store`) + the heavy-command timing duty; the baseline rule reconfirmed by the owner
+  2026-11-17 (NO pre-edit test/compile runs — tests run at task end and land in the repo; the only
+  exception is a toolchain/target warm-up, which is environment work, not a test baseline); the
+  Delivery ritual gained the note that `russet-target.zip` is a requested-only artifact, not a
+  routine one. `SANDBOX.md`: the restore + probe pointer in the Rust bullet. (5) V29 → verified
+  2026-11-17 via chat (owner: «проверил V29»). (6) The warm-up artifact BUILT and delivered this
+  round on request: `russet-target.zip` 1.2 GiB (the 3.8 G `target/` minus the `*incremental*`
+  caches; dev + gates + wasm lanes, the GUI binary included) — the owner uploads it to the release
+  `target-store`.
+- **Files:** NEW `TIMING.md`, NEW `scripts/sandbox_check.sh`; `AGENTS.md` (Commands: Session start
+  + timing duty + baseline reconfirmation; Delivery ritual note), `SANDBOX.md` (Rust bullet: restore
+  + probe), `DEBTS-verification.md` (V29 → verified), `PROGRESS.md` (this entry).
+- **Verified:** `bash scripts/sandbox_check.sh` run live — every lane [yes] (705/634/99 fingerprints;
+  two false negatives found and fixed on the way: the `rustfmt-.* (installed)` grep pattern and the
+  triple-lane `.fingerprint` depth); `bash scripts/verify.sh` ALL GATES GREEN, time'd twice: 14 s
+  (nothing changed) and 13 s (after `touch src/app.rs`); `cargo test --profile gates` 140 default /
+  152 mcp green; the zip built and CRC-tested (`unzip -t`), 141 s zip time recorded in TIMING.md.
+- **Owner-checks:** none born. The owner uploads `russet-target.zip` to the GitHub release
+  `target-store`; when ready: V26 (Nix), V30/V31 approval in chat.
+- **Commit title:** `Add sandbox_check.sh and TIMING.md; session-start probe and warm-target restore rules; V29 verified via chat`
+
 ### 2026-11-17 — `Feat:` magnetized tool-settings panel detached from the Tools window — owner request
 
 - **What:** the per-tool settings (Size, Line Mode + curve hints, Shape Kind + Fill/Outline, Text hints)
