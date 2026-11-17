@@ -10,9 +10,10 @@
 > **Cold** = the command had no usable `target/` for its lane (fresh clone,
 > recycled sandbox without `target/`, first run of a new profile/target triple)
 > or the toolchain itself had to be fetched. **Hot** = `target/` carried over.
-> `target/` normally persists with the project directory; the owner also hosts
-> a prebuilt `russet-target.zip` on GitHub to skip the cold dep build entirely
-> (AGENTS.md "Session start").
+> `target/` normally persists with the project directory. The warm-target store
+> (a hosted `russet-target.zip`) was RETIRED by the owner 2026-11-17 («идею с
+> target пока убираем — dev билдит достаточно быстро для тестов»); the cold
+> numbers below are the accepted cost of a fresh sandbox.
 >
 > Rule: **every** heavy command (> ~1 min) gets a row in the same edit that ran
 > it, with HOW it was measured (`time`d exactly vs observed from a background
@@ -42,9 +43,10 @@
 - The done-gate (`verify.sh`) after an ACTUAL code change is dominated by the
   gates-lane rebuild of the `russet` crate itself (deps stay cached): expect
   ~1–3 min total; 14 s means cargo saw nothing new.
-- A cold session WITHOUT the hosted `russet-target.zip` costs ~15–20 min of
-  dep compilation before the first useful command; with the zip restored it is
-  minutes of unzip + the hot numbers above.
+- A COLD session (fresh sandbox, no `target/`) costs ~15–20 min of dep
+  compilation before the first useful command; the store that used to skip it
+  is retired (owner decision 2026-11-17) — a warm `target/` carried over from
+  the previous session gives the hot numbers above.
 - Sleep chunk guidance: start with ~1/3 of the last measured duration, then
   poll in ~60–120 s chunks. Never poll more often than needed (every poll is a
   step).

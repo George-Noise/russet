@@ -68,6 +68,26 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
 
+### 2026-11-17 — `Docs:` V26/V28/V31 verified in chat; warm-target store retired — owner request
+
+- **What:** bookkeeping round, zero repo-behavior change. (1) `git pull`: the owner's master carried
+  the deliver.sh round as `778b214` (commit title verbatim); the worktree was byte-identical — this
+  round's base is `778b214`. (2) Three human checks verified via chat and closed in
+  DEBTS-verification.md (verbatim owner quotes kept in the rows): V26 — `nix build .#russet-dev`
+  (the flake dev build compiles in gates AND runs the tests), V28 — the Resize-dialog pass
+  («resize диалог я потрогал, меня устраивает сейчас»), V31 — the magnetized Tools+panel pass on his
+  machine. Remaining open: V30 (the 8 scenario markers) + V8 (parked). (3) The warm-target STORE is
+  RETIRED (owner decision: «идею с target пока убираем, оно билдит достаточно быстро в dev режиме
+  для тестов»): AGENTS.md "Session start" + "Delivery ritual" and TIMING.md now state the cold
+  build is the accepted cost; `sandbox_check.sh` still reports per-lane warmth but no longer points
+  at a hosted zip; the 1.2 G `russet-target.zip` deleted from the chat download dir.
+- **Files:** `DEBTS-verification.md`, `AGENTS.md` (2 bullets), `TIMING.md` (header + numbers),
+  `scripts/sandbox_check.sh` (verdict line), `PROGRESS.md` (this entry).
+- **Verified:** docs-only round — verify.sh ALL GATES GREEN, no src/ change so no rebuild;
+  rules.sh HARD-green; the three DEBTS quotes checked verbatim against the chat message.
+- **Owner-checks:** none born. Open: V30, V8 (parked).
+- **Commit title:** `Close V26/V28/V31 via chat; retire the warm-target store rule`
+
 ### 2026-11-17 — `Tooling:` deliver.sh, drag-probe template, flake dev-build fix — owner request
 
 - **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
@@ -163,40 +183,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   same-frame), park it near the bottom edge (the panel flips above), move it across the screen center
   (left/right alignment switches), switch tools (panel content follows; Pencil/Eyedropper → no panel).
 - **Commit title:** `Split tool settings into a magnetized panel under the Tools window (0.25rem gap, below/above flip, edge alignment)`
-
-### 2026-11-17 — `Feat:` CLI launch arguments (color wells, tool, canvas size) + owner-unconfirmed scenario markers — owner request
-- **What:** two requests, one round. (1) Launch arguments (native; parsed BEFORE the
-  window opens — `app/launch.rs`): `--primary`/`--secondary` hex color wells (RRGGBB;
-  #RGB, RRGGBBAA too), `--tool` (7 names, case-insensitive), `--canvas-size WxH` — the
-  STARTUP canvas (buffers + white initial layer + the Resize-dialog prefill; the dialog
-  1..=4096 clamp applies and reports; the New dialog keeps its 800×600 constants),
-  `--help`/`-h` prints (text owned by main.rs) and exits windowless, `--mcp` skipped
-  silently (the feature scans argv itself). NOTHING panics: invalid values and unknown
-  args warn on stderr (`russet: ...`) and the default stays; ONE code path native + wasm
-  (args_os is empty there). `App::new` → `new_with(cc, config)`: both entry points;
-  `build(ctx, config)` takes the size, `apply_to` the rest. (2) The 8 whole-app scenarios
-  are marked NOT YET CONFIRMED (owner request): a confirmation ledger in the suite's
-  header + a per-scenario OWNER STATUS marker each — a comment-only edit of the locked
-  file on the owner's explicit word; approvals flip the markers one by one (V30).
-- **Files:** `src/app/launch.rs` + `src/app/launch/tests.rs` (new, 12 tests),
-  `src/app.rs` (mod + `new_with`/`new_headless_with` + `build(ctx, config)`),
-  `src/main.rs` (parse/help/warnings + the native-only USAGE text), `src/tools.rs`
-  (Debug derive on Tool — for assert_eq!), `src/app/document.rs` (const doc),
-  `src/app/scenarios/tests.rs` (markers, comment-only), `AGENTS.md` (module map),
-  `SPEC.md` (§3.12 + the §3.6 marker sentence), `README.md` (Launch arguments),
-  `DEBTS-verification.md` (V29/V30 born), `PROGRESS.md` (+ archive: the 2026-11-17
-  strip-fix entry moved verbatim).
-- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after: rules.sh
-  HARD-green, fmt clean, clippy `-D warnings` clean default + mcp + diagnostics,
-  `cargo test --profile gates` 131 green (+12), `cargo check --target
-  wasm32-unknown-unknown` green (no warnings); live smoke: `--help` prints, warnings hit
-  stderr. The mcp TEST lane cold-compiled past 2×10 min in the recycled sandbox —
-  interrupted (mcp clippy --all-targets green; no MCP code touched; CI runs it); with
-  `< /dev/null` (SANDBOX pitfall 10) verify.sh ALL GATES GREEN (143 mcp green incl.).
-  Delivery byte-compared: worktree ↔ unpacked zip ↔ patch applied on a clean clone of
-  the base commit — all three match.
-- **Owner-checks:** V29 born (the launch-args pass on Windows) + V30 born (approve the
-  8 scenarios one by one). SOFT to relay: `panels.rs` 504 and `history_tree.rs` 569
-  lines over the 500 guard (pre-existing; splits only on the owner's approval).
-- **Commit title:** `Add CLI launch arguments (color wells, tool, canvas size); mark the suite scenarios owner-unconfirmed`
-

@@ -69,7 +69,7 @@ if [ -d "$REPO/target" ]; then
   [ -x "$REPO/target/debug/russet" ] && ok "GUI binary target/debug/russet present" \
     || no "GUI binary not built — cargo build --features mcp"
 else
-  no "target/ ABSENT — cold build everywhere (or restore the hosted russet-target.zip, see AGENTS.md 'Session start')"
+  no "target/ ABSENT — cold build everywhere (accepted cost: the hosted store is retired, owner decision 2026-11-17 — dev profile builds fast enough for tests)"
 fi
 
 say "GUI/Xvfb lane (SANDBOX.md recipe):"

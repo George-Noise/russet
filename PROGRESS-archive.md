@@ -9,6 +9,44 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-17 — `Feat:` CLI launch arguments (color wells, tool, canvas size) + owner-unconfirmed scenario markers — owner request
+- **What:** two requests, one round. (1) Launch arguments (native; parsed BEFORE the
+  window opens — `app/launch.rs`): `--primary`/`--secondary` hex color wells (RRGGBB;
+  #RGB, RRGGBBAA too), `--tool` (7 names, case-insensitive), `--canvas-size WxH` — the
+  STARTUP canvas (buffers + white initial layer + the Resize-dialog prefill; the dialog
+  1..=4096 clamp applies and reports; the New dialog keeps its 800×600 constants),
+  `--help`/`-h` prints (text owned by main.rs) and exits windowless, `--mcp` skipped
+  silently (the feature scans argv itself). NOTHING panics: invalid values and unknown
+  args warn on stderr (`russet: ...`) and the default stays; ONE code path native + wasm
+  (args_os is empty there). `App::new` → `new_with(cc, config)`: both entry points;
+  `build(ctx, config)` takes the size, `apply_to` the rest. (2) The 8 whole-app scenarios
+  are marked NOT YET CONFIRMED (owner request): a confirmation ledger in the suite's
+  header + a per-scenario OWNER STATUS marker each — a comment-only edit of the locked
+  file on the owner's explicit word; approvals flip the markers one by one (V30).
+- **Files:** `src/app/launch.rs` + `src/app/launch/tests.rs` (new, 12 tests),
+  `src/app.rs` (mod + `new_with`/`new_headless_with` + `build(ctx, config)`),
+  `src/main.rs` (parse/help/warnings + the native-only USAGE text), `src/tools.rs`
+  (Debug derive on Tool — for assert_eq!), `src/app/document.rs` (const doc),
+  `src/app/scenarios/tests.rs` (markers, comment-only), `AGENTS.md` (module map),
+  `SPEC.md` (§3.12 + the §3.6 marker sentence), `README.md` (Launch arguments),
+  `DEBTS-verification.md` (V29/V30 born), `PROGRESS.md` (+ archive: the 2026-11-17
+  strip-fix entry moved verbatim).
+- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after: rules.sh
+  HARD-green, fmt clean, clippy `-D warnings` clean default + mcp + diagnostics,
+  `cargo test --profile gates` 131 green (+12), `cargo check --target
+  wasm32-unknown-unknown` green (no warnings); live smoke: `--help` prints, warnings hit
+  stderr. The mcp TEST lane cold-compiled past 2×10 min in the recycled sandbox —
+  interrupted (mcp clippy --all-targets green; no MCP code touched; CI runs it); with
+  `< /dev/null` (SANDBOX pitfall 10) verify.sh ALL GATES GREEN (143 mcp green incl.).
+  Delivery byte-compared: worktree ↔ unpacked zip ↔ patch applied on a clean clone of
+  the base commit — all three match.
+- **Owner-checks:** V29 born (the launch-args pass on Windows) + V30 born (approve the
+  8 scenarios one by one). SOFT to relay: `panels.rs` 504 and `history_tree.rs` 569
+  lines over the 500 guard (pre-existing; splits only on the owner's approval).
+- **Commit title:** `Add CLI launch arguments (color wells, tool, canvas size); mark the suite scenarios owner-unconfirmed`
+
+---
+
 ### 2026-11-17 — `Test:` the whole-app scenario suite — owner-locked, size-guard exempt — owner request
 
 - **What:** while the owner walks the 8 manual chat scenarios by hand, ONE automated
