@@ -9,6 +9,41 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-17 — `Tooling:` deliver.sh, drag-probe template, flake dev-build fix — owner request
+
+- **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
+  carried the tooling round as `e364221` (commit title verbatim); the worktree was byte-identical —
+  this round's base is `e364221`. (2) NEW `scripts/deliver.sh` (owner request): the delivery ritual
+  in one command — stages the worktree exactly (tracked + untracked-not-ignored via git, plain-tar
+  fallback without .git), builds `russet.zip` + `russet.patch` under the FIXED names, runs BOTH
+  byte-compares (patched clean base ↔ worktree ↔ unpacked zip), prints sizes + sha256; exit 1 on any
+  mismatch. AGENTS.md "Delivery ritual" points every delivery at it. (3) NEW `scripts/
+  gui_magnet_check.sh` in the repo (owner request "keep it if useful"): the drag-probe TEMPLATE from
+  the magnet round (Xvfb + ffmpeg x11grab + xdotool drags) — copy per GUI feature whose behavior is
+  only visible through window drags; AGENTS.md GUI bullet references it. (4) V26 flake fix (owner
+  hit `error: attribute 'override' missing` on `nix build .#russet-dev`): recent nixpkgs builds
+  buildRustPackage through `lib.extendMkDerivation`, whose results no longer carry `.override` —
+  verified against nixos-unstable sources (build-rust-package/default.nix, cargo-build/check-hook.sh);
+  `russet-dev` is now its OWN `buildRustPackage (commonArgs // { buildType = "gates"; checkType =
+  "gates"; })` call sharing `commonArgs` with `russet`; the knobs are unchanged upstream args
+  (`--profile gates` in both hooks, doCheck defaults true). Release lane untouched.
+  (5) Mini-compaction: the scenario-suite entry moved verbatim to PROGRESS-archive.md (the live log
+  held 4 entries; V30's pointer updated).
+- **Files:** NEW `scripts/deliver.sh`, NEW `scripts/gui_magnet_check.sh`; `flake.nix` (packages
+  restructure), `AGENTS.md` (delivery ritual + GUI bullet), `DEBTS-verification.md` (V30 pointer),
+  `PROGRESS-archive.md` (+1 entry), `PROGRESS.md` (this entry).
+- **Verified:** `bash scripts/deliver.sh origin/master /tmp/deliv_test` — both byte-compares MATCH,
+  artifacts + checksums printed; flake brace/paren balance 0/0 and no `.override` remains; the
+  upstream knobs re-checked in the fetched nixpkgs sources (NOT from memory); rules.sh HARD-green,
+  fmt clean, clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 140/152 green.
+- **Owner-checks:** none born. V26: apply this patch, then `nix build .#russet-dev` and `nix run
+  .#russet-dev` on the Nix machine. The <100MB cold-start question: NO — the compiled dep tree is
+  the cold cost (debug/deps 2.0 G + gates/deps 1.3 G + wasm deps 96 M raw); the smallest useful
+  artifact is the whole store (1.2 G zip); wasm-only (~40 M zip) warms nothing native.
+- **Commit title:** `Automate the delivery ritual (scripts/deliver.sh); drag-probe template in scripts; fix russet-dev override error`
+
+---
+
 ### 2026-11-17 — `Tooling:` sandbox probe, timing log, warm-target store, V29 closed — owner request
 
 
