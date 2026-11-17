@@ -9,6 +9,38 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-16 — `Feat:` wheel-pan parity (F12-B interim), pin-based resize repositioning (F13-A), the temporary diag feature — owner request
+
+- **What:** the owner picked the designs: F12 → variant B («с пометкой что это не
+  окончательный вариант»; F11 учтён в расчётах — он писался после проверки на Windows),
+  F13 → вариант A, and approved the diagnostic patch ONLY behind a build flag. (1) F12-B:
+  the new pure `app/camera.rs::wheel_notches` converts the raw delta to PRODUCT NOTCHES per
+  its `unit` — `Line` passes through (winit ±1/notch on Windows/X11/Wayland-discrete),
+  `Point` ÷ 100 pt (eframe-web passes the DOM pixels as-is, Chrome ≈ 100/notch — INTERIM
+  calibration), `Page` × 3 — and every notch pans the FIXED `WHEEL_NOTCH_PAN` 15 pt on EVERY
+  platform (`SCROLL_PAN_SPEED` 3.0 superseded; F11 folded: 3.0 × 5 = 15.0). Zoom untouched
+  (sign-only — that is why it was always consistent). F12 STAYS OPEN (not final): the
+  constants are retuned from diag logs. (2) F13-A: the pure `resize_step` (3 tests) pins the
+  PRE-resize (window, content) rects on the FIRST changed frame and recomputes EVERY resize
+  frame from the pin — Wayland/Web non-monotonic content series can no longer accumulate the
+  chain drift («колбасит»); the pin clears on the first stable frame and on title-bar drags.
+  (3) The TEMPORARY `diag` cargo feature (default build compiles NONE of it): one `[diag]`
+  stderr line per wheel event (unit/source/delta → notches → pan step — the calibration
+  data) + per changed content rect + per repositioned floating window; on the web the lines
+  reach the browser console. Removed when F12/F13 close. SPEC §3.4 + the §7 checklist
+  rewritten; F11 paid (folded), F12/F13 statuses updated, V23/V24 born.
+- **Files:** `src/app/camera.rs` (+ tests), `src/app.rs`, `src/app/placement.rs` (+ tests),
+  `Cargo.toml`, `SPEC.md`, `DEBTS-functional.md`, `DEBTS-verification.md`, `PROGRESS.md`,
+  `PROGRESS-archive.md` (the 2026-11-16 Refactor entry moved verbatim).
+- **Verified:** verify.sh ALL GATES GREEN in-sandbox (the pinned 1.99.1 toolchain
+  bootstrapped this session) — fmt clean; clippy -D warnings clean default/mcp/diag;
+  98 default / 110 mcp tests green (+4 new: the unit→notch table, 3 × the pin semantics);
+  rules.sh HARD-green before and after; delivery byte-compared as usual.
+- **Owner-checks:** V23 (one notch = the same 15 pt on Windows/Wayland/Web + the ×5 feel;
+  optional `[diag] wheel` logs) and V24 (no Wayland/Web resize jitter; optional
+  `[diag] main resize`/`place` logs) born in DEBTS-verification.md.
+- **Commit title:** `Fix wheel-pan platform parity (fixed 15 pt notch, F12-B interim + F11) and the resize window jitter (F13-A reference-based); add the temporary diag feature`
+
 ### 2026-11-16 — `Docs:` V9 verified, the wheel-pan platform gap and the resize jitter analyzed (F12/F13) — owner request
 
 - **What:** (1) the owner's «V9 проверил» closes the M8 web real-mouse check in

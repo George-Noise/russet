@@ -75,12 +75,13 @@ Machine used for the numbers below: Intel Xeon E5-2680 v3, 24 threads, 15 GB RAM
 | `trunk build --release`, first build (wasm + bindgen + wasm-opt) | **144 s** (fails at wasm-opt without P5's flags); rebuild **10 s** |
 | `dist/` release bundle | wasm **5,017,305 B**, JS **76,943 B**, html **6,167 B** |
 | wasm `-Oz` instead of trunk's default `-O` | 4,941,128 B (−1.5 % more) |
+| `dist/` re-measured 2026-11-17 for the release-strip fix (one sandbox, both variants; trunk 0.22.1, bindgen 0.2.130, wasm-opt 131) | `strip = true` → wasm **5,155,501 B**, JS **76,952 B**; `strip = "debuginfo"` → wasm **5,156,370 B** (+869 B — the REAL `target_features` section replaces bindgen's empty-default one), JS **78,750 B** raw (+1.8 KB), **+112 B gzipped** (the glue switches to the feature-aware `__wbindgen_malloc/realloc/free` naming; the warned build used the folded `__wbindgen_export*` one) |
 | wasm fetch + compile in Firefox (localhost) | ~70 ms |
 
 The relink number is the painful one: any source edit costs ~2.7 minutes in release because
 rewriting one crate re-runs the whole `lto = "fat"` + `codegen-units = 1` pipeline.
 
-Release profile today (`Cargo.toml`): `lto = "fat"`, `codegen-units = 1`, `strip = true` — the
+Release profile today (`Cargo.toml`): `lto = "fat"`, `codegen-units = 1`, `strip = "debuginfo"` (2026-11-17: was `strip = true` — the symbols stripping deleted the wasm `target_features` custom section and broke wasm-bindgen's feature detection; see §4) — the
 slowest combination possible. The web build has never been produced (`trunk` is not installed
 here), so every browser number below is an estimate, not a measurement.
 
@@ -269,7 +270,7 @@ Only do these if the profiler (or `/usr/bin/time -v`) still shows allocation chu
 
 ## 4. Build-time options (reference for P8)
 
-Today: `lto = "fat"`, `codegen-units = 1`, `strip = true`. Cold 243 s, relink 160 s (§1).
+Today: `lto = "fat"`, `codegen-units = 1`, `strip = "debuginfo"`. Cold 243 s, relink 160 s (§1).
 
 | Change | Build-time effect | Runtime/binary effect |
 |---|---|---|
@@ -280,6 +281,14 @@ Today: `lto = "fat"`, `codegen-units = 1`, `strip = true`. Cold 243 s, relink 16
 
 Notes:
 
+- `strip = "symbols"` (=`strip = true`) is NOT an option since 2026-11-17: it maps to
+  `--strip-all`, which deletes every wasm custom section — including the `target_features`
+  list rustc embeds so wasm-bindgen can detect the enabled Wasm features. Without it bindgen
+  guesses and warns on every `trunk build --release` (the warning the owner hit 2026-11-17).
+  `strip = "debuginfo"` keeps the section (release `debug` is 0 — nothing extra to strip; on
+  native/MSVC nothing changes), and the dist/ bundle is still cut to size by wasm-opt AFTER
+  wasm-bindgen (trunk runs it on every release build, P5); measured cost: +869 B wasm,
+  +112 B gzipped JS (§1).
 - Any profile change invalidates the build cache once, then benefits every build (including
   `nix build`, which uses the same profile).
 - `jobs = 8` comes from the owner's global `~/.cargo/config.toml` on a 24-thread machine — a

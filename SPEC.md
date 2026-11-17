@@ -95,7 +95,12 @@ opt-level = 2
 [profile.release]
 lto = "fat"
 codegen-units = 1
-strip = true
+# NOT `strip = true` (= --strip-all): it deletes the wasm `target_features`
+# custom section, and wasm-bindgen can no longer detect the enabled Wasm
+# features — it warns on every release build and guesses. `debuginfo` keeps
+# the custom sections; the dist/ wasm is cut to size by wasm-opt AFTER
+# wasm-bindgen anyway (§2.2, PERF.md §1/§4).
+strip = "debuginfo"
 ```
 
 About build speed:

@@ -102,4 +102,13 @@ opt-level = 0
 [profile.release]
 lto = "fat"
 codegen-units = 1
-strip = true
+# NOT `strip = true` (owner request 2026-11-17): "symbols" maps to --strip-all,
+# which deletes EVERY wasm custom section — including the `target_features`
+# list rustc embeds so wasm-bindgen can detect the enabled Wasm features.
+# With the section gone wasm-bindgen guesses and warns on every
+# `trunk build --release` (silent mis-glue the day simd128/atomics land).
+# `debuginfo` strips only DWARF (release `debug` is 0, so nothing extra) and
+# keeps the custom sections; the final dist/ wasm is cut to size by wasm-opt
+# AFTER wasm-bindgen anyway (trunk 0.22 runs it on every release build —
+# web/index.html, PERF.md P5), so the bundle does not grow (PERF.md §1).
+strip = "debuginfo"

@@ -52,6 +52,10 @@ feature); the winit-CSD dependency landed (manifest-only, no new tests — re-ga
 (2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500;
 rules.sh reports the PROGRESS.md/Log budgets — green; the later flake/docs round the same
 day touched no Rust — cargo gates not re-run).
+2026-11-17: the release-strip fix round (manifest-only, no Rust touched) — rules.sh
+HARD-green + fmt clean before and after; `trunk build --release` run twice in-sandbox
+(`strip = true` → the warning reproduces; `strip = "debuginfo"` → clean; sizes in PERF §1);
+clippy/test lanes not re-run — no Rust change and the `gates` profile is untouched.
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -67,6 +71,31 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-17 — `Fix:` release `strip = true` deleted the wasm `target_features` section (the wasm-bindgen warning) — owner request
+
+- **What:** every `trunk build --release` warned "the `target_features` custom section is
+  missing, likely due to `strip = true`": symbols-stripping is `--strip-all`, which deletes
+  ALL wasm custom sections — including the `target_features` list rustc embeds so wasm-bindgen
+  can detect the enabled Wasm features (here: bulk-memory, reference-types, multivalue,
+  sign-ext). Harmless today (nothing non-default is enabled), but bindgen silently mis-glues
+  the day simd128/atomics/threads land, and it already served a guessed empty-default section.
+  Fix per wasm-bindgen's own advice: `strip = true` → `strip = "debuginfo"` — keeps the custom
+  sections (release `debug` is 0, nothing extra to strip; Windows/MSVC unaffected), the size
+  cut stays with wasm-opt AFTER wasm-bindgen (trunk 0.22 runs it on every release build —
+  PERF P5). No Rust code touched — manifest + docs only.
+- **Files:** `Cargo.toml`, `SPEC.md` §1, `PERF.md` §1 + §4, `DEBTS-verification.md` (V27 born),
+  `PROGRESS.md` (+ `PROGRESS-archive.md`: the 2026-11-16 wheel-pan-parity entry compacted
+  verbatim — the file hit the ~200-line budget).
+- **Verified:** baseline rules.sh HARD-green + fmt clean before the edit; three in-sandbox
+  `trunk build --release` runs (trunk 0.22.1, bindgen 0.2.130, wasm-opt 131, toolchain 1.99.1):
+  the warning reproduces with `strip = true` and is gone with `"debuginfo"`; dist/ wasm
+  5,155,501 → 5,156,370 B (+869 B — the real feature section), JS 76,952 → 78,750 B raw
+  (+112 B gzipped) — measured pairs in PERF §1. Manifest-only change → clippy/test lanes not
+  re-run (no Rust touched, the `gates` profile untouched); rules.sh + fmt re-run after.
+- **Owner-checks:** V27 born — rebuild `trunk build --release` + a browser smoke (load, draw,
+  zoom/pan) on the owner's machine.
+- **Commit title:** `Fix the wasm-bindgen target_features warning: release strip=true → debuginfo`
 
 ### 2026-11-16 — `Feat:` fast dev Nix build (`russet-dev`); V23/V24 verified → F13 paid; the debt-ordering rule — owner request
 
@@ -145,35 +174,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none born — V23 narrowed (re-check Firefox after the divisor; the
   Linux leg), V24 narrowed (only the Linux/Wayland leg) — updated in DEBTS-verification.md.
 - **Commit title:** `Fix Firefox wheel-pan overshoot (web Line ÷ 3 lines/notch) and rename the diag feature to diagnostics`
-
-### 2026-11-16 — `Feat:` wheel-pan parity (F12-B interim), pin-based resize repositioning (F13-A), the temporary diag feature — owner request
-
-- **What:** the owner picked the designs: F12 → variant B («с пометкой что это не
-  окончательный вариант»; F11 учтён в расчётах — он писался после проверки на Windows),
-  F13 → вариант A, and approved the diagnostic patch ONLY behind a build flag. (1) F12-B:
-  the new pure `app/camera.rs::wheel_notches` converts the raw delta to PRODUCT NOTCHES per
-  its `unit` — `Line` passes through (winit ±1/notch on Windows/X11/Wayland-discrete),
-  `Point` ÷ 100 pt (eframe-web passes the DOM pixels as-is, Chrome ≈ 100/notch — INTERIM
-  calibration), `Page` × 3 — and every notch pans the FIXED `WHEEL_NOTCH_PAN` 15 pt on EVERY
-  platform (`SCROLL_PAN_SPEED` 3.0 superseded; F11 folded: 3.0 × 5 = 15.0). Zoom untouched
-  (sign-only — that is why it was always consistent). F12 STAYS OPEN (not final): the
-  constants are retuned from diag logs. (2) F13-A: the pure `resize_step` (3 tests) pins the
-  PRE-resize (window, content) rects on the FIRST changed frame and recomputes EVERY resize
-  frame from the pin — Wayland/Web non-monotonic content series can no longer accumulate the
-  chain drift («колбасит»); the pin clears on the first stable frame and on title-bar drags.
-  (3) The TEMPORARY `diag` cargo feature (default build compiles NONE of it): one `[diag]`
-  stderr line per wheel event (unit/source/delta → notches → pan step — the calibration
-  data) + per changed content rect + per repositioned floating window; on the web the lines
-  reach the browser console. Removed when F12/F13 close. SPEC §3.4 + the §7 checklist
-  rewritten; F11 paid (folded), F12/F13 statuses updated, V23/V24 born.
-- **Files:** `src/app/camera.rs` (+ tests), `src/app.rs`, `src/app/placement.rs` (+ tests),
-  `Cargo.toml`, `SPEC.md`, `DEBTS-functional.md`, `DEBTS-verification.md`, `PROGRESS.md`,
-  `PROGRESS-archive.md` (the 2026-11-16 Refactor entry moved verbatim).
-- **Verified:** verify.sh ALL GATES GREEN in-sandbox (the pinned 1.99.1 toolchain
-  bootstrapped this session) — fmt clean; clippy -D warnings clean default/mcp/diag;
-  98 default / 110 mcp tests green (+4 new: the unit→notch table, 3 × the pin semantics);
-  rules.sh HARD-green before and after; delivery byte-compared as usual.
-- **Owner-checks:** V23 (one notch = the same 15 pt on Windows/Wayland/Web + the ×5 feel;
-  optional `[diag] wheel` logs) and V24 (no Wayland/Web resize jitter; optional
-  `[diag] main resize`/`place` logs) born in DEBTS-verification.md.
-- **Commit title:** `Fix wheel-pan platform parity (fixed 15 pt notch, F12-B interim + F11) and the resize window jitter (F13-A reference-based); add the temporary diag feature`
