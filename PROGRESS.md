@@ -46,23 +46,12 @@
 | Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
 | Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
 
-**Verification stamp:** fmt clean, `cargo clippy --profile gates --all-targets -- -D warnings` clean,
-`cargo test --profile gates` — 99 green; with `--features mcp` — clippy clean, 111 green;
-with `--features diagnostics` — clippy clean, 99 green; `trunk serve --features diagnostics`
-smoke-tested earlier 2026-11-16 (build + serve OK, wasm checks green with and without the
-feature); the winit-CSD dependency landed (manifest-only, no new tests — re-gated 2026-11-16)
-(2026-11-16, Rust 1.99.1 pinned via rust-toolchain.toml, Linux; every src file ≤ 500;
-rules.sh reports the PROGRESS.md/Log budgets — green; the later flake/docs round the same
-day touched no Rust — cargo gates not re-run).
-2026-11-17: the release-strip fix round (manifest-only, no Rust touched) — rules.sh
-HARD-green + fmt clean before and after; `trunk build --release` run twice in-sandbox
-(`strip = true` → the warning reproduces; `strip = "debuginfo"` → clean; sizes in PERF §1);
-clippy/test lanes not re-run — no Rust change and the `gates` profile is untouched.
-Later 2026-11-17: V27 + V25 verified via chat → Resolved (docs-only round, no Rust
-touched — rules.sh HARD-green before/after, gates not re-run).
-2026-11-17 (resize round): fmt clean, clippy `-D warnings` clean default+mcp+diagnostics, `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green (+12), `cargo check --target wasm32-unknown-unknown` green, the headless MCP driver pass ALL GREEN (15 checks, real binary, Xvfb recipe of SANDBOX.md).
-2026-11-17 (scenario-suite round): rules.sh HARD-green before and after; fmt clean, clippy `-D warnings` clean default+mcp, `cargo test --profile gates` 119 default / 131 mcp (+8 whole-app scenario tests) green, `cargo check --target wasm32-unknown-unknown` green.
-2026-11-17 (launch-args round): fmt clean, clippy `-D warnings` clean default + mcp + diagnostics, `cargo test --profile gates` 131 green (+12 launch-args tests), `cargo check --target wasm32-unknown-unknown` green (no warnings); live smoke: `--help` prints, parse warnings hit stderr. The mcp TEST lane cold-compiled past 2×10 min in the recycled sandbox — interrupted (mcp clippy --all-targets green; no MCP code touched; CI runs the mcp tests).
+**Verification stamp:** fmt clean, rules.sh HARD-green, `cargo clippy --profile gates --all-targets
+-- -D warnings` clean default + mcp, `cargo test --profile gates` 140 default / 152 mcp green (+9
+magnet-panel tests), `cargo check --target wasm32-unknown-unknown` green — 2026-11-17 (Rust 1.99.1
+pinned via rust-toolchain.toml, Linux). Web/trunk lanes last verified 2026-11-16 (see the archived
+log history); every src file ≤ 500 except the report-only `panels.rs` 504 / `history_tree.rs` 569.
+
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
 ## Warnings — open issues deliberately NOT fixed yet
@@ -78,6 +67,33 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-17 — `Feat:` magnetized tool-settings panel detached from the Tools window — owner request
+
+- **What:** the per-tool settings (Size, Line Mode + curve hints, Shape Kind + Fill/Outline, Text hints)
+  moved OUT of the Tools window into their own title-bar-less, immovable, content-hugging window glued to
+  the Tools window with NO way to detach («без возможности отлипания пока что»): `Window::fixed_pos`
+  re-applies the position EVERY frame (an egui 0.37 fact, pinned by a headless regression test) from the
+  pure `app/placement.rs::magnet_settings_pos` + the `ToolSettingsPlacement` state (the panel's last drawn
+  size). Vertically: below the Tools window at a `TOOL_SETTINGS_GAP` 0.25rem (4 pt); no room below → flips
+  above. Horizontally: Tools window left of the main-window center → left edges align, right of center →
+  right edges align (exact center = right); the result is clamped into the main window. The Size slider is
+  SHOWN (enabled) only for Brush/Eraser/Line/Shape — the disabled-when-unapplicable slider is retired;
+  Pencil/Eyedropper have no settings → the panel is not drawn at all. The Tools window is now only the
+  tool list (§3.2 first-open ratio + §3.11 placement unchanged — they govern the smaller window).
+- **Files:** `src/app/placement.rs` + `placement/tests.rs` (+5 magnet tests), `src/app/windows.rs` +
+  NEW `src/app/windows/tests.rs` (+4: per-tool helpers + headless-egui magnet/hug regressions),
+  `src/app.rs` (field), `SPEC.md` §3.2 (panel spec, stale Size bullet rewritten), `AGENTS.md` (module
+  map + floating-windows fact), `DEBTS-verification.md` (V31 born), `PROGRESS.md` (+ archive: the
+  resize-dialog and V27/V25 entries moved verbatim).
+- **Verified:** baseline rules.sh HARD-green + fmt clean BEFORE the edit; after: rules.sh HARD-green,
+  fmt clean, clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 140 default / 152
+  mcp green (+9), `cargo check --target wasm32-unknown-unknown` green; the headless MCP driver pass ALL
+  GREEN under Xvfb (the SANDBOX.md recipe) with pixel-measured x11grab captures of the magnet behavior (gap 4 px exact, both edge alignments).
+- **Owner-checks:** V31 born — the magnet pass on Windows: drag the Tools window (the panel follows
+  same-frame), park it near the bottom edge (the panel flips above), move it across the screen center
+  (left/right alignment switches), switch tools (panel content follows; Pencil/Eyedropper → no panel).
+- **Commit title:** `Split tool settings into a magnetized panel under the Tools window (0.25rem gap, below/above flip, edge alignment)`
 
 ### 2026-11-17 — `Feat:` CLI launch arguments (color wells, tool, canvas size) + owner-unconfirmed scenario markers — owner request
 
@@ -148,55 +164,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   splits only on the owner's approval).
 - **Commit title:** `Add the owner-locked whole-app scenario suite (resize x history walkthrough); App::new build() refactor`
 
-### 2026-11-17 — `Feat:` Resize dialog modes — canvas anchor grid, image resample filters, per-layer resize nodes, bottom layer owns the canvas — owner request
-
-- **What:** the owner's 4-point request (chat, 2026-11-17). (1) The dialog gained a MODE
-  radio: "Canvas size" — the Paint.NET-style 3×3 painted-dot ANCHOR grid (center = floor:
-  an odd crop takes the extra pixel left/top, an odd pad adds it right/bottom) — vs
-  "Image size" — a resampling radio Nearest neighbor / Bilinear / Bicubic (default) /
-  Lanczos3 via the PINNED `image` crate's `imageops` on PREMULTIPLIED bytes (no new deps,
-  approval flow not needed) + a "Maintain aspect ratio" lock (the changed field drives the
-  other along the canvas ratio). (2) EVERY layer's tree records ONE `resize` node — new
-  `ActionKind::Resize` + `TreeNode::resize: Option<ResizeInfo>` (mode, the layer's
-  from→to, anchor/filter); the tree row prints the summary, the dot hover explains it, the
-  MCP `get_history_tree` dumps the struct — jumping back beyond the resize shows what it
-  did to THAT layer. (3) SIZE MODEL: the BOTTOM layer owns the canvas size; other layers
-  composite at (0,0) clipped (`composite` learned to clip — mixed sizes are legal);
-  restores keep the node's NATIVE size (the 2026-11-13 crop/pad fit retired — F9 updated;
-  a bottom-layer restore resizes the canvas with it). (4) Deleting the bottom layer:
-  same-size successor = silent new base; different size = the "Canvas Size Source" dialog
-  ("Keep canvas size" = top-left adaptation + its own resize node / "Use layer as base" =
-  the canvas takes the size; no dismiss). New `layers/resize.rs` (anchor_offset,
-  fit_copy_at, rescale, scaled_layer_size); OK on an unchanged size is a silent no-op;
-  `fit_to_canvas` removed. SPEC §3.6/§3.7/§3.8/§6 exception/§7 item 11 rewritten.
-- **Files:** `src/history_tree.rs`, `src/layers.rs`, `src/layers/resize.rs` (new),
-  `src/layers/snapshot.rs`, `src/layers/composite.rs`, `src/app.rs`, `src/app/dialogs.rs`,
-  `src/app/menu.rs`, `src/app/panels.rs`, `src/app/tree_window/paint.rs`,
-  `src/app/mcp/tools/queries.rs`, `src/app/document.rs`, `src/canvas.rs` (unchanged),
-  `SPEC.md`, `DEBTS-verification.md` (V28 born), `DEBTS-functional.md` (F9 update),
-  `PROGRESS.md` (+ archive: the Wayland-CSD and Firefox-retune entries compacted verbatim).
-- **Verified:** rules.sh HARD-green; fmt clean; clippy `-D warnings` clean default + mcp +
-  diagnostics; `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green
-  (+12 new: the anchor table, crop/pad offsets, nearest ×2, ×1 identity, proportional
-  rounding, per-layer resize nodes, undo/redo over a resize node, fit_bottom_to, the
-  summaries, the aspect lock, record_resize); `cargo check --target wasm32-unknown-unknown`
-  green; the headless MCP driver pass — ALL 3 scenarios green (15 checks) through the real
-  gates-profile binary under Xvfb (the SANDBOX.md recipe). Delivery byte-compared as usual.
-- **Owner-checks:** V28 born — the resize pass (Windows, optionally browser): anchors,
-  filters, per-layer nodes + native-size jumps, the base-choice dialog branches.
-- **Commit title:** `Add Resize modes (canvas anchor grid, image resample filters), per-layer resize nodes, bottom-layer canvas ownership`
-
-### 2026-11-17 — Docs: V27 + V25 verified via chat → Resolved — owner request
-
-- **What:** the owner verified both open checks in one pass («проверил V27, V25»):
-  V27 — his local `trunk build --release` after the strip fix logs NO wasm-bindgen
-  `target_features` warning and the release page passed the browser smoke (loads, draws,
-  zoom/pan); V25 — the GNOME Wayland pass of the winit Adwaita CSD frame (title bar text
-  follows New/Open/Save/dirty, double-click maximizes/restores, close/minimize work,
-  light and dark shell themes look right). Both rows left the open table for the Resolved
-  list in the same edit; no new checks born; no F-debt rode on them (V23/V24 closed and
-  F13 paid 2026-11-16). Open after this edit: V26, V8; F12, F8, F9, F10, F3, F5.
-- **Files:** `DEBTS-verification.md`, `PROGRESS.md`. Docs-only → cargo gates not re-run.
-- **Verified:** rules.sh HARD-green before and after; delivery byte-compared as usual.
-- **Owner-checks:** none born.
-- **Commit title:** `docs: verify V27 V25 (release-strip rebuild, Wayland CSD pass)`

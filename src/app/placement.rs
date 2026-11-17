@@ -6,9 +6,10 @@
 //! all of its unit tests (in the sibling `placement/tests.rs`). `app.rs` stays
 //! the orchestrator. Since the owner request 2026-11-11 this covers all four
 //! floating windows — "Tools", "Palette", "History" and "Layers" — and also
-//! hosts the one-shot §3.2 first-open ratio of the Tools window.
+//! hosts the one-shot §3.2 first-open ratio of the Tools window and the
+//! magnetized tool-settings panel's position math (owner request 2026-11-17).
 
-use eframe::egui::{self, AreaState, Id, LayerId, Order, Pos2, Rect};
+use eframe::egui::{self, AreaState, Id, LayerId, Order, Pos2, Rect, Vec2};
 
 /// One CSS-style `rem`: egui 0.37 has no rem API, so this is the 16 pt
 /// default body font size. The floating windows' first-open offsets
@@ -44,6 +45,10 @@ const WINDOW_SNAP_DISTANCE: f32 = 2.0 * REM;
 /// [`WindowPlacement::first_open_ratio_y`]); afterwards §3.11 takes over and
 /// the user's placement always wins.
 pub(super) const TOOLS_FIRST_OPEN_RATIO: f32 = 0.4;
+
+/// 0.25rem — the gap between the "Tools" window and its magnetized settings
+/// panel (owner request 2026-11-17).
+pub(super) const TOOL_SETTINGS_GAP: f32 = 0.25 * REM;
 
 /// Placement bookkeeping for one floating window ("Tools"/"Palette"/
 /// "History"/"Layers"/"History Tree"). `Copy` so a tree-window render pass
@@ -90,6 +95,80 @@ impl WindowPlacement {
             ..Self::default()
         }
     }
+}
+
+/// Placement bookkeeping of the magnetized tool-settings panel (owner
+/// request 2026-11-17): the per-tool settings of the "Tools" window live in
+/// their own title-bar-less, immovable window (see [`super::windows`]) whose
+/// position is recomputed EVERY frame from the Tools window's drawn rect —
+/// `Window::fixed_pos` re-applies the position on every frame, so no stored
+/// area position (a drag, a stale state) can ever win over it and the panel
+/// cannot be detached from the Tools window. The only state needed here is
+/// the panel's LAST DRAWN SIZE: egui knows the true size of an auto-sized
+/// window only after its first (invisible) layout pass, and both the
+/// below/above flip and the edge alignment are decided from that size.
+#[derive(Clone, Copy, Default)]
+pub(super) struct ToolSettingsPlacement {
+    /// Outer size of the panel as drawn last frame; `None` before the first
+    /// draw. A zero size is assumed then: the first layout pass renders
+    /// invisibly and the position settles on the second frame.
+    size: Option<Vec2>,
+}
+
+impl ToolSettingsPlacement {
+    /// The left-top position the panel is drawn at THIS frame, derived from
+    /// the Tools window's drawn rect and the last known panel size.
+    pub(super) fn pos(&self, tools_rect: Rect, content: Rect) -> Pos2 {
+        magnet_settings_pos(
+            tools_rect,
+            self.size.unwrap_or_default(),
+            content,
+            TOOL_SETTINGS_GAP,
+        )
+    }
+
+    /// Records the panel's drawn rect (right after `Window::show`): its size
+    /// feeds the next frame's position decision.
+    pub(super) fn record(&mut self, rect: Rect) {
+        self.size = Some(rect.size());
+    }
+}
+
+/// Left-top position of the magnetized tool-settings panel for one frame
+/// (pure, owner request 2026-11-17):
+///
+/// - vertically the panel prefers the space BELOW the Tools window: its top
+///   edge sits `gap` below the Tools window's bottom edge. When it would not
+///   fit between that edge and the main window's bottom edge, it flips ABOVE
+///   the Tools window — its bottom edge sits `gap` above the Tools top edge;
+/// - horizontally the panel aligns the edge matching the side of the
+///   main-window center the Tools window is on: Tools window left of center
+///   → the panel's LEFT edge aligns with the Tools window's left edge;
+///   otherwise (right of center; exactly centered counts as right) the
+///   RIGHT edges align;
+/// - the result is clamped into the main window so a panel that fits nowhere
+///   (pathologically small main window) stays on-screen — egui's own area
+///   constrain is the backstop, this keeps the math total.
+pub(super) fn magnet_settings_pos(
+    tools_rect: Rect,
+    panel_size: Vec2,
+    content: Rect,
+    gap: f32,
+) -> Pos2 {
+    let x = if tools_rect.center().x < content.center().x {
+        tools_rect.min.x
+    } else {
+        tools_rect.max.x - panel_size.x
+    };
+    let fits_below = tools_rect.max.y + gap + panel_size.y <= content.max.y;
+    let y = if fits_below {
+        tools_rect.max.y + gap
+    } else {
+        tools_rect.min.y - gap - panel_size.y
+    };
+    let max_x = (content.max.x - panel_size.x).max(content.min.x);
+    let max_y = (content.max.y - panel_size.y).max(content.min.y);
+    egui::pos2(x.clamp(content.min.x, max_x), y.clamp(content.min.y, max_y))
 }
 
 /// Per-axis anchor of a floating window to one main-window edge (§3.11).

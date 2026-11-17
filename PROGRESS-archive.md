@@ -1051,6 +1051,58 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 ---
 
 ## Log entries moved 2026-11-13 (compaction — the live Log keeps the newest 4)
+### 2026-11-17 — `Feat:` Resize dialog modes — canvas anchor grid, image resample filters, per-layer resize nodes, bottom layer owns the canvas — owner request
+
+- **What:** the owner's 4-point request (chat, 2026-11-17). (1) The dialog gained a MODE
+  radio: "Canvas size" — the Paint.NET-style 3×3 painted-dot ANCHOR grid (center = floor:
+  an odd crop takes the extra pixel left/top, an odd pad adds it right/bottom) — vs
+  "Image size" — a resampling radio Nearest neighbor / Bilinear / Bicubic (default) /
+  Lanczos3 via the PINNED `image` crate's `imageops` on PREMULTIPLIED bytes (no new deps,
+  approval flow not needed) + a "Maintain aspect ratio" lock (the changed field drives the
+  other along the canvas ratio). (2) EVERY layer's tree records ONE `resize` node — new
+  `ActionKind::Resize` + `TreeNode::resize: Option<ResizeInfo>` (mode, the layer's
+  from→to, anchor/filter); the tree row prints the summary, the dot hover explains it, the
+  MCP `get_history_tree` dumps the struct — jumping back beyond the resize shows what it
+  did to THAT layer. (3) SIZE MODEL: the BOTTOM layer owns the canvas size; other layers
+  composite at (0,0) clipped (`composite` learned to clip — mixed sizes are legal);
+  restores keep the node's NATIVE size (the 2026-11-13 crop/pad fit retired — F9 updated;
+  a bottom-layer restore resizes the canvas with it). (4) Deleting the bottom layer:
+  same-size successor = silent new base; different size = the "Canvas Size Source" dialog
+  ("Keep canvas size" = top-left adaptation + its own resize node / "Use layer as base" =
+  the canvas takes the size; no dismiss). New `layers/resize.rs` (anchor_offset,
+  fit_copy_at, rescale, scaled_layer_size); OK on an unchanged size is a silent no-op;
+  `fit_to_canvas` removed. SPEC §3.6/§3.7/§3.8/§6 exception/§7 item 11 rewritten.
+- **Files:** `src/history_tree.rs`, `src/layers.rs`, `src/layers/resize.rs` (new),
+  `src/layers/snapshot.rs`, `src/layers/composite.rs`, `src/app.rs`, `src/app/dialogs.rs`,
+  `src/app/menu.rs`, `src/app/panels.rs`, `src/app/tree_window/paint.rs`,
+  `src/app/mcp/tools/queries.rs`, `src/app/document.rs`, `src/canvas.rs` (unchanged),
+  `SPEC.md`, `DEBTS-verification.md` (V28 born), `DEBTS-functional.md` (F9 update),
+  `PROGRESS.md` (+ archive: the Wayland-CSD and Firefox-retune entries compacted verbatim).
+- **Verified:** rules.sh HARD-green; fmt clean; clippy `-D warnings` clean default + mcp +
+  diagnostics; `cargo test --profile gates` 111 default / 123 mcp / 111 diagnostics green
+  (+12 new: the anchor table, crop/pad offsets, nearest ×2, ×1 identity, proportional
+  rounding, per-layer resize nodes, undo/redo over a resize node, fit_bottom_to, the
+  summaries, the aspect lock, record_resize); `cargo check --target wasm32-unknown-unknown`
+  green; the headless MCP driver pass — ALL 3 scenarios green (15 checks) through the real
+  gates-profile binary under Xvfb (the SANDBOX.md recipe). Delivery byte-compared as usual.
+- **Owner-checks:** V28 born — the resize pass (Windows, optionally browser): anchors,
+  filters, per-layer nodes + native-size jumps, the base-choice dialog branches.
+- **Commit title:** `Add Resize modes (canvas anchor grid, image resample filters), per-layer resize nodes, bottom-layer canvas ownership`
+
+### 2026-11-17 — Docs: V27 + V25 verified via chat → Resolved — owner request
+
+- **What:** the owner verified both open checks in one pass («проверил V27, V25»):
+  V27 — his local `trunk build --release` after the strip fix logs NO wasm-bindgen
+  `target_features` warning and the release page passed the browser smoke (loads, draws,
+  zoom/pan); V25 — the GNOME Wayland pass of the winit Adwaita CSD frame (title bar text
+  follows New/Open/Save/dirty, double-click maximizes/restores, close/minimize work,
+  light and dark shell themes look right). Both rows left the open table for the Resolved
+  list in the same edit; no new checks born; no F-debt rode on them (V23/V24 closed and
+  F13 paid 2026-11-16). Open after this edit: V26, V8; F12, F8, F9, F10, F3, F5.
+- **Files:** `DEBTS-verification.md`, `PROGRESS.md`. Docs-only → cargo gates not re-run.
+- **Verified:** rules.sh HARD-green before and after; delivery byte-compared as usual.
+- **Owner-checks:** none born.
+- **Commit title:** `docs: verify V27 V25 (release-strip rebuild, Wayland CSD pass)`
 
 ### 2026-11-13 — `Fix:` History Tree lanes: divergence-only forks, recency placement, shared connector exits, per-row labels — owner request
 

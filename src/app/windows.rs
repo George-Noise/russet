@@ -4,7 +4,10 @@
 //! private fields; `app.rs` stays the orchestrator. Their first-open
 //! positions are set here (§3.2/§3.3: `Window::pivot` + `default_pos`);
 //! where they sit afterwards (drop-time anchoring, resize repositioning)
-//! is §3.11 and lives in [`super::placement`].
+//! is §3.11 and lives in [`super::placement`]. The "Tools" window also owns
+//! its magnetized per-tool settings panel (owner request 2026-11-17): the
+//! position math is `super::placement::magnet_settings_pos`, the window
+//! itself is `tool_settings_window` below.
 
 use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 
@@ -25,6 +28,44 @@ fn tools_window_id() -> Id {
 
 fn palette_window_id() -> Id {
     Id::unique("palette_window")
+}
+
+/// Stable id of the magnetized tool-settings panel (owner request
+/// 2026-11-17); needed to read and persist its area state, so it must not
+/// depend on the (changing) title text.
+fn tool_settings_window_id() -> Id {
+    Id::unique("tool_settings_window")
+}
+
+/// The builder of the magnetized settings panel (owner request 2026-11-17):
+/// a title-bar-less, immovable, content-hugging window. `fixed_pos`
+/// re-applies the position on EVERY frame — that is the magnet: no stored
+/// area position can ever win over it, so the panel cannot be dragged or
+/// otherwise detached from the Tools window («без возможности отлипания,
+/// пока что»). Exposed as a function so the regression tests
+/// (`windows/tests.rs`) run the exact builder the app runs.
+fn tool_settings_window_builder(pos: egui::Pos2) -> egui::Window<'static> {
+    egui::Window::new("Tool settings")
+        .id(tool_settings_window_id())
+        .title_bar(false)
+        .collapsible(false)
+        .movable(false)
+        .fixed_pos(pos)
+        .auto_sized() // size follows the content; no resize handles
+}
+
+/// Whether the tool's settings panel shows the "Size" slider (owner request
+/// 2026-11-17: the slider is SHOWN for these tools and NOT SHOWN for the
+/// others — the former disabled-when-unapplicable slider is retired).
+fn tool_uses_size(tool: Tool) -> bool {
+    matches!(tool, Tool::Brush | Tool::Eraser | Tool::Line | Tool::Shape)
+}
+
+/// Whether the tool has anything for the settings panel to display at all:
+/// Pencil and Eyedropper have no settings, so the magnetized panel is not
+/// drawn for them (owner request 2026-11-17).
+fn tool_has_settings(tool: Tool) -> bool {
+    !matches!(tool, Tool::Pencil | Tool::Eyedropper)
 }
 
 impl App {
@@ -59,6 +100,9 @@ impl App {
             .default_pos(ctx.content_rect().left_center() + egui::vec2(FIRST_OPEN_GAP, 0.0))
             .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {
+                // The Tools window itself is ONLY the tool list: the per-tool
+                // settings live in the magnetized panel below/above it (owner
+                // request 2026-11-17, see `tool_settings_window`).
                 egui::Grid::new("tools_grid")
                     .num_columns(TOOL_COLUMNS)
                     .spacing([4.0, 2.0])
@@ -75,30 +119,65 @@ impl App {
                             ui.end_row();
                         }
                     });
+            });
+        if let Some(response) = &shown {
+            place_floating_window(
+                ctx,
+                tools_window_id(),
+                response.response.rect,
+                ctx.content_rect(),
+                self.last_content_rect,
+                &mut self.tools_placement,
+            );
+            // The panel magnets to the Tools window's rect AS DRAWN THIS
+            // frame: a title-bar drag moves both in the same frame, and the
+            // §3.11 resize repositioning (which persists into the next frame)
+            // is followed the frame it becomes visible.
+            self.tool_settings_window(ctx, response.response.rect);
+        }
+        if !open {
+            self.tools_window_open = false;
+        }
+    }
 
-                let size_affected = matches!(
-                    self.tools.tool,
-                    Tool::Brush | Tool::Eraser | Tool::Line | Tool::Shape
-                );
-                ui.add_enabled(
-                    size_affected,
-                    egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"),
-                );
-
-                if self.tools.tool == Tool::Line {
+    /// The magnetized settings panel of the "Tools" window (owner request
+    /// 2026-11-17): the per-tool controls that used to sit below the tool
+    /// list inside the Tools window, now in their own window glued to the
+    /// Tools window by [`tool_settings_window_builder`] and
+    /// `placement::magnet_settings_pos`. Drawn only while the Tools window
+    /// is shown AND the current tool has settings — for Pencil/Eyedropper
+    /// the panel is not drawn at all.
+    fn tool_settings_window(&mut self, ctx: &Context, tools_rect: Rect) {
+        if !tool_has_settings(self.tools.tool) {
+            return;
+        }
+        let pos = self
+            .tool_settings_placement
+            .pos(tools_rect, ctx.content_rect());
+        let shown = tool_settings_window_builder(pos).show(ctx, |ui| {
+            let tool = self.tools.tool;
+            if tool_uses_size(tool) {
+                // Always enabled when shown: a tool without a size setting
+                // does not get a disabled slider, it gets NO slider (owner
+                // request 2026-11-17).
+                ui.add(egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"));
+            }
+            match tool {
+                Tool::Line => {
                     ui.horizontal(|ui| {
                         ui.label("Mode");
                         ui.radio_value(&mut self.tools.line_mode, LineMode::Straight, "Straight");
                         ui.radio_value(&mut self.tools.line_mode, LineMode::Curve, "Curve");
                     });
                     if self.tools.line_mode == LineMode::Curve {
-                        // Short lines: one long hint stretches the auto-sized
-                        // Tools window (owner request 2026-11-10).
+                        // Short lines: one long hint stretches the panel (as
+                        // it once stretched the Tools window — owner
+                        // request 2026-11-10).
                         ui.weak("Click adds points.");
                         ui.weak("Enter/double-click places, Esc cancels.");
                     }
                 }
-                if self.tools.tool == Tool::Shape {
+                Tool::Shape => {
                     ui.horizontal(|ui| {
                         ui.label("Kind");
                         ui.radio_value(
@@ -126,25 +205,17 @@ impl App {
                         self.tools.shape_fill = true;
                     }
                 }
-                if self.tools.tool == Tool::Text {
-                    // Two short lines: the single long hint made the
-                    // auto-sized Tools window too wide (owner 2026-11-10).
+                Tool::Text => {
+                    // Two short lines: the single long hint would make the
+                    // auto-sized panel too wide (owner 2026-11-10).
                     ui.weak("Click the canvas to place text;");
                     ui.weak("font size is set in the Text window.");
                 }
-            });
+                Tool::Pencil | Tool::Brush | Tool::Eraser | Tool::Eyedropper => {}
+            }
+        });
         if let Some(response) = &shown {
-            place_floating_window(
-                ctx,
-                tools_window_id(),
-                response.response.rect,
-                ctx.content_rect(),
-                self.last_content_rect,
-                &mut self.tools_placement,
-            );
-        }
-        if !open {
-            self.tools_window_open = false;
+            self.tool_settings_placement.record(response.response.rect);
         }
     }
 
@@ -272,3 +343,6 @@ fn color_swell_button(ui: &mut egui::Ui, color: &mut Color32, size: f32) -> egui
         });
     button_response
 }
+
+#[cfg(test)]
+mod tests;

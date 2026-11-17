@@ -67,7 +67,7 @@ mod windows;
 
 use self::document::{MAX_CANVAS, MIN_CANVAS, NEW_HEIGHT, NEW_WIDTH, PendingAction};
 use self::launch::LaunchConfig;
-use self::placement::{TOOLS_FIRST_OPEN_RATIO, WindowPlacement};
+use self::placement::{TOOLS_FIRST_OPEN_RATIO, ToolSettingsPlacement, WindowPlacement};
 use self::preview::PreviewState;
 use self::text_tool::TextEditState;
 use self::tree_window::TreeView;
@@ -161,6 +161,10 @@ pub struct App {
     /// 2026-11-11 added the Tool Log/Layers pair); the Tools one also carries
     /// the one-shot §3.2 first-open vertical ratio (40%/60%).
     tools_placement: WindowPlacement,
+    /// Magnetized tool-settings panel (owner request 2026-11-17): the
+    /// panel's last drawn size, feeding the below/above flip and the edge
+    /// alignment of its next frame; state and math in [`placement`].
+    tool_settings_placement: ToolSettingsPlacement,
     palette_placement: WindowPlacement,
     history_placement: WindowPlacement,
     layers_placement: WindowPlacement,
@@ -311,6 +315,7 @@ impl App {
             tree_clones: 0,
             stroke_paint: None,
             tools_placement: WindowPlacement::first_open_at_ratio(TOOLS_FIRST_OPEN_RATIO),
+            tool_settings_placement: ToolSettingsPlacement::default(),
             palette_placement: WindowPlacement::default(),
             history_placement: WindowPlacement::default(),
             layers_placement: WindowPlacement::default(),
