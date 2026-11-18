@@ -2,12 +2,14 @@
 //! request 2026-11-18): every icon is a tiny-skia vector drawing rasterized
 //! ONCE into a [`tiny_skia::Pixmap`] at the current `pixels_per_point` and
 //! served as an egui texture through `load_texture_cached` — the per-frame
-//! cost of a button is one textured quad, not a re-tessellation. The atlas
-//! re-rasterizes only when the scale or the theme changes (owner: don't
-//! economize on theme switches, they are too rare). Colored and monochrome
+//! cost of a button is one textured quad, not a re-tessellation. Since the
+//! v4 pass the icons are FULLY theme-independent (the owner's goal: one
+//! drawing reads well in both themes): the colored rims are fixed constants
+//! and the monochrome ink is the fixed [`TOOL_INK`] — so the atlas
+//! re-rasterizes ONLY when the scale changes. Colored and monochrome
 //! icons share the SAME draw pipeline: both are polygons/strokes through the
-//! same primitives below; monochrome ones just take the theme's text color
-//! where the colored ones take a fixed palette. The Eyedropper's icon
+//! same primitives below; monochrome ones take [`TOOL_INK`] where the
+//! colored ones take a fixed palette. The Eyedropper's icon
 //! doubles as the canvas cursor (owner request 2026-11-18) via
 //! `Context::set_cursor_image` — egui 0.37 pushes the RGBA bitmap to the
 //! integration (`CustomCursorImage`, STRAIGHT alpha, deduped by `Arc` pointer
@@ -21,7 +23,7 @@
 //! 16 pt because egui 0.37 has no rem API) and one [`Transform`] maps it to
 //! the physical-pixel space of the raster.
 
-use eframe::egui::{self, Color32, Context, Id, TextureHandle, TextureId, TextureOptions, Theme};
+use eframe::egui::{self, Color32, Context, Id, TextureHandle, TextureId, TextureOptions};
 use std::sync::Arc;
 use tiny_skia::{
     FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Point, Stroke, Transform,
@@ -63,11 +65,19 @@ pub(super) fn label(tool: Tool) -> &'static str {
     }
 }
 
+/// The monochrome icons' ink (owner v4 pass 2026-11-18: FIXED — no longer
+/// the theme's text color, which flipped the Line/Shape/Text icons between
+/// near-white and near-black): the LIGHT theme's text color (egui light's
+/// noninteractive text, gray 80) a bit darker. The owner asked for "the
+/// light-theme color, just a bit darker".
+const TOOL_INK: Color32 = Color32::from_gray(64);
+
 /// The rasterized icon set behind the Tools window. Stored in `App`; rebuilt
-/// by [`ensure`] whenever the scale or the theme changes.
+/// by [`ensure`] whenever the scale changes (theme-independent since the v4
+/// pass — see the module doc).
 pub(super) struct Atlas {
-    /// `(pixels_per_point, dark)` the textures were rasterized at.
-    key: (f32, bool),
+    /// The `pixels_per_point` the textures were rasterized at.
+    key: f32,
     /// The uploaded textures, one per [`Tool`], same order as [`TOOLS`].
     /// The HANDLES are kept on purpose: a `TextureHandle` drop decrements
     /// the texture's retain count (`TextureManager::free`), and a texture
@@ -81,24 +91,21 @@ pub(super) struct Atlas {
 }
 
 /// (Re-)rasterizes the whole icon atlas when needed. Cheap no-op while the
-/// stored `(pixels_per_point, dark)` key matches the context: the expensive
-/// part (tiny-skia drawing + the texture upload) runs once per scale/theme
-/// change, exactly the "draw once, reuse" pattern the owner asked for.
-/// Total: on any raster failure the OLD atlas is kept and the call is
-/// retried next frame (the pixel size is clamped to `1..=256`, so this is
-/// unreachable in practice).
+/// stored `pixels_per_point` key matches the context: the expensive
+/// part (tiny-skia drawing + the texture upload) runs once per scale
+/// change, exactly the "draw once, reuse" pattern the owner asked for
+/// (theme-independent since the v4 pass — the key's theme half died with
+/// the theme-dependent ink and rims). Total: on any raster failure the OLD
+/// atlas is kept and the call is retried next frame (the pixel size is
+/// clamped to `1..=256`, so this is unreachable in practice).
 pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let ppp = ctx.pixels_per_point();
-    let dark = ctx.theme() == Theme::Dark;
-    if atlas.as_ref().is_some_and(|a| a.key == (ppp, dark)) {
+    if atlas.as_ref().is_some_and(|a| a.key == ppp) {
         return;
     }
-    // The monochrome icons take the ACTIVE theme's text color; the colored
-    // ones ignore it (same pipeline, different palette — see the module doc).
-    let text = ctx
-        .style_of(if dark { Theme::Dark } else { Theme::Light })
-        .visuals
-        .text_color();
+    // The monochrome icons take the FIXED ink; the colored ones have their
+    // own fixed palettes (same pipeline, different colors — module doc).
+    let text = TOOL_INK;
     let px = (ICON_PT * ppp).round().clamp(1.0, 256.0) as usize;
 
     let mut handles = Vec::with_capacity(TOOLS.len());
@@ -122,7 +129,7 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
         return; // unreachable: TOOLS contains the Eyedropper
     };
     *atlas = Some(Atlas {
-        key: (ppp, dark),
+        key: ppp,
         handles,
         pipette_cursor: Some(pipette_cursor),
     });
@@ -473,7 +480,7 @@ fn draw_eraser(pm: &mut Pixmap, ts: Transform) {
         ts,
         &[a, b, c, d],
         true,
-        Color32::from_rgb(180, 90, 116),
+        Color32::from_rgb(92, 52, 66),
         OUTLINE_W,
     );
     stroke(
@@ -481,7 +488,7 @@ fn draw_eraser(pm: &mut Pixmap, ts: Transform) {
         ts,
         &[m1, m2],
         false,
-        Color32::from_rgb(180, 90, 116),
+        Color32::from_rgb(92, 52, 66),
         OUTLINE_W,
     );
 }

@@ -80,13 +80,21 @@ impl App {
         if !self.tools_window_open {
             return;
         }
-        // The icon atlas is (re)rastered once per scale/theme change in
+        // The icon atlas is (re)rastered once per scale change in
         // `App::ui` — before the canvas, so the Eyedropper's pipette cursor
         // exists too; here every frame just blits the cached textures.
-        let mut open = true;
         let shown = egui::Window::new("Tools")
             .id(tools_window_id())
-            .open(&mut open)
+            // Owner v4 (2026-11-18): NO title bar — the header was WIDER
+            // than the tiny window (a visual artifact). The title still
+            // names the window's Id: egui derives it from the title EVEN
+            // when the bar is hidden (`window.rs` on `Window::new`), so the
+            // explicit `tools_window_id()` keeps the identity stable; egui's
+            // `WindowDrag::TitleBar` silently falls back to `Anywhere` for
+            // title-bar-less windows (`window.rs`), so the window stays
+            // draggable by its surface, and closing runs through
+            // View ▸ Tools (the bar's ✕ is gone with the bar).
+            .title_bar(false)
             // First open (§3.2): 0.5rem from the left edge; vertically a bit
             // ABOVE center — 40% of the free vertical space above the window
             // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
@@ -136,9 +144,6 @@ impl App {
             // is followed the frame it becomes visible.
             self.tool_settings_window(ctx, response.response.rect);
         }
-        if !open {
-            self.tools_window_open = false;
-        }
     }
 
     /// One tool button: a square, the cached icon texture on top, the
@@ -155,17 +160,29 @@ impl App {
         // single icon set (its dark rim) read well everywhere, instead of
         // drawing for two backgrounds. The states (selected/hover/rest) come
         // from the light widget visuals, so the button is theme-independent.
+        // Owner v4 (same day): the resting/hover fills dim A STEP (−14 per
+        // channel) — the full gray(230) light-theme button contrasted hard
+        // against BOTH themes' window background; the selection fill keeps
+        // the bright selection blue so the active tool still pops.
+        const DIM: u8 = 14;
+        let dim = |c: Color32| {
+            Color32::from_rgb(
+                c.r().saturating_sub(DIM),
+                c.g().saturating_sub(DIM),
+                c.b().saturating_sub(DIM),
+            )
+        };
         let light = egui::Visuals::light();
         let (fill, stroke) = if selected {
             (light.selection.bg_fill, light.selection.stroke)
         } else if response.hovered() {
             (
-                light.widgets.hovered.bg_fill,
+                dim(light.widgets.hovered.bg_fill),
                 light.widgets.hovered.bg_stroke,
             )
         } else {
             (
-                light.widgets.inactive.bg_fill,
+                dim(light.widgets.inactive.bg_fill),
                 light.widgets.inactive.bg_stroke,
             )
         };

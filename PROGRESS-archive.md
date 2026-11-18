@@ -1601,3 +1601,32 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **Owner-checks:** answer the batched debt questions (V1–V12, F-decisions) —
   first live run of the ask-don't-accumulate rule; skim the DEBTS wording.
 - **Commit title:** `Add DEBTS files and PROGRESS budget check; baseline rule; CI mcp gates; scenario driver`
+
+### 2026-11-18 — `Feat:` brush + pipette icons redrawn; equal Tools-grid gaps — owner request
+
+- **What:** the owner tested the hardened gate on a real task (2026-11-18): (1) the BRUSH
+  icon's chisel wedge read as a second pencil — redrawn as a classic round brush: a ROUND
+  volumetric bristle belly (peak half-height 2.7 pt past the ferrule) split into light/dark
+  facets for volume, a metal ferrule with two crimp ridges, the loaded paint tip kept;
+  (2) the PIPETTE's all-rectangle stick read as a pen — redrawn as a classic eyedropper:
+  a tapering glass cone with a blue liquid stripe (the tip full of the sample), a WIDER metal
+  collar band, and a ROUND rubber bulb (a new `arc_pts` helper tessellates the round parts);
+  `PIPETTE_TIP` and the cursor hotspot unchanged; (3) the Tools grid's horizontal gap was
+  18 pt vs 6 pt vertical — ROOT CAUSE inside egui's own `grid.rs`: every column is floored
+  at `interact_size.x` (40 pt), padding the 28 pt buttons with dead width; fixed with
+  `.min_col_width(TOOL_BUTTON_PT)` — pixel-measured 6 pt = 6 pt after the fix; quirk
+  recorded in AGENTS.md.
+- **Files:** `src/app/tool_icons.rs` (draw_brush + draw_pipette redrawn, `arc_pts`, the glass
+  widened so the outline doesn't eat it), `src/app/windows.rs` (`min_col_width`),
+  `src/app/tool_icons/tests.rs` (the glass assert follows the new palette), `AGENTS.md`
+  (Grid quirk), `PROGRESS.md` (compaction: the tool-icons entry moved to PROGRESS-archive.md;
+  snapshot row + this entry + stamp).
+- **Verified:** the design was iterated on rendered PNGs (256 px + real 24 px contact sheets),
+  then the FULL hot gate: ALL GATES GREEN 14 s (156 default / 168 mcp, fmt + clippy
+  `-D warnings` clean) — the FIRST gate run caught a real bug: the glass band was thinner
+  than two outline half-widths, so zero opaque glass pixels survived and the glass test
+  failed; fixed by widening the cone; headless visual driver ALL SCENARIOS GREEN + `--shots`,
+  the Tools window re-measured pixel-exact after the fix (H 6 / V 6).
+- **Owner-checks:** V35 born (the redrawn-icons look pass on Windows). Open: V35 (new), V34
+  (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
+- **Commit title:** `Redraw brush + pipette icons; equal Tools-grid gaps (egui Grid interact_size quirk)`

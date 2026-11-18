@@ -1,13 +1,13 @@
 //! Tests of the tool-icon rasterization (owner request 2026-11-18): the
 //! pure tiny-skia pipeline (colored + monochrome icons through the SAME
-//! primitives) and the atlas lifecycle — rasterized once per
-//! (pixels_per_point, theme) change, served as cached egui textures. The
-//! headless part runs real egui passes through [`egui::Context::run_pass`]
+//! primitives) and the atlas lifecycle — rasterized once per scale change
+//! (theme-independent since the v4 pass), served as cached egui textures.
+//! The headless part runs real egui passes through [`egui::Context::run_pass`]
 //! (no renderer, no App), the same pattern the dialog tests use.
 
-use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme};
+use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme, Visuals};
 
-use super::{TOOLS, cursor_bitmap, ensure, icon_transform, label, rasterize_tool_icon};
+use super::{TOOL_INK, TOOLS, cursor_bitmap, ensure, icon_transform, label, rasterize_tool_icon};
 use crate::tools::Tool;
 
 /// Opaque-pixel threshold: every icon must draw a substantial mark in its
@@ -183,31 +183,37 @@ fn the_icon_transform_maps_the_logical_space_onto_the_raster() {
     assert!((c.x - 12.0).abs() < 1e-3 && (c.y - 12.0).abs() < 1e-3);
 }
 
-/// The atlas lifecycle: built on the first frame, untouched while the
-/// (ppp, theme) key matches, rebuilt when the scale or the theme changes.
+/// The atlas lifecycle: built on the first frame, untouched while the ppp
+/// key matches, rebuilt when the scale changes. THEME-INDEPENDENT since the
+/// v4 pass (fixed ink + fixed rims): a theme switch must not rebuild it.
 #[test]
-fn atlas_rebuilds_only_on_scale_or_theme_change() {
+fn atlas_rebuilds_only_on_scale_change() {
     let ctx = Context::default();
     // ensure() loads textures; headless egui hands the deltas back with
     // every pass and asserts when they drop unhandled (the dialog tests'
-    // convention: explicitly clear them).
-    fn pass(ctx: &Context) {
-        ctx.run_pass(RawInput::default(), |_| {})
-            .textures_delta
-            .clear();
+    // convention: explicitly clear them). The return value is how many
+    // textures the pass uploaded — 0 means nothing re-rasterized. The
+    // first pass also uploads egui's font atlas (8); later passes carry
+    // only what re-rasterized, so the 0-assertions below stay a clean
+    // "nothing rebuilt" discriminator.
+    fn pass(ctx: &Context) -> usize {
+        let mut delta = ctx.run_pass(RawInput::default(), |_| {}).textures_delta;
+        let uploaded = delta.set.len();
+        delta.clear();
+        uploaded
     }
     let mut atlas = None;
     ensure(&mut atlas, &ctx);
-    pass(&ctx);
+    assert_eq!(pass(&ctx), 8, "7 tool icons + egui's font atlas");
     let first = atlas.as_ref().expect("the first ensure builds the atlas");
-    let key0 = first.key;
-    assert_eq!(key0, (1.0, true), "egui's headless default: ppp 1.0, dark");
+    assert_eq!(first.key, 1.0, "egui's headless default: ppp 1.0");
     let cursor0 = first.pipette_cursor.as_ref().expect("the pipette cursor");
     assert_eq!(cursor0.size, [24, 24]);
 
     // Same conditions: a cheap no-op (the key match must keep the atlas).
     ensure(&mut atlas, &ctx);
-    assert_eq!(atlas.as_ref().expect("kept").key, key0);
+    assert_eq!(pass(&ctx), 0);
+    assert_eq!(atlas.as_ref().expect("kept").key, 1.0);
 
     // Scale change: the WHOLE atlas re-rasterizes (24 pt × 2.0 = 48 px).
     // set_pixels_per_point becomes active at the START of the next pass,
@@ -215,21 +221,47 @@ fn atlas_rebuilds_only_on_scale_or_theme_change() {
     ctx.set_pixels_per_point(2.0);
     pass(&ctx);
     ensure(&mut atlas, &ctx);
-    pass(&ctx);
+    assert_eq!(
+        pass(&ctx),
+        7,
+        "rebuilt after the scale change (the font atlas only uploads once)"
+    );
     let scaled = atlas.as_ref().expect("rebuilt after the scale change");
-    assert_eq!(scaled.key, (2.0, true));
+    assert_eq!(scaled.key, 2.0);
     let cursor1 = scaled
         .pipette_cursor
         .as_ref()
         .expect("cursor re-rasterized");
     assert_eq!(cursor1.size, [48, 48]);
 
-    // Theme change: re-rasterized too (owner: don't economize here).
+    // Theme change: NOT a rebuild anymore — the fixed ink and the fixed
+    // rims make the icons theme-independent (owner v4: one drawing reads
+    // well in both themes; the old theme re-raster died with its reason).
+    // The pass still uploads ONE texture: egui's font atlas follows the
+    // theme too. OUR seven icons would make it 8 — the count stays the
+    // "did the atlas rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
     ensure(&mut atlas, &ctx);
-    pass(&ctx);
-    let themed = atlas.as_ref().expect("rebuilt after the theme change");
-    assert_eq!(themed.key, (2.0, false));
+    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 7 icons");
+    assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
+}
+
+/// The monochrome ink is FIXED (owner v4) and sits a bit BELOW the light
+/// theme's text color (egui light's noninteractive text, gray 80) — "the
+/// light-theme color, just a bit darker".
+#[test]
+fn mono_ink_is_fixed_below_the_light_theme_text() {
+    let light_text = Visuals::light().widgets.noninteractive.fg_stroke.color;
+    assert_eq!(
+        light_text,
+        Color32::from_gray(80),
+        "egui light's text color"
+    );
+    assert!(
+        TOOL_INK.r() < light_text.r() && TOOL_INK.r() > 32,
+        "TOOL_INK = {:?}",
+        TOOL_INK.to_array()
+    );
 }
 
 /// All seven atlas textures exist and are distinct (one per tool).
@@ -387,4 +419,15 @@ fn colored_outlines_are_dark_in_both_themes() {
             "the v2 light rim is gone — no theme-aware rims anymore"
         );
     }
+    // The Eraser's rim joins the family (owner v4: it carried a light pink
+    // outline that blended with its faces and broke the set's style).
+    let eraser = rasterize_tool_icon(Tool::Eraser, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(
+        has_color(&eraser, (92, 52, 66), 10),
+        "the eraser needs the dark plum rim"
+    );
+    assert!(
+        !has_color(&eraser, (180, 90, 116), 10),
+        "the old pink rim is gone"
+    );
 }

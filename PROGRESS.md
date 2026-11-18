@@ -53,7 +53,8 @@
 | Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
 | Extra: --warm warm-up + session rules; debts ask = 4 newest; V33 closed (owner 2026-11-18) | done — live cold-lane test + hot gate | `sandbox_check.sh --warm` = probe + detached gates-lane compile (clippy + test --no-run, nothing executed — the mcp stdin trap impossible) with a double-start pid guard; session start = `sandbox_check.sh --warm` FIRST; wasm ad-hoc checks only for web-facing changes; the batched debts ask lists only the 4 newest open items (AGENTS.md Debts rule 7) |
 | Extra: permanent #[ignore] icon-dump + F16 rust-cache debt (owner 2026-11-18) | done — dump live-tested, gate skips it | `cargo test --profile gates -- --ignored icons_dump` = 14 PNGs (7 tools × 256/24 px) into /tmp/icon_dump, BLACK raster keeps the monochrome icons legible; plain gate = 156/168 passed + 1 ignored; rust-cache (`Swatinem/rust-cache@v2` after checkout) recorded as postponed F16 with the mechanism + limits written out, ci.yml untouched |
-| Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged; V36/V37 → "refinements delivered; re-check pending" |
+| Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged |
+| Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -72,8 +73,10 @@ The icons-v2 round (same day) iterated the redraw on contact sheets, added the t
 switcher (menu bar + MCP `set_theme`, System default) and gate-verified it all. The
 icons-v3 round (the owner's pass) reverted the rim to ONE dark rim over the now
 light-theme tool-button background, made the pipette glass a cylinder and moved the
-Theme button before Help: the gate run below is green with 160 default / 173 mcp
-passed (+1 ignored each).
+Theme button before Help. The icons-v4 round (the owner approved v3) fixed the mono
+ink (`TOOL_INK`) — the atlas went fully theme-independent (key = ppp) — dimmed the
+buttons a step, put the eraser's rim in the set and removed the Tools window's title
+bar: the gate run below is green with 161 default / 174 mcp passed (+1 ignored each).
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
 `app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
@@ -99,8 +102,38 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > followed them (the verify.sh round needed the budget back), the tool-icons entry
 > joined them in the evening (the icon-redraw round), the About entry followed
 > it (V33's closure freed it — the tooling round's budget), the unoptimized-dev
-> entry followed that (the dump round's budget), and the verify.sh-hardening entry
-> completed the day's compactions (the icons-v2 round's budget).
+> entry followed that (the dump round's budget), the verify.sh-hardening entry
+> completed the day's compactions (the icons-v2 round's budget), and the
+> icon-redraw entry moved during the icons-v4 round's budget.
+
+### 2026-11-18 — `Fix:` icons v4 (eraser rim, dimmed buttons, fixed ink) + title-bar-less Tools — owner pass
+
+- **What:** the owner APPROVED the v3 pass ("отлично, гораздо лучше") and ordered four
+  leftovers: (1) the ERASER's outline joined the set's style — dark plum (92,52,66)
+  instead of the light pink that blended with the faces; (2) the tool buttons' REST/HOVER
+  fills dimmed A STEP (−14/channel: gray 230 → 216 rest, 220 → 206 hover — the full
+  light-theme button contrasted hard against BOTH themes' window backgrounds; the
+  selection fill keeps the bright blue); (3) the MONO icons' ink FIXED — `TOOL_INK`
+  gray 64 (the light theme's text gray 80, a bit darker), no white/black flip on theme
+  switch → the icons are FULLY theme-independent → the atlas key dropped to just
+  `pixels_per_point` (the theme re-raster died with its reason; the atlas test reworked:
+  a theme switch uploads only egui's theme-dependent font atlas, never our 7 — AGENTS
+  quirk); (4) the Tools window has NO TITLE BAR (`title_bar(false)` — the header was
+  wider than the tiny window): egui derives the Id from the title even with the bar
+  hidden (the explicit `tools_window_id()` keeps the identity — AGENTS quirk),
+  `WindowDrag::TitleBar` falls back to Anywhere (still draggable), the ✕ is gone →
+  View ▸ Tools closes.
+- **Files:** `src/app/tool_icons.rs` (TOOL_INK, eraser rims, key/ensure), 
+  `tool_icons/tests.rs` (atlas test reworked, mono-ink test, eraser-rim asserts),
+  `src/app/windows.rs` (dim + title_bar(false)), `SPEC.md` (§3.2), `AGENTS.md` (+2
+  quirks), `DEBTS-verification.md` (V37 verified; V36 → v4), `PROGRESS.md` (compaction:
+  the icon-redraw entry → PROGRESS-archive.md; snapshot + entry + stamp).
+- **Verified:** the eraser iterated on the dump contact sheet (reads as the set);
+  FULL hot gate below (161 default / 174 mcp); headless visual driver ALL SCENARIOS
+  GREEN (regression).
+- **Owner-checks:** V37 verified (owner approved the look). V36 → "v3 approved; v4
+  polish delivered — re-check pending". Open: V36, V30 (parked), V8 (parked).
+- **Commit title:** `Icons v4: eraser rim in the set, dimmed buttons, fixed mono ink (theme-independent atlas), title-bar-less Tools`
 
 ### 2026-11-18 — `Fix:` icons v3 (light-theme buttons, dark rim, cylinder glass) + Theme-button v2 — owner pass
 
@@ -209,32 +242,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V33 closed. Open after this edit: V35 (the icon look), V34 (the
   unoptimized-dev pass), V30 (parked), V8 (parked).
 - **Commit title:** `Add sandbox_check --warm warm-up; AGENTS wasm-economy + debts-ask rules; close V33`
-
-### 2026-11-18 — `Feat:` brush + pipette icons redrawn; equal Tools-grid gaps — owner request
-
-- **What:** the owner tested the hardened gate on a real task (2026-11-18): (1) the BRUSH
-  icon's chisel wedge read as a second pencil — redrawn as a classic round brush: a ROUND
-  volumetric bristle belly (peak half-height 2.7 pt past the ferrule) split into light/dark
-  facets for volume, a metal ferrule with two crimp ridges, the loaded paint tip kept;
-  (2) the PIPETTE's all-rectangle stick read as a pen — redrawn as a classic eyedropper:
-  a tapering glass cone with a blue liquid stripe (the tip full of the sample), a WIDER metal
-  collar band, and a ROUND rubber bulb (a new `arc_pts` helper tessellates the round parts);
-  `PIPETTE_TIP` and the cursor hotspot unchanged; (3) the Tools grid's horizontal gap was
-  18 pt vs 6 pt vertical — ROOT CAUSE inside egui's own `grid.rs`: every column is floored
-  at `interact_size.x` (40 pt), padding the 28 pt buttons with dead width; fixed with
-  `.min_col_width(TOOL_BUTTON_PT)` — pixel-measured 6 pt = 6 pt after the fix; quirk
-  recorded in AGENTS.md.
-- **Files:** `src/app/tool_icons.rs` (draw_brush + draw_pipette redrawn, `arc_pts`, the glass
-  widened so the outline doesn't eat it), `src/app/windows.rs` (`min_col_width`),
-  `src/app/tool_icons/tests.rs` (the glass assert follows the new palette), `AGENTS.md`
-  (Grid quirk), `PROGRESS.md` (compaction: the tool-icons entry moved to PROGRESS-archive.md;
-  snapshot row + this entry + stamp).
-- **Verified:** the design was iterated on rendered PNGs (256 px + real 24 px contact sheets),
-  then the FULL hot gate: ALL GATES GREEN 14 s (156 default / 168 mcp, fmt + clippy
-  `-D warnings` clean) — the FIRST gate run caught a real bug: the glass band was thinner
-  than two outline half-widths, so zero opaque glass pixels survived and the glass test
-  failed; fixed by widening the cone; headless visual driver ALL SCENARIOS GREEN + `--shots`,
-  the Tools window re-measured pixel-exact after the fix (H 6 / V 6).
-- **Owner-checks:** V35 born (the redrawn-icons look pass on Windows). Open: V35 (new), V34
-  (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
-- **Commit title:** `Redraw brush + pipette icons; equal Tools-grid gaps (egui Grid interact_size quirk)`
