@@ -23,6 +23,7 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-18 | `cargo check` (dev, FIRST run under the FULLY UNOPTIMIZED policy — owner decision 2026-11-18: fresh sandbox, all deps compiled unoptimized; toolchain fetched before the timer) | **1m31s** (was 3m51s the same morning under optimized deps) | time'd exactly |
 | 2026-11-18 | `cargo check` (dev, fresh sandbox: rustup 1.99.1 installed first, then ALL deps compiled; docs/comment-only tree) | 3m51s | time'd exactly |
 | 2026-11-17 | rustup install + fetch pinned 1.99.1 toolchain (fresh sandbox, no rustup at all) | ≈ 3–4 min | ≈ (background-log mtimes) |
 | 2026-11-17 | `cargo test --profile gates` (gates profile fresh: all test deps compiled) | ≈ 4–6 min | ≈ (observed via background poll) |
@@ -49,7 +50,10 @@
 - A COLD session (fresh sandbox, no `target/`) costs ~15–20 min of dep
   compilation before the first useful command; the store that used to skip it
   is retired (owner decision 2026-11-17) — a warm `target/` carried over from
-  the previous session gives the hot numbers above.
+  the previous session gives the hot numbers above. Since owner decision
+  2026-11-18 the dev profile is FULLY unoptimized, so the dep-compile share
+  shrank (first measured point: cold `cargo check` 1m31s vs 3m51s optimized,
+  same morning — see the cold rows).
 - Sleep chunk guidance: start with ~1/3 of the last measured duration, then
   poll in ~60–120 s chunks. Never poll more often than needed (every poll is a
   step).

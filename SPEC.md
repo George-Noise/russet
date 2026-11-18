@@ -78,17 +78,13 @@ winit = { version = "0.30.13", features = ["wayland-csd-adwaita"] }
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 
-# FAST DEVELOPMENT:
-# - own code rebuilds without optimizations (fast);
-# - dependencies (eframe, glow, image...) are optimized ONCE and taken from cache —
-#   the UI stays responsive in dev builds;
-# - shorter debug info speeds up linking and barely loads the disk.
+# DEV — FULLY UNOPTIMIZED (owner decision 2026-11-18; the full rationale
+# lives in Cargo.toml): the crate AND every dependency compile at opt-level 0,
+# no debuginfo — dev builds must be fast, UI lag in `cargo run` is accepted
+# (owner: "it's dev — it's fine if it lags").
 [profile.dev]
-opt-level = 1
-debug = "line-tables-only"
-
-[profile.dev.package."*"]
-opt-level = 2
+opt-level = 0
+debug = false
 
 # RELEASE: built by the owner MANUALLY when everything is ready (LTO is slow).
 # Do NOT run `cargo build --release` during development.
@@ -105,7 +101,7 @@ strip = "debuginfo"
 
 About build speed:
 - cargo and trunk **already build in parallel on all cores** — do not pass `-j`, do not disable parallelism, do not touch `codegen-units` in the dev profile.
-- The first `cargo run` is long (dependencies compile with optimizations) — this is normal; all subsequent rebuilds take seconds.
+- The dev profile is FULLY unoptimized (owner decision 2026-11-18), so even the first build compiles without optimizations and stays in minutes; the app itself runs unoptimized — UI lag in `cargo run` is expected and accepted (dev is for visual checks, not feel).
 - Environment requirement: Rust newer than `1.95` (`rustup update`). For a Linux build, `libxcb-*-dev`, `libxkbcommon-dev`, and `libgtk-3-dev` will be needed eventually (for the `rfd` crate) — NOT required now.
 
 ## 2. Architecture

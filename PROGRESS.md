@@ -48,11 +48,15 @@
 | Extra: repo-wide English-only owner quotes (owner 2026-11-18) | done — docs only | every verbatim Russian owner quote across docs/scripts/comments translated to English (meaning kept); PROGRESS Log compacted — 2 entries moved to PROGRESS-archive.md |
 | Extra: debt F14 — in-house windows later (owner 2026-11-18) | done — docs only | egui::Window → an in-house `egui::Area` frame recorded in DEBTS-functional.md from the owner's pros/cons chat review; owner-gated, no code touched |
 | Extra: tool icon buttons + two-column grid (owner 2026-11-18) | done — gates green + visual driver | 1.5rem icon buttons via a cached tiny-skia atlas (`app/tool_icons.rs`), colored pencil/brush/eraser/pipette + mono line/shape/text through ONE pipeline, name+key hover tooltips, the pipette as the Eyedropper's canvas cursor; the two-column grid is debt F15; the driver screenshot caught the dead-texture trap (handles kept in the Atlas now — AGENTS.md quirks) |
+| Extra: fully unoptimized dev profile (owner 2026-11-18) | done — cargo check green on the new lane | `[profile.dev]` opt-level 0 + no debuginfo, the `[profile.dev.package."*"] opt-level 2` dep override REMOVED (the "deps optimized once for responsive `cargo run`" policy retired — development is sandbox-only now, UI lag accepted); flake `russet-dev` already ran the unoptimized gates lane (untouched); SPEC §1 + AGENTS.md synced; owner visual pass = V34 |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
 168 mcp green (+11 new tool-icon tests), `cargo check --target wasm32-unknown-unknown` green,
 visual driver ALL SCENARIOS GREEN + `--shots` — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+Config-only round later 2026-11-18 (fully unoptimized dev profile): rules.sh HARD-green, fmt clean,
+`cargo check` green on the new dev lane (fresh sandbox, cold, time'd: 1m31s vs 3m51s optimized the
+same morning — TIMING.md); gates lane untouched by construction.
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND the fresh
 `app/tool_icons.rs` 512 (over the 500 guard — the split is proposed to the owner at delivery,
@@ -74,6 +78,31 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
 > docs rounds moved to PROGRESS-archive.md.
+
+### 2026-11-18 — `Build:` dev profile fully unoptimized (opt-level 0, no debuginfo, no dep overrides) — owner request
+
+- **What:** the owner (2026-11-18) retired the PARTIAL dev optimization: development now happens
+  entirely inside the agent sandbox, so `[profile.dev]` exists only to compile fast and to run the
+  app for visual checks — UI lag is accepted (owner: "it's dev — it's fine if it lags"; he judges
+  the build-speed-vs-checking trade-off himself → V34). `[profile.dev]` is now `opt-level = 0` +
+  `debug = false`, and the `[profile.dev.package."*"] opt-level = 2` dependency override is GONE —
+  the crate AND every dependency compile unoptimized. The former policy ("dependencies optimized
+  ONCE and taken from cache — the UI stays responsive") dated from the owner's-machine era and made
+  the one-time optimized dep compile the dominant cold cost on 2-core sandboxes. `[profile.gates]`
+  is functionally unchanged — its explicit opt-level/debug/incremental overrides simply mirror dev's
+  new defaults now. The flake's `russet-dev` ALREADY built in the unoptimized `gates` lane (owner
+  request 2026-11-16) — nothing to remove there. CI's native job keeps the (now unoptimized) dev
+  profile untouched and gets faster automatically.
+- **Files:** `Cargo.toml`, `SPEC.md` (§1 profile block + the "About build speed" note), `AGENTS.md`
+  (Repo facts toolchain bullet; done-gate + CI bullets wording), `TIMING.md` (first cold row under
+  the new policy), `DEBTS-verification.md` (V34 born), `PROGRESS.md` (snapshot row + entry + stamp).
+- **Verified:** config-only round, no src/ change — `scripts/rules.sh` HARD-green, `cargo fmt
+  --check` clean, `cargo check` green on the NEW dev profile (fresh sandbox, cold, time'd exactly:
+  1m31s vs 3m51s the same morning under the old optimized deps — TIMING.md). The gates test lane is
+  untouched by construction (every changed dev key is explicitly overridden in `[profile.gates]`),
+  so clippy/test results are unaffected; the full verify.sh was not re-run for this round.
+- **Owner-checks:** V34 born (the unoptimized-dev visual pass on Windows + the build-speed judgment).
+- **Commit title:** `Make the dev lane fully unoptimized (opt-level 0, no debuginfo, no dep overrides); sync SPEC §1 and AGENTS.md`
 
 ### 2026-11-18 — `Feat:` tool icon buttons (cached tiny-skia atlas) + two-column Tools grid — owner request
 

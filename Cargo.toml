@@ -72,21 +72,24 @@ mcp = ["dep:serde_json"]
 # Removed together with the feature when F12/F13 close (the debts track it).
 diagnostics = []
 
-# FAST DEVELOPMENT:
-# - own code rebuilds without optimizations (fast);
-# - dependencies (eframe, wgpu, image...) are optimized ONCE and taken from cache —
-#   the UI stays responsive in dev builds;
-# - shorter debug info speeds up linking and barely loads the disk.
+# DEV — FULLY UNOPTIMIZED (owner decision 2026-11-18): development now happens
+# entirely inside the agent sandbox, so the dev lane exists to COMPILE FAST and
+# to run the app for visual/functional checks; UI lag is accepted
+# (owner: "it's dev — it's fine if it lags"). The former policy — own code at
+# opt-level 1 + dependencies optimized ONCE at opt-level 2 for a responsive
+# `cargo run` — dates from the era when dev builds ran on the owner's machine,
+# and on 2-core sandboxes the one-time optimized dep compile was the dominant
+# cold cost. Everything (the crate AND every dependency) compiles at
+# opt-level 0, no debuginfo, no per-package overrides.
 [profile.dev]
-opt-level = 1
-debug = "line-tables-only"
-
-[profile.dev.package."*"]
-opt-level = 2
+opt-level = 0
+debug = false
 
 # GATES LANE (owner decision 2026-11-11): unoptimized builds for gate runs
-# (verify.sh, agent sandboxes, weak/cold machines). Same checks as CI, minutes
-# faster to compile — pure-logic tests never benefit from optimized deps.
+# (verify.sh, agent sandboxes, weak/cold machines). Same checks as CI. Since
+# owner decision 2026-11-18 the dev profile is fully unoptimized too, so the
+# two lanes compile at similar speed; gates keeps its separate `target/`
+# fingerprints (switching lanes rebuilds) and `incremental = false`.
 #   cargo clippy --profile gates --all-targets -- -D warnings
 #   cargo test --profile gates
 [profile.gates]
