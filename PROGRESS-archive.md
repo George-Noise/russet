@@ -1,5 +1,45 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-18 — `Docs:` debt F14 born — in-house window solution, owner-gated (later)
+
+- **What:** the owner (owner: "record it in the debts — replace egui::Window with our own
+  solution, we'll do it later") ordered the window-solution replacement recorded as a debt.
+  F14 added to DEBTS-functional.md (newest-first row): an in-house frame over `egui::Area`
+  replacing all floating windows and dialogs; the entry carries the 2026-11-18 chat pros/cons
+  review (the recorded `egui::Window` quirks freed vs drag/occlusion/AccessKit/placement-glue/
+  test rework across ~9 call sites), the REJECTED frameless-main-window alternative and the
+  owner gate. No code touched — SPEC §3.7–§3.8/§3.11 behavior unchanged. The same chat answered
+  the icon-rendering question (Painter primitives + one-time rasterization into a cached
+  `TextureHandle`, re-rasterized on ppp/theme change) — analysis only, no repo change.
+- **Files:** `DEBTS-functional.md` (F14), `PROGRESS.md` (this entry + snapshot row + stamp).
+- **Verified:** docs/comment-only round — `cargo fmt --check` clean, `cargo check` green,
+  rules.sh HARD-green; no clippy/test rerun per AGENTS.md "Docs/comment-only edits:
+  cargo check is enough".
+- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
+- **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
+  (superseded 2026-11-18: the owner merges the F14 docs round into the ONE icon-buttons commit —
+  the newest entry's title above is the commit's canonical title)
+
+### 2026-11-18 — `Docs:` Russian owner quotes translated to English repo-wide — owner request
+
+- **What:** the owner asked (2026-11-18) to translate every Cyrillic text in the project to English
+  without losing meaning. All verbatim owner quotes across AGENTS.md, SPEC.md, PROGRESS.md,
+  PROGRESS-archive.md, TIMING.md, DEBTS-verification.md, DEBTS-functional.md, scripts/rules.sh and
+  the doc comments of 9 src files are English now (the `owner: "…"` attribution style kept; the
+  keyboard-layout examples dropped the Cyrillic key glyphs — "the Russian typewriter layout's
+  W/A/S/D keys"). The owner-locked `app/scenarios/tests.rs`: the request IS the explicit
+  permission — only its 2 header quotes changed, no scenario steps touched. Zero Cyrillic left
+  repo-wide (script-checked). Also: the `roxmltree` entry in Cargo.lock was verified to come from
+  `fontique` (the `system_fonts` feature's fontconfig enumeration) — NOT an SVG dependency.
+- **Files:** `SPEC.md`, `AGENTS.md`, `TIMING.md`, `scripts/rules.sh`, `DEBTS-verification.md`,
+  `DEBTS-functional.md`, `src/{app/{scenarios/tests,tool_log,dialogs,windows,placement,camera,
+  preview/colors}.rs, app/placement/tests/resize.rs, history_tree.rs}`; PROGRESS Log compacted.
+- **Verified:** docs/comment-only round — `cargo fmt --check` clean, `cargo check` green
+  (3m51s cold), rules.sh HARD-green; no clippy/test rerun per AGENTS.md "Docs/comment-only
+  edits: cargo check is enough".
+- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
+- **Commit title:** `Translate the recorded owner quotes to English across docs and comments`
+
 ### 2026-11-17 — `Refactor:` placement/tests.rs split by topic — owner-approved — owner request
 
 - **What:** the 500-line file guard paid for `app/placement/tests.rs` (518 lines, owner: "do the

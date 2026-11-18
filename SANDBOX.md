@@ -116,8 +116,10 @@ pkill -x Xvfb
     every `App::build` compiled with the feature spawns the MCP stdin reader on it,
     and the cargo ↔ test-binary teardown never returns (observed 2026-11-17: the
     log already showed "143 passed … finished in 3.4 s" while the tool call still
-    burned its whole timeout). Pipe `< /dev/null` into `cargo test` / `verify.sh`
-    — the reader sees an immediate EOF and everything exits in seconds.
+    burned its whole timeout). FIXED AT THE SOURCE 2026-11-18: `verify.sh` closes
+    stdin itself (`exec </dev/null`) — the gate needs no redirect anymore. A BARE
+    `cargo test --features mcp` outside the gate still needs the manual pipe
+    (`< /dev/null`): the reader sees an immediate EOF and everything exits in seconds.
 
 ## What this unlocked, and what still belongs to the owner
 

@@ -49,14 +49,15 @@
 | Extra: debt F14 — in-house windows later (owner 2026-11-18) | done — docs only | egui::Window → an in-house `egui::Area` frame recorded in DEBTS-functional.md from the owner's pros/cons chat review; owner-gated, no code touched |
 | Extra: tool icon buttons + two-column grid (owner 2026-11-18) | done — gates green + visual driver | 1.5rem icon buttons via a cached tiny-skia atlas (`app/tool_icons.rs`), colored pencil/brush/eraser/pipette + mono line/shape/text through ONE pipeline, name+key hover tooltips, the pipette as the Eyedropper's canvas cursor; the two-column grid is debt F15; the driver screenshot caught the dead-texture trap (handles kept in the Atlas now — AGENTS.md quirks) |
 | Extra: fully unoptimized dev profile (owner 2026-11-18) | done — cargo check green on the new lane | `[profile.dev]` opt-level 0 + no debuginfo, the `[profile.dev.package."*"] opt-level 2` dep override REMOVED (the "deps optimized once for responsive `cargo run`" policy retired — development is sandbox-only now, UI lag accepted); flake `russet-dev` already ran the unoptimized gates lane (untouched); SPEC §1 + AGENTS.md synced; owner visual pass = V34 |
+| Extra: verify.sh hardening (owner 2026-11-18) | done — FULL gate green on a cold lane (191 s) | `exec </dev/null` closes stdin for the whole run (SANDBOX.md trap 10 fixed AT THE SOURCE — the mcp test stage exits in seconds instead of hanging); per-stage seconds + total printed (TIMING.md rows are copied now, not re-measured); cold-lane hint when `target/gates` is absent; the mcp pair stays UNCONDITIONAL (hot gate ≈ 15 s, zip sandboxes have no git, the gate never guesses) |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
 168 mcp green (+11 new tool-icon tests), `cargo check --target wasm32-unknown-unknown` green,
 visual driver ALL SCENARIOS GREEN + `--shots` — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
-Config-only round later 2026-11-18 (fully unoptimized dev profile): rules.sh HARD-green, fmt clean,
-`cargo check` green on the new dev lane (fresh sandbox, cold, time'd: 1m31s vs 3m51s optimized the
-same morning — TIMING.md); gates lane untouched by construction.
+The hardened gate (stdin shield + stage timers, same day) then re-ran EVERYTHING on a cold lane
+after the dev-profile de-optimization: 191 s total, 156/168 green again — the profile change is
+fully gate-verified.
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND the fresh
 `app/tool_icons.rs` 512 (over the 500 guard — the split is proposed to the owner at delivery,
@@ -77,7 +78,32 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
-> docs rounds moved to PROGRESS-archive.md.
+> docs rounds moved to PROGRESS-archive.md; later the same day the F14 + quotes rounds
+> followed them (the verify.sh round needed the budget back).
+
+### 2026-11-18 — `Tooling:` verify.sh hardened — stdin shield, stage timers, cold-lane hint — owner request
+
+- **What:** the owner (2026-11-18: "make verify.sh good — you work with this file") ordered the
+  done-gate reworked. Three changes, NO lane/semantics change (the rules → fmt → clippy → test →
+  mcp-clippy → mcp-test chain is identical): (1) `exec </dev/null` closes stdin for the WHOLE run —
+  SANDBOX.md trap 10 (mcp test binaries' stdin reader hangs the cargo ↔ test-binary teardown on a
+  recycled sandbox's open pipe/pty even after green tests) is fixed AT THE SOURCE; the
+  `verify.sh < /dev/null` habit is dead (a BARE `cargo test --features mcp` outside the gate still
+  needs the manual pipe). (2) Every stage prints its own seconds and the total — TIMING.md rows are
+  copied from the output now, not re-measured. (3) A cold-lane hint prints when `target/gates` is
+  absent. The mcp pair stays UNCONDITIONAL on purpose: the whole hot gate is ~15 s, zip-delivered
+  sandboxes usually have no git, and the done-gate must never depend on change-detection guesses.
+- **Files:** `scripts/verify.sh`, `SANDBOX.md` (trap 10 rewritten: fixed at the source),
+  `TIMING.md` (cold row), `PROGRESS.md` (compaction: the F14 + quotes rounds moved to
+  PROGRESS-archive.md; snapshot row + this entry + stamp).
+- **Verified:** the NEW script's first live run = the FULL gate on a fully COLD lane, end to end:
+  rules 0 s, fmt 0 s, clippy 84 s, test 156 green (98 s), mcp clippy 3 s, mcp test 168 green
+  (6 s — the stdin reader EOF'd instantly, no hang: first live proof of the shield), ALL GATES
+  GREEN 191 s total. This also gate-verifies the 2026-11-18 dev-profile change end to end (the
+  morning round had skipped the full gate as a config-only change). The PROGRESS compaction and
+  this entry are md-only edits AFTER the gate run — rules.sh re-run at delivery covers them.
+- **Owner-checks:** none born. Open: V34 (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
+- **Commit title:** `Harden verify.sh: exec </dev/null stdin shield, per-stage timers, cold-lane hint`
 
 ### 2026-11-18 — `Build:` dev profile fully unoptimized (opt-level 0, no debuginfo, no dep overrides) — owner request
 
@@ -134,46 +160,6 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   AGENTS.md "eframe/egui 0.37 API quirks".
 - **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
 - **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
-
-### 2026-11-18 — `Docs:` debt F14 born — in-house window solution, owner-gated (later)
-
-- **What:** the owner (owner: "record it in the debts — replace egui::Window with our own
-  solution, we'll do it later") ordered the window-solution replacement recorded as a debt.
-  F14 added to DEBTS-functional.md (newest-first row): an in-house frame over `egui::Area`
-  replacing all floating windows and dialogs; the entry carries the 2026-11-18 chat pros/cons
-  review (the recorded `egui::Window` quirks freed vs drag/occlusion/AccessKit/placement-glue/
-  test rework across ~9 call sites), the REJECTED frameless-main-window alternative and the
-  owner gate. No code touched — SPEC §3.7–§3.8/§3.11 behavior unchanged. The same chat answered
-  the icon-rendering question (Painter primitives + one-time rasterization into a cached
-  `TextureHandle`, re-rasterized on ppp/theme change) — analysis only, no repo change.
-- **Files:** `DEBTS-functional.md` (F14), `PROGRESS.md` (this entry + snapshot row + stamp).
-- **Verified:** docs/comment-only round — `cargo fmt --check` clean, `cargo check` green,
-  rules.sh HARD-green; no clippy/test rerun per AGENTS.md "Docs/comment-only edits:
-  cargo check is enough".
-- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
-- **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
-  (superseded 2026-11-18: the owner merges the F14 docs round into the ONE icon-buttons commit —
-  the newest entry's title above is the commit's canonical title)
-
-### 2026-11-18 — `Docs:` Russian owner quotes translated to English repo-wide — owner request
-
-- **What:** the owner asked (2026-11-18) to translate every Cyrillic text in the project to English
-  without losing meaning. All verbatim owner quotes across AGENTS.md, SPEC.md, PROGRESS.md,
-  PROGRESS-archive.md, TIMING.md, DEBTS-verification.md, DEBTS-functional.md, scripts/rules.sh and
-  the doc comments of 9 src files are English now (the `owner: "…"` attribution style kept; the
-  keyboard-layout examples dropped the Cyrillic key glyphs — "the Russian typewriter layout's
-  W/A/S/D keys"). The owner-locked `app/scenarios/tests.rs`: the request IS the explicit
-  permission — only its 2 header quotes changed, no scenario steps touched. Zero Cyrillic left
-  repo-wide (script-checked). Also: the `roxmltree` entry in Cargo.lock was verified to come from
-  `fontique` (the `system_fonts` feature's fontconfig enumeration) — NOT an SVG dependency.
-- **Files:** `SPEC.md`, `AGENTS.md`, `TIMING.md`, `scripts/rules.sh`, `DEBTS-verification.md`,
-  `DEBTS-functional.md`, `src/{app/{scenarios/tests,tool_log,dialogs,windows,placement,camera,
-  preview/colors}.rs, app/placement/tests/resize.rs, history_tree.rs}`; PROGRESS Log compacted.
-- **Verified:** docs/comment-only round — `cargo fmt --check` clean, `cargo check` green
-  (3m51s cold), rules.sh HARD-green; no clippy/test rerun per AGENTS.md "Docs/comment-only
-  edits: cargo check is enough".
-- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
-- **Commit title:** `Translate the recorded owner quotes to English across docs and comments`
 
 ### 2026-11-18 — `Feat:` About window names Rust + links the GitHub repo — owner request
 
