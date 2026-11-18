@@ -64,6 +64,7 @@ mod placement;
 mod preview;
 mod scenarios;
 mod text_tool;
+mod tool_icons;
 mod tool_log;
 mod tree_window;
 mod windows;
@@ -141,6 +142,11 @@ pub struct App {
     is_stroking: bool,
     last_pos: Option<Pos2>,
     stroke_button: Option<PointerButton>,
+    /// The rasterized tool-icon atlas ([`tool_icons`]; owner request
+    /// 2026-11-18): built once per scale/theme change, otherwise the Tools
+    /// window only blits the cached textures and the Eyedropper reuses the
+    /// pipette icon as its canvas cursor.
+    tool_icons: Option<tool_icons::Atlas>,
     tools_window_open: bool,
     palette_window_open: bool,
     history_window_open: bool,
@@ -309,6 +315,7 @@ impl App {
             is_stroking: false,
             last_pos: None,
             stroke_button: None,
+            tool_icons: None,
             tools_window_open: true,
             palette_window_open: true,
             history_window_open: true,
@@ -637,6 +644,20 @@ impl App {
             ) {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             }
+            // The Eyedropper's cursor is the pipette icon itself (owner
+            // request 2026-11-18): the bitmap cursor sits where the icon
+            // points — its hotspot is the pipette tip. `set_cursor_image`
+            // is native-only (web silently falls back to the Crosshair
+            // above); egui-winit dedupes by Arc identity, so pushing the
+            // same image every frame is cheap.
+            if tool == Tool::Eyedropper
+                && let Some(image) = self
+                    .tool_icons
+                    .as_ref()
+                    .and_then(|a| a.pipette_cursor.clone())
+            {
+                ui.ctx().set_cursor_image(Some(image));
+            }
             if matches!(tool, Tool::Brush | Tool::Eraser | Tool::Line | Tool::Shape)
                 && let Some(cursor) = ui.input(|i| i.pointer.hover_pos())
             {
@@ -695,6 +716,9 @@ impl eframe::App for App {
         #[cfg(target_arch = "wasm32")]
         self.poll_file_task();
         self.handle_hotkeys(&ctx);
+        // The icon atlas must exist before the canvas (the Eyedropper's
+        // pipette cursor) and the Tools window (the icon buttons) draw.
+        tool_icons::ensure(&mut self.tool_icons, &ctx);
         self.top_menu(ui);
 
         // no_frame: zero margin, the gray canvas background reaches the

@@ -1,0 +1,244 @@
+//! Tests of the tool-icon rasterization (owner request 2026-11-18): the
+//! pure tiny-skia pipeline (colored + monochrome icons through the SAME
+//! primitives) and the atlas lifecycle — rasterized once per
+//! (pixels_per_point, theme) change, served as cached egui textures. The
+//! headless part runs real egui passes through [`egui::Context::run_pass`]
+//! (no renderer, no App), the same pattern the dialog tests use.
+
+use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme};
+
+use super::{TOOLS, cursor_bitmap, ensure, icon_transform, label, rasterize_tool_icon};
+use crate::tools::Tool;
+
+/// Opaque-pixel threshold: every icon must draw a substantial mark in its
+/// 24×24 logical space (guards against a silently-empty raster).
+const MIN_OPAQUE_PIXELS: usize = 40;
+
+fn count_opaque(pm: &tiny_skia::Pixmap) -> usize {
+    pm.pixels().iter().filter(|p| p.alpha() > 0).count()
+}
+
+fn has_color(pm: &tiny_skia::Pixmap, rgb: (u8, u8, u8), tol: u8) -> bool {
+    let (r, g, b) = rgb;
+    pm.pixels().iter().any(|p| {
+        p.alpha() > 200
+            && p.red().abs_diff(r) <= tol
+            && p.green().abs_diff(g) <= tol
+            && p.blue().abs_diff(b) <= tol
+    })
+}
+
+#[test]
+fn every_tool_rasterizes_with_a_substantial_mark() {
+    for tool in TOOLS {
+        let pm = rasterize_tool_icon(tool, 24, Color32::WHITE).expect("px is in 1..=256");
+        assert!(
+            count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
+            "{tool:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"
+        );
+    }
+}
+
+#[test]
+fn pencil_is_the_classic_yellow_wood_graphite_eraser_pencil() {
+    let pm = rasterize_tool_icon(Tool::Pencil, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(has_color(&pm, (253, 194, 92), 6), "yellow body missing");
+    assert!(
+        has_color(&pm, (236, 159, 43), 6),
+        "darker body facet missing"
+    );
+    assert!(has_color(&pm, (231, 196, 151), 6), "wood cone missing");
+    assert!(has_color(&pm, (60, 60, 60), 6), "black graphite missing");
+    assert!(has_color(&pm, (240, 144, 138), 6), "eraser end missing");
+    assert!(has_color(&pm, (175, 180, 189), 6), "metal ferrule missing");
+}
+
+#[test]
+fn brush_is_wood_handle_metal_ferrule_and_bristles() {
+    let pm = rasterize_tool_icon(Tool::Brush, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(
+        has_color(&pm, (180, 113, 60), 6),
+        "varnished-wood handle missing"
+    );
+    assert!(has_color(&pm, (185, 190, 198), 6), "metal ferrule missing");
+    assert!(has_color(&pm, (216, 169, 107), 6), "bristles missing");
+    assert!(has_color(&pm, (110, 74, 40), 6), "loaded tip missing");
+}
+
+#[test]
+fn eraser_is_the_classic_pink_slab() {
+    let pm = rasterize_tool_icon(Tool::Eraser, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(
+        has_color(&pm, (249, 183, 196), 6),
+        "light pink face missing"
+    );
+    assert!(has_color(&pm, (239, 140, 164), 6), "main pink face missing");
+}
+
+#[test]
+fn pipette_has_rubber_bulb_glass_and_liquid() {
+    let pm = rasterize_tool_icon(Tool::Eyedropper, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(has_color(&pm, (217, 87, 68), 6), "rubber bulb missing");
+    assert!(has_color(&pm, (95, 168, 220), 6), "liquid stripe missing");
+    assert!(has_color(&pm, (201, 212, 221), 6), "glass tube missing");
+}
+
+#[test]
+fn monochrome_icons_follow_the_given_text_color() {
+    // The SAME pipeline, the color comes from the theme (owner request:
+    // no duplicated draw code for colored vs monochrome icons). The pixels
+    // come back PREMULTIPLIED, so the comparison runs on the
+    // demultiplied (straight) color; a thin AA stroke may never reach full
+    // pixel coverage, which premultiplication would otherwise scale.
+    for tool in [Tool::Line, Tool::Shape, Tool::Text] {
+        for text in [Color32::BLACK, Color32::WHITE] {
+            let pm = rasterize_tool_icon(tool, 32, text).expect("px is in 1..=256");
+            let opaque: Vec<_> = pm
+                .pixels()
+                .iter()
+                .filter(|p| p.alpha() > 220)
+                .map(|p| p.demultiply())
+                .collect();
+            assert!(!opaque.is_empty(), "{tool:?} must draw opaque pixels");
+            for p in &opaque {
+                assert!(
+                    p.red().abs_diff(text.r()) <= 10
+                        && p.green().abs_diff(text.g()) <= 10
+                        && p.blue().abs_diff(text.b()) <= 10,
+                    "{tool:?} must be monochrome in the given text color"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn labels_carry_the_name_and_the_keyboard_key() {
+    let keys = [
+        (Tool::Pencil, "P", "Pencil"),
+        (Tool::Brush, "B", "Brush"),
+        (Tool::Eraser, "E", "Eraser"),
+        (Tool::Eyedropper, "I", "Eyedropper"),
+        (Tool::Line, "L", "Line"),
+        (Tool::Shape, "U", "Shape"),
+        (Tool::Text, "T", "Text"),
+    ];
+    for (tool, key, name) in keys {
+        let label = label(tool);
+        assert_eq!(
+            label,
+            &format!("{name} ({key})"),
+            "tooltip label of {tool:?}"
+        );
+    }
+}
+
+#[test]
+fn cursor_bitmap_is_straight_rgba_with_the_hotspot_at_the_pipette_tip() {
+    let pm = rasterize_tool_icon(Tool::Eyedropper, 24, Color32::WHITE).expect("px is in 1..=256");
+    let image = cursor_bitmap(&pm).expect("a 24×24 pixmap always converts");
+    let (w, h) = (pm.width() as usize, pm.height() as usize);
+    assert_eq!(
+        image.rgba.len(),
+        w * h * 4,
+        "straight RGBA, 4 bytes per pixel"
+    );
+    assert_eq!(image.size, [w as u16, h as u16]);
+    assert!(
+        image.hotspot[0] < w as u16 && image.hotspot[1] < h as u16,
+        "the hotspot must sit inside the bitmap"
+    );
+    // The hotspot is the pipette tip mapped by the same transform the
+    // drawing used (scale ∘ rotate-about-center).
+    let mut tip = tiny_skia::Point::from_xy(super::PIPETTE_TIP.0, super::PIPETTE_TIP.1);
+    icon_transform(w, super::TOOL_ANGLE).map_point(&mut tip);
+    assert_eq!(
+        image.hotspot,
+        [tip.x.round() as u16, tip.y.round() as u16],
+        "the hotspot must be the pipette tip's pixel"
+    );
+    // Straight (non-premultiplied) encoding: an AA edge pixel's straight
+    // components are >= its premultiplied ones.
+    for p in pm.pixels() {
+        if p.alpha() > 0 && p.alpha() < 255 {
+            let straight = p.demultiply();
+            assert!(straight.red() >= p.red() && straight.green() >= p.green());
+            break;
+        }
+    }
+}
+
+#[test]
+fn the_icon_transform_maps_the_logical_space_onto_the_raster() {
+    let ts = icon_transform(48, 0.0);
+    assert_eq!(ts.sx, 2.0, "48 px over the 24 pt logical space = ×2");
+    let ts45 = icon_transform(24, super::TOOL_ANGLE);
+    // The rotation about the center keeps the center fixed.
+    let mut c = tiny_skia::Point::from_xy(12.0, 12.0);
+    ts45.map_point(&mut c);
+    assert!((c.x - 12.0).abs() < 1e-3 && (c.y - 12.0).abs() < 1e-3);
+}
+
+/// The atlas lifecycle: built on the first frame, untouched while the
+/// (ppp, theme) key matches, rebuilt when the scale or the theme changes.
+#[test]
+fn atlas_rebuilds_only_on_scale_or_theme_change() {
+    let ctx = Context::default();
+    // ensure() loads textures; headless egui hands the deltas back with
+    // every pass and asserts when they drop unhandled (the dialog tests'
+    // convention: explicitly clear them).
+    fn pass(ctx: &Context) {
+        ctx.run_pass(RawInput::default(), |_| {})
+            .textures_delta
+            .clear();
+    }
+    let mut atlas = None;
+    ensure(&mut atlas, &ctx);
+    pass(&ctx);
+    let first = atlas.as_ref().expect("the first ensure builds the atlas");
+    let key0 = first.key;
+    assert_eq!(key0, (1.0, true), "egui's headless default: ppp 1.0, dark");
+    let cursor0 = first.pipette_cursor.as_ref().expect("the pipette cursor");
+    assert_eq!(cursor0.size, [24, 24]);
+
+    // Same conditions: a cheap no-op (the key match must keep the atlas).
+    ensure(&mut atlas, &ctx);
+    assert_eq!(atlas.as_ref().expect("kept").key, key0);
+
+    // Scale change: the WHOLE atlas re-rasterizes (24 pt × 2.0 = 48 px).
+    // set_pixels_per_point becomes active at the START of the next pass,
+    // so a pass runs before ensure() can observe the new scale.
+    ctx.set_pixels_per_point(2.0);
+    pass(&ctx);
+    ensure(&mut atlas, &ctx);
+    pass(&ctx);
+    let scaled = atlas.as_ref().expect("rebuilt after the scale change");
+    assert_eq!(scaled.key, (2.0, true));
+    let cursor1 = scaled
+        .pipette_cursor
+        .as_ref()
+        .expect("cursor re-rasterized");
+    assert_eq!(cursor1.size, [48, 48]);
+
+    // Theme change: re-rasterized too (owner: don't economize here).
+    ctx.set_theme(Theme::Light);
+    ensure(&mut atlas, &ctx);
+    pass(&ctx);
+    let themed = atlas.as_ref().expect("rebuilt after the theme change");
+    assert_eq!(themed.key, (2.0, false));
+}
+
+/// All seven atlas textures exist and are distinct (one per tool).
+#[test]
+fn atlas_ids_are_one_per_tool() {
+    let ctx = Context::default();
+    let mut atlas = None;
+    ensure(&mut atlas, &ctx);
+    let atlas = atlas.expect("built");
+    let mut ids: Vec<_> = atlas.handles.iter().map(TextureHandle::id).collect();
+    let n = ids.len();
+    ids.sort_by_key(|id| format!("{id:?}"));
+    ids.dedup();
+    assert_eq!(ids.len(), n, "every tool owns its own texture");
+    assert_eq!(n, TOOLS.len());
+}

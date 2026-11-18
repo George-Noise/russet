@@ -13,11 +13,18 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
+use super::tool_icons;
 use crate::palette::{COLORS, COLS, GRID_WIDTH, ROWS, TILE};
 use crate::tools::{LineMode, ShapeKind, Tool};
 
-/// Tools are stacked in one column (SPEC §3.2).
-const TOOL_COLUMNS: usize = 1;
+/// INTERIM layout (owner request 2026-11-18: "two columns for now — it will
+/// be reworked later, I have a better idea"): the tool buttons sit in a
+/// two-column grid. The rework is debt F15.
+const TOOL_COLUMNS: usize = 2;
+
+/// The tool button's square size in logical points: the 1.5rem icon plus a
+/// small padding on every side.
+const TOOL_BUTTON_PT: f32 = tool_icons::ICON_PT + 4.0;
 
 /// Stable ids for the two floating windows. They are needed to read the
 /// windows' area state and title-bar drag responses from the placement
@@ -73,15 +80,9 @@ impl App {
         if !self.tools_window_open {
             return;
         }
-        let tools = [
-            (Tool::Pencil, "Pencil (P)"),
-            (Tool::Brush, "Brush (B)"),
-            (Tool::Eraser, "Eraser (E)"),
-            (Tool::Eyedropper, "Eyedropper (I)"),
-            (Tool::Line, "Line (L)"),
-            (Tool::Shape, "Shape (U)"),
-            (Tool::Text, "Text (T)"),
-        ];
+        // The icon atlas is (re)rastered once per scale/theme change in
+        // `App::ui` — before the canvas, so the Eyedropper's pipette cursor
+        // exists too; here every frame just blits the cached textures.
         let mut open = true;
         let shown = egui::Window::new("Tools")
             .id(tools_window_id())
@@ -105,16 +106,11 @@ impl App {
                 // request 2026-11-17, see `tool_settings_window`).
                 egui::Grid::new("tools_grid")
                     .num_columns(TOOL_COLUMNS)
-                    .spacing([4.0, 2.0])
+                    .spacing([6.0, 6.0])
                     .show(ui, |ui| {
-                        for row in tools.chunks(TOOL_COLUMNS) {
-                            for (tool, label) in row {
-                                if ui
-                                    .selectable_label(self.tools.tool == *tool, *label)
-                                    .clicked()
-                                {
-                                    self.tools.tool = *tool;
-                                }
+                        for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {
+                            for tool in row {
+                                self.tool_button(ui, *tool);
                             }
                             ui.end_row();
                         }
@@ -138,6 +134,48 @@ impl App {
         if !open {
             self.tools_window_open = false;
         }
+    }
+
+    /// One tool button: a square, the cached icon texture on top, the
+    /// selectable_label visual states (selected = the selection fill, hover
+    /// = the hovered fill) and the name+key tooltip (owner request
+    /// 2026-11-18). Clicking selects the tool — the same state the old
+    /// text `selectable_label` list drove.
+    fn tool_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
+        let selected = self.tools.tool == tool;
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(TOOL_BUTTON_PT, TOOL_BUTTON_PT), Sense::click());
+        // The selectable_label visuals: fill only when selected/hovered.
+        let visuals = ui.visuals();
+        let (fill, stroke) = if selected {
+            (visuals.selection.bg_fill, visuals.selection.stroke)
+        } else if response.hovered() {
+            (
+                visuals.widgets.hovered.bg_fill,
+                visuals.widgets.hovered.bg_stroke,
+            )
+        } else {
+            (
+                visuals.widgets.inactive.bg_fill,
+                visuals.widgets.inactive.bg_stroke,
+            )
+        };
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, 3.0, fill);
+        painter.rect_stroke(rect, 3.0, stroke, egui::StrokeKind::Inside);
+        if let Some(id) = tool_icons::texture_id(&self.tool_icons, tool) {
+            let uv = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1.0, 1.0));
+            // The icon is square; center it inside the padded button.
+            let icon = egui::Rect::from_center_size(
+                rect.center(),
+                egui::vec2(tool_icons::ICON_PT, tool_icons::ICON_PT),
+            );
+            painter.image(id, icon, uv, Color32::WHITE);
+        }
+        if response.clicked() {
+            self.tools.tool = tool;
+        }
+        response.on_hover_text(tool_icons::label(tool));
     }
 
     /// The magnetized settings panel of the "Tools" window (owner request

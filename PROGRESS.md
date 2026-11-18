@@ -46,14 +46,17 @@
 | Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
 | Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
 | Extra: repo-wide English-only owner quotes (owner 2026-11-18) | done — docs only | every verbatim Russian owner quote across docs/scripts/comments translated to English (meaning kept); PROGRESS Log compacted — 2 entries moved to PROGRESS-archive.md |
+| Extra: debt F14 — in-house windows later (owner 2026-11-18) | done — docs only | egui::Window → an in-house `egui::Area` frame recorded in DEBTS-functional.md from the owner's pros/cons chat review; owner-gated, no code touched |
+| Extra: tool icon buttons + two-column grid (owner 2026-11-18) | done — gates green + visual driver | 1.5rem icon buttons via a cached tiny-skia atlas (`app/tool_icons.rs`), colored pencil/brush/eraser/pipette + mono line/shape/text through ONE pipeline, name+key hover tooltips, the pipette as the Eyedropper's canvas cursor; the two-column grid is debt F15; the driver screenshot caught the dead-texture trap (handles kept in the Atlas now — AGENTS.md quirks) |
 
-**Verification stamp:** fmt clean, rules.sh HARD-green, `cargo check` green (docs/comment-only
-round — clippy/test NOT re-run per AGENTS.md "Docs/comment-only edits"; the last FULL gate was
-2026-11-18: clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 145 default /
-157 mcp green, `cargo check --target wasm32-unknown-unknown` green), zero Cyrillic repo-wide —
-2026-11-18 (Rust 1.99.1 pinned via rust-toolchain.toml, Linux). Web/trunk lanes last verified
-2026-11-16 (see the archived log history); every src file ≤ 500 except the report-only
-owner-deferred `history_tree.rs` 569.
+**Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
+HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
+168 mcp green (+11 new tool-icon tests), `cargo check --target wasm32-unknown-unknown` green,
+visual driver ALL SCENARIOS GREEN + `--shots` — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
+every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND the fresh
+`app/tool_icons.rs` 512 (over the 500 guard — the split is proposed to the owner at delivery,
+not done without his approval).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -71,6 +74,57 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
 > docs rounds moved to PROGRESS-archive.md.
+
+### 2026-11-18 — `Feat:` tool icon buttons (cached tiny-skia atlas) + two-column Tools grid — owner request
+
+- **What:** the owner (2026-11-18) ordered the Tools window onto ICON buttons: 1.5rem (24 pt)
+  icons, some COLORED, colored/monochrome through the SAME draw path ("no duplicated code"),
+  a name+key hover tooltip per button, and a two-column INTERIM grid ("a better idea later" —
+  debt F15). New child module `app/tool_icons.rs` (+ `tests.rs`): every icon is a tiny-skia
+  vector drawing rasterized ONCE per (pixels_per_point, theme) change into an egui texture
+  (`Context::load_texture_cached`) — a button's per-frame cost is one textured quad. Colored:
+  Pencil (classic yellow body, wood cone, black graphite, metal ferrule, eraser end), Brush
+  (varnished-wood handle + metal ferrule + bristles), Eraser (classic pink slab), Eyedropper
+  (a pipette); monochrome (the theme text color): Line, Shape, Text. The pipette doubles as
+  the Eyedropper's canvas cursor via `Context::set_cursor_image` (`CustomCursorImage`, straight
+  RGBA, hotspot at the pipette tip; web falls back to `Crosshair`) — egui 0.37's custom-cursor
+  path verified against the crate sources. `App` owns `tool_icons: Option<Atlas>`;
+  `App::ui` calls `tool_icons::ensure` before the canvas draws. The uncommitted F14 docs round
+  (recorded earlier today) rides in the SAME commit per the owner's one-commit request.
+- **Files:** `src/app/tool_icons.rs` + `src/app/tool_icons/tests.rs` (new), `src/app/windows.rs`
+  (icon buttons + `TOOL_COLUMNS` 2), `src/app.rs` (module + atlas field + ensure + cursor),
+  `SPEC.md` §3.2, `AGENTS.md` (module map), `DEBTS-functional.md` (F15), `PROGRESS.md`
+  (snapshot row + this entry + stamp).
+- **Verified:** FULL gate re-run after the final fix: fmt clean, rules.sh HARD-green, clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default / 168 mcp green
+  (+11 new icon tests), `cargo check --target wasm32-unknown-unknown` green; headless visual
+  driver (Xvfb + MCP, the SANDBOX.md recipe): ALL SCENARIOS GREEN + `--shots` screenshots —
+  the FIRST driver run caught a real bug: dropping the `load_texture_cached` handle freed the
+  texture the SAME frame (retain-count rule) and the buttons rendered EMPTY; fixed by keeping
+  the handles in `Atlas` — both new quirks (dead texture, custom OS cursors) recorded in
+  AGENTS.md "eframe/egui 0.37 API quirks".
+- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
+- **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
+
+### 2026-11-18 — `Docs:` debt F14 born — in-house window solution, owner-gated (later)
+
+- **What:** the owner (owner: "record it in the debts — replace egui::Window with our own
+  solution, we'll do it later") ordered the window-solution replacement recorded as a debt.
+  F14 added to DEBTS-functional.md (newest-first row): an in-house frame over `egui::Area`
+  replacing all floating windows and dialogs; the entry carries the 2026-11-18 chat pros/cons
+  review (the recorded `egui::Window` quirks freed vs drag/occlusion/AccessKit/placement-glue/
+  test rework across ~9 call sites), the REJECTED frameless-main-window alternative and the
+  owner gate. No code touched — SPEC §3.7–§3.8/§3.11 behavior unchanged. The same chat answered
+  the icon-rendering question (Painter primitives + one-time rasterization into a cached
+  `TextureHandle`, re-rasterized on ppp/theme change) — analysis only, no repo change.
+- **Files:** `DEBTS-functional.md` (F14), `PROGRESS.md` (this entry + snapshot row + stamp).
+- **Verified:** docs/comment-only round — `cargo fmt --check` clean, `cargo check` green,
+  rules.sh HARD-green; no clippy/test rerun per AGENTS.md "Docs/comment-only edits:
+  cargo check is enough".
+- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
+- **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
+  (superseded 2026-11-18: the owner merges the F14 docs round into the ONE icon-buttons commit —
+  the newest entry's title above is the commit's canonical title)
 
 ### 2026-11-18 — `Docs:` Russian owner quotes translated to English repo-wide — owner request
 
@@ -115,60 +169,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   owner in the chat download dir).
 - **Owner-checks:** V33 born (the About-window pass on Windows / browser).
 - **Commit title:** `About window: "written in Rust" line + GitHub repo hyperlink`
-
-### 2026-11-17 — `Refactor:` placement/tests.rs split by topic — owner-approved — owner request
-
-- **What:** the 500-line file guard paid for `app/placement/tests.rs` (518 lines, owner: "do the
-  placement/tests.rs split"). PURE code motion, zero behavior change — the 25 test bodies moved
-  byte-identical. Per "Tests" rule 7 the file becomes a DECLARATION-ONLY module (10 lines: six
-  `mod` lines + a header) and the suites move to the repo's FIRST `tests/` subdirectory:
-  `app/placement/tests/common.rs` (the rect/assert_close helpers), `anchors.rs` (5 tests: the
-  drop-time magnet detection), `reposition.rs` (8: the anchored/free resize math), `resize.rs`
-  (3: the F13-A pin lifecycle), `first_open.rs` (4: the §3.2 ratio + the first-open anchor
-  regression trio), `panel.rs` (5: the tool-settings magnet). New precedent: topic files reach
-  the placement items with `crate::app::placement::…` — descendant modules see the private items,
-  and the flat `use super::` style would have meant an unreadable `super::super::`.
-- **Also:** V32 CLOSED — the owner verified the first-open fix on his machine ("checked the windows");
-  the row stays in DEBTS-verification.md as a verified anchor row. The first `tests/` split
-  convention is this entry; future over-guard test files follow it.
-- **Files:** `src/app/placement/tests.rs` (10), `src/app/placement/tests/{common,anchors,
-  reposition,resize,first_open,panel}.rs` (15/114/168/80/104/78), `DEBTS-verification.md`,
-  `PROGRESS.md`.
-- **Verified:** rules.sh HARD-green — the placement/tests.rs OVER GUARD is retired (only the
-  owner-deferred `history_tree.rs` remains). fmt clean, clippy `-D warnings` clean, tests 143/155
-  green with the SAME counts (pure motion), wasm green. verify.sh 11 s.
-- **Owner-checks:** none born (code motion; the suite itself is the check). Open: V30 (parked),
-  V8 (parked).
-- **Commit title:** `Split placement/tests.rs by topic per rule 7; close V32 (first-open fix verified)`
-
-### 2026-11-17 — `Fix:` first-open window gaps drift on the first main-window resize — owner bug report — owner request
-
-- **What:** the owner's report (fresh launch → resize the main window → the windows slid off their
-  magnet boundaries; a manual re-drag re-anchored them). ROOT CAUSE: §3.11 anchors are decided only
-  on drag-end, so a never-dragged window had FREE axes — and the free-axis gap-ratio formula scales
-  the gaps with the free space (Layers right gap 8 pt → 8.83 on a 1200→1300 grow), while the SPEC
-  promises «§3.11 keeps the dropped gap afterwards» for the first-open positions. FIX: explicit
-  FIRST-OPEN anchors per window — `WindowPlacement::with_first_open_anchors` (placement.rs;
-  `AxisAnchor`/`WindowAnchor` become pub(super) for the app-level init) applied in `App::new`:
-  Tools x=Min/y=free (the 40/60 ratio is a free-axis placement BY DESIGN), Palette Min/Max, Tool
-  Log free-x (stays centered)/Max, Layers Max/Max (the 36 pt zoom-label lift is KEPT, not scaled);
-  tree_window.rs: main tree + clones Max/Min (right edge + below the menu bar). A drag-end still
-  overwrites the anchor with the user's dropped gaps — the user's placement always wins.
-- **Tests:** three regression tests in `placement/tests.rs` (143/155 total now): the anchored
-  first-open gaps survive grow+shrink; WITHOUT anchors they drift (the bug, pinned); the Tools
-  window keeps the left gap AND the vertical ratio. ALSO: the owner's commit `3be38d4` carried the
-  old `panels.rs` as a DEAD ORPHAN next to its split successors (the rename-form patch was applied
-  by a tool that skipped the rename deletion; the file had no `mod` declaration, so everything
-  still compiled) — the orphan is deleted in this round, and `deliver.sh` now emits
-  `--no-renames` patches so plain delete+add diffs apply unambiguously in any patcher. V30 parked
-  by the owner (light-tasks mode); V32 born (the fix's manual pass).
-- **Files:** `src/app/placement.rs` (+builder, visibility), `src/app.rs` (anchor init + import),
-  `src/app/tree_window.rs` (2 sites + import), `src/app/placement/tests.rs` (+3 tests; 518 lines —
-  over the 500 guard: the topic split per "Tests" rule 7 is PROPOSED, awaiting the owner's OK),
-  `scripts/deliver.sh` (--no-renames), `DEBTS-verification.md`, `PROGRESS.md`.
-- **Verified:** rules.sh HARD-green (OVER GUARD: the orphan panels.rs is GONE, history_tree.rs is
-  the owner-deferred one, placement/tests.rs 518 — proposed split), fmt clean, clippy `-D warnings`
-  clean default+mcp, tests 143/155 green, wasm check green. verify.sh 13 s.
-- **Owner-checks:** V32 born (the fresh-launch resize pass, see DEBTS-verification.md). Open: V32,
-  V30 (parked), V8 (parked).
-- **Commit title:** `Fix first-open window gaps drifting on resize (explicit first-open anchors); drop the panels.rs orphan`

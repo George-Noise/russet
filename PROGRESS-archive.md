@@ -1,5 +1,63 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-17 — `Refactor:` placement/tests.rs split by topic — owner-approved — owner request
+
+- **What:** the 500-line file guard paid for `app/placement/tests.rs` (518 lines, owner: "do the
+  placement/tests.rs split"). PURE code motion, zero behavior change — the 25 test bodies moved
+  byte-identical. Per "Tests" rule 7 the file becomes a DECLARATION-ONLY module (10 lines: six
+  `mod` lines + a header) and the suites move to the repo's FIRST `tests/` subdirectory:
+  `app/placement/tests/common.rs` (the rect/assert_close helpers), `anchors.rs` (5 tests: the
+  drop-time magnet detection), `reposition.rs` (8: the anchored/free resize math), `resize.rs`
+  (3: the F13-A pin lifecycle), `first_open.rs` (4: the §3.2 ratio + the first-open anchor
+  regression trio), `panel.rs` (5: the tool-settings magnet). New precedent: topic files reach
+  the placement items with `crate::app::placement::…` — descendant modules see the private items,
+  and the flat `use super::` style would have meant an unreadable `super::super::`.
+- **Also:** V32 CLOSED — the owner verified the first-open fix on his machine ("checked the windows");
+  the row stays in DEBTS-verification.md as a verified anchor row. The first `tests/` split
+  convention is this entry; future over-guard test files follow it.
+- **Files:** `src/app/placement/tests.rs` (10), `src/app/placement/tests/{common,anchors,
+  reposition,resize,first_open,panel}.rs` (15/114/168/80/104/78), `DEBTS-verification.md`,
+  `PROGRESS.md`.
+- **Verified:** rules.sh HARD-green — the placement/tests.rs OVER GUARD is retired (only the
+  owner-deferred `history_tree.rs` remains). fmt clean, clippy `-D warnings` clean, tests 143/155
+  green with the SAME counts (pure motion), wasm green. verify.sh 11 s.
+- **Owner-checks:** none born (code motion; the suite itself is the check). Open: V30 (parked),
+  V8 (parked).
+- **Commit title:** `Split placement/tests.rs by topic per rule 7; close V32 (first-open fix verified)`
+
+### 2026-11-17 — `Fix:` first-open window gaps drift on the first main-window resize — owner bug report — owner request
+
+- **What:** the owner's report (fresh launch → resize the main window → the windows slid off their
+  magnet boundaries; a manual re-drag re-anchored them). ROOT CAUSE: §3.11 anchors are decided only
+  on drag-end, so a never-dragged window had FREE axes — and the free-axis gap-ratio formula scales
+  the gaps with the free space (Layers right gap 8 pt → 8.83 on a 1200→1300 grow), while the SPEC
+  promises «§3.11 keeps the dropped gap afterwards» for the first-open positions. FIX: explicit
+  FIRST-OPEN anchors per window — `WindowPlacement::with_first_open_anchors` (placement.rs;
+  `AxisAnchor`/`WindowAnchor` become pub(super) for the app-level init) applied in `App::new`:
+  Tools x=Min/y=free (the 40/60 ratio is a free-axis placement BY DESIGN), Palette Min/Max, Tool
+  Log free-x (stays centered)/Max, Layers Max/Max (the 36 pt zoom-label lift is KEPT, not scaled);
+  tree_window.rs: main tree + clones Max/Min (right edge + below the menu bar). A drag-end still
+  overwrites the anchor with the user's dropped gaps — the user's placement always wins.
+- **Tests:** three regression tests in `placement/tests.rs` (143/155 total now): the anchored
+  first-open gaps survive grow+shrink; WITHOUT anchors they drift (the bug, pinned); the Tools
+  window keeps the left gap AND the vertical ratio. ALSO: the owner's commit `3be38d4` carried the
+  old `panels.rs` as a DEAD ORPHAN next to its split successors (the rename-form patch was applied
+  by a tool that skipped the rename deletion; the file had no `mod` declaration, so everything
+  still compiled) — the orphan is deleted in this round, and `deliver.sh` now emits
+  `--no-renames` patches so plain delete+add diffs apply unambiguously in any patcher. V30 parked
+  by the owner (light-tasks mode); V32 born (the fix's manual pass).
+- **Files:** `src/app/placement.rs` (+builder, visibility), `src/app.rs` (anchor init + import),
+  `src/app/tree_window.rs` (2 sites + import), `src/app/placement/tests.rs` (+3 tests; 518 lines —
+  over the 500 guard: the topic split per "Tests" rule 7 is PROPOSED, awaiting the owner's OK),
+  `scripts/deliver.sh` (--no-renames), `DEBTS-verification.md`, `PROGRESS.md`.
+- **Verified:** rules.sh HARD-green (OVER GUARD: the orphan panels.rs is GONE, history_tree.rs is
+  the owner-deferred one, placement/tests.rs 518 — proposed split), fmt clean, clippy `-D warnings`
+  clean default+mcp, tests 143/155 green, wasm check green. verify.sh 13 s.
+- **Owner-checks:** V32 born (the fresh-launch resize pass, see DEBTS-verification.md). Open: V32,
+  V30 (parked), V8 (parked).
+- **Commit title:** `Fix first-open window gaps drifting on resize (explicit first-open anchors); drop the panels.rs orphan`
+
+
 Verbatim log entries moved out of `PROGRESS.md` by the log-compaction rule
 (AGENTS.md "Git & progress log": the live Log keeps the newest 3–5 entries,
 older ones go here unchanged). Read this file only via grep when investigating
