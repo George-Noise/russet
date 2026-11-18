@@ -1657,3 +1657,26 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **Owner-checks:** V33 closed. Open after this edit: V35 (the icon look), V34 (the
   unoptimized-dev pass), V30 (parked), V8 (parked).
 - **Commit title:** `Add sandbox_check --warm warm-up; AGENTS wasm-economy + debts-ask rules; close V33`
+
+### 2026-11-18 — `Test:` permanent #[ignore] icon-dump; F16 rust-cache debt — owner request
+
+- **What:** two owner orders (2026-11-18): (1) the icon contact sheet is now a PERMANENT ignored
+  test `icons_dump_when_requested` in `app/tool_icons/tests.rs` — a plain `cargo test` (the
+  done-gate) SKIPS it, run explicitly `cargo test --profile gates -- --ignored icons_dump`
+  when redraw/adjusting an icon; it renders every tool at 256 px (design view) + the real
+  24 px button size into /tmp/icon_dump/ (cleared first), BLACK raster so the monochrome
+  icons (Line/Shape/Text take the raster color) stay legible; the icon-redraw loop's
+  temporary dump test is no longer needed each time; (2) rust-cache recorded as F16 in
+  DEBTS-functional.md (owner: not now — a possible improvement for when CI speed matters):
+  one `Swatinem/rust-cache@v2` step after checkout, the mechanism, limits and the owner-gate
+  written into the row; ci.yml untouched.
+- **Files:** `src/app/tool_icons/tests.rs` (+ the ignored dump test), `DEBTS-functional.md`
+  (F16 born), `PROGRESS.md` (compaction: the unoptimized-dev entry moved; snapshot row +
+  this entry + stamp).
+- **Verified:** the dump ran explicitly on a hot lane: 1 passed in 0.09 s, 14 PNGs (7 tools ×
+  256/24 px) in /tmp/icon_dump/, PIL-checked 256×256 and 24×24; the plain gate SKIPS it —
+  the test stages below count it as 1 ignored (156 default / 168 mcp passed, unchanged);
+  rules.sh HARD-green.
+- **Owner-checks:** none born (F16 is owner-gated work, not a human check). Open: V35 (the
+  icon look), V34 (the unoptimized-dev pass), V30 (parked), V8 (parked).
+- **Commit title:** `Add the permanent #[ignore] icon-dump test; record CI rust-cache as F16`

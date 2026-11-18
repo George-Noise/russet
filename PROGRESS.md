@@ -56,6 +56,7 @@
 | Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged |
 | Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
 | Extra: Tools window v5 — the bar back, only the label hidden (owner pass 2026-11-18) | done — gate + driver + magnet check | `Window::new("")` + the explicit `tools_window_id()` renders the title bar WITHOUT the text (egui derives the Id from the title even when empty); `.open` plumbing restored (the ✕ is back); AGENTS quirk rewritten (the empty-title recipe); .gitignore keeps `__pycache__`/`*.pyc` out of the artifacts; V36 → v5 re-check pending |
+| Extra: language rule → English-only whitelist (owner request 2026-11-18) | done — gate + deliver | the stamp's "Zero Cyrillic repo-wide" reworded: a language WHITELIST (English is the only written language), not a script blacklist — friendlier to readers of any writing system |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -80,7 +81,9 @@ buttons a step, put the eraser's rim in the set and removed the Tools window's t
 bar (v4; the v5 round restored the bar and hides only the label — an empty title
 string + the explicit id): the gate run below is green with 161 default / 174 mcp
 passed (+1 ignored each).
-Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
+English-only repo-wide — a language WHITELIST (English is simply the only written language
+here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
+2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
 `app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
 draw fns vs the atlas/cursor pipeline; proposed to the owner at delivery, not done without
@@ -108,7 +111,23 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > entry followed that (the dump round's budget), the verify.sh-hardening entry
 > completed the day's compactions (the icons-v2 round's budget), the
 > icon-redraw entry moved during the icons-v4 round's budget, and the
-> Tooling entry moved during the v5 round's budget.
+> Tooling entry moved during the v5 round's budget; the icon-dump entry
+> moved during the wording round's budget.
+
+### 2026-11-18 — `Docs:` the language rule reworded — an English whitelist, not a script blacklist — owner request
+
+- **What:** the owner asked to reword the stamp's language rule: "Zero Cyrillic repo-wide" read as
+  hostile toward people whose writing systems use Cyrillic. The rule is now a WHITELIST: English is
+  the only language written in the repo (comments, docs, commit titles) — nothing is "banned",
+  English is simply what is used. One line in the stamp; no other rule text referenced the old
+  wording (grep: PROGRESS.md only; AGENTS.md's separate "user-facing strings are hardcoded English"
+  product rule is untouched).
+- **Files:** `PROGRESS.md` (stamp line; compaction: the icon-dump entry → archive; snapshot + this
+  entry + quote).
+- **Verified:** no src/ change — the hot gate below re-run for the ritual (161 default / 174 mcp);
+  the delivery rebuilt (byte-compares MATCH), the zip carries the new stamp.
+- **Owner-checks:** open: V36, V30 (parked), V8 (parked).
+- **Commit title:** `Reword the language rule as an English-only whitelist (stamp)`
 
 ### 2026-11-18 — `Fix:` Tools window v5: the bar is back, only the label hidden — owner pass
 
@@ -219,26 +238,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V36 (icons-v2 look, both themes) and V37 (theme switcher, three states)
   born. Open: V37, V36 (new), V30 (parked), V8 (parked).
 - **Commit title:** `Icons v2: theme-aware rims, pipette collar, S-curve, circle, T+t; theme switcher in menu + MCP; dump dir param`
-
-### 2026-11-18 — `Test:` permanent #[ignore] icon-dump; F16 rust-cache debt — owner request
-
-- **What:** two owner orders (2026-11-18): (1) the icon contact sheet is now a PERMANENT ignored
-  test `icons_dump_when_requested` in `app/tool_icons/tests.rs` — a plain `cargo test` (the
-  done-gate) SKIPS it, run explicitly `cargo test --profile gates -- --ignored icons_dump`
-  when redraw/adjusting an icon; it renders every tool at 256 px (design view) + the real
-  24 px button size into /tmp/icon_dump/ (cleared first), BLACK raster so the monochrome
-  icons (Line/Shape/Text take the raster color) stay legible; the icon-redraw loop's
-  temporary dump test is no longer needed each time; (2) rust-cache recorded as F16 in
-  DEBTS-functional.md (owner: not now — a possible improvement for when CI speed matters):
-  one `Swatinem/rust-cache@v2` step after checkout, the mechanism, limits and the owner-gate
-  written into the row; ci.yml untouched.
-- **Files:** `src/app/tool_icons/tests.rs` (+ the ignored dump test), `DEBTS-functional.md`
-  (F16 born), `PROGRESS.md` (compaction: the unoptimized-dev entry moved; snapshot row +
-  this entry + stamp).
-- **Verified:** the dump ran explicitly on a hot lane: 1 passed in 0.09 s, 14 PNGs (7 tools ×
-  256/24 px) in /tmp/icon_dump/, PIL-checked 256×256 and 24×24; the plain gate SKIPS it —
-  the test stages below count it as 1 ignored (156 default / 168 mcp passed, unchanged);
-  rules.sh HARD-green.
-- **Owner-checks:** none born (F16 is owner-gated work, not a human check). Open: V35 (the
-  icon look), V34 (the unoptimized-dev pass), V30 (parked), V8 (parked).
-- **Commit title:** `Add the permanent #[ignore] icon-dump test; record CI rust-cache as F16`
