@@ -166,3 +166,79 @@ fn the_aspect_lock_drives_the_untouched_field() {
     let (w, h) = super::aspect_linked(800.0, 600.0, 0.2, 600.0, 0.75);
     assert_eq!((w, h), (0.2, 1.0));
 }
+
+// ---- the About window's content (owner request 2026-11-18) ----
+
+/// Renders the REAL About body through the REAL window builder (no `App`)
+/// and joins every painted text run, so the assertions see exactly what the
+/// user sees — the same trick the plumbing tests use, applied to content.
+/// THREE passes, like `the_dialog_window_hugs_its_content`: egui sizes a
+/// fresh window on the frame after its first layout — the first pass paints
+/// nothing (every shape culled to Noop), the content text exists from the
+/// second pass on.
+fn render_about_texts() -> String {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        ..egui::RawInput::default()
+    };
+    let mut rendered = String::new();
+    for _ in 0..3 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            dialog_window("About Russet", dialog_id("about_content"), ctx)
+                .show(ctx, |ui| {
+                    super::about_window_content(ui);
+                })
+                .expect("the About window shows");
+        });
+        // No renderer: drop the font-atlas deltas explicitly (see show_once).
+        output.textures_delta.clear();
+        // egui nests paint commands (`Shape::Vec`) — collect recursively.
+        fn texts<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a str>) {
+            match shape {
+                egui::Shape::Text(text) => out.push(text.galley.job.text.as_str()),
+                egui::Shape::Vec(children) => children.iter().for_each(|c| texts(c, out)),
+                _ => {}
+            }
+        }
+        let mut runs = Vec::new();
+        for clipped in &output.shapes {
+            texts(&clipped.shape, &mut runs);
+        }
+        rendered = runs.join("\n");
+    }
+    rendered
+}
+
+#[test]
+fn the_about_window_renders_the_spec_promise() {
+    let rendered = render_about_texts();
+
+    // SPEC §3.1 / §7.20: name, version, the language, the repository link,
+    // the platform and renderer lines, the Close row.
+    for promised in [
+        "Russet",
+        "Version",
+        super::ABOUT_DESCRIPTION,
+        super::ABOUT_REPO_LABEL,
+        "Platform:",
+        "Renderer:",
+        "Close",
+    ] {
+        assert!(
+            rendered.contains(promised),
+            "the About window must render {promised:?}; painted text: {rendered:?}"
+        );
+    }
+}
+
+#[test]
+fn the_about_hyperlink_targets_the_github_repo() {
+    // SPEC §3.1 (owner request 2026-11-18): the window links the project's
+    // GitHub repository — locked here so a URL edit is a conscious test
+    // update, never an accident.
+    assert_eq!(
+        super::ABOUT_REPO_URL,
+        "https://github.com/George-Noise/russet"
+    );
+}

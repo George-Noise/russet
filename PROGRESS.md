@@ -21,7 +21,7 @@
 | M7 Resize Canvas + New | done | |
 | M8 Web (WASM) | built + headless Firefox check (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` + Firefox: UI renders, canvas draws, WebGL2 — a headless smoke test, not a human pass. Owner must click through drawing/zoom/pan/Open/Save with a real mouse |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
-| Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
+| Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; 2026-11-18: + "written in Rust" description + GitHub repo hyperlink; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
 | Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |
 | Extra: README.md | done | English, build & run only (Windows / NixOS / Web); declared the human-facing doc in AGENTS.md + SPEC §8 |
 | Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
@@ -67,6 +67,30 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check.
+
+### 2026-11-18 — `Feat:` About window names Rust + links the GitHub repo — owner request
+
+- **What:** the "About Russet" window gained (owner request 2026-11-18): (1) the language — the
+  description line now reads "A tiny bitmap paint program written in Rust with egui/eframe."
+  (was "built with egui/eframe."); (2) a GitHub repository hyperlink "GitHub: George-Noise/russet"
+  → `https://github.com/George-Noise/russet`, via `ui.hyperlink_to` — opens the system browser on
+  native (eframe's `links` feature, already enabled) and `window.open` on web; no new dependency.
+  The window's CONTENT moved into the free `about_window_content` (no `App` state) so the new
+  headless-egui content tests render the REAL body; placement, Close button and the dialog
+  plumbing untouched. New egui quirk recorded in AGENTS.md: a window's first `run_pass` paints
+  only `Shape::Noop` — content shapes exist from pass 2 on.
+- **Files:** `src/app/dialogs.rs` (ABOUT_* constants + `about_window_content` + `about_dialog`),
+  `src/app/dialogs/tests.rs` (+2 content tests), `SPEC.md` (§3.1 Help bullet + §7 checklist item
+  20), `AGENTS.md` (1 quirk), `DEBTS-verification.md` (V33 born), `TIMING.md` (2 rows),
+  `PROGRESS.md` (snapshot row + this entry).
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 145 default / 157 mcp (fmt, clippy
+  `-D warnings`, rules.sh HARD-green; the history_tree.rs OVER GUARD is the owner-deferred item);
+  `cargo check --target wasm32-unknown-unknown` green; headless `visual_driver.py` 3/3 scenarios
+  green (15 checks) after the change; scripted real-binary About pass 4/4 under Xvfb (Help menu →
+  About opens → the hyperlink renders in link color → Close hides it; evidence frame for the
+  owner in the chat download dir).
+- **Owner-checks:** V33 born (the About-window pass on Windows / browser).
+- **Commit title:** `About window: "written in Rust" line + GitHub repo hyperlink`
 
 ### 2026-11-17 — `Refactor:` placement/tests.rs split by topic — owner-approved — owner request
 

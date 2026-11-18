@@ -26,13 +26,14 @@
 | 2026-11-17 | rustup install + fetch pinned 1.99.1 toolchain (fresh sandbox, no rustup at all) | ≈ 3–4 min | ≈ (background-log mtimes) |
 | 2026-11-17 | `cargo check` (dev, fresh clone: ALL deps compiled) | ≈ 8–12 min | ≈ (background-log mtimes) |
 | 2026-11-17 | `cargo test --profile gates` (gates profile fresh: all test deps compiled) | ≈ 4–6 min | ≈ (observed via background poll) |
+| 2026-11-18 | `bash scripts/verify.sh` FIRST run in a cold gates lane (all gate deps compiled; the run itself FAILED at a new test — the 3 min is the compile cost, the fix re-ran hot) | ≈ 3 min | time'd exactly |
 | 2026-11-17 | `cargo check --target wasm32-unknown-unknown` (target triple fresh; deps recompiled for wasm) | ≈ 1.5–2.5 min + one-time `rustup target add` download | ≈ (background-log mtimes; the finishing pass measured 1m38s) |
 
 ## Hot
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
-| 2026-11-17 | `bash scripts/verify.sh` after a SMALL code change (the panels split: 2 new files, deps hot, gates profile) | **18 s** | time'd exactly |
+| 2026-11-18 | `bash scripts/verify.sh` after a small code change (About window: 2 files + 2 tests, deps hot, gates profile) | **15.1 s** | time'd exactly |
 | 2026-11-17 | `bash scripts/verify.sh` after docs/script-only changes (no src/ touched — no rebuild; same after a bare `touch` of an unchanged file: cargo detects identical content) | **9 s** | time'd exactly |
 | 2026-11-17 | `cargo clippy --profile gates --all-targets` after real code changes (the magnet round) | 59 s | cargo's own "Finished in" |
 | 2026-11-17 | `cargo test --profile gates` after real code changes (the magnet round) | ≈ 3–4 min | ≈ (background poll) |

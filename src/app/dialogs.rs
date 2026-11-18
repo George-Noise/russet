@@ -14,6 +14,19 @@ use super::App;
 use super::document::{MAX_CANVAS, MIN_CANVAS, PendingAction};
 use crate::history_tree::{ResizeAnchor, ResizeFilter, ResizeMode};
 
+/// The GitHub repository the About window links (owner request 2026-11-18):
+/// the `ui.hyperlink_to` target — opens the system browser on native builds
+/// (eframe's `links` feature) and a new tab on web.
+pub(super) const ABOUT_REPO_URL: &str = "https://github.com/George-Noise/russet";
+
+/// The About window hyperlink's visible label (owner request 2026-11-18).
+pub(super) const ABOUT_REPO_LABEL: &str = "GitHub: George-Noise/russet";
+
+/// The About window's one-line description (owner request 2026-11-18: the
+/// window must say the project is written in Rust — SPEC §3.1 / §7.20).
+pub(super) const ABOUT_DESCRIPTION: &str =
+    "A tiny bitmap paint program written in Rust with egui/eframe.";
+
 /// Stable area id of a modal dialog (needed to reset its stored position
 /// on close — see [`forget_dialog_position`]).
 pub(super) fn dialog_id(name: &str) -> Id {
@@ -305,11 +318,15 @@ impl App {
         }
     }
 
-    /// The "About Russet" window (owner request 2026-11-09): name, version
-    /// and the platform the app is running on — Wayland, X11, Windows, Web
-    /// (WASM), etc. The platform/renderer strings come from `main.rs`
-    /// (`crate::platform_label` / `crate::renderer_label`), the place where
-    /// platform knowledge is allowed to live (AGENTS.md "Repo facts").
+    /// The "About Russet" window (owner request 2026-11-09). The CONTENT —
+    /// name, version, the one-line description ("written in Rust", owner
+    /// request 2026-11-18), the GitHub repository hyperlink (same request),
+    /// the platform/renderer lines and the Close row — lives in the free
+    /// [`about_window_content`], so the headless-egui test in `dialogs/tests.rs`
+    /// renders the REAL body without an `App`. The platform/renderer strings
+    /// come from `main.rs` (`crate::platform_label` / `crate::renderer_label`),
+    /// the place where platform knowledge is allowed to live (AGENTS.md
+    /// "Repo facts").
     pub(super) fn about_dialog(&mut self, ctx: &Context) {
         if !self.show_about {
             return;
@@ -317,22 +334,34 @@ impl App {
         let mut close = false;
         let id = dialog_id("about");
         dialog_window("About Russet", id, ctx).show(ctx, |ui| {
-            ui.heading("Russet");
-            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-            ui.add_space(4.0);
-            ui.label("A tiny bitmap paint program built with egui/eframe.");
-            ui.add_space(4.0);
-            ui.label(format!("Platform: {}", crate::platform_label()));
-            ui.label(format!("Renderer: {}", crate::renderer_label()));
-            ui.add_space(6.0);
-            let (close_hit, _) = dialog_button_row(ui, "Close", "");
-            close = close_hit;
+            close = about_window_content(ui);
         });
         if close {
             self.show_about = false;
             forget_dialog_position(ctx, id);
         }
     }
+}
+
+/// The About window's whole content, minus the window plumbing (owner
+/// request 2026-11-09 for the window; 2026-11-18 for the language line and
+/// the repository link). Free of `App` state on purpose: the only variable
+/// inputs are the crate version (compile-time) and the platform/renderer
+/// labels, so the headless-egui test can show this through the SAME
+/// [`dialog_window`] builder the real dialog uses. Returns whether the
+/// Close row was clicked.
+fn about_window_content(ui: &mut egui::Ui) -> bool {
+    ui.heading("Russet");
+    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+    ui.add_space(4.0);
+    ui.label(ABOUT_DESCRIPTION);
+    ui.hyperlink_to(ABOUT_REPO_LABEL, ABOUT_REPO_URL);
+    ui.add_space(4.0);
+    ui.label(format!("Platform: {}", crate::platform_label()));
+    ui.label(format!("Renderer: {}", crate::renderer_label()));
+    ui.add_space(6.0);
+    let (close, _) = dialog_button_row(ui, "Close", "");
+    close
 }
 
 /// The Paint.NET-style 3×3 anchor grid of the Canvas-mode resize (owner
