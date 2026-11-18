@@ -231,6 +231,7 @@ flow, so a worthy crate is used instead of being re-invented as an in-house whee
 - `egui` is not a direct dependency: `use eframe::egui;` (or fully qualify `eframe::egui`).
 - Keyboard-focus guard is `ctx.egui_wants_keyboard_input()`, not `ctx.wants_keyboard_input()`.
 - `Ui::id()` is deprecated; use `Ui::scope_id()`.
+- `egui::Grid` floors EVERY column at `interact_size.x` (40 pt) regardless of the widgets inside (`grid.rs` `set_min_col_width(col, widget_rect.width().max(min_cell_size.x))`) — a compact grid of narrower widgets (e.g. 28 pt tool buttons) silently grows wide columns and a huge visible horizontal gap while the row gap obeys `spacing().y` (caught by pixel measurement 2026-11-18: 18 pt vs 6 pt). Fix: `.min_col_width(widget_width)` on the Grid builder.
 - Panels are unified: `egui::Panel::top(id)` / `bottom` / `left` / `right`; there is no `TopBottomPanel`/`SidePanel`.
 - Menu bar is `egui::MenuBar::new().ui(ui, |ui| { ui.menu_button(...) })`; there is no `egui::menu::bar`.
 - Tool windows/panels are drawn with `egui::Window::new(...).show(&ctx, ...)`; input over them must not paint on the canvas (use response hover/occlusion, not raw pointer position).

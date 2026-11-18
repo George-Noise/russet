@@ -106,6 +106,11 @@ impl App {
                 // request 2026-11-17, see `tool_settings_window`).
                 egui::Grid::new("tools_grid")
                     .num_columns(TOOL_COLUMNS)
+                    // egui floors every column at `interact_size.x` (40 pt),
+                    // which padded the 28 pt buttons with invisible width and
+                    // made the column gap 18 pt while the row gap stayed 6 pt
+                    // (owner request 2026-11-18: equal gaps both ways).
+                    .min_col_width(TOOL_BUTTON_PT)
                     .spacing([6.0, 6.0])
                     .show(ui, |ui| {
                         for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {

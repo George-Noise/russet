@@ -219,15 +219,32 @@ fn polygon(pts: &[(f32, f32)], closed: bool) -> Option<Path> {
     pb.finish()
 }
 
+/// Points along a circular arc in the logical space (y-down: 0° = +x, 90° =
+/// +y downward). The round parts of the redrawn icons (2026-11-18 owner
+/// request: a volumetric round bristle belly, a recognizable rubber bulb)
+/// are short line segments through this helper — anti-aliasing hides the
+/// tessellation at button sizes.
+fn arc_pts(cx: f32, cy: f32, r: f32, a0_deg: f32, a1_deg: f32, steps: usize) -> Vec<(f32, f32)> {
+    (0..=steps)
+        .map(|i| {
+            let a = (a0_deg + (a1_deg - a0_deg) * i as f32 / steps as f32).to_radians();
+            (cx + r * a.cos(), cy + r * a.sin())
+        })
+        .collect()
+}
+
 /// The colored icons' thin dark outline around the tool's silhouette.
 const OUTLINE_W: f32 = 0.9;
 
 // ---------------------------------------------------------------------------
-// The icons (owner specs 2026-11-18). Colored: Pencil (classic yellow body,
+// The icons (owner specs 2026-11-18; brush + pipette redrawn the same day —
+// owner: the brush's chisel wedge read as a second pencil and the pipette's
+// all-rectangle stick read as a pen). Colored: Pencil (classic yellow body,
 // wood cone, black graphite, eraser on the end), Brush (varnished-wood
-// handle + small metal ferrule + bristles), Eraser (classic pink slab),
-// Eyedropper (pipette — also the canvas cursor). Monochrome (theme text
-// color): Line, Shape, Text.
+// handle + metal ferrule + a ROUND volumetric bristle belly with a loaded
+// tip), Eraser (classic pink slab), Eyedropper (tapering glass cone with a
+// liquid stripe + metal collar + round rubber bulb — also the canvas
+// cursor). Monochrome (theme text color): Line, Shape, Text.
 // ---------------------------------------------------------------------------
 
 /// The angle every hand-held tool is drawn at (tip pointing down-left).
@@ -292,47 +309,123 @@ fn draw_pencil(pm: &mut Pixmap, ts: Transform) {
     );
 }
 
+/// A round paint brush (owner request 2026-11-18: the old chisel wedge read
+/// as a second pencil — the bristles now bulge into a ROUND belly past the
+/// ferrule and taper to the tip, the way classic paint apps draw brushes).
+/// The belly is split into light/dark facets along the centerline for the
+/// volume; the dark loaded tip (paint) stays.
 fn draw_brush(pm: &mut Pixmap, ts: Transform) {
+    // The bristle silhouette: tip (1.2, 12.0), round belly peaking at
+    // x≈7.0 (half-height 2.7), closing slightly into the ferrule at 10.6
+    // (half-height 2.0).
+    let bristle_top = [
+        (1.2, 12.0),
+        (2.6, 10.5),
+        (4.6, 9.7),
+        (7.0, 9.3),
+        (9.2, 9.6),
+        (10.6, 10.0),
+    ];
+    let bristle_bottom = [
+        (10.6, 14.0),
+        (9.2, 14.4),
+        (7.0, 14.7),
+        (4.6, 14.3),
+        (2.6, 13.5),
+    ];
+    // Volume: light facet above the centerline, dark below (the pencil's
+    // facet pattern; the light half keeps the canonical bristle color).
     fill(
         pm,
         ts,
-        &[(1.4, 11.8), (3.4, 11.5), (3.4, 12.5), (1.4, 12.2)],
-        Color32::from_rgb(110, 74, 40),
-    ); // loaded tip
-    fill(
-        pm,
-        ts,
-        &[(3.4, 11.5), (9.0, 10.0), (9.0, 14.0), (3.4, 12.5)],
-        Color32::from_rgb(216, 169, 107), // bristles
+        &[
+            (1.2, 12.0),
+            (2.6, 10.5),
+            (4.6, 9.7),
+            (7.0, 9.3),
+            (9.2, 9.6),
+            (10.6, 10.0),
+            (10.6, 12.0),
+        ],
+        Color32::from_rgb(216, 169, 107), // bristles, light facet
     );
     fill(
         pm,
         ts,
-        &[(9.0, 10.0), (11.6, 10.0), (11.6, 14.0), (9.0, 14.0)],
-        Color32::from_rgb(185, 190, 198),
-    ); // metal ferrule
+        &[
+            (10.6, 12.0),
+            (10.6, 14.0),
+            (9.2, 14.4),
+            (7.0, 14.7),
+            (4.6, 14.3),
+            (2.6, 13.5),
+            (1.2, 12.0),
+        ],
+        Color32::from_rgb(192, 142, 84), // bristles, dark facet
+    );
+    // Paint-loaded tip over the facets (the brush has just picked up color).
     fill(
-        pm,
-        ts,
-        &[(11.6, 10.3), (22.6, 10.3), (22.6, 12.0), (11.6, 12.0)],
-        Color32::from_rgb(180, 113, 60),
-    ); // handle, light facet
-    fill(
-        pm,
-        ts,
-        &[(11.6, 12.0), (22.6, 12.0), (22.6, 13.7), (11.6, 13.7)],
-        Color32::from_rgb(148, 85, 39),
-    ); // handle, dark facet
-    stroke(
         pm,
         ts,
         &[
-            (1.4, 12.0),
-            (9.0, 10.0),
-            (22.6, 10.3),
-            (22.6, 13.7),
-            (9.0, 14.0),
+            (1.2, 12.0),
+            (2.6, 10.5),
+            (3.6, 11.0),
+            (3.4, 13.0),
+            (2.6, 13.5),
         ],
+        Color32::from_rgb(110, 74, 40), // loaded tip
+    );
+    fill(
+        pm,
+        ts,
+        &[(10.6, 9.9), (13.4, 9.9), (13.4, 14.1), (10.6, 14.1)],
+        Color32::from_rgb(185, 190, 198), // metal ferrule
+    );
+    // The ferrule's crimp ridges (two thin darker lines near the bristles).
+    for x in [11.6, 12.3] {
+        stroke(
+            pm,
+            ts,
+            &[(x, 10.1), (x, 13.9)],
+            false,
+            Color32::from_rgb(150, 157, 166),
+            0.5,
+        );
+    }
+    fill(
+        pm,
+        ts,
+        &[(13.4, 10.4), (23.0, 10.4), (23.0, 12.0), (13.4, 12.0)],
+        Color32::from_rgb(180, 113, 60), // handle, light facet
+    );
+    fill(
+        pm,
+        ts,
+        &[(13.4, 12.0), (23.0, 12.0), (23.0, 13.6), (13.4, 13.6)],
+        Color32::from_rgb(148, 85, 39), // handle, dark facet
+    );
+    stroke(
+        pm,
+        ts,
+        bristle_top
+            .iter()
+            .chain(
+                [
+                    (10.6, 9.9),
+                    (13.4, 9.9),
+                    (13.4, 10.4),
+                    (23.0, 10.4),
+                    (23.0, 13.6),
+                    (13.4, 13.6),
+                    (13.4, 14.1),
+                ]
+                .iter(),
+            )
+            .chain(bristle_bottom.iter())
+            .copied()
+            .collect::<Vec<(f32, f32)>>()
+            .as_slice(),
         true,
         Color32::from_rgb(78, 58, 36),
         OUTLINE_W,
@@ -372,59 +465,64 @@ fn draw_eraser(pm: &mut Pixmap, ts: Transform) {
 /// tip is where the pointer samples).
 const PIPETTE_TIP: (f32, f32) = (1.6, 12.0);
 
+/// A classic eyedropper (owner request 2026-11-18: the old all-rectangle
+/// stick read as a pen — the glass now TAPERS from the collar to the fine
+/// tip and the rubber bulb is a ROUND cap, the way paint apps draw pipettes).
+/// The blue liquid fills the tip (the sample) and runs as a tapering stripe
+/// inside the glass barrel; the tip stays at [`PIPETTE_TIP`] (cursor hotspot).
 fn draw_pipette(pm: &mut Pixmap, ts: Transform) {
+    // The glass cone is deliberately WIDER than the liquid stripe plus two
+    // outline half-widths — otherwise the outline eats the glass and no
+    // opaque glass pixel survives rasterization (caught by the glass test).
     fill(
         pm,
         ts,
-        &[(1.6, 11.3), (7.4, 11.3), (7.4, 12.7), (1.6, 12.7)],
-        Color32::from_rgb(201, 212, 221),
-    ); // glass tip tube
+        &[(5.2, 11.4), (15.0, 10.2), (15.0, 13.8), (5.2, 12.6)],
+        Color32::from_rgb(213, 223, 231), // glass barrel, tapering cone
+    );
     fill(
         pm,
         ts,
-        &[(1.6, 11.7), (7.4, 11.7), (7.4, 12.3), (1.6, 12.3)],
-        Color32::from_rgb(95, 168, 220),
-    ); // liquid in the tip
+        &[(5.6, 11.9), (14.4, 11.5), (14.4, 12.5), (5.6, 12.1)],
+        Color32::from_rgb(95, 168, 220), // liquid stripe in the barrel
+    );
     fill(
         pm,
         ts,
-        &[(7.4, 10.6), (13.8, 10.6), (13.8, 13.4), (7.4, 13.4)],
-        Color32::from_rgb(213, 223, 231),
-    ); // glass barrel
+        &[(1.6, 12.0), (5.2, 11.4), (5.2, 12.6)],
+        Color32::from_rgb(95, 168, 220), // liquid filling the tip (the sample)
+    );
     fill(
         pm,
         ts,
-        &[(7.4, 11.5), (13.8, 11.5), (13.8, 12.5), (7.4, 12.5)],
-        Color32::from_rgb(95, 168, 220),
-    ); // liquid in the barrel
+        &[(15.0, 9.9), (17.55, 9.9), (17.55, 14.1), (15.0, 14.1)],
+        Color32::from_rgb(94, 103, 112), // metal collar (wider than the glass — reads as a band)
+    );
+    // The rubber bulb: a full circle bulging past the collar (the old icon's
+    // red rectangle was the "unfamiliar" part). The silhouette arc below
+    // shares the same circle: center (19.4, 12.0), r 2.8.
     fill(
         pm,
         ts,
-        &[(13.8, 10.2), (15.2, 10.2), (15.2, 13.8), (13.8, 13.8)],
-        Color32::from_rgb(94, 103, 112),
-    ); // metal collar
-    fill(
-        pm,
-        ts,
-        &[(15.2, 9.9), (21.6, 9.9), (21.6, 14.1), (15.2, 14.1)],
-        Color32::from_rgb(217, 87, 68),
-    ); // rubber bulb
+        &arc_pts(19.4, 12.0, 2.8, 0.0, 360.0, 32),
+        Color32::from_rgb(217, 87, 68), // rubber bulb
+    );
     stroke(
         pm,
         ts,
-        &[
+        [
             (1.6, 12.0),
-            (7.4, 11.3),
-            (7.4, 10.6),
-            (13.8, 10.6),
-            (13.8, 10.2),
-            (21.6, 9.9),
-            (21.6, 14.1),
-            (13.8, 13.8),
-            (13.8, 13.4),
-            (7.4, 13.4),
-            (7.4, 12.7),
-        ],
+            (5.2, 11.4),
+            (15.0, 10.2),
+            (15.0, 9.9),
+            (17.55, 9.9),
+        ]
+        .iter()
+        .chain(arc_pts(19.4, 12.0, 2.8, 228.6, 491.4, 28).iter())
+        .chain([(15.0, 14.1), (15.0, 13.8), (5.2, 12.6)].iter())
+        .copied()
+        .collect::<Vec<(f32, f32)>>()
+        .as_slice(),
         true,
         Color32::from_rgb(58, 68, 77),
         OUTLINE_W,

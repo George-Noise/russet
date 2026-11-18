@@ -50,6 +50,7 @@
 | Extra: tool icon buttons + two-column grid (owner 2026-11-18) | done — gates green + visual driver | 1.5rem icon buttons via a cached tiny-skia atlas (`app/tool_icons.rs`), colored pencil/brush/eraser/pipette + mono line/shape/text through ONE pipeline, name+key hover tooltips, the pipette as the Eyedropper's canvas cursor; the two-column grid is debt F15; the driver screenshot caught the dead-texture trap (handles kept in the Atlas now — AGENTS.md quirks) |
 | Extra: fully unoptimized dev profile (owner 2026-11-18) | done — cargo check green on the new lane | `[profile.dev]` opt-level 0 + no debuginfo, the `[profile.dev.package."*"] opt-level 2` dep override REMOVED (the "deps optimized once for responsive `cargo run`" policy retired — development is sandbox-only now, UI lag accepted); flake `russet-dev` already ran the unoptimized gates lane (untouched); SPEC §1 + AGENTS.md synced; owner visual pass = V34 |
 | Extra: verify.sh hardening (owner 2026-11-18) | done — FULL gate green on a cold lane (191 s) | `exec </dev/null` closes stdin for the whole run (SANDBOX.md trap 10 fixed AT THE SOURCE — the mcp test stage exits in seconds instead of hanging); per-stage seconds + total printed (TIMING.md rows are copied now, not re-measured); cold-lane hint when `target/gates` is absent; the mcp pair stays UNCONDITIONAL (hot gate ≈ 15 s, zip sandboxes have no git, the gate never guesses) |
+| Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -57,11 +58,14 @@ HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile ga
 visual driver ALL SCENARIOS GREEN + `--shots` — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 The hardened gate (stdin shield + stage timers, same day) then re-ran EVERYTHING on a cold lane
 after the dev-profile de-optimization: 191 s total, 156/168 green again — the profile change is
-fully gate-verified.
+fully gate-verified. The icon-redraw round (same day) exercised the hardened gate on a REAL
+change: hot run 14 s (156/168 green), the glass test caught a real drawing bug pre-delivery,
+driver ALL SCENARIOS GREEN, the grid gaps pixel-measured 6 pt = 6 pt.
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
-every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND the fresh
-`app/tool_icons.rs` 512 (over the 500 guard — the split is proposed to the owner at delivery,
-not done without his approval).
+every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
+`app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
+draw fns vs the atlas/cursor pipeline; proposed to the owner at delivery, not done without
+his approval).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -79,7 +83,37 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
 > docs rounds moved to PROGRESS-archive.md; later the same day the F14 + quotes rounds
-> followed them (the verify.sh round needed the budget back).
+> followed them (the verify.sh round needed the budget back), and the tool-icons entry
+> joined them in the evening (the icon-redraw round).
+
+### 2026-11-18 — `Feat:` brush + pipette icons redrawn; equal Tools-grid gaps — owner request
+
+- **What:** the owner tested the hardened gate on a real task (2026-11-18): (1) the BRUSH
+  icon's chisel wedge read as a second pencil — redrawn as a classic round brush: a ROUND
+  volumetric bristle belly (peak half-height 2.7 pt past the ferrule) split into light/dark
+  facets for volume, a metal ferrule with two crimp ridges, the loaded paint tip kept;
+  (2) the PIPETTE's all-rectangle stick read as a pen — redrawn as a classic eyedropper:
+  a tapering glass cone with a blue liquid stripe (the tip full of the sample), a WIDER metal
+  collar band, and a ROUND rubber bulb (a new `arc_pts` helper tessellates the round parts);
+  `PIPETTE_TIP` and the cursor hotspot unchanged; (3) the Tools grid's horizontal gap was
+  18 pt vs 6 pt vertical — ROOT CAUSE inside egui's own `grid.rs`: every column is floored
+  at `interact_size.x` (40 pt), padding the 28 pt buttons with dead width; fixed with
+  `.min_col_width(TOOL_BUTTON_PT)` — pixel-measured 6 pt = 6 pt after the fix; quirk
+  recorded in AGENTS.md.
+- **Files:** `src/app/tool_icons.rs` (draw_brush + draw_pipette redrawn, `arc_pts`, the glass
+  widened so the outline doesn't eat it), `src/app/windows.rs` (`min_col_width`),
+  `src/app/tool_icons/tests.rs` (the glass assert follows the new palette), `AGENTS.md`
+  (Grid quirk), `PROGRESS.md` (compaction: the tool-icons entry moved to PROGRESS-archive.md;
+  snapshot row + this entry + stamp).
+- **Verified:** the design was iterated on rendered PNGs (256 px + real 24 px contact sheets),
+  then the FULL hot gate: ALL GATES GREEN 14 s (156 default / 168 mcp, fmt + clippy
+  `-D warnings` clean) — the FIRST gate run caught a real bug: the glass band was thinner
+  than two outline half-widths, so zero opaque glass pixels survived and the glass test
+  failed; fixed by widening the cone; headless visual driver ALL SCENARIOS GREEN + `--shots`,
+  the Tools window re-measured pixel-exact after the fix (H 6 / V 6).
+- **Owner-checks:** V35 born (the redrawn-icons look pass on Windows). Open: V35 (new), V34
+  (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
+- **Commit title:** `Redraw brush + pipette icons; equal Tools-grid gaps (egui Grid interact_size quirk)`
 
 ### 2026-11-18 — `Tooling:` verify.sh hardened — stdin shield, stage timers, cold-lane hint — owner request
 
@@ -129,37 +163,6 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   so clippy/test results are unaffected; the full verify.sh was not re-run for this round.
 - **Owner-checks:** V34 born (the unoptimized-dev visual pass on Windows + the build-speed judgment).
 - **Commit title:** `Make the dev lane fully unoptimized (opt-level 0, no debuginfo, no dep overrides); sync SPEC §1 and AGENTS.md`
-
-### 2026-11-18 — `Feat:` tool icon buttons (cached tiny-skia atlas) + two-column Tools grid — owner request
-
-- **What:** the owner (2026-11-18) ordered the Tools window onto ICON buttons: 1.5rem (24 pt)
-  icons, some COLORED, colored/monochrome through the SAME draw path ("no duplicated code"),
-  a name+key hover tooltip per button, and a two-column INTERIM grid ("a better idea later" —
-  debt F15). New child module `app/tool_icons.rs` (+ `tests.rs`): every icon is a tiny-skia
-  vector drawing rasterized ONCE per (pixels_per_point, theme) change into an egui texture
-  (`Context::load_texture_cached`) — a button's per-frame cost is one textured quad. Colored:
-  Pencil (classic yellow body, wood cone, black graphite, metal ferrule, eraser end), Brush
-  (varnished-wood handle + metal ferrule + bristles), Eraser (classic pink slab), Eyedropper
-  (a pipette); monochrome (the theme text color): Line, Shape, Text. The pipette doubles as
-  the Eyedropper's canvas cursor via `Context::set_cursor_image` (`CustomCursorImage`, straight
-  RGBA, hotspot at the pipette tip; web falls back to `Crosshair`) — egui 0.37's custom-cursor
-  path verified against the crate sources. `App` owns `tool_icons: Option<Atlas>`;
-  `App::ui` calls `tool_icons::ensure` before the canvas draws. The uncommitted F14 docs round
-  (recorded earlier today) rides in the SAME commit per the owner's one-commit request.
-- **Files:** `src/app/tool_icons.rs` + `src/app/tool_icons/tests.rs` (new), `src/app/windows.rs`
-  (icon buttons + `TOOL_COLUMNS` 2), `src/app.rs` (module + atlas field + ensure + cursor),
-  `SPEC.md` §3.2, `AGENTS.md` (module map), `DEBTS-functional.md` (F15), `PROGRESS.md`
-  (snapshot row + this entry + stamp).
-- **Verified:** FULL gate re-run after the final fix: fmt clean, rules.sh HARD-green, clippy
-  `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default / 168 mcp green
-  (+11 new icon tests), `cargo check --target wasm32-unknown-unknown` green; headless visual
-  driver (Xvfb + MCP, the SANDBOX.md recipe): ALL SCENARIOS GREEN + `--shots` screenshots —
-  the FIRST driver run caught a real bug: dropping the `load_texture_cached` handle freed the
-  texture the SAME frame (retain-count rule) and the buttons rendered EMPTY; fixed by keeping
-  the handles in `Atlas` — both new quirks (dead texture, custom OS cursors) recorded in
-  AGENTS.md "eframe/egui 0.37 API quirks".
-- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
-- **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
 
 ### 2026-11-18 — `Feat:` About window names Rust + links the GitHub repo — owner request
 

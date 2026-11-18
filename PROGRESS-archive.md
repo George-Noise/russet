@@ -1,5 +1,36 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-18 — `Feat:` tool icon buttons (cached tiny-skia atlas) + two-column Tools grid — owner request
+
+- **What:** the owner (2026-11-18) ordered the Tools window onto ICON buttons: 1.5rem (24 pt)
+  icons, some COLORED, colored/monochrome through the SAME draw path ("no duplicated code"),
+  a name+key hover tooltip per button, and a two-column INTERIM grid ("a better idea later" —
+  debt F15). New child module `app/tool_icons.rs` (+ `tests.rs`): every icon is a tiny-skia
+  vector drawing rasterized ONCE per (pixels_per_point, theme) change into an egui texture
+  (`Context::load_texture_cached`) — a button's per-frame cost is one textured quad. Colored:
+  Pencil (classic yellow body, wood cone, black graphite, metal ferrule, eraser end), Brush
+  (varnished-wood handle + metal ferrule + bristles), Eraser (classic pink slab), Eyedropper
+  (a pipette); monochrome (the theme text color): Line, Shape, Text. The pipette doubles as
+  the Eyedropper's canvas cursor via `Context::set_cursor_image` (`CustomCursorImage`, straight
+  RGBA, hotspot at the pipette tip; web falls back to `Crosshair`) — egui 0.37's custom-cursor
+  path verified against the crate sources. `App` owns `tool_icons: Option<Atlas>`;
+  `App::ui` calls `tool_icons::ensure` before the canvas draws. The uncommitted F14 docs round
+  (recorded earlier today) rides in the SAME commit per the owner's one-commit request.
+- **Files:** `src/app/tool_icons.rs` + `src/app/tool_icons/tests.rs` (new), `src/app/windows.rs`
+  (icon buttons + `TOOL_COLUMNS` 2), `src/app.rs` (module + atlas field + ensure + cursor),
+  `SPEC.md` §3.2, `AGENTS.md` (module map), `DEBTS-functional.md` (F15), `PROGRESS.md`
+  (snapshot row + this entry + stamp).
+- **Verified:** FULL gate re-run after the final fix: fmt clean, rules.sh HARD-green, clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default / 168 mcp green
+  (+11 new icon tests), `cargo check --target wasm32-unknown-unknown` green; headless visual
+  driver (Xvfb + MCP, the SANDBOX.md recipe): ALL SCENARIOS GREEN + `--shots` screenshots —
+  the FIRST driver run caught a real bug: dropping the `load_texture_cached` handle freed the
+  texture the SAME frame (retain-count rule) and the buttons rendered EMPTY; fixed by keeping
+  the handles in `Atlas` — both new quirks (dead texture, custom OS cursors) recorded in
+  AGENTS.md "eframe/egui 0.37 API quirks".
+- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
+- **Commit title:** `Record debts F14/F15; tool icon buttons via a cached tiny-skia atlas + two-column Tools grid`
+
 ### 2026-11-18 — `Docs:` debt F14 born — in-house window solution, owner-gated (later)
 
 - **What:** the owner (owner: "record it in the debts — replace egui::Window with our own

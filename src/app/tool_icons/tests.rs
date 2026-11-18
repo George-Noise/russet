@@ -80,7 +80,7 @@ fn pipette_has_rubber_bulb_glass_and_liquid() {
     let pm = rasterize_tool_icon(Tool::Eyedropper, 48, Color32::WHITE).expect("px is in 1..=256");
     assert!(has_color(&pm, (217, 87, 68), 6), "rubber bulb missing");
     assert!(has_color(&pm, (95, 168, 220), 6), "liquid stripe missing");
-    assert!(has_color(&pm, (201, 212, 221), 6), "glass tube missing");
+    assert!(has_color(&pm, (213, 223, 231), 6), "glass barrel missing");
 }
 
 #[test]
