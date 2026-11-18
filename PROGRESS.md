@@ -51,6 +51,7 @@
 | Extra: fully unoptimized dev profile (owner 2026-11-18) | done — cargo check green on the new lane | `[profile.dev]` opt-level 0 + no debuginfo, the `[profile.dev.package."*"] opt-level 2` dep override REMOVED (the "deps optimized once for responsive `cargo run`" policy retired — development is sandbox-only now, UI lag accepted); flake `russet-dev` already ran the unoptimized gates lane (untouched); SPEC §1 + AGENTS.md synced; owner visual pass = V34 |
 | Extra: verify.sh hardening (owner 2026-11-18) | done — FULL gate green on a cold lane (191 s) | `exec </dev/null` closes stdin for the whole run (SANDBOX.md trap 10 fixed AT THE SOURCE — the mcp test stage exits in seconds instead of hanging); per-stage seconds + total printed (TIMING.md rows are copied now, not re-measured); cold-lane hint when `target/gates` is absent; the mcp pair stays UNCONDITIONAL (hot gate ≈ 15 s, zip sandboxes have no git, the gate never guesses) |
 | Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
+| Extra: --warm warm-up + session rules; debts ask = 4 newest; V33 closed (owner 2026-11-18) | done — live cold-lane test + hot gate | `sandbox_check.sh --warm` = probe + detached gates-lane compile (clippy + test --no-run, nothing executed — the mcp stdin trap impossible) with a double-start pid guard; session start = `sandbox_check.sh --warm` FIRST; wasm ad-hoc checks only for web-facing changes; the batched debts ask lists only the 4 newest open items (AGENTS.md Debts rule 7) |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -60,7 +61,9 @@ The hardened gate (stdin shield + stage timers, same day) then re-ran EVERYTHING
 after the dev-profile de-optimization: 191 s total, 156/168 green again — the profile change is
 fully gate-verified. The icon-redraw round (same day) exercised the hardened gate on a REAL
 change: hot run 14 s (156/168 green), the glass test caught a real drawing bug pre-delivery,
-driver ALL SCENARIOS GREEN, the grid gaps pixel-measured 6 pt = 6 pt.
+driver ALL SCENARIOS GREEN, the grid gaps pixel-measured 6 pt = 6 pt. The tooling round (same
+day) proved `sandbox_check.sh --warm` on a truly cold lane (0.6 s return, the double-start
+guard fired, a hot gate after the log's "finished") and closed V33 (NixOS + Windows).
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
 `app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
@@ -83,8 +86,36 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
 > docs rounds moved to PROGRESS-archive.md; later the same day the F14 + quotes rounds
-> followed them (the verify.sh round needed the budget back), and the tool-icons entry
-> joined them in the evening (the icon-redraw round).
+> followed them (the verify.sh round needed the budget back), the tool-icons entry
+> joined them in the evening (the icon-redraw round), and the About entry followed
+> it (V33's closure freed it — the tooling round's budget).
+
+### 2026-11-18 — `Tooling:` warm-up flag + session rules; debts-ask trimmed; V33 closed — owner request
+
+- **What:** four owner orders (2026-11-18), one docs/tooling round, NO src/ change:
+  (1) `sandbox_check.sh --warm` — after the usual probe it starts a DETACHED gates-lane warm-up
+  (clippy + `cargo test --no-run --features mcp`: exactly the compile work verify.sh does, nothing
+  EXECUTED — no test binary spawns, so the mcp stdin trap is impossible here even without the
+  shield), a pid-file guard blocks double starts; the session-start rule now runs
+  `sandbox_check.sh --warm` FIRST — the done-gate is hot when the task ends (in-sandbox
+  compilation; the retired warm-target STORE stays retired); (2) AGENTS.md wasm-check economy:
+  ad-hoc `cargo check --target wasm32-unknown-unknown` ONLY for web-facing changes — neither
+  verify.sh nor CI runs wasm, so an unneeded run is pure lost minutes; (3) debts rule 7
+  (AGENTS.md + DEBTS-verification.md): the batched ask lists ONLY the 4 newest open items,
+  newest first — the files keep every open item; (4) V33 verified (owner: About checked on
+  NixOS AND Windows).
+- **Files:** `scripts/sandbox_check.sh` (--warm), `AGENTS.md` (session-start bullet, wasm
+  bullet, Debts rule 7), `DEBTS-verification.md` (presenting bullet, V33 → verified, V33's
+  source ref → archive), `TIMING.md` (cold warm-up row), `PROGRESS.md` (compaction: the About
+  entry moved; snapshot row + this entry + stamp).
+- **Verified:** live test on a truly cold lane (`rm -rf target/gates`): `--warm` returned in
+  0.6 s with the background build compiling (log /tmp/russet_warm_build.log), a second `--warm`
+  hit the guard ("already running, pid N"), and after the log's "finished" the same-session
+  verify.sh ran HOT (this round's gate run below); rules.sh HARD-green; no src/ change — no
+  wasm check (the new economy rule's first application).
+- **Owner-checks:** V33 closed. Open after this edit: V35 (the icon look), V34 (the
+  unoptimized-dev pass), V30 (parked), V8 (parked).
+- **Commit title:** `Add sandbox_check --warm warm-up; AGENTS wasm-economy + debts-ask rules; close V33`
 
 ### 2026-11-18 — `Feat:` brush + pipette icons redrawn; equal Tools-grid gaps — owner request
 
@@ -163,27 +194,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   so clippy/test results are unaffected; the full verify.sh was not re-run for this round.
 - **Owner-checks:** V34 born (the unoptimized-dev visual pass on Windows + the build-speed judgment).
 - **Commit title:** `Make the dev lane fully unoptimized (opt-level 0, no debuginfo, no dep overrides); sync SPEC §1 and AGENTS.md`
-
-### 2026-11-18 — `Feat:` About window names Rust + links the GitHub repo — owner request
-
-- **What:** the "About Russet" window gained (owner request 2026-11-18): (1) the language — the
-  description line now reads "A tiny bitmap paint program written in Rust with egui/eframe."
-  (was "built with egui/eframe."); (2) a GitHub repository hyperlink "GitHub: George-Noise/russet"
-  → `https://github.com/George-Noise/russet`, via `ui.hyperlink_to` — opens the system browser on
-  native (eframe's `links` feature, already enabled) and `window.open` on web; no new dependency.
-  The window's CONTENT moved into the free `about_window_content` (no `App` state) so the new
-  headless-egui content tests render the REAL body; placement, Close button and the dialog
-  plumbing untouched. New egui quirk recorded in AGENTS.md: a window's first `run_pass` paints
-  only `Shape::Noop` — content shapes exist from pass 2 on.
-- **Files:** `src/app/dialogs.rs` (ABOUT_* constants + `about_window_content` + `about_dialog`),
-  `src/app/dialogs/tests.rs` (+2 content tests), `SPEC.md` (§3.1 Help bullet + §7 checklist item
-  20), `AGENTS.md` (1 quirk), `DEBTS-verification.md` (V33 born), `TIMING.md` (2 rows),
-  `PROGRESS.md` (snapshot row + this entry).
-- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 145 default / 157 mcp (fmt, clippy
-  `-D warnings`, rules.sh HARD-green; the history_tree.rs OVER GUARD is the owner-deferred item);
-  `cargo check --target wasm32-unknown-unknown` green; headless `visual_driver.py` 3/3 scenarios
-  green (15 checks) after the change; scripted real-binary About pass 4/4 under Xvfb (Help menu →
-  About opens → the hyperlink renders in link color → Close hides it; evidence frame for the
-  owner in the chat download dir).
-- **Owner-checks:** V33 born (the About-window pass on Windows / browser).
-- **Commit title:** `About window: "written in Rust" line + GitHub repo hyperlink`

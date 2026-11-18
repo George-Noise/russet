@@ -1,5 +1,30 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-18 — `Feat:` About window names Rust + links the GitHub repo — owner request
+
+- **What:** the "About Russet" window gained (owner request 2026-11-18): (1) the language — the
+  description line now reads "A tiny bitmap paint program written in Rust with egui/eframe."
+  (was "built with egui/eframe."); (2) a GitHub repository hyperlink "GitHub: George-Noise/russet"
+  → `https://github.com/George-Noise/russet`, via `ui.hyperlink_to` — opens the system browser on
+  native (eframe's `links` feature, already enabled) and `window.open` on web; no new dependency.
+  The window's CONTENT moved into the free `about_window_content` (no `App` state) so the new
+  headless-egui content tests render the REAL body; placement, Close button and the dialog
+  plumbing untouched. New egui quirk recorded in AGENTS.md: a window's first `run_pass` paints
+  only `Shape::Noop` — content shapes exist from pass 2 on.
+- **Files:** `src/app/dialogs.rs` (ABOUT_* constants + `about_window_content` + `about_dialog`),
+  `src/app/dialogs/tests.rs` (+2 content tests), `SPEC.md` (§3.1 Help bullet + §7 checklist item
+  20), `AGENTS.md` (1 quirk), `DEBTS-verification.md` (V33 born), `TIMING.md` (2 rows),
+  `PROGRESS.md` (snapshot row + this entry).
+- **Verified:** `bash scripts/verify.sh` ALL GATES GREEN — 145 default / 157 mcp (fmt, clippy
+  `-D warnings`, rules.sh HARD-green; the history_tree.rs OVER GUARD is the owner-deferred item);
+  `cargo check --target wasm32-unknown-unknown` green; headless `visual_driver.py` 3/3 scenarios
+  green (15 checks) after the change; scripted real-binary About pass 4/4 under Xvfb (Help menu →
+  About opens → the hyperlink renders in link color → Close hides it; evidence frame for the
+  owner in the chat download dir).
+- **Owner-checks:** V33 born (the About-window pass on Windows / browser) — verified 2026-11-18
+  via chat (owner checked on NixOS and Windows).
+- **Commit title:** `About window: "written in Rust" line + GitHub repo hyperlink`
+
 ### 2026-11-18 — `Feat:` tool icon buttons (cached tiny-skia atlas) + two-column Tools grid — owner request
 
 - **What:** the owner (2026-11-18) ordered the Tools window onto ICON buttons: 1.5rem (24 pt)

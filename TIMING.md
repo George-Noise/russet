@@ -23,6 +23,7 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-18 | `sandbox_check.sh --warm` background warm-up (clippy + `cargo test --no-run --features mcp`) on a TRULY cold lane (`rm -rf target/gates` first) — the session's first action; verify.sh after it is hot | **192 s** (19:00:20→19:03:32, exit 0) | the background log's timestamps |
 | 2026-11-18 | `bash scripts/verify.sh` FULL gate on a COLD lane (first run of the hardened gate — `exec </dev/null` shield + stage timers): rules 0 s / fmt 0 s / clippy 84 s / test 156 green 98 s / mcp clippy 3 s / mcp test 168 green 6 s — the mcp stage exited instantly, no stdin hang | **191 s total** | the script's own stage timers |
 | 2026-11-18 | `cargo check` (dev, FIRST run under the FULLY UNOPTIMIZED policy — owner decision 2026-11-18: fresh sandbox, all deps compiled unoptimized; toolchain fetched before the timer) | **1m31s** (was 3m51s the same morning under optimized deps) | time'd exactly |
 | 2026-11-18 | `cargo check` (dev, fresh sandbox: rustup 1.99.1 installed first, then ALL deps compiled; docs/comment-only tree) | 3m51s | time'd exactly |

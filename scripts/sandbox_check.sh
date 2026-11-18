@@ -6,8 +6,10 @@
 # the session-start decision (AGENTS.md "Session start"). Fix hints quote the
 # exact commands (SANDBOX.md is the source of truth for the GUI recipe).
 #
-# Usage: bash scripts/sandbox_check.sh [repo-dir]   (default: the repo root)
+# Usage: bash scripts/sandbox_check.sh [--warm] [repo-dir]   (default: the repo root)
 set -u
+WARM=0
+[ "${1:-}" = "--warm" ] && { WARM=1; shift; }
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 [ "${1:-}" != "" ] && REPO="$1"
 PIN=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$REPO/rust-toolchain.toml" 2>/dev/null)
@@ -81,6 +83,33 @@ else
 fi
 command -v xdotool > /dev/null 2>&1 || [ -x /tmp/xdotool/ext/usr/bin/xdotool ] \
   && ok "xdotool (drag probes)" || no "xdotool absent (optional; window drags need it)"
+
+say "Gates-lane warm-up:"
+if [ "$WARM" = "1" ]; then
+  # Detached compilation of EXACTLY the gate's compile work: clippy (check
+  # units) + `cargo test --no-run` (test binaries compiled, NOTHING executed —
+  # no test binary spawns, so the mcp stdin reader cannot hang; SANDBOX.md
+  # trap 10 stays impossible here without the stdin shield). The lane is hot
+  # while the agent reads code and plans. In-sandbox compilation, NOT the
+  # retired warm-target store (owner decision 2026-11-17).
+  if [ -f /tmp/russet_warm_build.pid ] && kill -0 "$(cat /tmp/russet_warm_build.pid 2>/dev/null)" 2>/dev/null; then
+    ok "warm-up build already running (pid $(cat /tmp/russet_warm_build.pid), log /tmp/russet_warm_build.log)"
+  else
+    rm -f /tmp/russet_warm_build.pid
+    setsid bash -c '
+      export PATH="$HOME/.cargo/bin:$PATH"
+      echo $$ > /tmp/russet_warm_build.pid
+      echo "russet warm-up (pid $$) started $(date +%T): clippy + test --no-run on the gates lane"
+      cargo clippy --profile gates --all-targets --features mcp -- -D warnings
+      cargo test --profile gates --features mcp --no-run
+      echo "warm-up finished $(date +%T) (exit $?) — verify.sh is now hot"
+    ' > /tmp/russet_warm_build.log 2>&1 < /dev/null &
+    ok "background warm-up started (log /tmp/russet_warm_build.log) — verify.sh is hot when the log says finished"
+  fi
+else
+  say "  [--] pass --warm to start a detached gates-lane warm-up (clippy + test --no-run:"
+  say "       the same compile work verify.sh does, nothing executed)"
+fi
 
 say "Verdict: the lines above are the session-start inventory. Do not start a"
 say "build/test lane whose [NO] rows you are not prepared to fix first; log any"

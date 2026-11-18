@@ -136,6 +136,11 @@ Hard rules:
    newest-first convention as the PROGRESS.md Log). A closed item leaves the
    open table for the Resolved/Paid section in the SAME edit — it never
    lingers there.
+7. **The ask lists only the 4 newest (owner request 2026-11-18).** When surfacing
+   open debts to the owner — the batched session-start/task-end list and every
+   chat reply — write out ONLY the 4 newest open items, newest first (rule 6's
+   order applies inside the four). The FILES keep every open item; nothing is
+   dropped, only the ask stays scannable.
 
 ## Delivery ritual — artifacts sent to the owner
 
@@ -150,10 +155,14 @@ The final chat reply MUST state the suggested commit title verbatim (owner reque
 
 ## Commands
 
-- Session start, BEFORE anything else (owner request 2026-11-17): run `bash scripts/sandbox_check.sh`
+- Session start, BEFORE anything else (owner request 2026-11-17): run `bash scripts/sandbox_check.sh --warm`
   (report-only probe of the agent sandbox: base tools, pinned toolchain + wasm target, network,
   `target/` warmth per lane, the Xvfb GUI fix) and read its verdict before launching any heavy
-  command — never start a build/test lane whose missing prerequisites are not accounted for. If
+  command — never start a build/test lane whose missing prerequisites are not accounted for. The
+  `--warm` flag (owner request 2026-11-18) additionally starts a DETACHED gates-lane warm-up —
+  clippy + `cargo test --no-run`, exactly the compile work verify.sh does and nothing executed —
+  so the done-gate is hot by the time the task ends; in-sandbox compilation, NOT the retired
+  warm-target store (owner decision 2026-11-17: "drop the warm-target idea for now — dev builds fast enough for tests"). If
   `target/` is cold or missing (fresh clone / recycled sandbox), a cold build is the accepted
   cost: the warm-target STORE idea (a hosted `russet-target.zip`) is RETIRED for now (owner
   decision 2026-11-17: "drop the warm-target idea for now — dev builds fast enough for tests"). `sandbox_check.sh` still reports the per-lane warmth verdict; the cold-vs-hot
@@ -170,6 +179,11 @@ The final chat reply MUST state the suggested commit title verbatim (owner reque
   a fresh sandbox, which is environment work, not a test baseline. If the baseline fails, STOP and
   tell the owner — a red baseline means a broken delivery, not a task.
 - Quick loop after edits: `cargo check` (owner's time-saving policy 2026-11-09).
+- Wasm-check economy (owner request 2026-11-18): run `cargo check --target wasm32-unknown-unknown`
+  ONLY when the change touches web-facing code (`web/`, `main.rs`'s wasm init, `#[cfg(target_arch
+  = "wasm32")]` paths, trunk config) — native gate green is enough otherwise; neither verify.sh
+  nor CI runs wasm (the CI wasm job is deliberately postponed), so an unneeded ad-hoc wasm run is
+  pure lost minutes.
 - Done gate: `bash scripts/verify.sh` — first `scripts/rules.sh` (machine rules, no cargo needed: inline test modules and `unwrap()` in `src/` are HARD failures; `expect()` outside tests, the 500-line file-size guard and the PROGRESS.md budget/stale check are report-only notes), then `cargo fmt --check`, `cargo clippy --profile gates --all-targets -- -D warnings`, `cargo test --profile gates` (the unoptimized `gates` lane — see "Repo facts"; identical checks). Run it before recording a task as done in `PROGRESS.md`; relay any report lines to the owner (warn + propose a split at task end per "Repo facts").
 - CI (`.github/workflows/ci.yml`) runs the same gate on GitHub — two jobs, `rules` (grep-level `scripts/rules.sh`, no toolchain) and `native` (`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` → the same clippy+test pair with `--features mcp`, owner OK 2026-11-13) — for every push to `master` and every PR, with Rust pinned to the owner's local toolchain. Keep it green: a red CI on `master` is a stop-everything signal. Editing the workflow (or adding the postponed wasm job) is a build-tooling change and needs the owner's OK. CI keeps the dev profile on purpose (owner decision 2026-11-11) — it stays the independent full-lane verifier on GitHub's machines, while verify.sh runs the `gates` lane locally; since owner decision 2026-11-18 the dev profile itself is fully unoptimized, so CI compiles unoptimized as well.
 - Tests: `cargo test --profile gates` (all — the lane verify.sh uses) / `cargo test app::placement --profile gates` (one module by path fragment). Unit tests live in `<module>/tests.rs` (see "Tests").
