@@ -81,6 +81,10 @@ fn pipette_has_rubber_bulb_glass_and_liquid() {
     assert!(has_color(&pm, (217, 87, 68), 6), "rubber bulb missing");
     assert!(has_color(&pm, (95, 168, 220), 6), "liquid stripe missing");
     assert!(has_color(&pm, (213, 223, 231), 6), "glass barrel missing");
+    assert!(
+        has_color(&pm, (94, 103, 112), 6),
+        "the wide metal collar missing"
+    );
 }
 
 #[test]
@@ -241,4 +245,143 @@ fn atlas_ids_are_one_per_tool() {
     ids.dedup();
     assert_eq!(ids.len(), n, "every tool owns its own texture");
     assert_eq!(n, TOOLS.len());
+}
+
+/// The icon contact sheet, kept PERMANENTLY as an ignored test (owner
+/// request 2026-11-18). A plain `cargo test` — the done-gate — SKIPS it,
+/// so it costs verify.sh nothing; run it explicitly when redraw/adjusting
+/// an icon to SEE it instead of judging coordinates:
+///
+///     cargo test --profile gates -- --ignored icons_dump
+///
+/// It rasterizes every tool at 256 px (the design view) and at the real
+/// button size 24 px (cleared first). The raster color is BLACK so the
+/// monochrome icons (Line/Shape/Text take the raster color) stay legible;
+/// the colored icons paint their own palette. The output folder is
+/// `RUSSET_ICON_DUMP_DIR` (a leading `~/` expands to HOME/USERPROFILE —
+/// the owner dumps straight into e.g. ~/Pictures), default /tmp/icon_dump.
+#[test]
+#[ignore = "a diagnostic dump, not a check — run: RUSSET_ICON_DUMP_DIR=~/Pictures cargo test --profile gates -- --ignored icons_dump"]
+fn icons_dump_when_requested() {
+    let dir = dump_dir();
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("the dump folder must be creatable");
+    for tool in TOOLS {
+        for px in [256, 24] {
+            let pm = rasterize_tool_icon(tool, px, Color32::BLACK).expect("px is in 1..=256");
+            let path = dir.join(format!("{px}px_{tool:?}.png"));
+            pm.save_png(&path)
+                .expect("tiny-skia's default features include png");
+        }
+    }
+    let n = std::fs::read_dir(&dir)
+        .expect("the dir was just created")
+        .count();
+    assert_eq!(n, TOOLS.len() * 2, "one 256 px + one 24 px PNG per tool");
+}
+
+/// The dump folder: `RUSSET_ICON_DUMP_DIR` when set (a leading `~/` expands
+/// to HOME, falling back to USERPROFILE on Windows), else /tmp/icon_dump.
+fn dump_dir() -> std::path::PathBuf {
+    match std::env::var("RUSSET_ICON_DUMP_DIR") {
+        Ok(dir) if !dir.is_empty() => {
+            if let Some(rest) = dir.strip_prefix("~/") {
+                let home = std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .expect("set HOME/USERPROFILE — cannot expand ~ in RUSSET_ICON_DUMP_DIR");
+                std::path::PathBuf::from(home).join(rest)
+            } else {
+                std::path::PathBuf::from(dir)
+            }
+        }
+        _ => std::path::PathBuf::from("/tmp/icon_dump"),
+    }
+}
+
+/// Whether any mostly-opaque pixel sits within `tol` LOGICAL units of the
+/// logical-space point `pt` (the tests speak the icons' 24×24 language;
+/// the helper maps it through the raster's scale).
+fn has_opaque_near(pm: &tiny_skia::Pixmap, pt: (f32, f32), tol: f32) -> bool {
+    let k = pm.width() as f32 / 24.0;
+    let (x, y) = (pt.0 * k, pt.1 * k);
+    pm.pixels().iter().enumerate().any(|(i, p)| {
+        p.alpha() > 200
+            && ((i as f32 % pm.width() as f32) - x).abs() <= tol * k
+            && ((i as f32 / pm.width() as f32) - y).abs() <= tol * k
+    })
+}
+
+/// The v2 refinements (owner request 2026-11-18 after the V35 pass).
+#[test]
+fn line_icon_is_a_curve_bulging_off_the_chord() {
+    let pm = rasterize_tool_icon(Tool::Line, 48, Color32::BLACK).expect("px is in 1..=256");
+    // The S of two quadratic arcs deviates from the straight chord on BOTH
+    // sides: the first arc dips to ≈(11.6, 16.9) — the chord passes y ≈ 12.1
+    // there — and the second rises to ≈(15.9, 6.2) against a chord y ≈ 8.0.
+    assert!(
+        has_opaque_near(&pm, (11.6, 16.9), 1.0) && has_opaque_near(&pm, (15.9, 6.2), 1.0),
+        "the S-curve's bends are missing — the icon reads as a straight line"
+    );
+    assert!(
+        has_opaque_near(&pm, (4.8, 18.6), 1.0) && has_opaque_near(&pm, (19.2, 4.8), 1.0),
+        "the curve must span the icon's diagonal"
+    );
+}
+
+#[test]
+fn shape_icon_is_a_rectangle_and_a_circle_not_a_diamond() {
+    let pm = rasterize_tool_icon(Tool::Shape, 48, Color32::BLACK).expect("px is in 1..=256");
+    // On the circle's 45° diagonal the diamond HAD ink (its edge band ran
+    // through Manhattan distance 4.05..5.95; the point below sits at
+    // Manhattan 4.24 — on the old edge — but at Euclidean 3.0, deep inside
+    // the circle's empty hole).
+    assert!(
+        has_opaque_near(&pm, (19.1, 14.1), 0.8),
+        "the circle's 45° arc is missing"
+    );
+    assert!(
+        !has_opaque_near(&pm, (17.72, 8.48), 0.4),
+        "the diamond's edge is still there — the circle did not replace it"
+    );
+    assert!(
+        has_opaque_near(&pm, (3.6, 9.2), 0.5) && has_opaque_near(&pm, (13.8, 19.4), 0.5),
+        "the rectangle half is missing"
+    );
+}
+
+#[test]
+fn text_icon_is_a_serif_curved_t_with_a_small_t() {
+    let pm = rasterize_tool_icon(Tool::Text, 48, Color32::BLACK).expect("px is in 1..=256");
+    // The serif hooks dip BELOW the bar line (the old plain bar had nothing
+    // there outside the stem).
+    assert!(
+        has_opaque_near(&pm, (4.0, 9.8), 0.8),
+        "the left serif hook is missing"
+    );
+    assert!(
+        has_opaque_near(&pm, (14.2, 9.8), 0.8),
+        "the right serif hook is missing"
+    );
+    // The small lowercase t: ink on its stem and its crossbar.
+    assert!(
+        has_opaque_near(&pm, (17.2, 11.0), 0.7) && has_opaque_near(&pm, (16.6, 13.0), 0.9),
+        "the small lowercase t is missing"
+    );
+}
+
+#[test]
+fn colored_outlines_follow_the_theme() {
+    // The dark theme's light text color → the LIGHT rim (the graphite and
+    // the loaded tip must not blend into the dark background); a dark raster
+    // color → the dark rim. The Pencil's silhouette carries both.
+    let dark = rasterize_tool_icon(Tool::Pencil, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(
+        has_color(&dark, (216, 222, 228), 10),
+        "the dark theme needs a light rim"
+    );
+    let light = rasterize_tool_icon(Tool::Pencil, 48, Color32::BLACK).expect("px is in 1..=256");
+    assert!(
+        has_color(&light, (75, 58, 40), 10),
+        "the light theme keeps the dark rim"
+    );
 }

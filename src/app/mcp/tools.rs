@@ -20,7 +20,7 @@ mod queries;
 #[cfg(test)]
 mod tests;
 
-use edits::{add_layer, add_stroke, redo, set_active_layer, undo};
+use edits::{add_layer, add_stroke, redo, set_active_layer, set_theme, undo};
 use queries::{export_png, get_canvas_snapshot, get_history_tree, get_layers, get_tree_layout};
 
 /// Serves one `tools/call`. Tool-level failures (bad arguments, bad tool)
@@ -44,6 +44,7 @@ pub(crate) fn tool_call(app: &mut App, params: &Value) -> Value {
         "redo" => redo(app),
         "add_layer" => add_layer(app),
         "set_active_layer" => set_active_layer(app, &args),
+        "set_theme" => set_theme(app, &args),
         "get_canvas_snapshot" => get_canvas_snapshot(app),
         "export_png" => export_png(app, &args),
         _ => Err(format!("Unknown tool: {name}")),
@@ -135,6 +136,17 @@ pub(crate) fn tool_declarations() -> Value {
                     "index": { "type": "integer", "description": "Layer index" }
                 },
                 "required": ["index"]
+            }
+        },
+        {
+            "name": "set_theme",
+            "description": "Switch the app theme — the same switcher as the menu-bar button: dark, light, or system (follow the OS preference). The whole UI re-styles immediately and the icon atlas re-rasterizes for the new theme.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "theme": { "type": "string", "enum": ["dark", "light", "system"], "description": "The theme to switch to." }
+                },
+                "required": ["theme"]
             }
         },
         {

@@ -107,6 +107,23 @@ impl App {
                     }
                 });
 
+                // The theme switcher (owner request 2026-11-18): Dark /
+                // Light / System — System follows the OS preference. The
+                // choice applies immediately through `apply_theme` (egui
+                // re-styles next pass; the icon atlas re-rasterizes).
+                ui.menu_button(self.theme_label(), |ui| {
+                    for (theme, name) in [
+                        (egui::ThemePreference::Dark, "Dark"),
+                        (egui::ThemePreference::Light, "Light"),
+                        (egui::ThemePreference::System, "System (follow the OS)"),
+                    ] {
+                        if ui.radio(self.theme == theme, name).clicked() {
+                            self.apply_theme(theme);
+                            ui.close();
+                        }
+                    }
+                });
+
                 #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
                 self.mcp_badge(ui);
             });

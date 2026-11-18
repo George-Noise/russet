@@ -221,6 +221,13 @@ pub struct App {
     error_popup: Option<String>,
     show_about: bool,
     window_title: String,
+    /// The menu-bar theme switcher's choice (owner request 2026-11-18):
+    /// Dark, Light or System (the OS preference — the default). The
+    /// PREFERENCE is stored (egui's `ThemePreference`); `ctx.theme()`
+    /// resolves it to the active `Theme` for the icon atlas.
+    /// Applied through [`App::apply_theme`], which is also the MCP
+    /// `set_theme` tool's code path.
+    theme: egui::ThemePreference,
 }
 
 impl App {
@@ -267,6 +274,9 @@ impl App {
         ctx.all_styles_mut(|style| {
             style.visuals.window_shadow = egui::Shadow::NONE;
         });
+        // The theme switcher's default (owner request 2026-11-18): follow the
+        // OS preference; the menu-bar button or the MCP tool changes it later.
+        ctx.set_theme(egui::ThemePreference::System);
 
         // The STARTUP canvas (owner request 2026-11-17): the parsed launch
         // arguments (`--canvas-size`, already clamped 1..=4096 at parse
@@ -379,6 +389,9 @@ impl App {
             error_popup: None,
             show_about: false,
             window_title: String::new(),
+            // The switcher's default: follow the OS preference (owner
+            // request 2026-11-18 — "also the choice of the system color").
+            theme: egui::ThemePreference::System,
         };
         // The parsed launch arguments land AFTER the literal (the config
         // tweaks existing fields; see `launch::LaunchConfig::apply_to`).
@@ -411,6 +424,29 @@ impl App {
             self.restore_active_layer_state();
             self.dirty = true;
             self.action_log.push("Redo");
+        }
+    }
+
+    /// The shared action behind the menu-bar theme switcher ([`menu`]) and
+    /// the MCP `set_theme` tool (owner request 2026-11-18): applies
+    /// immediately — egui re-styles every widget next pass, and the icon
+    /// atlas re-rasterizes through its `(pixels_per_point, theme)` key.
+    pub(super) fn apply_theme(&mut self, theme: egui::ThemePreference) {
+        self.theme = theme;
+        self.ctx.set_theme(theme);
+        self.action_log.push(match theme {
+            egui::ThemePreference::Dark => "Theme: Dark",
+            egui::ThemePreference::Light => "Theme: Light",
+            egui::ThemePreference::System => "Theme: System",
+        });
+    }
+
+    /// The theme switcher button's label in the menu bar.
+    pub(super) fn theme_label(&self) -> &'static str {
+        match self.theme {
+            egui::ThemePreference::Dark => "Theme: Dark",
+            egui::ThemePreference::Light => "Theme: Light",
+            egui::ThemePreference::System => "Theme: System",
         }
     }
 

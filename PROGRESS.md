@@ -52,6 +52,8 @@
 | Extra: verify.sh hardening (owner 2026-11-18) | done — FULL gate green on a cold lane (191 s) | `exec </dev/null` closes stdin for the whole run (SANDBOX.md trap 10 fixed AT THE SOURCE — the mcp test stage exits in seconds instead of hanging); per-stage seconds + total printed (TIMING.md rows are copied now, not re-measured); cold-lane hint when `target/gates` is absent; the mcp pair stays UNCONDITIONAL (hot gate ≈ 15 s, zip sandboxes have no git, the gate never guesses) |
 | Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
 | Extra: --warm warm-up + session rules; debts ask = 4 newest; V33 closed (owner 2026-11-18) | done — live cold-lane test + hot gate | `sandbox_check.sh --warm` = probe + detached gates-lane compile (clippy + test --no-run, nothing executed — the mcp stdin trap impossible) with a double-start pid guard; session start = `sandbox_check.sh --warm` FIRST; wasm ad-hoc checks only for web-facing changes; the batched debts ask lists only the 4 newest open items (AGENTS.md Debts rule 7) |
+| Extra: permanent #[ignore] icon-dump + F16 rust-cache debt (owner 2026-11-18) | done — dump live-tested, gate skips it | `cargo test --profile gates -- --ignored icons_dump` = 14 PNGs (7 tools × 256/24 px) into /tmp/icon_dump, BLACK raster keeps the monochrome icons legible; plain gate = 156/168 passed + 1 ignored; rust-cache (`Swatinem/rust-cache@v2` after checkout) recorded as postponed F16 with the mechanism + limits written out, ci.yml untouched |
+| Extra: icons v2 + theme switcher UI+MCP + dump dir (owner 2026-11-18) | done — 4 dump-iteration rounds + FULL gate | outlines 1.25 pt theme-aware (light rim on dark — graphite/tip no longer blend); pipette = wide collar ring + dominant bulb (no needle); Line = S-curve; Shape = rect+circle; Text = serif T + small t; menu-bar Theme button (Dark/Light/System, System default) via `apply_theme` → `ThemePreference`; MCP `set_theme` same path; dump takes `RUSSET_ICON_DUMP_DIR` (~ → HOME) — README documents ~/Pictures; V35/V34 verified, V36/V37 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -63,7 +65,12 @@ fully gate-verified. The icon-redraw round (same day) exercised the hardened gat
 change: hot run 14 s (156/168 green), the glass test caught a real drawing bug pre-delivery,
 driver ALL SCENARIOS GREEN, the grid gaps pixel-measured 6 pt = 6 pt. The tooling round (same
 day) proved `sandbox_check.sh --warm` on a truly cold lane (0.6 s return, the double-start
-guard fired, a hot gate after the log's "finished") and closed V33 (NixOS + Windows).
+guard fired, a hot gate after the log's "finished") and closed V33 (NixOS + Windows). The
+test round added the permanent #[ignore] icon dump (explicit-only: 14 PNGs live-checked,
+the plain gate counts it as 1 ignored) and recorded CI rust-cache as F16 (owner: not now).
+The icons-v2 round (same day) iterated the redraw on contact sheets, added the theme
+switcher (menu bar + MCP `set_theme`, System default) and gate-verified it all: the gate
+run below is green with 160 default / 173 mcp passed (+1 ignored each).
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
 `app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
@@ -87,8 +94,64 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
 > docs rounds moved to PROGRESS-archive.md; later the same day the F14 + quotes rounds
 > followed them (the verify.sh round needed the budget back), the tool-icons entry
-> joined them in the evening (the icon-redraw round), and the About entry followed
-> it (V33's closure freed it — the tooling round's budget).
+> joined them in the evening (the icon-redraw round), the About entry followed
+> it (V33's closure freed it — the tooling round's budget), the unoptimized-dev
+> entry followed that (the dump round's budget), and the verify.sh-hardening entry
+> completed the day's compactions (the icons-v2 round's budget).
+
+### 2026-11-18 — `Feat:` icons v2 + theme switcher (UI + MCP) + dump dir — owner request
+
+- **What:** the owner VERIFIED V35 + V34 (chat) and ordered on top: (1) icon refinements —
+  outlines 0.9 → 1.25 pt and THEME-AWARE (`outline_color` picks the rim from the text color's
+  luminance: a LIGHT rim in the dark theme — the graphite + the brush's loaded tip no longer
+  blend into the dark background); the pipette's collar is the classic WIDE band between glass
+  and bulb with the bulb dominant (the slim collar read as a NEEDLE at 1.5rem); Line = a smooth
+  S-curve of two quad arcs (the tool has curve mode); Shape's diamond → circle; Text = a
+  serif-curved T plus a small lowercase t; (2) the THEME SWITCHER — a menu-bar button right of
+  Help (Dark/Light/System radios; System = follow the OS, the startup default) through
+  `App::apply_theme` → `ctx.set_theme` (egui's `ThemePreference` — `Theme` itself has no
+  System/FollowSystem variant: an API quirk caught by the first compile, AGENTS.md); the Tool
+  Log records it; the MCP `set_theme` tool (dark/light/system) runs the SAME path; SPEC §6
+  drops "themes/appearance customization" from the out-of-scope list; (3) the ignored dump
+  takes `RUSSET_ICON_DUMP_DIR` (a leading ~ expands to HOME/USERPROFILE) — README documents
+  the ~/Pictures run (POSIX + PowerShell).
+- **Files:** `src/app/tool_icons.rs` (outline_color/quad_pts + 5 redraws), `tool_icons/tests.rs`
+  (+4 tests, dump dir), `src/app.rs` (theme field + apply_theme/theme_label), `src/app/menu.rs`
+  (switcher), `mcp/tools.rs` + `edits.rs` + `tools/tests.rs` (set_theme), `README.md` (dump
+  section), `SPEC.md` (§3.1 Theme, §3.2 icon v2, §6, §7 item 21), `AGENTS.md` (theme-API quirk),
+  DEBTS (V35/V34 verified; V36/V37 born), PROGRESS (compaction: verify.sh entry → archive;
+  snapshot + entry + stamp).
+- **Verified:** the icons were iterated on dump contact sheets (4 rounds, dark + light rows +
+  the real 24 px row); the new tests: the S's bends off the chord on BOTH sides, the 45° arc
+  vs the empty old-diamond point, the serif hooks + small t, the theme-following rim; the dump
+  live-ran with RUSSET_ICON_DUMP_DIR; `set_theme` MCP test (light / purple-error / system);
+  FULL hot gate below (160 default / 173 mcp + 1 ignored); visual driver ALL SCENARIOS GREEN.
+- **Owner-checks:** V36 (icons-v2 look, both themes) and V37 (theme switcher, three states)
+  born. Open: V37, V36 (new), V30 (parked), V8 (parked).
+- **Commit title:** `Icons v2: theme-aware rims, pipette collar, S-curve, circle, T+t; theme switcher in menu + MCP; dump dir param`
+
+### 2026-11-18 — `Test:` permanent #[ignore] icon-dump; F16 rust-cache debt — owner request
+
+- **What:** two owner orders (2026-11-18): (1) the icon contact sheet is now a PERMANENT ignored
+  test `icons_dump_when_requested` in `app/tool_icons/tests.rs` — a plain `cargo test` (the
+  done-gate) SKIPS it, run explicitly `cargo test --profile gates -- --ignored icons_dump`
+  when redraw/adjusting an icon; it renders every tool at 256 px (design view) + the real
+  24 px button size into /tmp/icon_dump/ (cleared first), BLACK raster so the monochrome
+  icons (Line/Shape/Text take the raster color) stay legible; the icon-redraw loop's
+  temporary dump test is no longer needed each time; (2) rust-cache recorded as F16 in
+  DEBTS-functional.md (owner: not now — a possible improvement for when CI speed matters):
+  one `Swatinem/rust-cache@v2` step after checkout, the mechanism, limits and the owner-gate
+  written into the row; ci.yml untouched.
+- **Files:** `src/app/tool_icons/tests.rs` (+ the ignored dump test), `DEBTS-functional.md`
+  (F16 born), `PROGRESS.md` (compaction: the unoptimized-dev entry moved; snapshot row +
+  this entry + stamp).
+- **Verified:** the dump ran explicitly on a hot lane: 1 passed in 0.09 s, 14 PNGs (7 tools ×
+  256/24 px) in /tmp/icon_dump/, PIL-checked 256×256 and 24×24; the plain gate SKIPS it —
+  the test stages below count it as 1 ignored (156 default / 168 mcp passed, unchanged);
+  rules.sh HARD-green.
+- **Owner-checks:** none born (F16 is owner-gated work, not a human check). Open: V35 (the
+  icon look), V34 (the unoptimized-dev pass), V30 (parked), V8 (parked).
+- **Commit title:** `Add the permanent #[ignore] icon-dump test; record CI rust-cache as F16`
 
 ### 2026-11-18 — `Tooling:` warm-up flag + session rules; debts-ask trimmed; V33 closed — owner request
 
@@ -145,52 +208,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V35 born (the redrawn-icons look pass on Windows). Open: V35 (new), V34
   (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
 - **Commit title:** `Redraw brush + pipette icons; equal Tools-grid gaps (egui Grid interact_size quirk)`
-
-### 2026-11-18 — `Tooling:` verify.sh hardened — stdin shield, stage timers, cold-lane hint — owner request
-
-- **What:** the owner (2026-11-18: "make verify.sh good — you work with this file") ordered the
-  done-gate reworked. Three changes, NO lane/semantics change (the rules → fmt → clippy → test →
-  mcp-clippy → mcp-test chain is identical): (1) `exec </dev/null` closes stdin for the WHOLE run —
-  SANDBOX.md trap 10 (mcp test binaries' stdin reader hangs the cargo ↔ test-binary teardown on a
-  recycled sandbox's open pipe/pty even after green tests) is fixed AT THE SOURCE; the
-  `verify.sh < /dev/null` habit is dead (a BARE `cargo test --features mcp` outside the gate still
-  needs the manual pipe). (2) Every stage prints its own seconds and the total — TIMING.md rows are
-  copied from the output now, not re-measured. (3) A cold-lane hint prints when `target/gates` is
-  absent. The mcp pair stays UNCONDITIONAL on purpose: the whole hot gate is ~15 s, zip-delivered
-  sandboxes usually have no git, and the done-gate must never depend on change-detection guesses.
-- **Files:** `scripts/verify.sh`, `SANDBOX.md` (trap 10 rewritten: fixed at the source),
-  `TIMING.md` (cold row), `PROGRESS.md` (compaction: the F14 + quotes rounds moved to
-  PROGRESS-archive.md; snapshot row + this entry + stamp).
-- **Verified:** the NEW script's first live run = the FULL gate on a fully COLD lane, end to end:
-  rules 0 s, fmt 0 s, clippy 84 s, test 156 green (98 s), mcp clippy 3 s, mcp test 168 green
-  (6 s — the stdin reader EOF'd instantly, no hang: first live proof of the shield), ALL GATES
-  GREEN 191 s total. This also gate-verifies the 2026-11-18 dev-profile change end to end (the
-  morning round had skipped the full gate as a config-only change). The PROGRESS compaction and
-  this entry are md-only edits AFTER the gate run — rules.sh re-run at delivery covers them.
-- **Owner-checks:** none born. Open: V34 (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
-- **Commit title:** `Harden verify.sh: exec </dev/null stdin shield, per-stage timers, cold-lane hint`
-
-### 2026-11-18 — `Build:` dev profile fully unoptimized (opt-level 0, no debuginfo, no dep overrides) — owner request
-
-- **What:** the owner (2026-11-18) retired the PARTIAL dev optimization: development now happens
-  entirely inside the agent sandbox, so `[profile.dev]` exists only to compile fast and to run the
-  app for visual checks — UI lag is accepted (owner: "it's dev — it's fine if it lags"; he judges
-  the build-speed-vs-checking trade-off himself → V34). `[profile.dev]` is now `opt-level = 0` +
-  `debug = false`, and the `[profile.dev.package."*"] opt-level = 2` dependency override is GONE —
-  the crate AND every dependency compile unoptimized. The former policy ("dependencies optimized
-  ONCE and taken from cache — the UI stays responsive") dated from the owner's-machine era and made
-  the one-time optimized dep compile the dominant cold cost on 2-core sandboxes. `[profile.gates]`
-  is functionally unchanged — its explicit opt-level/debug/incremental overrides simply mirror dev's
-  new defaults now. The flake's `russet-dev` ALREADY built in the unoptimized `gates` lane (owner
-  request 2026-11-16) — nothing to remove there. CI's native job keeps the (now unoptimized) dev
-  profile untouched and gets faster automatically.
-- **Files:** `Cargo.toml`, `SPEC.md` (§1 profile block + the "About build speed" note), `AGENTS.md`
-  (Repo facts toolchain bullet; done-gate + CI bullets wording), `TIMING.md` (first cold row under
-  the new policy), `DEBTS-verification.md` (V34 born), `PROGRESS.md` (snapshot row + entry + stamp).
-- **Verified:** config-only round, no src/ change — `scripts/rules.sh` HARD-green, `cargo fmt
-  --check` clean, `cargo check` green on the NEW dev profile (fresh sandbox, cold, time'd exactly:
-  1m31s vs 3m51s the same morning under the old optimized deps — TIMING.md). The gates test lane is
-  untouched by construction (every changed dev key is explicitly overridden in `[profile.gates]`),
-  so clippy/test results are unaffected; the full verify.sh was not re-run for this round.
-- **Owner-checks:** V34 born (the unoptimized-dev visual pass on Windows + the build-speed judgment).
-- **Commit title:** `Make the dev lane fully unoptimized (opt-level 0, no debuginfo, no dep overrides); sync SPEC §1 and AGENTS.md`

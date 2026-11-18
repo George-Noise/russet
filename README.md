@@ -124,6 +124,28 @@ trunk build --release
 The static site is written to `dist/` — serve that folder with any web server,
 for example `python3 -m http.server -d dist`, and open the printed URL.
 
+## Tool icon contact sheet (dev)
+
+The tool icons are vector drawings rasterized once per (scale, theme) change
+(`src/app/tool_icons.rs`). To SEE them while adjusting one, dump a contact
+sheet — every icon at the 256 px design view plus the real 24 px button size,
+one PNG per icon. It is an `#[ignore]`d test: a plain `cargo test` (and the
+done-gate) skips it; run it explicitly:
+
+```bash
+# into the default folder /tmp/icon_dump
+cargo test --profile gates -- --ignored icons_dump
+
+# into a folder of your choice (a leading ~ expands to HOME)
+RUSSET_ICON_DUMP_DIR=~/Pictures cargo test --profile gates -- --ignored icons_dump
+```
+
+Windows PowerShell:
+
+```powershell
+$env:RUSSET_ICON_DUMP_DIR = "$HOME\Pictures"; cargo test --profile gates -- --ignored icons_dump
+```
+
 ## Contributing
 
 This repository is developed by LLM agents under the owner's direction; the

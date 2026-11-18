@@ -55,7 +55,7 @@ fn tool_declarations_have_name_description_schema() {
     let tools = tool_declarations();
     let list = tools.as_array().expect("tools array");
 
-    assert_eq!(list.len(), 10);
+    assert_eq!(list.len(), 11);
     let names: Vec<&str> = list
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str))
@@ -185,4 +185,33 @@ fn apply_stroke_after_undo_forks_like_a_hand_gesture() {
 fn pixel_rgb(pixmap: &Pixmap, x: u32, y: u32) -> (u8, u8, u8) {
     let pixel = pixmap.pixel(x, y).expect("in bounds").demultiply();
     (pixel.red(), pixel.green(), pixel.blue())
+}
+
+#[test]
+fn set_theme_tool_switches_the_app_theme() {
+    let mut app = App::new_headless();
+    let out = tool_call(
+        &mut app,
+        &serde_json::json!({ "name": "set_theme", "arguments": { "theme": "light" } }),
+    );
+    assert!(out.get("isError").is_none(), "light failed: {out}");
+    assert_eq!(app.ctx.theme(), eframe::egui::Theme::Light);
+    assert_eq!(app.theme, eframe::egui::ThemePreference::Light);
+
+    // A bad value stays a TOOL error (isError: true), the theme unchanged.
+    let out = tool_call(
+        &mut app,
+        &serde_json::json!({ "name": "set_theme", "arguments": { "theme": "purple" } }),
+    );
+    assert_eq!(out.get("isError"), Some(&serde_json::json!(true)));
+    assert_eq!(app.theme, eframe::egui::ThemePreference::Light);
+
+    // "system" stores the System preference (the switcher's third state);
+    // the context resolves it to the followed theme for the styling.
+    let out = tool_call(
+        &mut app,
+        &serde_json::json!({ "name": "set_theme", "arguments": { "theme": "system" } }),
+    );
+    assert!(out.get("isError").is_none(), "system failed: {out}");
+    assert_eq!(app.theme, eframe::egui::ThemePreference::System);
 }

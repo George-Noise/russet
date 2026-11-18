@@ -18,6 +18,22 @@ use crate::tools::{Tool, draw_segment};
 
 use super::{hex_color, tool_text};
 
+/// The theme switcher over MCP (owner request 2026-11-18): the SAME
+/// `apply_theme` the menu-bar button runs — the UI re-styles immediately.
+pub(super) fn set_theme(app: &mut App, args: &Value) -> Result<Value, String> {
+    use eframe::egui::ThemePreference;
+    let (theme, name) = match args.get("theme").and_then(Value::as_str) {
+        Some("dark") => (ThemePreference::Dark, "dark"),
+        Some("light") => (ThemePreference::Light, "light"),
+        Some("system") => (ThemePreference::System, "system"),
+        _ => return Err("theme must be \"dark\", \"light\" or \"system\"".to_string()),
+    };
+    app.apply_theme(theme);
+    Ok(tool_text(
+        json!({ "theme": name, "applied": true }).to_string(),
+    ))
+}
+
 pub(super) fn add_stroke(app: &mut App, args: &Value) -> Result<Value, String> {
     let points = parse_points(args.get("points").unwrap_or(&Value::Null))?;
     let color = match args.get("color").and_then(Value::as_str) {
