@@ -16,13 +16,13 @@ use eframe::egui::{Color32, PointerButton};
 /// Wells of a Shape-tool gesture start: the outline comes from the primary
 /// well and the fill from the secondary one, each gated by its Tools-window
 /// checkbox (owner request 2026-11-10). A RIGHT-button gesture USES the two
-/// wells INVERTED (owner request 2026-11-15: "цвета используются наоборот и
-/// без Swap") — the former secondary paints the outline, the former primary
+/// wells INVERTED (owner request 2026-11-15: "the colors are used the other
+/// way around and without Swap") — the former secondary paints the outline, the former primary
 /// the fill — WITHOUT touching the wells themselves: the Palette's
 /// primary/secondary stay exactly as they are, unlike the persistent swap
 /// the previous behavior performed. The wells cannot be mutated through
 /// this helper (no `&mut` access to them, and the caller does not swap), so
-/// "без Swap" holds by construction. Returns `(outline, fill)`.
+/// "without Swap" holds by construction. Returns `(outline, fill)`.
 pub(super) fn shape_gesture_wells(
     button: PointerButton,
     shape_outline: bool,

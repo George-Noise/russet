@@ -39,7 +39,7 @@ pub(super) fn dialog_id(name: &str) -> Id {
 /// The shared builder of every modal dialog (SPEC §3.7–§3.8): not
 /// collapsible, not resizable, and positioned so that it ARISES at the
 /// main window's center (owner request 2026-11-15: dialogs
-/// «возникают по центру главного окна», not at egui's cascade position
+/// "appear centered on the main window", not at egui's cascade position
 /// slightly right/below of the floating windows). The CENTER_CENTER pivot
 /// makes `default_pos` mean "put the dialog's center here", so the center
 /// lands exactly on `content_rect().center()` even before the window size
@@ -450,7 +450,7 @@ fn aspect_linked(w0: f32, h0: f32, w1: f32, h1: f32, ratio: f32) -> (f32, f32) {
 
 /// The affirmative/dismissive button row of every dialog and of the Text
 /// tool window, laid out per the IBM Carbon / Apple HIG / Google Material
-/// convention (owner request 2026-11-13: "чтобы как у всех"): the row is
+/// convention (owner request 2026-11-13: "like every other app"): the row is
 /// right-aligned and the AFFIRMATIVE (primary) button is the RIGHTMOST one,
 /// with the dismissive button to its left. Microsoft Windows's opposite
 /// order (primary leftmost) is deliberately not followed. Returns
@@ -463,8 +463,8 @@ fn aspect_linked(w0: f32, h0: f32, w1: f32, h1: f32, ratio: f32) -> (f32, f32) {
 /// content (egui's default outer window size is 340×420) the row is
 /// anchored into that empty space, the content's measured size never
 /// shrinks back and the dialog stays tall with the buttons detached below
-/// the fields (owner report 2026-11-15: dialogs "растягиваются до конца
-/// вниз"). Reading `available_width` is safe here: every caller is a
+/// the fields (owner report 2026-11-15: dialogs "stretched all the way
+/// down"). Reading `available_width` is safe here: every caller is a
 /// window with egui's stored default width — never an `.auto_sized()`
 /// window, whose first-pass available width is the whole screen (the
 /// quirk recorded in AGENTS.md).

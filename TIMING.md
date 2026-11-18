@@ -11,8 +11,8 @@
 > recycled sandbox without `target/`, first run of a new profile/target triple)
 > or the toolchain itself had to be fetched. **Hot** = `target/` carried over.
 > `target/` normally persists with the project directory. The warm-target store
-> (a hosted `russet-target.zip`) was RETIRED by the owner 2026-11-17 («идею с
-> target пока убираем — dev билдит достаточно быстро для тестов»); the cold
+> (a hosted `russet-target.zip`) was RETIRED by the owner 2026-11-17 ("drop the
+> warm-target idea for now — dev builds fast enough for tests"); the cold
 > numbers below are the accepted cost of a fresh sandbox.
 >
 > Rule: **every** heavy command (> ~1 min) gets a row in the same edit that ran
@@ -23,8 +23,8 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-18 | `cargo check` (dev, fresh sandbox: rustup 1.99.1 installed first, then ALL deps compiled; docs/comment-only tree) | 3m51s | time'd exactly |
 | 2026-11-17 | rustup install + fetch pinned 1.99.1 toolchain (fresh sandbox, no rustup at all) | ≈ 3–4 min | ≈ (background-log mtimes) |
-| 2026-11-17 | `cargo check` (dev, fresh clone: ALL deps compiled) | ≈ 8–12 min | ≈ (background-log mtimes) |
 | 2026-11-17 | `cargo test --profile gates` (gates profile fresh: all test deps compiled) | ≈ 4–6 min | ≈ (observed via background poll) |
 | 2026-11-18 | `bash scripts/verify.sh` FIRST run in a cold gates lane (all gate deps compiled; the run itself FAILED at a new test — the 3 min is the compile cost, the fix re-ran hot) | ≈ 3 min | time'd exactly |
 | 2026-11-17 | `cargo check --target wasm32-unknown-unknown` (target triple fresh; deps recompiled for wasm) | ≈ 1.5–2.5 min + one-time `rustup target add` download | ≈ (background-log mtimes; the finishing pass measured 1m38s) |

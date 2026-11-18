@@ -26,14 +26,14 @@ fn history_window_id() -> egui::Id {
 }
 
 /// Max height of the Tool Log's entry list. Was 280 pt, HALVED to 140 pt
-/// by the owner request 2026-11-13 («уменьшить максимальную высоту окошка
-/// вдвое»).
+/// by the owner request 2026-11-13 ("halve the window's max
+/// height").
 const TOOL_LOG_MAX_HEIGHT: f32 = 140.0;
 
 /// Font size of the Tool Log's entries: 0.5rem = 8 pt (1 rem = 16 pt — egui
 /// 0.37 has no rem API, the same convention as `placement::REM`; owner
 /// request 2026-11-13). The window's vertical row spacing is zeroed with it
-/// (owner request: «прижать в 0»), so consecutive log lines sit flush — each
+/// (owner request: "pin the gap to 0"), so consecutive log lines sit flush — each
 /// row is the 8 pt font's own line height, the closest egui gets to a
 /// 0.5rem line height.
 const TOOL_LOG_FONT_SIZE: f32 = 8.0;
@@ -51,7 +51,7 @@ impl App {
         // First open (owner request 2026-11-12, amended 2026-11-13): the
         // window sits at the BOTTOM CENTER of the main window and its
         // bottom edge is FLUSH with the bottom edge — the former 0.5rem
-        // gap is now 0 («прижать в 0 к низу», owner request 2026-11-13).
+        // gap is now 0 ("pinned flush to the bottom", owner request 2026-11-13).
         // §3.11 anchors the dropped gap, so it stays flush through
         // main-window resizes until the user drags it away. Afterwards the
         // same §3.11 magnetism and resize repositioning as Tools/Palette

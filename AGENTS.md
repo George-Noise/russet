@@ -82,7 +82,7 @@ touching behavior code.
    scenario suite — is exempt from BOTH this guard and the 500-line file guard: it grows
    scenario by scenario on the owner's request, splitting it is NOT a debt and is never
    proposed, and editing it without the owner's explicit permission is forbidden
-   («редактировать без разрешения владельца нельзя» — the file's own header says the same;
+   ("editing without the owner's permission is forbidden" — the file's own header says the same;
    `scripts/rules.sh` skips it in the size-guard loop).
 8. `cargo test` must pass before a task counts as done, and `cargo clippy --all-targets` lints the
    test files too.
@@ -156,8 +156,7 @@ The final chat reply MUST state the suggested commit title verbatim (owner reque
   command — never start a build/test lane whose missing prerequisites are not accounted for. If
   `target/` is cold or missing (fresh clone / recycled sandbox), a cold build is the accepted
   cost: the warm-target STORE idea (a hosted `russet-target.zip`) is RETIRED for now (owner
-  decision 2026-11-17: «идею с target пока убираем, оно билдит достаточно быстро в dev режиме
-  для тестов»). `sandbox_check.sh` still reports the per-lane warmth verdict; the cold-vs-hot
+  decision 2026-11-17: "drop the warm-target idea for now — dev builds fast enough for tests"). `sandbox_check.sh` still reports the per-lane warmth verdict; the cold-vs-hot
   numbers stay in TIMING.md ("Reading the numbers"). Reviving the store would be a NEW owner
   decision, never a routine delivery artifact.
 - Heavy-command timing (owner request 2026-11-17): every command that ran longer than ~1 minute
@@ -166,8 +165,8 @@ The final chat reply MUST state the suggested commit title verbatim (owner reque
 - Baseline at session start, BEFORE any edit (owner policy 2026-11-13): `bash scripts/rules.sh` and
   `cargo fmt --check` — nothing else. Both are instant and never compile anything. The tree always
   arrives green (byte-compared delivery + CI), so pre-edit `cargo check`/clippy/test runs are wasted
-  minutes — reconfirmed by the owner 2026-11-17 («тесты до задачи не нужны — в конце задачи тесты и
-  так делаются»): NO pre-edit test/compile runs; the only exception is a toolchain/target warm-up in
+  minutes — reconfirmed by the owner 2026-11-17 ("tests before a task aren't needed — tests run at the task's end
+  anyway"): NO pre-edit test/compile runs; the only exception is a toolchain/target warm-up in
   a fresh sandbox, which is environment work, not a test baseline. If the baseline fails, STOP and
   tell the owner — a red baseline means a broken delivery, not a task.
 - Quick loop after edits: `cargo check` (owner's time-saving policy 2026-11-09).

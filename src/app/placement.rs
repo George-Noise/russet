@@ -39,8 +39,8 @@ const WINDOW_SNAP_DISTANCE: f32 = 2.0 * REM;
 
 /// First-open vertical gap ratio of the "Tools" window (§3.2, owner request
 /// 2026-11-11): 40% of the FREE vertical space sits above the window and
-/// 60% below it — a bit higher than the former dead center (owner: "расстояние
-/// до верхнего края 40%, до нижнего 60%"). Applied once, on the first frame
+/// 60% below it — a bit higher than the former dead center (owner: "40% of the gap to the top edge,
+/// 60% to the bottom"). Applied once, on the first frame
 /// the window is shown, when its auto-sized height is first known (see
 /// [`WindowPlacement::first_open_ratio_y`]); afterwards §3.11 takes over and
 /// the user's placement always wins.
@@ -80,7 +80,7 @@ pub(super) struct WindowPlacement {
     /// frame's; every resize frame recomputes from this pin (see
     /// [`resize_step`]) instead of chaining off the previous frame, so the
     /// non-monotonic content-rect series of Wayland/Web resizes cannot
-    /// accumulate drift — the «колбасит» fix. Cleared on the first stable
+    /// accumulate drift — the "wobbles" fix. Cleared on the first stable
     /// frame; the next resize pins fresh.
     resizing: Option<(Rect, Rect)>,
 }
@@ -396,7 +396,7 @@ pub(super) fn set_window_pos(ctx: &egui::Context, area_id: Id, left_top: Pos2) {
 ///   of the last stable frame — is pinned on the first changed frame and
 ///   cleared on the first stable one, so the non-monotonic content-rect
 ///   series of Wayland/Web resizes cannot accumulate the per-frame drift
-///   that showed as «колбасит». Resizes never anchor, unanchor or move
+///   that showed as "wobbles". Resizes never anchor, unanchor or move
 ///   anything flush.
 /// - on the very first frame a window with a first-open ratio is shown
 ///   (§3.2 Tools window), the ratio is applied exactly — the auto-sized

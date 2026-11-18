@@ -134,7 +134,7 @@ impl ResizeAnchor {
 }
 
 /// The resampling filter of an Image-mode resize (owner request
-/// 2026-11-17: "метод соседних пикселей и другие"). Backed by the already
+/// 2026-11-17: "the neighboring-pixels method and others"). Backed by the already
 /// pinned `image` crate's `imageops` filters — no new dependencies.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResizeFilter {
@@ -193,8 +193,8 @@ impl ResizeMode {
 }
 
 /// Everything the Resize dialog chose for ONE layer's node (owner request
-/// 2026-11-17: "записывать в узел дерева истории для каждого слоя все
-/// выборы которые были сделаны в окошке resize"): the mode, the layer's
+/// 2026-11-17: "record into each layer's history-tree node all the
+/// choices made in the resize window"): the mode, the layer's
 /// before/after sizes and the mode-specific parameter. The History Tree
 /// row shows [`ResizeInfo::summary`], so jumping a layer back beyond a
 /// resize node explains what that resize did to THIS layer.

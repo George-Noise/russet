@@ -19,8 +19,8 @@
 #   4. src files over 500 lines (owner-exempt: app.rs and the owner-locked
 #      app/scenarios/tests.rs, owner request 2026-11-17) — AGENTS.md "Repo
 #      facts" file-size guard.
-#   5. PROGRESS.md size and stale material (owner request 2026-11-13: "чтобы
-#      агент и человек не забывали"): warn when the file or its Log section
+#   5. PROGRESS.md size and stale material (owner request 2026-11-13: "so that
+#      neither the agent nor the human forgets"): warn when the file or its Log section
 #      outgrows its budget, when RESOLVED warnings are still parked in the
 #      Warnings section, and list the live log entries that still carry
 #      owner checks — the open items must be surfaced and asked about (see

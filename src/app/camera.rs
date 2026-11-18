@@ -181,7 +181,7 @@ impl App {
     /// W/A/S/D pan the viewport continuously (§3.4). `egui::Key` letter
     /// variants are PHYSICAL keys — egui-winit maps them from winit's
     /// `PhysicalKey` — so the bindings are keyboard-layout independent: on
-    /// ЙЦУКЕН the same physical keys (Ц/Ф/Ы/В) work, and so on for every
+    /// the Russian typewriter layout the same physical keys work, and so on for every
     /// other layout. While a pan key is held, no stroke starts (the caller
     /// treats this as panning, same as Space+LMB).
     fn handle_key_pan(&mut self, ui: &egui::Ui) -> bool {

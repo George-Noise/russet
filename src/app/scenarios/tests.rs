@@ -5,15 +5,15 @@
 //! resize/history coupling is exercised the way a user actually chains it.
 //!
 //! OWNER-LOCKED FILE (owner request 2026-11-17):
-//! «Редактировать этот файл без разрешения владельца нельзя» — the agent may
+//! "Editing this file without the owner's permission is forbidden" — the agent may
 //! only APPEND new scenarios on an explicit owner request; the existing steps
 //! and expectations are changed by the owner alone. The file is exempt from
 //! BOTH size guards (the tests' ~300-line guard and the 500-line file guard,
 //! AGENTS.md "Tests" rule 7 + "Repo facts") and splitting it is NOT a debt —
 //! `scripts/rules.sh` skips it in the size-guard loop.
 //!
-//! SCENARIO CONFIRMATION LEDGER (owner request 2026-11-17: «пометь каждый
-//! текущий сценарий, что они мной пока не подтверждены»): every scenario
+//! SCENARIO CONFIRMATION LEDGER (owner request 2026-11-17: "mark every
+//! current scenario as not yet confirmed by me"): every scenario
 //! below is the AGENT'S coding of the chat walkthrough — the owner approves
 //! them ONE BY ONE, and only his word flips the per-scenario marker to
 //! CONFIRMED <date>. Status as of 2026-11-17 — 0 of 8 approved, all NOT YET

@@ -26,7 +26,7 @@ fn resize_pins_the_reference_on_the_first_changed_frame() {
     // The series turns back (non-monotonic Wayland/Web configure events) and
     // the drawn rect is stale — the target is re-derived FROM THE PIN, so the
     // content returning to the pre-resize size lands the window EXACTLY at
-    // its pre-resize position instead of drifting (the «колбасит» fix).
+    // its pre-resize position instead of drifting (the "wobbles" fix).
     let (_, pos_back) = resize_step(
         Some(rect(300.0, 100.0, 200.0, 200.0)),
         Some(grown),

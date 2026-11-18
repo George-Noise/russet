@@ -9,6 +9,56 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
+### 2026-11-17 — `Refactor:` panels.rs split into tool_log.rs + layers_window.rs — owner-approved — owner request
+
+- **What:** the 500-line file guard debt paid for `app/panels.rs` (504 lines, owner: "do the
+  panels.rs split, but not at the cost of agent development"). PURE code motion, zero behavior change: the file
+  becomes TWO DIRECT children of `app` — `app/tool_log.rs` (102: the Tool Log window, its id fn and
+  the TOOL_LOG_* consts) and `app/layers_window.rs` (430: the Layers window, LayerRequest, the row/
+  arrow helpers, the layer ops and the delete dialog). The two-direct-children shape (no panels.rs
+  shell, no grandchild `impl App`) was chosen over a child-module split DELIBERATELY so nothing
+  changes for future agents: every `impl App` stays in `app.rs` or its direct children (the repo
+  convention), every visibility stays `pub(super)`, every `use super::...` line moves over verbatim,
+  the app.rs call sites (`self.history_window` / `self.layers_window` / `self.layer_delete_dialog`)
+  are untouched. The `panels` name survives only in split-history notes (both new module docs,
+  app.rs module map, AGENTS.md/SPEC.md pointers updated). history_tree.rs (569) is NOT split —
+  owner deferral (his unfinished task lives there); AGENTS.md "File-size guard" now records the
+  deferral so the split is not re-proposed. `git pull`: the owner's master carried the store-
+  retirement round as `cc2734d` (commit title verbatim); the worktree was byte-identical — this
+  round's base is `cc2734d`.
+- **Files:** NEW `src/app/tool_log.rs`, NEW `src/app/layers_window.rs`; DELETED `src/app/panels.rs`;
+  `src/app.rs` (mod decls + module map + 3 doc refs), `AGENTS.md` (pattern table, module list,
+  file-size guard bullet, egui quirk pointer), `SPEC.md` (§1 module list), `TIMING.md` (new hot row +
+  the done-gate note corrected to the measured ~20 s small-change cost), `PROGRESS.md`.
+- **Verified:** the baseline was the byte-identical-to-origin `cc2734d` (CI-green commit; the
+  pre-edit rules.sh/fmt baseline was skipped this round — nothing had touched the tree). After:
+  rules.sh HARD-green
+  (the only OVER GUARD left is the owner-deferred history_tree.rs), fmt clean, clippy `-D warnings`
+  clean default + mcp, `cargo test --profile gates` 140 default / 152 mcp green (counts unchanged —
+  the suite is byte-identical), `cargo check --target wasm32-unknown-unknown` green. verify.sh 18 s
+  for a small change. Delivery byte-compared via deliver.sh.
+- **Owner-checks:** none born. Open: V30 (8 scenario markers), V8 (parked).
+- **Commit title:** `Split app/panels.rs into tool_log.rs + layers_window.rs (pure code motion); defer history_tree.rs split`
+
+### 2026-11-17 — `Docs:` V26/V28/V31 verified in chat; warm-target store retired — owner request
+
+- **What:** bookkeeping round, zero repo-behavior change. (1) `git pull`: the owner's master carried
+  the deliver.sh round as `778b214` (commit title verbatim); the worktree was byte-identical — this
+  round's base is `778b214`. (2) Three human checks verified via chat and closed in
+  DEBTS-verification.md (verbatim owner quotes kept in the rows): V26 — `nix build .#russet-dev`
+  (the flake dev build compiles in gates AND runs the tests), V28 — the Resize-dialog pass
+  ("I tried the Resize dialog, it suits me for now"), V31 — the magnetized Tools+panel pass on his
+  machine. Remaining open: V30 (the 8 scenario markers) + V8 (parked). (3) The warm-target STORE is
+  RETIRED (owner decision: "drop the warm-target idea for now — dev builds fast enough for tests"): AGENTS.md "Session start" + "Delivery ritual" and TIMING.md now state the cold
+  build is the accepted cost; `sandbox_check.sh` still reports per-lane warmth but no longer points
+  at a hosted zip; the 1.2 G `russet-target.zip` deleted from the chat download dir.
+- **Files:** `DEBTS-verification.md`, `AGENTS.md` (2 bullets), `TIMING.md` (header + numbers),
+  `scripts/sandbox_check.sh` (verdict line), `PROGRESS.md` (this entry).
+- **Verified:** docs-only round — verify.sh ALL GATES GREEN, no src/ change so no rebuild;
+  rules.sh HARD-green; the three DEBTS quotes checked verbatim against the chat message.
+- **Owner-checks:** none born. Open: V30, V8 (parked).
+- **Commit title:** `Close V26/V28/V31 via chat; retire the warm-target store rule`
+
 ### 2026-11-17 — `Tooling:` deliver.sh, drag-probe template, flake dev-build fix — owner request
 
 - **What:** agent-workflow round, zero app-behavior change. (1) `git pull`: the owner's master
@@ -64,7 +114,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   exception is a toolchain/target warm-up, which is environment work, not a test baseline); the
   Delivery ritual gained the note that `russet-target.zip` is a requested-only artifact, not a
   routine one. `SANDBOX.md`: the restore + probe pointer in the Rust bullet. (5) V29 → verified
-  2026-11-17 via chat (owner: «проверил V29»). (6) The warm-up artifact BUILT and delivered this
+  2026-11-17 via chat (owner: "checked V29"). (6) The warm-up artifact BUILT and delivered this
   round on request: `russet-target.zip` 1.2 GiB (the 3.8 G `target/` minus the `*incremental*`
   caches; dev + gates + wasm lanes, the GUI binary included) — the owner uploads it to the release
   `target-store`.
@@ -86,7 +136,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 - **What:** the per-tool settings (Size, Line Mode + curve hints, Shape Kind + Fill/Outline, Text hints)
   moved OUT of the Tools window into their own title-bar-less, immovable, content-hugging window glued to
-  the Tools window with NO way to detach («без возможности отлипания пока что»): `Window::fixed_pos`
+  the Tools window with NO way to detach ("with no way to detach it, for now"): `Window::fixed_pos`
   re-applies the position EVERY frame (an egui 0.37 fact, pinned by a headless regression test) from the
   pure `app/placement.rs::magnet_settings_pos` + the `ToolSettingsPlacement` state (the panel's last drawn
   size). Vertically: below the Tools window at a `TOOL_SETTINGS_GAP` 0.25rem (4 pt); no room below → flips
@@ -212,7 +262,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-16 — `Feat:` fast dev Nix build (`russet-dev`); V23/V24 verified → F13 paid; the debt-ordering rule — owner request
 
-- **What:** (1) the owner verified V23 + V24 via chat («проверил V23, V24») → both moved to the
+- **What:** (1) the owner verified V23 + V24 via chat ("checked V23, V24") → both moved to the
   Resolved list; that satisfied F13's documented LAST pending condition (the owner's Wayland
   feel pass), so F13 is PAID (the `diagnostics` feature lives until F12 closes); F12 stays open
   as the final-design decision only. (2) The flake gained `russet-dev` (owner request: a fast
@@ -292,9 +342,9 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-16 — `Feat:` wheel-pan parity (F12-B interim), pin-based resize repositioning (F13-A), the temporary diag feature — owner request
 
-- **What:** the owner picked the designs: F12 → variant B («с пометкой что это не
-  окончательный вариант»; F11 учтён в расчётах — он писался после проверки на Windows),
-  F13 → вариант A, and approved the diagnostic patch ONLY behind a build flag. (1) F12-B:
+- **What:** the owner picked the designs: F12 → variant B ("with a note that it is not
+  the final design"; F11 is folded into the math — it was written after the Windows check),
+  F13 → variant A, and approved the diagnostic patch ONLY behind a build flag. (1) F12-B:
   the new pure `app/camera.rs::wheel_notches` converts the raw delta to PRODUCT NOTCHES per
   its `unit` — `Line` passes through (winit ±1/notch on Windows/X11/Wayland-discrete),
   `Point` ÷ 100 pt (eframe-web passes the DOM pixels as-is, Chrome ≈ 100/notch — INTERIM
@@ -304,7 +354,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   constants are retuned from diag logs. (2) F13-A: the pure `resize_step` (3 tests) pins the
   PRE-resize (window, content) rects on the FIRST changed frame and recomputes EVERY resize
   frame from the pin — Wayland/Web non-monotonic content series can no longer accumulate the
-  chain drift («колбасит»); the pin clears on the first stable frame and on title-bar drags.
+  chain drift ("wobbles"); the pin clears on the first stable frame and on title-bar drags.
   (3) The TEMPORARY `diag` cargo feature (default build compiles NONE of it): one `[diag]`
   stderr line per wheel event (unit/source/delta → notches → pan step — the calibration
   data) + per changed content rect + per repositioned floating window; on the web the lines
@@ -324,17 +374,17 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-16 — `Docs:` V9 verified, the wheel-pan platform gap and the resize jitter analyzed (F12/F13) — owner request
 
-- **What:** (1) the owner's «V9 проверил» closes the M8 web real-mouse check in
+- **What:** (1) the owner's "checked V9" closes the M8 web real-mouse check in
   DEBTS-verification.md. (2) The same pass surfaced TWO platform gaps, born as
-  F12 + F13 (DEBTS-functional.md), analysis-only by request («ничего этого пока
-  исправлять не нужно»). F12 — wheel-pan parity: `app/camera.rs::handle_scroll`
+  F12 + F13 (DEBTS-functional.md), analysis-only by request ("none of this needs
+  fixing yet"). F12 — wheel-pan parity: `app/camera.rs::handle_scroll`
   reads the RAW `Event::MouseWheel.delta` in its EVENT UNIT and ignores `unit`,
   verified against the pinned sources (egui 0.37.0: delta unconverted, unit
   Line/Point/Page, its own web=8 vs native=40 line speed; winit 0.30.13:
   Windows/X11 `LineDelta(±1)` per notch, Wayland discrete-or-pixel; eframe web:
   DOM pixels as-is) — one notch pans ±3 pt on Windows vs ~±300 pt on the Web.
   Zoom is immune (it uses only the SIGN). Options A/B/C in F12; the owner's
-  «pan по методу zoom» maps to B/C; F11's ×5 must be RE-DECIDED after the unit
+  "pan via the zoom method" maps to B/C; F11's ×5 must be RE-DECIDED after the unit
   fix (measured on the buggy speed). F13 — window jitter on Linux/Web resize:
   per-frame repositioning (`place_floating_window` → `set_window_pos`) meets
   non-monotonic content-rect series + auto-sized windows resizing in the same
@@ -350,12 +400,12 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-16 — `Docs:` third debt triage — 8 checks verified, F11 born, zip-priority rule
 
-- **What:** the owner's «проверил V22, V21, V20, V19, V18, V17, V14, V13» closed those
+- **What:** the owner's "checked V22, V21, V20, V19, V18, V17, V14, V13" closed those
   EIGHT owner-checks in DEBTS-verification.md (chat-verified, the V4/V7 precedent).
   V15's verdict becomes a NEW functional debt F11 — wheel pan ANOTHER ×5 faster:
   `SCROLL_PAN_SPEED` 3.0 → 15.0 in `src/app.rs` + the two SPEC §3.4 mentions in the
-  same edit — recorded with the how-to and POSTPONED by the owner («запиши как
-  сделать потом»). AGENTS.md "Git & progress log" gained the owner's rule: a
+  same edit — recorded with the how-to and POSTPONED by the owner ("record it as
+  something to do later"). AGENTS.md "Git & progress log" gained the owner's rule: a
   delivered `russet.zip` is used IMMEDIATELY — no `git pull`/`git clone` first
   (the .zip signals priority and saves setup time); the patch base is snapshotted
   from the unpacked .zip before the first edit. Compaction: the 2026-11-13 `UX:`
@@ -374,8 +424,8 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 - **What:** holding `Shift` during a Shape (U) drag constrains it to a
   proportional shape — a square for the Rectangle, a circle for the Ellipse
-  (owner: «при зажатом Shift фигуры получались пропорциональными, как в
-  Paint Net»). The start point is the anchor corner; the free corner is
+  (owner: "with Shift held, the shapes came out proportional, as in
+  Paint Net"). The start point is the anchor corner; the free corner is
   pulled, LIVE (every frame — pressing/releasing Shift MID-drag snaps and
   releases instantly), onto the dominant-axis square: side = max(|dx|,|dy|),
   each axis keeps its drag direction, so the shape always grows toward the
@@ -410,8 +460,8 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   unchanged — layers.rs 504 → 354. The tests split by topic the same way:
   `layers/tests/snapshot.rs` + `layers/tests/composite.rs`. (2) A two-color
   gesture now carries BOTH colors on its history node and the History Tree
-  row's chip shows both — outline\|fill halves (owner: «у тех инструментов
-  у которых использовалось 2 цвета отображалось 2 цвета»): `TreeNode.color2`
+  row's chip shows both — outline\|fill halves (owner: "the tools
+  that used two colors showed two colors"): `TreeNode.color2`
   (Option), threaded `LayerStack::record_action` → `record_active_action`;
   the pure `shape_record_colors` mapping lives in the NEW child
   `app/preview/colors.rs` (placed there from the start — the mapping plus
@@ -450,8 +500,8 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   `with_layout` inherited the whole remaining available rect — replaced with
   a bounded `allocate_ui_with_layout` row. (3) Shape (U) RMB: the wells are
   USED inverted (former secondary → outline, former primary → fill) WITHOUT
-  swapping them — the persistent swap is gone (owner: «цвета используются
-  наоборот и без Swap»); pure `shape_gesture_wells` returns `(outline, fill)`
+  swapping them — the persistent swap is gone (owner: "the colors are used
+  the other way around and without Swap"); pure `shape_gesture_wells` returns `(outline, fill)`
   and has no `&mut` access to the wells. (4) Palette button "Swap (X)" →
   "Swap" (no hotkey behind it and none wanted — §3.9 stays exhaustive).
   NEW file: `src/app/dialogs/tests.rs` — 3 headless-egui regression tests
@@ -501,12 +551,12 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 ### 2026-11-13 — `Docs:` second debt triage — owner answered the batched V/F list
 
 - **What:** dispositions applied, zero code change. Verified via chat: V4, V7 (owner:
-  «проверил V4, V7» — one `cargo run` each after the toolchain pin / the file splits).
+  "checked V4, V7" — one `cargo run` each after the toolchain pin / the file splits).
   F2 DROPPED from the debts by owner decision: the History window stays AS IS, the
   owner will say himself when it is no longer needed — not tracked anymore. F5 parked
-  for the long term («долгий ящик»): memory limits not needed during active
+  for the long term ("long-term parking"): memory limits not needed during active
   development. The rest reconfirmed open: V8, V9, V13, V14, F3, F8, F9, F10 — owner:
-  «остальное не сейчас» (statuses carry the date). Open tables: V 6 → 4, F 6 → 5.
+  "the rest — not now" (statuses carry the date). Open tables: V 6 → 4, F 6 → 5.
 - **Files:** `DEBTS-verification.md` (V4/V7 → Resolved; V8/V9/V13/V14 notes),
   `DEBTS-functional.md` (F2 → closed; F5 parked), PROGRESS.md (entry + compaction:
   the `Feat:` real-layers and first-triage entries moved VERBATIM to
@@ -607,7 +657,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
-### 2026-11-13 — `Tooling:` headless-GUI recipe — the sandbox CAN run the GUI after all — owner request ("запиши опыт в .md")
+### 2026-11-13 — `Tooling:` headless-GUI recipe — the sandbox CAN run the GUI after all — owner request ("record the experience in a .md")
 
 - **What:** the previous round's "GUI impossible here" was wrong. NEW `SANDBOX.md` records the
   verified recipe: raw Xvfb (not xvfb-run — no xauth) + two user-space .debs
@@ -631,7 +681,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ---
 
-### 2026-11-13 — `Feat:` real layers + per-node PNG history + node-dot switching — owner request ("кусок большой фичи")
+### 2026-11-13 — `Feat:` real layers + per-node PNG history + node-dot switching — owner request ("a chunk of the big feature")
 
 - **What:** owner's staged rollout of the history design, decisions fixed in chat:
   ALL tools record nodes; fork-after-jump git-style; Start root; no node limit;
@@ -660,7 +710,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   the wiring frame-free.
 - **Owner-checks:** V13 click-through (layers ops, node-dot switching, fork after
   old-node draw, resize-fitted restore, Save composite); say the word if your remark
-  "cargo run отлично работает" closes V4/V7.
+  "cargo run works great" closes V4/V7.
 - **Commit title:** `Add real layers, per-node PNG history trees and node-dot canvas switching`
 
 ---
@@ -669,7 +719,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 - **What:** owner dispositions applied to the two debt files; zero code change.
   Verified via chat: V1, V2, V3, V11 (Windows tool/UX/About checks), V5+V6 (History
-  Tree — "руками потрогал, устраивает"; later improvements = new tasks), V12 (docs
+  Tree — "tried it by hand, it suits me"; later improvements = new tasks), V12 (docs
   skimmed, dev stable). Closed as not-a-debt: V10 (owner builds on Nix periodically
   himself), F6 (line-cap circles fine for now), F7 (popup shadow stays). Parked by
   the owner, stay open: V8 (no Windows MCP pass for now), V9 (no web checks soon).
@@ -696,7 +746,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   `tests.rs` keep the `history_tree::` paths untouched. (2) `app/tree_window.rs` 687 → 433:
   the painter + `GraphMetrics` + geometry constants + palette moved to child
   `app/tree_window/paint.rs` (269); the parent keeps windows/clones/scroll bookkeeping.
-  (3) `app.rs` 936 → 439 (owner request "сделай app.rs меньше"): document lifecycle
+  (3) `app.rs` 936 → 439 (owner request "make app.rs smaller"): document lifecycle
   (New/Open/Save, unsaved-changes gate, window title) → `app/document.rs`; top menu bar →
   `app/menu.rs`; hotkeys + freehand strokes + Eyedropper → `app/input.rs`. `app.rs` keeps App
   state, frame flow, undo/redo, canvas widget, texture sync. LLM navigation guarded: every new
@@ -843,8 +893,8 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   flush) and per-axis resize repositioning; their first-open anchors are
   unchanged (`history_placement`/`layers_placement` added to `App`). (2) The
   Tools window's first open is a bit ABOVE center: 40% of the FREE vertical
-  space above / 60% below (owner: "расстояние до верхнего края 40%, до нижнего
-  60%"). A pivot + `default_pos` cannot express this (the auto-sized height is
+  space above / 60% below (owner: "40% of the gap to the top edge,
+  60% to the bottom"). A pivot + `default_pos` cannot express this (the auto-sized height is
   unknown before the first layout), so the exact split is a ONE-SHOT fix on the
   first frame — `TOOLS_FIRST_OPEN_RATIO` + `first_open_ratio_pos` in
   placement.rs, persisted via the same `set_window_pos` path as §3.11; §3.11
@@ -1048,7 +1098,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-10 — `Features:` Eyedropper, Line/Curve, Shape, Text, History log, Layers placeholder — owner request (6 items)
 - **What:** six owner-requested additions, all deliberately simple first
-  iterations ("простенько") that the owner will rework later. This work was
+  iterations ("keep it simple") that the owner will rework later. This work was
   explicitly ordered by the owner, overriding the §6 out-of-scope list
   (recorded as an owner exception in SPEC §6).
   1. **Eyedropper (I)** — pressing on the canvas samples the pixel under
@@ -1122,10 +1172,10 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   (8) hotkeys I/L/U/T do not fire while typing in the Text window.
 
 ### 2026-11-10 — `UX+Build:` WASD panning, 0.5rem first-open gaps, flake de-warned — owner request (4 items)
-- **What:** three code changes + the tests question answered in chat. (1) **`flake.nix`:** the deprecated `xorg.*` aliases in `runtimeLibs` were replaced with the new-style top-level attrs (`libx11`, `libxcursor`, `libxrandr`, `libxi`, `libxrender`, `libxext`, `libxcb`) — this removes the nixpkgs evaluation warnings; same libraries, same dlopen names, runtime behavior identical. (2) **First-open gaps:** Tools and Palette no longer sit flush — each keeps a 0.5rem (8 pt) gap from the edges: Tools 8 pt from the left edge (vertically centered), Palette 8 pt from the left AND bottom edges. `0.5 * REM` (REM = 16 pt; egui 0.37 has no rem API) lives in `app/placement.rs::FIRST_OPEN_GAP` next to the 2rem `WINDOW_SNAP_DISTANCE` (now `2.0 * REM`), applied to the `Window::default_pos` anchors in `app/windows.rs`; §3.11 treats the offset as an ordinary dropped gap (the free-axis gap-ratio preserves it even before the first drag). (3) **W/A/S/D panning:** a held key pans the viewport continuously — pure `key_pan_dir(w,a,s,d)` in `app/camera.rs` (diagonals normalized), speed `KEY_PAN_SPEED` = 600 pt/s (screen-space, owner-tuned) scaled by `stable_dt.min(0.1)` so a stalled frame cannot jump the canvas. `egui::Key` letters are PHYSICAL keys (egui-winit maps them from winit `PhysicalKey`), so it is layout-independent — ЙЦУКЕН's Ц/Ф/Ы/В included. Gated by `!egui_wants_keyboard_input()` like the hotkeys; while a pan key is held no stroke starts; explicit `request_repaint()` while keys are held so panning is smooth even without OS key repeat. (4) Docs synced: SPEC §3.2, §3.3, §3.4 (new "Pan — W/A/S/D" bullet), §3.9 table (new row), §7.1; AGENTS.md placement bullet.
+- **What:** three code changes + the tests question answered in chat. (1) **`flake.nix`:** the deprecated `xorg.*` aliases in `runtimeLibs` were replaced with the new-style top-level attrs (`libx11`, `libxcursor`, `libxrandr`, `libxi`, `libxrender`, `libxext`, `libxcb`) — this removes the nixpkgs evaluation warnings; same libraries, same dlopen names, runtime behavior identical. (2) **First-open gaps:** Tools and Palette no longer sit flush — each keeps a 0.5rem (8 pt) gap from the edges: Tools 8 pt from the left edge (vertically centered), Palette 8 pt from the left AND bottom edges. `0.5 * REM` (REM = 16 pt; egui 0.37 has no rem API) lives in `app/placement.rs::FIRST_OPEN_GAP` next to the 2rem `WINDOW_SNAP_DISTANCE` (now `2.0 * REM`), applied to the `Window::default_pos` anchors in `app/windows.rs`; §3.11 treats the offset as an ordinary dropped gap (the free-axis gap-ratio preserves it even before the first drag). (3) **W/A/S/D panning:** a held key pans the viewport continuously — pure `key_pan_dir(w,a,s,d)` in `app/camera.rs` (diagonals normalized), speed `KEY_PAN_SPEED` = 600 pt/s (screen-space, owner-tuned) scaled by `stable_dt.min(0.1)` so a stalled frame cannot jump the canvas. `egui::Key` letters are PHYSICAL keys (egui-winit maps them from winit `PhysicalKey`), so it is layout-independent — the Russian typewriter layout's W/A/S/D keys included. Gated by `!egui_wants_keyboard_input()` like the hotkeys; while a pan key is held no stroke starts; explicit `request_repaint()` while keys are held so panning is smooth even without OS key repeat. (4) Docs synced: SPEC §3.2, §3.3, §3.4 (new "Pan — W/A/S/D" bullet), §3.9 table (new row), §7.1; AGENTS.md placement bullet.
 - **Files:** `flake.nix`; `src/app/windows.rs`, `src/app/placement.rs` (REM / FIRST_OPEN_GAP consts), `src/app/camera.rs` (key pan, 2 new tests), `src/app.rs` (`KEY_PAN_SPEED`); docs: `SPEC.md`, `AGENTS.md`.
 - **Verified:** `cargo fmt --check`, `cargo check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` — all green, 27 tests (25 + 2 new WASD direction/diagonal tests; Rust 1.99.1, Linux). Nix is still unavailable in the sandbox, so the flake itself is only desk-checked (attrs cross-checked against the nixpkgs rename: top-level `libx*`/`libxcb` are the non-deprecated forms).
-- **Owner must check:** on Windows `cargo run` — Tools/Palette appear with a small 8 pt margin instead of flush; holding W/A/S/D pans the canvas (switch the layout to Russian and confirm Ц/Ф/Ы/В do the same; typing in a dialog field must NOT pan); wheel/middle/Space panning unchanged. On a Nix machine — `nix build` (or `nix flake check`) must now run WITHOUT evaluation warnings.
+- **Owner must check:** on Windows `cargo run` — Tools/Palette appear with a small 8 pt margin instead of flush; holding W/A/S/D pans the canvas (switch to the Russian layout and confirm its W/A/S/D keys do the same; typing in a dialog field must NOT pan); wheel/middle/Space panning unchanged. On a Nix machine — `nix build` (or `nix flake check`) must now run WITHOUT evaluation warnings.
 
 ### 2026-11-09 — `Docs:` README.md added (build & run for humans) — owner request
 - **What:** new `README.md` in English, deliberately MINIMAL per the owner's instruction: it contains ONLY how to build and run the app for the three supported targets — Windows (`cargo run`, `cargo build --release`), NixOS/Linux (`nix build` / `nix run` / `nix develop`, flake enablement one-liner, `WINIT_UNIX_BACKEND` override, non-NixOS distros welcome) and Web/WASM (wasm32 target, `trunk serve`, `trunk build --release` → `dist/`, one example of serving it). No feature descriptions, no changelog. The fact that README.md is the HUMAN-facing document (agents read AGENTS.md/SPEC.md instead) is recorded in AGENTS.md ("Repo facts") and SPEC §8, with a keep-in-sync rule when commands change.
@@ -1261,7 +1311,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-17 — Docs: V27 + V25 verified via chat → Resolved — owner request
 
-- **What:** the owner verified both open checks in one pass («проверил V27, V25»):
+- **What:** the owner verified both open checks in one pass ("checked V27, V25"):
   V27 — his local `trunk build --release` after the strip fix logs NO wasm-bindgen
   `target_features` warning and the release page passed the browser smoke (loads, draws,
   zoom/pan); V25 — the GNOME Wayland pass of the winit Adwaita CSD frame (title bar text

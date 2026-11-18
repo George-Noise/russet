@@ -41,8 +41,8 @@ fn tool_settings_window_id() -> Id {
 /// a title-bar-less, immovable, content-hugging window. `fixed_pos`
 /// re-applies the position on EVERY frame — that is the magnet: no stored
 /// area position can ever win over it, so the panel cannot be dragged or
-/// otherwise detached from the Tools window («без возможности отлипания,
-/// пока что»). Exposed as a function so the regression tests
+/// otherwise detached from the Tools window ("with no way to detach it,
+/// for now"). Exposed as a function so the regression tests
 /// (`windows/tests.rs`) run the exact builder the app runs.
 fn tool_settings_window_builder(pos: egui::Pos2) -> egui::Window<'static> {
     egui::Window::new("Tool settings")

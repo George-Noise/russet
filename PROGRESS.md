@@ -45,12 +45,15 @@
 | Extra: web-Line notch retune + `diag` → `diagnostics` rename (owner 2026-11-16) | done — gates green | Firefox scroll-pan ~3× overshoot fixed inside F12-B: Firefox emits `DOM_DELTA_LINE` ×3 lines/notch, so web `Line` deltas now divide by `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0 (native pass-through); the approved Windows/Chrome feel UNCHANGED (15 pt/notch); the temporary feature renamed `diag` → `diagnostics` (owner: the abbreviation was unclear) — feature, cfg sites, fn, `[diagnostics]` prefix; trunk-serve how-to: `trunk serve --features diagnostics` (logs → browser console); V23/V24 narrowed, not closed |
 | Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
 | Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
+| Extra: repo-wide English-only owner quotes (owner 2026-11-18) | done — docs only | every verbatim Russian owner quote across docs/scripts/comments translated to English (meaning kept); PROGRESS Log compacted — 2 entries moved to PROGRESS-archive.md |
 
-**Verification stamp:** fmt clean, rules.sh HARD-green, `cargo clippy --profile gates --all-targets
--- -D warnings` clean default + mcp, `cargo test --profile gates` 140 default / 152 mcp green (+9
-magnet-panel tests), `cargo check --target wasm32-unknown-unknown` green — 2026-11-17 (Rust 1.99.1
-pinned via rust-toolchain.toml, Linux). Web/trunk lanes last verified 2026-11-16 (see the archived
-log history); every src file ≤ 500 except the report-only `panels.rs` 504 / `history_tree.rs` 569.
+**Verification stamp:** fmt clean, rules.sh HARD-green, `cargo check` green (docs/comment-only
+round — clippy/test NOT re-run per AGENTS.md "Docs/comment-only edits"; the last FULL gate was
+2026-11-18: clippy `-D warnings` clean default + mcp, `cargo test --profile gates` 145 default /
+157 mcp green, `cargo check --target wasm32-unknown-unknown` green), zero Cyrillic repo-wide —
+2026-11-18 (Rust 1.99.1 pinned via rust-toolchain.toml, Linux). Web/trunk lanes last verified
+2026-11-16 (see the archived log history); every src file ≤ 500 except the report-only
+owner-deferred `history_tree.rs` 569.
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -66,7 +69,28 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > Commit title); durable facts move to their canonical home in the same edit (AGENTS.md
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
-> ever pinned in place by a pending check.
+> ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
+> docs rounds moved to PROGRESS-archive.md.
+
+### 2026-11-18 — `Docs:` Russian owner quotes translated to English repo-wide — owner request
+
+- **What:** the owner asked (2026-11-18) to translate every Cyrillic text in the project to English
+  without losing meaning. All verbatim owner quotes across AGENTS.md, SPEC.md, PROGRESS.md,
+  PROGRESS-archive.md, TIMING.md, DEBTS-verification.md, DEBTS-functional.md, scripts/rules.sh and
+  the doc comments of 9 src files are English now (the `owner: "…"` attribution style kept; the
+  keyboard-layout examples dropped the Cyrillic key glyphs — "the Russian typewriter layout's
+  W/A/S/D keys"). The owner-locked `app/scenarios/tests.rs`: the request IS the explicit
+  permission — only its 2 header quotes changed, no scenario steps touched. Zero Cyrillic left
+  repo-wide (script-checked). Also: the `roxmltree` entry in Cargo.lock was verified to come from
+  `fontique` (the `system_fonts` feature's fontconfig enumeration) — NOT an SVG dependency.
+- **Files:** `SPEC.md`, `AGENTS.md`, `TIMING.md`, `scripts/rules.sh`, `DEBTS-verification.md`,
+  `DEBTS-functional.md`, `src/{app/{scenarios/tests,tool_log,dialogs,windows,placement,camera,
+  preview/colors}.rs, app/placement/tests/resize.rs, history_tree.rs}`; PROGRESS Log compacted.
+- **Verified:** docs/comment-only round — `cargo fmt --check` clean, `cargo check` green
+  (3m51s cold), rules.sh HARD-green; no clippy/test rerun per AGENTS.md "Docs/comment-only
+  edits: cargo check is enough".
+- **Owner-checks:** none born. Open: V33 (the About pass), V30 (parked), V8 (parked).
+- **Commit title:** `Translate the recorded owner quotes to English across docs and comments`
 
 ### 2026-11-18 — `Feat:` About window names Rust + links the GitHub repo — owner request
 
@@ -94,8 +118,8 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 
 ### 2026-11-17 — `Refactor:` placement/tests.rs split by topic — owner-approved — owner request
 
-- **What:** the 500-line file guard paid for `app/placement/tests.rs` (518 lines, owner: «делай
-  сплит placement/tests.rs»). PURE code motion, zero behavior change — the 25 test bodies moved
+- **What:** the 500-line file guard paid for `app/placement/tests.rs` (518 lines, owner: "do the
+  placement/tests.rs split"). PURE code motion, zero behavior change — the 25 test bodies moved
   byte-identical. Per "Tests" rule 7 the file becomes a DECLARATION-ONLY module (10 lines: six
   `mod` lines + a header) and the suites move to the repo's FIRST `tests/` subdirectory:
   `app/placement/tests/common.rs` (the rect/assert_close helpers), `anchors.rs` (5 tests: the
@@ -104,7 +128,7 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   regression trio), `panel.rs` (5: the tool-settings magnet). New precedent: topic files reach
   the placement items with `crate::app::placement::…` — descendant modules see the private items,
   and the flat `use super::` style would have meant an unreadable `super::super::`.
-- **Also:** V32 CLOSED — the owner verified the first-open fix on his machine («окошки проверил»);
+- **Also:** V32 CLOSED — the owner verified the first-open fix on his machine ("checked the windows");
   the row stays in DEBTS-verification.md as a verified anchor row. The first `tests/` split
   convention is this entry; future over-guard test files follow it.
 - **Files:** `src/app/placement/tests.rs` (10), `src/app/placement/tests/{common,anchors,
@@ -148,54 +172,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V32 born (the fresh-launch resize pass, see DEBTS-verification.md). Open: V32,
   V30 (parked), V8 (parked).
 - **Commit title:** `Fix first-open window gaps drifting on resize (explicit first-open anchors); drop the panels.rs orphan`
-
-### 2026-11-17 — `Refactor:` panels.rs split into tool_log.rs + layers_window.rs — owner-approved — owner request
-
-- **What:** the 500-line file guard debt paid for `app/panels.rs` (504 lines, owner: «делай сплит
-  panels.rs но не в ущерб агентной разработке»). PURE code motion, zero behavior change: the file
-  becomes TWO DIRECT children of `app` — `app/tool_log.rs` (102: the Tool Log window, its id fn and
-  the TOOL_LOG_* consts) and `app/layers_window.rs` (430: the Layers window, LayerRequest, the row/
-  arrow helpers, the layer ops and the delete dialog). The two-direct-children shape (no panels.rs
-  shell, no grandchild `impl App`) was chosen over a child-module split DELIBERATELY so nothing
-  changes for future agents: every `impl App` stays in `app.rs` or its direct children (the repo
-  convention), every visibility stays `pub(super)`, every `use super::...` line moves over verbatim,
-  the app.rs call sites (`self.history_window` / `self.layers_window` / `self.layer_delete_dialog`)
-  are untouched. The `panels` name survives only in split-history notes (both new module docs,
-  app.rs module map, AGENTS.md/SPEC.md pointers updated). history_tree.rs (569) is NOT split —
-  owner deferral (his unfinished task lives there); AGENTS.md "File-size guard" now records the
-  deferral so the split is not re-proposed. `git pull`: the owner's master carried the store-
-  retirement round as `cc2734d` (commit title verbatim); the worktree was byte-identical — this
-  round's base is `cc2734d`.
-- **Files:** NEW `src/app/tool_log.rs`, NEW `src/app/layers_window.rs`; DELETED `src/app/panels.rs`;
-  `src/app.rs` (mod decls + module map + 3 doc refs), `AGENTS.md` (pattern table, module list,
-  file-size guard bullet, egui quirk pointer), `SPEC.md` (§1 module list), `TIMING.md` (new hot row +
-  the done-gate note corrected to the measured ~20 s small-change cost), `PROGRESS.md`.
-- **Verified:** the baseline was the byte-identical-to-origin `cc2734d` (CI-green commit; the
-  pre-edit rules.sh/fmt baseline was skipped this round — nothing had touched the tree). After:
-  rules.sh HARD-green
-  (the only OVER GUARD left is the owner-deferred history_tree.rs), fmt clean, clippy `-D warnings`
-  clean default + mcp, `cargo test --profile gates` 140 default / 152 mcp green (counts unchanged —
-  the suite is byte-identical), `cargo check --target wasm32-unknown-unknown` green. verify.sh 18 s
-  for a small change. Delivery byte-compared via deliver.sh.
-- **Owner-checks:** none born. Open: V30 (8 scenario markers), V8 (parked).
-- **Commit title:** `Split app/panels.rs into tool_log.rs + layers_window.rs (pure code motion); defer history_tree.rs split`
-
-### 2026-11-17 — `Docs:` V26/V28/V31 verified in chat; warm-target store retired — owner request
-
-- **What:** bookkeeping round, zero repo-behavior change. (1) `git pull`: the owner's master carried
-  the deliver.sh round as `778b214` (commit title verbatim); the worktree was byte-identical — this
-  round's base is `778b214`. (2) Three human checks verified via chat and closed in
-  DEBTS-verification.md (verbatim owner quotes kept in the rows): V26 — `nix build .#russet-dev`
-  (the flake dev build compiles in gates AND runs the tests), V28 — the Resize-dialog pass
-  («resize диалог я потрогал, меня устраивает сейчас»), V31 — the magnetized Tools+panel pass on his
-  machine. Remaining open: V30 (the 8 scenario markers) + V8 (parked). (3) The warm-target STORE is
-  RETIRED (owner decision: «идею с target пока убираем, оно билдит достаточно быстро в dev режиме
-  для тестов»): AGENTS.md "Session start" + "Delivery ritual" and TIMING.md now state the cold
-  build is the accepted cost; `sandbox_check.sh` still reports per-lane warmth but no longer points
-  at a hosted zip; the 1.2 G `russet-target.zip` deleted from the chat download dir.
-- **Files:** `DEBTS-verification.md`, `AGENTS.md` (2 bullets), `TIMING.md` (header + numbers),
-  `scripts/sandbox_check.sh` (verdict line), `PROGRESS.md` (this entry).
-- **Verified:** docs-only round — verify.sh ALL GATES GREEN, no src/ change so no rebuild;
-  rules.sh HARD-green; the three DEBTS quotes checked verbatim against the chat message.
-- **Owner-checks:** none born. Open: V30, V8 (parked).
-- **Commit title:** `Close V26/V28/V31 via chat; retire the warm-target store rule`
