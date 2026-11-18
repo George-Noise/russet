@@ -53,7 +53,7 @@
 | Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
 | Extra: --warm warm-up + session rules; debts ask = 4 newest; V33 closed (owner 2026-11-18) | done — live cold-lane test + hot gate | `sandbox_check.sh --warm` = probe + detached gates-lane compile (clippy + test --no-run, nothing executed — the mcp stdin trap impossible) with a double-start pid guard; session start = `sandbox_check.sh --warm` FIRST; wasm ad-hoc checks only for web-facing changes; the batched debts ask lists only the 4 newest open items (AGENTS.md Debts rule 7) |
 | Extra: permanent #[ignore] icon-dump + F16 rust-cache debt (owner 2026-11-18) | done — dump live-tested, gate skips it | `cargo test --profile gates -- --ignored icons_dump` = 14 PNGs (7 tools × 256/24 px) into /tmp/icon_dump, BLACK raster keeps the monochrome icons legible; plain gate = 156/168 passed + 1 ignored; rust-cache (`Swatinem/rust-cache@v2` after checkout) recorded as postponed F16 with the mechanism + limits written out, ci.yml untouched |
-| Extra: icons v2 + theme switcher UI+MCP + dump dir (owner 2026-11-18) | done — 4 dump-iteration rounds + FULL gate | outlines 1.25 pt theme-aware (light rim on dark — graphite/tip no longer blend); pipette = wide collar ring + dominant bulb (no needle); Line = S-curve; Shape = rect+circle; Text = serif T + small t; menu-bar Theme button (Dark/Light/System, System default) via `apply_theme` → `ThemePreference`; MCP `set_theme` same path; dump takes `RUSSET_ICON_DUMP_DIR` (~ → HOME) — README documents ~/Pictures; V35/V34 verified, V36/V37 born |
+| Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged; V36/V37 → "refinements delivered; re-check pending" |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -69,8 +69,11 @@ guard fired, a hot gate after the log's "finished") and closed V33 (NixOS + Wind
 test round added the permanent #[ignore] icon dump (explicit-only: 14 PNGs live-checked,
 the plain gate counts it as 1 ignored) and recorded CI rust-cache as F16 (owner: not now).
 The icons-v2 round (same day) iterated the redraw on contact sheets, added the theme
-switcher (menu bar + MCP `set_theme`, System default) and gate-verified it all: the gate
-run below is green with 160 default / 173 mcp passed (+1 ignored each).
+switcher (menu bar + MCP `set_theme`, System default) and gate-verified it all. The
+icons-v3 round (the owner's pass) reverted the rim to ONE dark rim over the now
+light-theme tool-button background, made the pipette glass a cylinder and moved the
+Theme button before Help: the gate run below is green with 160 default / 173 mcp
+passed (+1 ignored each).
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
 `app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
@@ -98,6 +101,33 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > it (V33's closure freed it — the tooling round's budget), the unoptimized-dev
 > entry followed that (the dump round's budget), and the verify.sh-hardening entry
 > completed the day's compactions (the icons-v2 round's budget).
+
+### 2026-11-18 — `Fix:` icons v3 (light-theme buttons, dark rim, cylinder glass) + Theme-button v2 — owner pass
+
+- **What:** the owner CHECKED V36 + V37 (chat) with refinements: (1) ICONS v3 — the v2
+  theme-aware light rim REVERTED to the ONE dark rim in both themes, and the tool buttons
+  carry the LIGHT-theme background in the dark theme instead (`windows.rs::tool_button`
+  picks resting/hover/selected fills from `egui::Visuals::light()` — one drawing reads
+  well everywhere, the owner's stated goal); the pipette's glass is a full CYLINDER with
+  a cone ONLY at the tip and the collar ring got wider (still "a bit like a needle"
+  before); (2) THEME-BUTTON v2 — the button reads just "Theme" (no ": Dark" suffix — the
+  picked theme is visible by opening it), the System radio is plainly "System" (no
+  "(follow the OS)"), and the button sits BETWEEN View and Help — Help ALWAYS last;
+  the now-unused `theme_label()` is gone. SPEC §3.1/§3.2 updated; DEBTS V36/V37 carry
+  the refined asks (first pass done, re-check pending).
+- **Files:** `src/app/tool_icons.rs` (rim revert + pipette cylinder/wider collar),
+  `tool_icons/tests.rs` (the rim test now asserts the DARK rim with BOTH raster colors
+  + no light rim), `src/app/windows.rs` (light-theme button fills), `src/app/menu.rs`
+  (Theme before Help, plain labels), `src/app.rs` (`theme_label` removed), `SPEC.md`
+  (§3.1, §3.2), `DEBTS-verification.md` (V36/V37 updated), PROGRESS (snapshot + entry
+  + stamp).
+- **Verified:** the pipette was iterated on a dump contact sheet (cylinder + wider
+  collar read clean at 24 px on BOTH the dark and light rows); the rim test covers the
+  revert (dark rim with WHITE and BLACK raster); FULL hot gate below; visual driver
+  ALL SCENARIOS GREEN (regression).
+- **Owner-checks:** V36 + V37 updated to "refinements delivered; re-check pending".
+  Open: V37, V36, V30 (parked), V8 (parked).
+- **Commit title:** `Icons v3: light-theme button background + one dark rim, cylinder glass, wider collar; Theme button before Help`
 
 ### 2026-11-18 — `Feat:` icons v2 + theme switcher (UI + MCP) + dump dir — owner request
 

@@ -370,18 +370,21 @@ fn text_icon_is_a_serif_curved_t_with_a_small_t() {
 }
 
 #[test]
-fn colored_outlines_follow_the_theme() {
-    // The dark theme's light text color → the LIGHT rim (the graphite and
-    // the loaded tip must not blend into the dark background); a dark raster
-    // color → the dark rim. The Pencil's silhouette carries both.
-    let dark = rasterize_tool_icon(Tool::Pencil, 48, Color32::WHITE).expect("px is in 1..=256");
-    assert!(
-        has_color(&dark, (216, 222, 228), 10),
-        "the dark theme needs a light rim"
-    );
-    let light = rasterize_tool_icon(Tool::Pencil, 48, Color32::BLACK).expect("px is in 1..=256");
-    assert!(
-        has_color(&light, (75, 58, 40), 10),
-        "the light theme keeps the dark rim"
-    );
+fn colored_outlines_are_dark_in_both_themes() {
+    // Owner v3 (after the V36 pass): ONE dark rim in BOTH themes — the tool
+    // buttons carry the light-theme background in the dark theme
+    // (windows.rs::tool_button), so the rim never needs to follow the theme.
+    // The Pencil's silhouette carries the rim; the raster color (which
+    // tracks the theme for the monochrome icons) must not change it.
+    for raster in [Color32::WHITE, Color32::BLACK] {
+        let pm = rasterize_tool_icon(Tool::Pencil, 48, raster).expect("px is in 1..=256");
+        assert!(
+            has_color(&pm, (75, 58, 40), 10),
+            "the dark rim is missing (raster {raster:?})"
+        );
+        assert!(
+            !has_color(&pm, (216, 222, 228), 10),
+            "the v2 light rim is gone — no theme-aware rims anymore"
+        );
+    }
 }

@@ -441,15 +441,6 @@ impl App {
         });
     }
 
-    /// The theme switcher button's label in the menu bar.
-    pub(super) fn theme_label(&self) -> &'static str {
-        match self.theme {
-            egui::ThemePreference::Dark => "Theme: Dark",
-            egui::ThemePreference::Light => "Theme: Light",
-            egui::ThemePreference::System => "Theme: System",
-        }
-    }
-
     /// Node-dot click in a History Tree window: the head moves to the
     /// clicked node and the canvas shows its PNG snapshot. A stroke right
     /// after that forks the tree git-style.

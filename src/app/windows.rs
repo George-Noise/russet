@@ -150,19 +150,23 @@ impl App {
         let selected = self.tools.tool == tool;
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(TOOL_BUTTON_PT, TOOL_BUTTON_PT), Sense::click());
-        // The selectable_label visuals: fill only when selected/hovered.
-        let visuals = ui.visuals();
+        // Owner request 2026-11-18 (after the V36 pass): the tool buttons
+        // keep the LIGHT-theme look in BOTH themes — one background lets the
+        // single icon set (its dark rim) read well everywhere, instead of
+        // drawing for two backgrounds. The states (selected/hover/rest) come
+        // from the light widget visuals, so the button is theme-independent.
+        let light = egui::Visuals::light();
         let (fill, stroke) = if selected {
-            (visuals.selection.bg_fill, visuals.selection.stroke)
+            (light.selection.bg_fill, light.selection.stroke)
         } else if response.hovered() {
             (
-                visuals.widgets.hovered.bg_fill,
-                visuals.widgets.hovered.bg_stroke,
+                light.widgets.hovered.bg_fill,
+                light.widgets.hovered.bg_stroke,
             )
         } else {
             (
-                visuals.widgets.inactive.bg_fill,
-                visuals.widgets.inactive.bg_stroke,
+                light.widgets.inactive.bg_fill,
+                light.widgets.inactive.bg_stroke,
             )
         };
         let painter = ui.painter_at(rect);

@@ -249,44 +249,34 @@ fn quad_pts(p0: (f32, f32), ctrl: (f32, f32), p1: (f32, f32), steps: usize) -> V
         .collect()
 }
 
-/// The colored icons' outline color follows the THEME (owner request
-/// 2026-11-18: the pencil's dark graphite and the brush's loaded tip blended
-/// into the dark background — the dark theme draws a LIGHT rim instead, the
-/// light theme keeps the dark one). `text` tracks the theme (the atlas
-/// rasterizes the monochrome icons in the theme's text color), so its
-/// luminance picks the rim; the dump test's raster color plays the same role.
-fn outline_color(text: Color32, on_light: Color32) -> Color32 {
-    let lum = text.r() as u16 + text.g() as u16 + text.b() as u16;
-    if lum > 3 * 128 {
-        Color32::from_rgb(216, 222, 228) // the light rim for the dark theme
-    } else {
-        on_light
-    }
-}
-
 /// The colored icons' outline width around the tool's silhouette (owner
-/// request 2026-11-18: "a bit thicker" — 0.9 vanished at 1.5rem in the dark
-/// theme; the wider rim is what separates the dark parts there).
+/// request 2026-11-18: "a bit thicker" — 0.9 vanished at 1.5rem). V3 (owner,
+/// after the V36 pass): the rim is the SAME dark color in BOTH themes — the
+/// tool buttons now keep the light-theme background in the dark theme
+/// (`windows.rs::tool_button`), so one dark rim reads well everywhere.
 const OUTLINE_W: f32 = 1.25;
 
 // ---------------------------------------------------------------------------
-// The icons (owner specs 2026-11-18; the v2 refinements the same day after
-// the owner's V35 pass: outlines thicker and theme-aware, the pipette's
-// collar widened into the classic fat band — at 1.5rem the slim collar read
-// as a needle — the Line icon is a CURVE (the tool has curve mode), the
-// Shape icon's diamond became a circle, and the Text icon is a serif-curved
-// T with a small lowercase t beside it). Colored: Pencil (classic yellow
-// body, wood cone, black graphite, metal ferrule, eraser on the end), Brush
-// (varnished-wood handle + metal ferrule + a ROUND volumetric bristle belly
-// with a loaded tip), Eraser (classic pink slab), Eyedropper (tapering glass
-// cone with a liquid stripe + WIDE metal collar + round rubber bulb — also
-// the canvas cursor). Monochrome (theme text color): Line, Shape, Text.
+// The icons (owner specs 2026-11-18; the v3 refinements after the owner's
+// V36 pass: the theme-aware light rim was REVERTED to the dark rim in both
+// themes — the icon buttons carry a light-theme background now — and the
+// pipette's glass became a full CYLINDER with a cone only at the tip plus a
+// wider collar; the v2 same-day refinements: outlines thicker, the pipette's
+// collar widened into the classic fat band, the Line icon a CURVE (the tool
+// has curve mode), the Shape icon's diamond became a circle, and the Text
+// icon is a serif-curved T with a small lowercase t beside it). Colored:
+// Pencil (classic yellow body, wood cone, black graphite, metal ferrule,
+// eraser on the end), Brush (varnished-wood handle + metal ferrule + a ROUND
+// volumetric bristle belly with a loaded tip), Eraser (classic pink slab),
+// Eyedropper (glass cylinder with a liquid stripe + WIDE metal collar +
+// round rubber bulb — also the canvas cursor). Monochrome (theme text
+// color): Line, Shape, Text.
 // ---------------------------------------------------------------------------
 
 /// The angle every hand-held tool is drawn at (tip pointing down-left).
 const TOOL_ANGLE: f32 = -45.0;
 
-fn draw_pencil(pm: &mut Pixmap, ts: Transform, oc: Color32) {
+fn draw_pencil(pm: &mut Pixmap, ts: Transform) {
     // Local space: horizontal pencil along y = 12, tip (graphite) on the
     // LEFT. The shaft is the uniform 9.6..14.4 band; the cone tapers from
     // the shaft to the tip, and the outline traces THAT silhouette (an
@@ -340,7 +330,7 @@ fn draw_pencil(pm: &mut Pixmap, ts: Transform, oc: Color32) {
             (4.6, 13.4),
         ],
         true,
-        oc,
+        Color32::from_rgb(75, 58, 40),
         OUTLINE_W,
     );
 }
@@ -350,7 +340,7 @@ fn draw_pencil(pm: &mut Pixmap, ts: Transform, oc: Color32) {
 /// ferrule and taper to the tip, the way classic paint apps draw brushes).
 /// The belly is split into light/dark facets along the centerline for the
 /// volume; the dark loaded tip (paint) stays.
-fn draw_brush(pm: &mut Pixmap, ts: Transform, oc: Color32) {
+fn draw_brush(pm: &mut Pixmap, ts: Transform) {
     // The bristle silhouette: tip (1.2, 12.0), round belly peaking at
     // x≈7.0 (half-height 2.7), closing slightly into the ferrule at 10.6
     // (half-height 2.0).
@@ -463,12 +453,12 @@ fn draw_brush(pm: &mut Pixmap, ts: Transform, oc: Color32) {
             .collect::<Vec<(f32, f32)>>()
             .as_slice(),
         true,
-        oc,
+        Color32::from_rgb(78, 58, 36),
         OUTLINE_W,
     );
 }
 
-fn draw_eraser(pm: &mut Pixmap, ts: Transform, oc: Color32) {
+fn draw_eraser(pm: &mut Pixmap, ts: Transform) {
     // The classic pink slab: a parallelogram split along its long midline.
     let a = (4.6, 13.2);
     let b = (14.2, 6.8);
@@ -478,8 +468,22 @@ fn draw_eraser(pm: &mut Pixmap, ts: Transform, oc: Color32) {
     let m2 = (16.9, 9.5);
     fill(pm, ts, &[a, b, m2, m1], Color32::from_rgb(249, 183, 196)); // top face
     fill(pm, ts, &[m1, m2, c, d], Color32::from_rgb(239, 140, 164)); // front face
-    stroke(pm, ts, &[a, b, c, d], true, oc, OUTLINE_W);
-    stroke(pm, ts, &[m1, m2], false, oc, OUTLINE_W);
+    stroke(
+        pm,
+        ts,
+        &[a, b, c, d],
+        true,
+        Color32::from_rgb(180, 90, 116),
+        OUTLINE_W,
+    );
+    stroke(
+        pm,
+        ts,
+        &[m1, m2],
+        false,
+        Color32::from_rgb(180, 90, 116),
+        OUTLINE_W,
+    );
 }
 
 /// The pipette's TIP in the logical space — the cursor hotspot's source
@@ -488,32 +492,30 @@ fn draw_eraser(pm: &mut Pixmap, ts: Transform, oc: Color32) {
 const PIPETTE_TIP: (f32, f32) = (1.6, 12.0);
 
 /// A classic eyedropper (owner request 2026-11-18: the old all-rectangle
-/// stick read as a pen — the glass now TAPERS from the collar to the fine
-/// tip and the rubber bulb is a ROUND cap, the way paint apps draw pipettes).
-/// The blue liquid fills the tip (the sample) and runs as a tapering stripe
-/// inside the glass barrel; the tip stays at [`PIPETTE_TIP`] (cursor hotspot).
-/// V2 (owner, after the V35 pass): at 1.5rem the slim collar read as a NEEDLE
-/// — the collar is now the classic WIDE band between the glass and the bulb
-/// ("the wide piece between the glass and the bulb made the image stick").
-fn draw_pipette(pm: &mut Pixmap, ts: Transform, oc: Color32) {
-    // The glass cone is deliberately WIDER than the liquid stripe plus two
-    // outline half-widths — otherwise the outline eats the glass and no
-    // opaque glass pixel survives rasterization (caught by the glass test).
-    // V2 (owner, after the V35 pass): a slim tube tapering over half the
-    // icon read as a needle — the barrel is now a nearly CYLINDRICAL tube
-    // (4.4–4.8 tall) that flares early and only tapers in the last stretch
-    // before the tip: spike → fat tube → wide ring → round bulb.
+/// stick read as a pen — the glass tapers to the fine tip and the rubber
+/// bulb is a ROUND cap, the way paint apps draw pipettes). The blue liquid
+/// fills the tip (the sample) and runs as a stripe inside the glass barrel;
+/// the tip stays at [`PIPETTE_TIP`] (cursor hotspot). V3 (owner, after the
+/// V36 pass — "still a bit like a needle"): the glass is a full CYLINDER
+/// (constant 4.4 height) with a cone ONLY at the tip, and the collar between
+/// glass and bulb got wider — spike → fat uniform tube → wide ring → bulb.
+fn draw_pipette(pm: &mut Pixmap, ts: Transform) {
+    // The glass: a cone only at the very tip (1.6 → 5.0), then a straight
+    // cylinder (5.0..15.0 at a constant 9.8..14.2). The cylinder is
+    // deliberately WIDER than the liquid stripe plus two outline
+    // half-widths — otherwise the outline eats the glass and no opaque
+    // glass pixel survives rasterization (caught by the glass test).
     fill(
         pm,
         ts,
         &[
             (1.6, 12.0),
-            (6.0, 11.0),
+            (5.0, 9.8),
             (15.0, 9.8),
             (15.0, 14.2),
-            (6.0, 13.0),
+            (5.0, 14.2),
         ],
-        Color32::from_rgb(213, 223, 231), // glass barrel: short cone + tube
+        Color32::from_rgb(213, 223, 231), // glass: short cone + cylinder
     );
     fill(
         pm,
@@ -524,19 +526,19 @@ fn draw_pipette(pm: &mut Pixmap, ts: Transform, oc: Color32) {
     fill(
         pm,
         ts,
-        &[(1.6, 12.0), (5.2, 11.4), (5.2, 12.6)],
+        &[(1.6, 12.0), (5.0, 11.6), (5.0, 12.4)],
         Color32::from_rgb(95, 168, 220), // liquid filling the tip (the sample)
     );
     fill(
         pm,
         ts,
-        &[(15.0, 9.2), (17.4, 9.2), (17.4, 14.8), (15.0, 14.8)],
-        Color32::from_rgb(94, 103, 112), // the wide metal collar ring
+        &[(15.0, 8.8), (18.0, 8.8), (18.0, 15.2), (15.0, 15.2)],
+        Color32::from_rgb(94, 103, 112), // the WIDE metal collar ring
     );
     // The rubber bulb: a full circle pushed ONTO the collar — the bulb is
-    // the icon's biggest red mass (dominating the collar: d 6.2 vs the
-    // collar's 5.6 height), the way a real pipette reads. The silhouette
-    // arc below shares the same circle: center (19.9, 12.0), r 3.1.
+    // the icon's biggest red mass (d 6.2), the way a real pipette reads.
+    // The silhouette arc below shares the same circle: center (19.9, 12.0),
+    // r 3.1.
     fill(
         pm,
         ts,
@@ -548,19 +550,19 @@ fn draw_pipette(pm: &mut Pixmap, ts: Transform, oc: Color32) {
         ts,
         [
             (1.6, 12.0),
-            (6.0, 11.0),
+            (5.0, 9.8),
             (15.0, 9.8),
-            (15.0, 9.2),
-            (17.4, 9.2),
+            (15.0, 8.8),
+            (18.0, 8.8),
         ]
         .iter()
-        .chain(arc_pts(19.9, 12.0, 3.1, 228.2, 491.8, 28).iter())
-        .chain([(17.4, 14.8), (15.0, 14.8), (15.0, 14.2), (6.0, 13.0)].iter())
+        .chain(arc_pts(19.9, 12.0, 3.1, 239.3, 480.7, 28).iter())
+        .chain([(18.0, 15.2), (15.0, 15.2), (15.0, 14.2), (5.0, 14.2)].iter())
         .copied()
         .collect::<Vec<(f32, f32)>>()
         .as_slice(),
         true,
-        oc,
+        Color32::from_rgb(58, 68, 77),
         OUTLINE_W,
     );
 }
@@ -622,26 +624,10 @@ fn draw_text(pm: &mut Pixmap, ts: Transform, mono: Color32) {
 pub(super) fn rasterize_tool_icon(tool: Tool, px: usize, text: Color32) -> Option<Pixmap> {
     let mut pm = Pixmap::new(px as u32, px as u32)?;
     match tool {
-        Tool::Pencil => draw_pencil(
-            &mut pm,
-            icon_transform(px, TOOL_ANGLE),
-            outline_color(text, Color32::from_rgb(75, 58, 40)),
-        ),
-        Tool::Brush => draw_brush(
-            &mut pm,
-            icon_transform(px, TOOL_ANGLE),
-            outline_color(text, Color32::from_rgb(78, 58, 36)),
-        ),
-        Tool::Eraser => draw_eraser(
-            &mut pm,
-            icon_transform(px, 0.0),
-            outline_color(text, Color32::from_rgb(180, 90, 116)),
-        ),
-        Tool::Eyedropper => draw_pipette(
-            &mut pm,
-            icon_transform(px, TOOL_ANGLE),
-            outline_color(text, Color32::from_rgb(58, 68, 77)),
-        ),
+        Tool::Pencil => draw_pencil(&mut pm, icon_transform(px, TOOL_ANGLE)),
+        Tool::Brush => draw_brush(&mut pm, icon_transform(px, TOOL_ANGLE)),
+        Tool::Eraser => draw_eraser(&mut pm, icon_transform(px, 0.0)),
+        Tool::Eyedropper => draw_pipette(&mut pm, icon_transform(px, TOOL_ANGLE)),
         Tool::Line => draw_line(&mut pm, icon_transform(px, 0.0), text),
         Tool::Shape => draw_shape(&mut pm, icon_transform(px, 0.0), text),
         Tool::Text => draw_text(&mut pm, icon_transform(px, 0.0), text),
