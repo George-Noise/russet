@@ -1630,3 +1630,30 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **Owner-checks:** V35 born (the redrawn-icons look pass on Windows). Open: V35 (new), V34
   (the unoptimized-dev pass), V33 (About), V30 (parked), V8 (parked).
 - **Commit title:** `Redraw brush + pipette icons; equal Tools-grid gaps (egui Grid interact_size quirk)`
+
+### 2026-11-18 — `Tooling:` warm-up flag + session rules; debts-ask trimmed; V33 closed — owner request
+
+- **What:** four owner orders (2026-11-18), one docs/tooling round, NO src/ change:
+  (1) `sandbox_check.sh --warm` — after the usual probe it starts a DETACHED gates-lane warm-up
+  (clippy + `cargo test --no-run --features mcp`: exactly the compile work verify.sh does, nothing
+  EXECUTED — no test binary spawns, so the mcp stdin trap is impossible here even without the
+  shield), a pid-file guard blocks double starts; the session-start rule now runs
+  `sandbox_check.sh --warm` FIRST — the done-gate is hot when the task ends (in-sandbox
+  compilation; the retired warm-target STORE stays retired); (2) AGENTS.md wasm-check economy:
+  ad-hoc `cargo check --target wasm32-unknown-unknown` ONLY for web-facing changes — neither
+  verify.sh nor CI runs wasm, so an unneeded run is pure lost minutes; (3) debts rule 7
+  (AGENTS.md + DEBTS-verification.md): the batched ask lists ONLY the 4 newest open items,
+  newest first — the files keep every open item; (4) V33 verified (owner: About checked on
+  NixOS AND Windows).
+- **Files:** `scripts/sandbox_check.sh` (--warm), `AGENTS.md` (session-start bullet, wasm
+  bullet, Debts rule 7), `DEBTS-verification.md` (presenting bullet, V33 → verified, V33's
+  source ref → archive), `TIMING.md` (cold warm-up row), `PROGRESS.md` (compaction: the About
+  entry moved; snapshot row + this entry + stamp).
+- **Verified:** live test on a truly cold lane (`rm -rf target/gates`): `--warm` returned in
+  0.6 s with the background build compiling (log /tmp/russet_warm_build.log), a second `--warm`
+  hit the guard ("already running, pid N"), and after the log's "finished" the same-session
+  verify.sh ran HOT (this round's gate run below); rules.sh HARD-green; no src/ change — no
+  wasm check (the new economy rule's first application).
+- **Owner-checks:** V33 closed. Open after this edit: V35 (the icon look), V34 (the
+  unoptimized-dev pass), V30 (parked), V8 (parked).
+- **Commit title:** `Add sandbox_check --warm warm-up; AGENTS wasm-economy + debts-ask rules; close V33`

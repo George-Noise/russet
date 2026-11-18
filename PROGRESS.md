@@ -55,6 +55,7 @@
 | Extra: permanent #[ignore] icon-dump + F16 rust-cache debt (owner 2026-11-18) | done — dump live-tested, gate skips it | `cargo test --profile gates -- --ignored icons_dump` = 14 PNGs (7 tools × 256/24 px) into /tmp/icon_dump, BLACK raster keeps the monochrome icons legible; plain gate = 156/168 passed + 1 ignored; rust-cache (`Swatinem/rust-cache@v2` after checkout) recorded as postponed F16 with the mechanism + limits written out, ci.yml untouched |
 | Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged |
 | Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
+| Extra: Tools window v5 — the bar back, only the label hidden (owner pass 2026-11-18) | done — gate + driver + magnet check | `Window::new("")` + the explicit `tools_window_id()` renders the title bar WITHOUT the text (egui derives the Id from the title even when empty); `.open` plumbing restored (the ✕ is back); AGENTS quirk rewritten (the empty-title recipe); .gitignore keeps `__pycache__`/`*.pyc` out of the artifacts; V36 → v5 re-check pending |
 
 **Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
 HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
@@ -76,7 +77,9 @@ light-theme tool-button background, made the pipette glass a cylinder and moved 
 Theme button before Help. The icons-v4 round (the owner approved v3) fixed the mono
 ink (`TOOL_INK`) — the atlas went fully theme-independent (key = ppp) — dimmed the
 buttons a step, put the eraser's rim in the set and removed the Tools window's title
-bar: the gate run below is green with 161 default / 174 mcp passed (+1 ignored each).
+bar (v4; the v5 round restored the bar and hides only the label — an empty title
+string + the explicit id): the gate run below is green with 161 default / 174 mcp
+passed (+1 ignored each).
 Zero Cyrillic repo-wide. Web/trunk lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
 `app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
@@ -103,12 +106,36 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > joined them in the evening (the icon-redraw round), the About entry followed
 > it (V33's closure freed it — the tooling round's budget), the unoptimized-dev
 > entry followed that (the dump round's budget), the verify.sh-hardening entry
-> completed the day's compactions (the icons-v2 round's budget), and the
-> icon-redraw entry moved during the icons-v4 round's budget.
+> completed the day's compactions (the icons-v2 round's budget), the
+> icon-redraw entry moved during the icons-v4 round's budget, and the
+> Tooling entry moved during the v5 round's budget.
+
+### 2026-11-18 — `Fix:` Tools window v5: the bar is back, only the label hidden — owner pass
+
+- **What:** the owner corrected the v4 window change: the whole bar had vanished while only
+  the title TEXT had to go. Fix: the title is an EMPTY STRING — `title_ui` builds the bar
+  (button atoms + drag strip) regardless of the text (`window.rs`), so the bar renders
+  unchanged minus the label; the Id stays EXPLICIT (`tools_window_id()` — egui derives it
+  from the title, an empty one included; `Window::id` doc: "Required if the title changes,
+  or is shared with another window"); the ✕ is back via the restored `.open` plumbing
+  (plus View ▸ Tools). AGENTS quirk rewritten (the empty-title recipe; the
+  `title_bar(false)` semantics kept as general knowledge); SPEC §3.2 updated. Also carried
+  from the interrupted round: `__pycache__/` + `*.pyc` into .gitignore (the owner deletes
+  the stray mcp_smoke.pyc by hand for now, but the next artifact must not re-add it; the
+  cache leaks from visual_driver.py's `from mcp_smoke import Russet`).
+- **Files:** `src/app/windows.rs` (empty title, open plumbing), `SPEC.md` (§3.2),
+  `AGENTS.md` (quirk v5), `.gitignore`, `DEBTS-verification.md` (V36 → v5), `PROGRESS.md`
+  (compaction: the Tooling entry → archive; snapshot + entry + stamp).
+- **Verified:** FULL hot gate ALL GATES GREEN 15 s (161 default / 174 mcp); headless visual
+  driver ALL SCENARIOS GREEN; gui_magnet_check EXIT=0 (the geometry re-measured with the
+  bar back); the fresh zip carries ZERO `__pycache__` entries (grep -c = 0).
+- **Owner-checks:** V36 → "v3 approved; v4 bar over-removed, v5 label-only delivered —
+  re-check pending". Open: V36, V30 (parked), V8 (parked).
+- **Commit title:** `Tools window: keep the title bar, hide only the label (empty title + explicit id)`
 
 ### 2026-11-18 — `Fix:` icons v4 (eraser rim, dimmed buttons, fixed ink) + title-bar-less Tools — owner pass
 
-- **What:** the owner APPROVED the v3 pass ("отлично, гораздо лучше") and ordered four
+- **What:** the owner APPROVED the v3 pass ("much better now") and ordered four
   leftovers: (1) the ERASER's outline joined the set's style — dark plum (92,52,66)
   instead of the light pink that blended with the faces; (2) the tool buttons' REST/HOVER
   fills dimmed A STEP (−14/channel: gray 230 → 216 rest, 220 → 206 hover — the full
@@ -215,30 +242,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none born (F16 is owner-gated work, not a human check). Open: V35 (the
   icon look), V34 (the unoptimized-dev pass), V30 (parked), V8 (parked).
 - **Commit title:** `Add the permanent #[ignore] icon-dump test; record CI rust-cache as F16`
-
-### 2026-11-18 — `Tooling:` warm-up flag + session rules; debts-ask trimmed; V33 closed — owner request
-
-- **What:** four owner orders (2026-11-18), one docs/tooling round, NO src/ change:
-  (1) `sandbox_check.sh --warm` — after the usual probe it starts a DETACHED gates-lane warm-up
-  (clippy + `cargo test --no-run --features mcp`: exactly the compile work verify.sh does, nothing
-  EXECUTED — no test binary spawns, so the mcp stdin trap is impossible here even without the
-  shield), a pid-file guard blocks double starts; the session-start rule now runs
-  `sandbox_check.sh --warm` FIRST — the done-gate is hot when the task ends (in-sandbox
-  compilation; the retired warm-target STORE stays retired); (2) AGENTS.md wasm-check economy:
-  ad-hoc `cargo check --target wasm32-unknown-unknown` ONLY for web-facing changes — neither
-  verify.sh nor CI runs wasm, so an unneeded run is pure lost minutes; (3) debts rule 7
-  (AGENTS.md + DEBTS-verification.md): the batched ask lists ONLY the 4 newest open items,
-  newest first — the files keep every open item; (4) V33 verified (owner: About checked on
-  NixOS AND Windows).
-- **Files:** `scripts/sandbox_check.sh` (--warm), `AGENTS.md` (session-start bullet, wasm
-  bullet, Debts rule 7), `DEBTS-verification.md` (presenting bullet, V33 → verified, V33's
-  source ref → archive), `TIMING.md` (cold warm-up row), `PROGRESS.md` (compaction: the About
-  entry moved; snapshot row + this entry + stamp).
-- **Verified:** live test on a truly cold lane (`rm -rf target/gates`): `--warm` returned in
-  0.6 s with the background build compiling (log /tmp/russet_warm_build.log), a second `--warm`
-  hit the guard ("already running, pid N"), and after the log's "finished" the same-session
-  verify.sh ran HOT (this round's gate run below); rules.sh HARD-green; no src/ change — no
-  wasm check (the new economy rule's first application).
-- **Owner-checks:** V33 closed. Open after this edit: V35 (the icon look), V34 (the
-  unoptimized-dev pass), V30 (parked), V8 (parked).
-- **Commit title:** `Add sandbox_check --warm warm-up; AGENTS wasm-economy + debts-ask rules; close V33`
