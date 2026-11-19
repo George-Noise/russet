@@ -1,5 +1,29 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-18 — `Fix:` Tools window v5: the bar is back, only the label hidden — owner pass
+
+- **What:** the owner corrected the v4 window change: the whole bar had vanished while only
+  the title TEXT had to go. Fix: the title is an EMPTY STRING — `title_ui` builds the bar
+  (button atoms + drag strip) regardless of the text (`window.rs`), so the bar renders
+  unchanged minus the label; the Id stays EXPLICIT (`tools_window_id()` — egui derives it
+  from the title, an empty one included; `Window::id` doc: "Required if the title changes,
+  or is shared with another window"); the ✕ is back via the restored `.open` plumbing
+  (plus View ▸ Tools). AGENTS quirk rewritten (the empty-title recipe; the
+  `title_bar(false)` semantics kept as general knowledge); SPEC §3.2 updated. Also carried
+  from the interrupted round: `__pycache__/` + `*.pyc` into .gitignore (the owner deletes
+  the stray mcp_smoke.pyc by hand for now, but the next artifact must not re-add it; the
+  cache leaks from visual_driver.py's `from mcp_smoke import Russet`).
+- **Files:** `src/app/windows.rs` (empty title, open plumbing), `SPEC.md` (§3.2),
+  `AGENTS.md` (quirk v5), `.gitignore`, `DEBTS-verification.md` (V36 → v5), `PROGRESS.md`
+  (compaction: the Tooling entry → archive; snapshot + entry + stamp).
+- **Verified:** FULL hot gate ALL GATES GREEN 15 s (161 default / 174 mcp); headless visual
+  driver ALL SCENARIOS GREEN; gui_magnet_check EXIT=0 (the geometry re-measured with the
+  bar back); the fresh zip carries ZERO `__pycache__` entries (grep -c = 0).
+- **Owner-checks:** V36 → "v3 approved; v4 bar over-removed, v5 label-only delivered —
+  re-check pending". Open: V36, V30 (parked), V8 (parked).
+- **Commit title:** `Tools window: keep the title bar, hide only the label (empty title + explicit id)`
+
+
 ### 2026-11-18 — `Fix:` icons v4 (eraser rim, dimmed buttons, fixed ink) + title-bar-less Tools — owner pass
 
 - **What:** the owner APPROVED the v3 pass ("much better now") and ordered four

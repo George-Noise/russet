@@ -5,7 +5,11 @@
 //! OWNS: parsing argv into [`LaunchConfig`] (the pure [`LaunchConfig::parse`]
 //! with its [`LaunchConfig::from_env`] adapter) and applying the parsed
 //! choices to `App` ([`LaunchConfig::apply_to`]; the CANVAS SIZE is read by
-//! `App::build` directly — it constructs the buffers). NEIGHBOURS: `main.rs`
+//! `App::build` directly — it constructs the buffers). The color-hex TEXT
+//! SYNTAX is owned here too as [`parse_hex_components`] — one primitive for
+//! BOTH the `--primary`/`--secondary` flags and the Palette window's hex
+//! field (`super::windows`, owner request 2026-11-19), so the two can never
+//! drift apart. NEIGHBOURS: `main.rs`
 //! calls `from_env` / `report_warnings`, OWNS the `--help` TEXT (printing is
 //! entry-point logic — the web build has no argv and never prints it; the
 //! platform cfg lives in `main.rs` per AGENTS.md "Repo facts") and exits on
@@ -234,9 +238,16 @@ impl LaunchConfig {
     }
 }
 
+/// The color-hex TEXT SYNTAX shared by the `--primary`/`--secondary` launch
+/// flags and the Palette window's hex field (owner request 2026-11-19):
 /// `RRGGBB` with an optional leading `#`; `RGB` (3 digits, each doubled:
-/// `#0f0` = `#00ff00`) and `RRGGBBAA` (explicit alpha) also work.
-pub(crate) fn parse_color(value: &str) -> Option<Color32> {
+/// `#0f0` = `#00ff00`) and `RRGGBBAA` (explicit alpha) also work;
+/// surrounding spaces are fine. Returns the RGB triple plus the alpha ONLY
+/// when the text carried one — the CALLER decides the fallback, which is
+/// the one behavioral difference between the two consumers: the launch
+/// flags default a missing alpha to opaque, the hex field keeps the well's
+/// current alpha (the way its R/G/B DragValues don't touch it either).
+pub(crate) fn parse_hex_components(value: &str) -> Option<([u8; 3], Option<u8>)> {
     let trimmed = value.trim();
     let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
     if hex.is_empty() || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -251,26 +262,18 @@ pub(crate) fn parse_color(value: &str) -> Option<Color32> {
             .map(|digit| digit * 17) // one hex digit doubled: F -> FF
     };
     match hex.len() {
-        3 => Some(Color32::from_rgba_unmultiplied(
-            digit(0)?,
-            digit(1)?,
-            digit(2)?,
-            255,
-        )),
-        6 => Some(Color32::from_rgba_unmultiplied(
-            pair(0)?,
-            pair(2)?,
-            pair(4)?,
-            255,
-        )),
-        8 => Some(Color32::from_rgba_unmultiplied(
-            pair(0)?,
-            pair(2)?,
-            pair(4)?,
-            pair(6)?,
-        )),
+        3 => Some(([digit(0)?, digit(1)?, digit(2)?], None)),
+        6 => Some(([pair(0)?, pair(2)?, pair(4)?], None)),
+        8 => Some(([pair(0)?, pair(2)?, pair(4)?], Some(pair(6)?))),
         _ => None,
     }
+}
+
+/// The launch-argument color form of [`parse_hex_components`]: a missing
+/// alpha means OPAQUE (the flags set a startup color, not a partial edit).
+pub(crate) fn parse_color(value: &str) -> Option<Color32> {
+    parse_hex_components(value)
+        .map(|([r, g, b], alpha)| Color32::from_rgba_unmultiplied(r, g, b, alpha.unwrap_or(255)))
 }
 
 /// The `--tool` name → [`Tool`] map: case-insensitive, the names of

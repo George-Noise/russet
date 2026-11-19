@@ -37,20 +37,20 @@
 | Extra: Tools strip fits the window — variant A2 (owner 2026-11-19) | done — gates + probes green | the title strip's HORIZONTAL padding zeroed via `Window::title_frame` (`windows.rs::tools_title_frame` = egui's default window frame with `inner_margin.left/right = 0`): the strip paints EXACTLY the window's width instead of ~11 pt past it, the ✕ no longer hangs half outside, BOTH buttons kept, the strip's height/fill/corners unchanged (variant A `Margin::ZERO` shrank the strip vertically — not picked); +1 regression test on the `__title_click` geometry; `gui_collapse_check.sh` locate fixed (the idle crosshair cursor fooled it); V38 + V36 verified in chat, V39 born |
 | Extra: Tools panel hides while collapsed (owner 2026-11-19) | done — gates + click probe green | the magnetized settings panel hides while the Tools window is collapsed to its title bar and returns on expand (`windows.rs::settings_panel_shown` on `Window::show`'s `inner.is_some()`); the header-width PROPOSAL delivered (measured options, no header code change — the owner picks); V38 born |
 | Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
+| Extra: palette alpha + a hex field in the color wells (owner 2026-11-19) | done — gates + driver green | `Alpha::OnlyBlend` (the picker's alpha slider + the A DragValue; the eyedropper's alpha no longer erased on popup open) + a "Hex" row parsing the launch-flag syntax (short form keeps the well's alpha, 8 digits sets it, `#RRGGBBAA` display, canonicalized on blur); one shared `launch.rs::parse_hex_components` feeds both consumers; windows/tests split by topic (rule 7) + 5 color-well tests; windows.rs 571 — OVER guard, the palette split PROPOSED (owner-gated); V40 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s): fmt clean,
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 8 s): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-163 default / 176 mcp green (+1 ignored each — the permanent #[ignore] icon dump) with the
-title-strip-fit regression test (verified to FAIL pre-fix); the visual driver ALL SCENARIOS
-GREEN and the `scripts/gui_collapse_check.sh` click probe ALL GREEN under Xvfb
-(expanded→collapsed→re-expanded, PIL-located buttons, the cursor-run locate fix) —
+168 default / 181 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +5
+color-well tests this round) with the alpha/hex popup logic covered by the pure helpers and
+the visual driver ALL SCENARIOS GREEN (15 checks) under Xvfb through the gates binary —
 Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
 2026-11-16 (see the archived log history);
-every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569
-(the 2026-11-19 owner-approved split retired the last agent-side exception:
-`app/tool_icons.rs` 673 → 308 + the child `app/tool_icons/draw.rs` 400).
+every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 and
+`app/windows.rs` 571 (this round's growth; the palette-window split is PROPOSED,
+owner-gated — never split mid-task).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -78,7 +78,40 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > moved during the wording round's budget, and the icons-v2 entry moved
 > during the 2026-11-19 collapse round's budget; the icons-v3 and
 > language-rule entries moved during the 2026-11-19 header round's budget;
-> the icons-v4 entry moved during the 2026-11-19 split round's budget.
+> the icons-v4 entry moved during the 2026-11-19 split round's budget, and
+> the v5 entry moved during the 2026-11-19 alpha+hex round's budget.
+
+### 2026-11-19 — `Feat:` the color wells edit alpha + a hex field under the picker — owner request
+
+- **What:** the owner asked for alpha in the custom-color picker and, bonus, a hex field
+  ("hex is needed too often"). `windows.rs::color_swell_button`: `Alpha::Opaque` →
+  `Alpha::OnlyBlend` — egui's alpha slider + the A DragValue appear, and egui stops forcing
+  the stored alpha to 1.0 (which silently erased an Eyedropper-picked translucent pixel on
+  the first popup open); the pipeline composites alpha end-to-end already. NEW: a "Hex" row
+  under the picker — displays `#RRGGBBAA`, parses the launch-flag syntax (`#RGB` doubled,
+  `#RRGGBB`, `#RRGGBBAA`, `#`/spaces optional): 8 digits SET the alpha, a short form KEEPS
+  the well's current alpha; the raw text lives in egui's per-well `IdTypeMap` (a frame-rebuilt
+  string would fight the caret), re-seeded on popup open / outside changes, canonicalized on
+  blur; invalid text applies nothing. One shared primitive `launch.rs::parse_hex_components`
+  (the old `parse_color` core extracted) feeds BOTH the flags and the field — the syntax
+  cannot drift; launch behavior unchanged (a missing alpha stays opaque). egui's premultiplied
+  `Color32` storage can nudge a translucent channel ±1 — an app-wide property, now noted in
+  the tests + the AGENTS quirk.
+- **Files:** `src/app/windows.rs` (the popup + `hex_edited_color`/`format_color_hex`; 571
+  lines — OVER the 500 guard: a palette-window split PROPOSED at task end, owner-gated),
+  `src/app/launch.rs` (the extraction + docstring), NEW `src/app/windows/tests/{common,
+  settings_panel,tools_strip,color_well}.rs` (the suite split by topic, Tests rule 7 — the
+  old tests.rs sat at 292 lines) + 5 color-well tests, `SPEC.md` §3.3, `AGENTS.md` (+1 quirk:
+  egui 0.37 has NO hex entry in the picker anywhere; the split's test path fixed),
+  `DEBTS-verification.md` (V40 born), PROGRESS (snapshot + entry + stamp + compaction),
+  TIMING (2 rows).
+- **Verified:** FULL hot gate ALL GATES GREEN 8 s — 168 default / 181 mcp green (+1 ignored
+  each; +5 color-well tests, the moved ones byte-identical); the visual driver ALL SCENARIOS
+  GREEN (15 checks) under Xvfb through the gates binary. No wasm lane: not a web-facing
+  change (the session rule).
+- **Owner-checks:** V40 born (the palette alpha + hex pass on Windows). Open: V40, V30
+  (parked), V8 (parked).
+- **Commit title:** `Palette: the color picker edits alpha (OnlyBlend) + a #RRGGBBAA hex field under it`
 
 ### 2026-11-19 — `Refactor:` tool_icons.rs split — the icon drawings to the child draw module — owner-approved
 
@@ -164,26 +197,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V38 born (the collapse pass on Windows). Open: V38, V36 (v5 re-check
   pending), V30 (parked), V8 (parked).
 - **Commit title:** `Tools window: hide the magnetized settings panel while collapsed`
-
-### 2026-11-18 — `Fix:` Tools window v5: the bar is back, only the label hidden — owner pass
-
-- **What:** the owner corrected the v4 window change: the whole bar had vanished while only
-  the title TEXT had to go. Fix: the title is an EMPTY STRING — `title_ui` builds the bar
-  (button atoms + drag strip) regardless of the text (`window.rs`), so the bar renders
-  unchanged minus the label; the Id stays EXPLICIT (`tools_window_id()` — egui derives it
-  from the title, an empty one included; `Window::id` doc: "Required if the title changes,
-  or is shared with another window"); the ✕ is back via the restored `.open` plumbing
-  (plus View ▸ Tools). AGENTS quirk rewritten (the empty-title recipe; the
-  `title_bar(false)` semantics kept as general knowledge); SPEC §3.2 updated. Also carried
-  from the interrupted round: `__pycache__/` + `*.pyc` into .gitignore (the owner deletes
-  the stray mcp_smoke.pyc by hand for now, but the next artifact must not re-add it; the
-  cache leaks from visual_driver.py's `from mcp_smoke import Russet`).
-- **Files:** `src/app/windows.rs` (empty title, open plumbing), `SPEC.md` (§3.2),
-  `AGENTS.md` (quirk v5), `.gitignore`, `DEBTS-verification.md` (V36 → v5), `PROGRESS.md`
-  (compaction: the Tooling entry → archive; snapshot + entry + stamp).
-- **Verified:** FULL hot gate ALL GATES GREEN 15 s (161 default / 174 mcp); headless visual
-  driver ALL SCENARIOS GREEN; gui_magnet_check EXIT=0 (the geometry re-measured with the
-  bar back); the fresh zip carries ZERO `__pycache__` entries (grep -c = 0).
-- **Owner-checks:** V36 → "v3 approved; v4 bar over-removed, v5 label-only delivered —
-  re-check pending". Open: V36, V30 (parked), V8 (parked).
-- **Commit title:** `Tools window: keep the title bar, hide only the label (empty title + explicit id)`

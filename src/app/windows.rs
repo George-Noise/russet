@@ -1,6 +1,8 @@
 //! The floating "Tools" and "Palette" windows (SPEC §3.2 / §3.3), their
 //! stable area ids and the primary/secondary color well with the built-in
-//! egui color picker. A child module of `app`, so it can touch `App`'s
+//! egui color picker — the alpha channel editable (`Alpha::OnlyBlend`) and
+//! a hex field under the picker (owner request 2026-11-19). A child module
+//! of `app`, so it can touch `App`'s
 //! private fields; `app.rs` stays the orchestrator. Their first-open
 //! positions are set here (§3.2/§3.3: `Window::pivot` + `default_pos`);
 //! where they sit afterwards (drop-time anchoring, resize repositioning)
@@ -13,6 +15,7 @@
 use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 
 use super::App;
+use super::launch::parse_hex_components;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use super::tool_icons;
 use crate::palette::{COLORS, COLS, GRID_WIDTH, ROWS, TILE};
@@ -433,6 +436,21 @@ impl App {
 /// A primary/secondary color well: keeps the classic swatch look, but a
 /// click opens egui's built-in color picker for THIS color (each well edits
 /// its own color; there are no captions).
+///
+/// The picker edits the ALPHA too (owner request 2026-11-19):
+/// `Alpha::OnlyBlend` instead of the former `Alpha::Opaque` — egui shows its
+/// own alpha slider and the A DragValue, and stops forcing the stored alpha
+/// to 1.0 (which silently erased an Eyedropper-picked translucent pixel on
+/// the first popup open). The drawing pipeline already composites alpha
+/// end-to-end (`tools.rs`), so a translucent well paints translucently.
+///
+/// Under the picker sits a hex field (owner request 2026-11-19: "hex is
+/// needed too often") parsing the SAME syntax as the `--primary`/
+/// `--secondary` launch flags (`super::launch::parse_hex_components`):
+/// `#RGB`, `#RRGGBB`, `#RRGGBBAA`, the leading `#` optional — a short form
+/// keeps the well's current alpha, an 8-digit form sets it. The field's raw
+/// text lives in egui's per-well memory (`IdTypeMap`): a string
+/// rebuilt from the color every frame would fight the caret while typing.
 fn color_swell_button(ui: &mut egui::Ui, color: &mut Color32, size: f32) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), Sense::click());
     ui.painter().rect_filled(rect, 2.0, *color);
@@ -448,21 +466,105 @@ fn color_swell_button(ui: &mut egui::Ui, color: &mut Color32, size: f32) -> egui
     // color every frame and written back only when the picker changed it.
     let mut hsva = egui::ecolor::Hsva::from(*color);
     let mut button_response = response;
+    let popup_id = button_response.id.with("color_popup");
+    // The hex field's identities, per well (the two wells never share text).
+    let hex_text_id = button_response.id.with("color_hex_text");
+    let hex_edit_id = button_response.id.with("color_hex_edit");
+    // Is the popup OPEN as of the PREVIOUS frame? `is_id_open` reads the
+    // stored state before `.show` runs this frame — exactly the open
+    // transition (egui's own `color_edit_button_hsva` reads it the same
+    // way). A freshly opened popup re-seeds the hex text below, because the
+    // stored text went stale while the popup was closed (a preset click,
+    // Swap, a launch flag can all have changed the color meanwhile).
+    let was_open = egui::Popup::is_id_open(ui.ctx(), popup_id);
     egui::Popup::menu(&button_response)
-        .id(button_response.id.with("color_popup"))
+        .id(popup_id)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             ui.spacing_mut().slider_width = 275.0;
-            if egui::color_picker::color_picker_hsva_2d(
+            let mut changed = egui::color_picker::color_picker_hsva_2d(
                 ui,
                 &mut hsva,
-                egui::color_picker::Alpha::Opaque,
-            ) {
+                egui::color_picker::Alpha::OnlyBlend,
+            );
+            if changed {
+                // The sliders only mutate `hsva` — the picker's own
+                // writeback (as egui's button does it).
                 *color = Color32::from(hsva);
+            }
+            // Re-seed the hex text whenever the color changed OUTSIDE the
+            // field (fresh popup = stale text; the sliders just moved).
+            // While the FIELD edits, its raw text stands — the picker part
+            // only changes on pointer drags, and a typing frame never drags.
+            if !was_open || changed {
+                let seed = format_color_hex(*color);
+                ui.ctx()
+                    .memory_mut(|mem| mem.data.insert_temp(hex_text_id, seed));
+            }
+            ui.horizontal(|ui| {
+                ui.label("Hex");
+                let mut text = ui
+                    .ctx()
+                    .memory(|mem| mem.data.get_temp::<String>(hex_text_id))
+                    .unwrap_or_default();
+                let field = ui.add(
+                    egui::TextEdit::singleline(&mut text)
+                        .id(hex_edit_id)
+                        // Monospace: the digits line up while editing.
+                        .font(egui::TextStyle::Monospace),
+                );
+                let edited = field.changed();
+                let lost_focus = field.lost_focus();
+                if edited {
+                    // The direct `*color` write keeps the parsed hex
+                    // BIT-EXACT — routing it through `hsva` first would let
+                    // the HSV↔RGB float roundtrip nudge the entered bytes.
+                    if let Some(new) = hex_edited_color(*color, &text) {
+                        *color = new;
+                        hsva = egui::ecolor::Hsva::from(new);
+                        changed = true;
+                    }
+                }
+                if lost_focus {
+                    // The edit is over (Enter/click-elsewhere): the field
+                    // shows the canonical form of the FINAL color — a valid
+                    // entry gets normalized, invalid text reverts to the
+                    // current color.
+                    let canonical = format_color_hex(*color);
+                    ui.ctx()
+                        .memory_mut(|mem| mem.data.insert_temp(hex_text_id, canonical));
+                } else {
+                    // Keep the raw text (mid-typing state included).
+                    ui.ctx()
+                        .memory_mut(|mem| mem.data.insert_temp(hex_text_id, text));
+                }
+            });
+            if changed {
                 button_response.mark_changed();
             }
         });
     button_response
+}
+
+/// The hex field's write-back (owner request 2026-11-19): the RGB comes
+/// from the text; the alpha comes from the text only when it was written
+/// (`RRGGBBAA`, 8 digits) — a short form (`#RGB`/`#RRGGBB`) keeps the
+/// well's current alpha, the same way the R/G/B DragValues don't touch it.
+/// `None` on any other text (also while the user is mid-typing a partial
+/// value) — the field then simply applies nothing.
+fn hex_edited_color(current: Color32, text: &str) -> Option<Color32> {
+    let [_, _, _, alpha] = current.to_srgba_unmultiplied();
+    parse_hex_components(text).map(|([r, g, b], parsed)| {
+        Color32::from_rgba_unmultiplied(r, g, b, parsed.unwrap_or(alpha))
+    })
+}
+
+/// The hex field's display form: `#RRGGBBAA` — the alpha is always spelled
+/// out now that the picker edits it (an 8-digit paste sets it, a 6-digit
+/// paste keeps it — see [`hex_edited_color`]).
+fn format_color_hex(color: Color32) -> String {
+    let [r, g, b, a] = color.to_srgba_unmultiplied();
+    format!("#{r:02X}{g:02X}{b:02X}{a:02X}")
 }
 
 #[cfg(test)]
