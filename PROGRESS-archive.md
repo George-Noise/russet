@@ -1,5 +1,64 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-19 — `Fix:` the Tools header strip fits the window — variant A2 — owner request
+
+- **What:** the owner picked "variant A2" among the measured header-width options: the title
+  strip's HORIZONTAL padding is zeroed — `tools_window_builder` feeds `Window::title_frame`
+  with egui's default window frame whose `inner_margin.left/right` are 0
+  (`app/windows.rs::tools_title_frame`) — so the both-buttons strip paints EXACTLY the
+  window's width instead of ~11 pt past it and the ✕ no longer lands half outside. BOTH
+  buttons kept (the ask); the VERTICAL padding stays, so the strip's height, fill and rounded
+  corners are unchanged (variant A, `Margin::ZERO`, additionally shrank the strip vertically
+  and shifted the first-open position — NOT picked). Also closed V38 + V36 in chat and carried
+  the probe fix below.
+- **Files:** `src/app/windows.rs` (tools_title_frame + the builder + the `TOOL_GRID_GAP`
+  const extracted), `windows/tests.rs` (+1 regression test: the strip's `__title_click`
+  drag strip spans collapse-icon-right .. close-icon-left, so the ▼/✕ atoms' outer edges
+  `(click ± (heading_h + icon_width)/2)` must stay within the window — verified to FAIL
+  pre-fix), `scripts/gui_collapse_check.sh` (locate_strip_icon now takes the first ≥10-row
+  non-canvas run at x=8 — the idle X11 crosshair cursor's ~6-row crossing fooled it into
+  clicking the cursor's own position; probe bug, not an app bug), `SPEC.md` §3.2,
+  `AGENTS.md` (quirk extended: the chosen fix + the test's atom math),
+  `DEBTS-verification.md` (V38 + V36 verified, V39 born), PROGRESS (compaction: the
+  icons-v3 + language-rule entries → archive; snapshot + entry + stamp), TIMING (2
+  build rows).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s (163 default / 176 mcp, +1 ignored
+  each); the pre-fix regression check (red with the title_frame line removed, green with
+  it); Xvfb strip probe: window 9..82 / strip 9..82 flush, ▼ 14..23 and ✕ 67..77 fully
+  inside (`download/tools_header_A2_fixed.png`); visual driver ALL SCENARIOS GREEN;
+  gui_collapse_check EXIT=0 (expanded→collapsed→re-expanded).
+- **Owner-checks:** V39 born (the header pass on Windows). Open: V39, V30 (parked),
+  V8 (parked).
+- **Commit title:** `Tools window: the title strip fits the window (zeroed strip side padding, variant A2)`
+
+### 2026-11-19 — `Refactor:` tool_icons.rs split — the icon drawings to the child draw module — owner-approved
+
+- **What:** the file-guard debt paid for `app/tool_icons.rs` (673 lines after the 2026-11-18
+  icon rounds; proposed twice, and the owner approved it at the V39 check: "do the split of
+  app/tool_icons.rs"). PURE code motion, zero behavior change: the SEVEN ICON DRAWINGS — the
+  per-tool `draw_*` fns with their fixed color specs, `TOOL_ANGLE`, `PIPETTE_TIP` and the
+  `rasterize_tool_icon` dispatcher — moved VERBATIM to the child module `app/tool_icons/draw.rs`
+  (400 lines), which imports the parent's shared primitives (`fill`/`stroke`/`arc_pts`/
+  `quad_pts`/`icon_transform`/`OUTLINE_W`); the parent (308 lines) keeps the atlas/cursor
+  pipeline and the shared primitives and imports the dispatcher (`use self::draw::{…}`) — every
+  `tool_icons::` path stays (app.rs/windows.rs untouched) and the tests' `super::` imports are
+  unchanged byte-for-byte (the parent's private bindings resolve them). Same shape as the
+  `tree_window`/`paint` child. No owner check born (the panels-split precedent: pure code
+  motion is proven by the unchanged suite + the gates).
+- **Files:** `src/app/tool_icons.rs` (673 → 308), NEW `src/app/tool_icons/draw.rs` (400),
+  `src/app.rs` (the module map's `tool_icons` entry added, with the child mention),
+  `AGENTS.md` (the module-list entry updated), `DEBTS-verification.md` (V39 verified + moved
+  to Resolved; two resolved-entry owner quotes translated to English per the language
+  whitelist), PROGRESS (snapshot + entry + stamp + the icons-v4 entry → archive).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s — rules HARD green (the tool_icons
+  OVER-GUARD note retired; only the owner-deferred history_tree.rs 569 remains), fmt clean,
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 163 default /
+  176 mcp green (+1 ignored each) — the counts UNCHANGED from the pre-split tree, the
+  pure-code-motion proof. No wasm lane: not a web-facing change (the session rule).
+- **Owner-checks:** none born. Open: V30 (parked), V8 (parked).
+- **Commit title:** `Split app/tool_icons.rs: the icon drawings move to the child tool_icons/draw.rs (pure code motion)`
+
+
 ### 2026-11-19 — `Fix:` the settings panel hides while the Tools window is collapsed — owner request
 
 - **What:** two asks. (1) IMPLEMENTED: when the Tools window is collapsed to its title bar

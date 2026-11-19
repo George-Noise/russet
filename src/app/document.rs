@@ -5,16 +5,23 @@
 //!
 //! Split-off note (owner request 2026-11-13): this is the file-glue half
 //! of the former `app.rs`. The dialogs that ASK before acting live in
-//! [`super::dialogs`] (they call back into this module), the actual
+//! [`super::dialogs`], the "Save Image" dialog (owner request 2026-11-19 —
+//! BOTH Save and Save As open it) in [`super::save_dialog`], the actual
 //! platform I/O in [`crate::file_io`], and the orchestrator — `App` state
 //! and the frame flow — in [`super`]. Platform `cfg` branches are allowed
-//! here like in `file_io.rs` (AGENTS.md "Repo facts").
+//! here like in `file_io.rs` (AGENTS.md "Repo facts"): the save dialog's
+//! native prefill refinement and the Save-click glue are them.
 
 use eframe::egui::{self, Color32, Vec2};
 
 use super::App;
+#[cfg(not(target_arch = "wasm32"))]
+use super::save_dialog::base_name_of;
+use super::save_dialog::compose_file_name;
 use crate::canvas::Canvas;
 use crate::file_io;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::file_io::SaveFormat;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::WebOutcome;
 use crate::layers::LayerStack;
@@ -149,49 +156,104 @@ impl App {
         }
     }
 
-    /// "Save": to the current path when there is one, Save As otherwise.
-    pub(super) fn save(&mut self, ctx: &egui::Context) {
+    /// "Save" (Ctrl+S): opens the in-app "Save Image" dialog (owner request
+    /// 2026-11-19) — the format choice (PNG/JPEG), the file name, the JPEG
+    /// quality and the native folder live THERE, so Save no longer writes
+    /// silently to the current path; it saves the same dialog prefilled
+    /// from the document.
+    pub(super) fn save(&mut self) {
+        self.open_save_dialog();
         #[cfg(not(target_arch = "wasm32"))]
+        self.prefill_save_from_path();
+    }
+
+    /// "Save As": the SAME dialog since the owner request 2026-11-19 (the
+    /// format is chosen in the dialog, so Save and Save As converge).
+    pub(super) fn save_as(&mut self) {
+        self.save();
+    }
+
+    /// Native refinement of the dialog prefill (platform cfg lives here per
+    /// AGENTS.md): the document's own folder becomes the dialog's folder and
+    /// the current path's extension picks the format radio. Runs AFTER
+    /// `open_save_dialog` — the path's facts beat the display-name defaults.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn prefill_save_from_path(&mut self) {
+        let Some(path) = self.current_path.clone() else {
+            return;
+        };
+        self.save_dir = path.parent().map(std::path::Path::to_path_buf);
+        if let Some(format) = path
+            .extension()
+            .and_then(|ext| SaveFormat::from_extension(&ext.to_string_lossy()))
         {
-            let _ = ctx;
-            if let Some(path) = self.current_path.clone() {
-                self.save_to(&path);
-            } else {
-                self.save_as(ctx);
-            }
+            self.save_format = format;
         }
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.save_as(ctx);
+        if let Some(name) = path.file_name() {
+            self.save_file_name = base_name_of(&name.to_string_lossy());
         }
     }
 
-    /// "Save As": always asks for a destination.
-    pub(super) fn save_as(&mut self, ctx: &egui::Context) {
+    /// The dialog's Save click (the glue behind
+    /// [`super::save_dialog::save_dialog`]): composes the final name,
+    /// resolves the native folder — the dialog's pick, else the document's
+    /// own folder, else the folder picker opens right from the click (a
+    /// cancelled pick keeps the dialog open) — and writes. Returns whether
+    /// the dialog may close: success (or, on web, the spawned download
+    /// task); a write error surfaces through the error popup and the
+    /// dialog STAYS OPEN so the name can be fixed.
+    pub(super) fn commit_save_dialog(&mut self) -> bool {
+        self.save_quality = self.save_quality.clamp(1, 100);
+        let name = compose_file_name(&self.save_file_name, self.save_format);
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let _ = ctx;
-            match file_io::save_image_as(self.canvas.pixmap(), &self.display_name) {
-                Ok(Some(saved)) => self.apply_saved(saved),
-                Ok(None) => {}
-                Err(error) => self.error_popup = Some(error),
+            let dir = match self.save_dir.clone() {
+                Some(dir) => dir,
+                None => {
+                    match self
+                        .current_path
+                        .as_ref()
+                        .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
+                    {
+                        Some(dir) => dir,
+                        None => match file_io::pick_save_folder(self.save_dir.as_deref()) {
+                            Some(picked) => {
+                                self.save_dir = Some(picked.clone());
+                                picked
+                            }
+                            // The user cancelled the picker: keep the dialog.
+                            None => return false,
+                        },
+                    }
+                }
+            };
+            match file_io::save_image_as(
+                self.canvas.pixmap(),
+                &dir,
+                &name,
+                self.save_format,
+                self.save_quality,
+            ) {
+                Ok(saved) => {
+                    self.apply_saved(saved);
+                    true
+                }
+                Err(error) => {
+                    self.error_popup = Some(error);
+                    false
+                }
             }
         }
         #[cfg(target_arch = "wasm32")]
         {
             self.web_task = Some(file_io::save_image_as(
-                ctx,
+                &self.ctx,
                 self.canvas.pixmap().clone(),
-                self.display_name.clone(),
+                name,
+                self.save_format,
+                self.save_quality,
             ));
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn save_to(&mut self, path: &std::path::Path) {
-        match file_io::save_image_to(self.canvas.pixmap(), path) {
-            Ok(()) => self.dirty = false,
-            Err(error) => self.error_popup = Some(error),
+            true
         }
     }
 

@@ -29,6 +29,10 @@
 //!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
 //!                   (press–drag–release and polyline gestures, overlay
 //!                   preview, commit)
+//!   [`save_dialog`] — owner request 2026-11-19: the "Save Image" dialog
+//!                   BOTH Save and Save As open — the format radio (PNG/
+//!                   JPEG), the file name, the JPEG quality, the native
+//!                   folder row; the save glue lives in [`document`]
 //!   [`scenarios`] — owner request 2026-11-17: the OWNER-LOCKED whole-app
 //!                   scenario suite (tests only — the automated counterpart
 //!                   of the owner's manual resize × history walkthrough;
@@ -46,12 +50,15 @@
 //!
 //! Keep new subsystems as child modules instead of growing this file.
 
-#[cfg(not(target_arch = "wasm32"))]
+// The save dialog's folder state (`save_dir`) exists on BOTH platforms —
+// the folder row is hidden at runtime on web (`file_io::FOLDER_PICKING_
+// SUPPORTED`), so the shared dialog code compiles unchanged.
 use std::path::PathBuf;
 
 use eframe::egui::{self, Color32, PointerButton, Pos2, Rect, Sense, Vec2};
 
 use crate::canvas::Canvas;
+use crate::file_io::SaveFormat;
 #[cfg(target_arch = "wasm32")]
 use crate::file_io::WebTask;
 use crate::history::ActionLog;
@@ -70,6 +77,7 @@ mod mcp;
 mod menu;
 mod placement;
 mod preview;
+mod save_dialog;
 mod scenarios;
 mod text_tool;
 mod tool_icons;
@@ -220,6 +228,19 @@ pub struct App {
     resize_anchor: ResizeAnchor,
     resize_filter: ResizeFilter,
     resize_aspect: bool,
+    /// "Save Image" dialog state (owner request 2026-11-19; dialog in
+    /// [`save_dialog`], glue in [`document`]): the raw file name (the
+    /// extension comes from the chosen format), the format radio — the
+    /// PNG/JPEG choice lives IN the dialog — the JPEG quality (kept across
+    /// opens) and the folder picked with the dialog's Browse… button (the
+    /// document's own folder prefills it; the row is HIDDEN on web — the
+    /// browser owns the download location — but the field stays on both
+    /// platforms so the shared dialog code compiles unchanged).
+    show_save_dialog: bool,
+    save_file_name: String,
+    save_format: SaveFormat,
+    save_quality: u8,
+    save_dir: Option<PathBuf>,
     /// Pending base choice after deleting the BOTTOM layer whose successor
     /// has a DIFFERENT size (owner request 2026-11-17): the user picks
     /// "keep the canvas size" (adapt the new bottom layer) or "use the
@@ -378,6 +399,7 @@ impl App {
             last_content_rect: None,
             #[cfg(not(target_arch = "wasm32"))]
             current_path: None,
+            save_dir: None,
             #[cfg(target_arch = "wasm32")]
             web_task: None,
             display_name: "Untitled".to_string(),
@@ -392,6 +414,10 @@ impl App {
             resize_anchor: ResizeAnchor::Center,
             resize_filter: ResizeFilter::Bicubic,
             resize_aspect: true,
+            show_save_dialog: false,
+            save_file_name: "Untitled".to_string(),
+            save_format: SaveFormat::Png,
+            save_quality: crate::file_io::DEFAULT_JPEG_QUALITY,
             layer_base_choice: false,
             pending_action: None,
             error_popup: None,
@@ -778,6 +804,7 @@ impl eframe::App for App {
         self.resize_dialog(&ctx);
         self.layer_delete_dialog(&ctx);
         self.layer_base_dialog(&ctx);
+        self.save_dialog(&ctx);
         self.error_dialog(&ctx);
         self.about_dialog(&ctx);
         self.update_title(&ctx);

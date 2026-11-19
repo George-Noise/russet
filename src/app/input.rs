@@ -23,10 +23,10 @@ impl App {
             self.reset_zoom();
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)) {
-            self.save_as(ctx);
+            self.save_as();
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::S)) {
-            self.save(ctx);
+            self.save();
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::N)) {
             self.request_new();

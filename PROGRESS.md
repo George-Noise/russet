@@ -39,12 +39,14 @@
 | Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
 | Extra: palette alpha + a hex field in the color wells (owner 2026-11-19) | done — gates + driver green | `Alpha::OnlyBlend` (the picker's alpha slider + the A DragValue; the eyedropper's alpha no longer erased on popup open) + a "Hex" row parsing the launch-flag syntax (short form keeps the well's alpha, 8 digits sets it, `#RRGGBBAA` display, canonicalized on blur); one shared `launch.rs::parse_hex_components` feeds both consumers; windows/tests split by topic (rule 7) + 5 color-well tests; windows.rs 571 — OVER guard, the palette split PROPOSED (owner-gated); V40 born |
 | Extra: lenient hex + the windows.rs palette split (owner 2026-11-19) | done — gates + driver green | the Hex field eats pasted junk (every non-hex-digit char stripped, an optional `0x` prefix dropped) and the new digit-count forms 4 `RGBA` / 5 `RGBAA` / 7 `RRGGBBA` (the 5-vs-7 asymmetry is the owner's deliberate design); a per-well SEED alpha keeps a live-typed 5-digit prefix from leaking alpha into a final 6-digit color; the launch flags share the same `parse_hex_components` syntax; PURE code-motion split: `windows.rs` 571 → 351 + the child `windows/palette_window.rs` 287 (the palette window, wells, picker popup, hex field; the color-well tests moved to `palette_window/tests.rs` per Tests rule 2) — both under the guard, the OVER-GUARD note retired; V40 verified in chat, V41 born |
+| Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 9 s): fmt clean,
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-170 default / 183 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +2
-lenient-hex tests this round) and the visual driver ALL SCENARIOS GREEN under Xvfb through
-the gates binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+179 default / 192 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +9
+save-dialog tests this round), the wasm `cargo check --target wasm32-unknown-unknown` green
+(file_io.rs touched) and the visual driver ALL SCENARIOS GREEN under Xvfb through
+the gates+mcp binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
 2026-11-16 (see the archived log history);
@@ -75,7 +77,49 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > completed the day's compactions (the icons-v2 round's budget); on 2026-11-18/19 the
 > icon-redraw, v5, Tooling, icon-dump, icons-v2, icons-v3, language-rule and
 > icons-v4 entries each moved under their following rounds' budgets, and the
-> collapse entry moved during the 2026-11-19 lenient-hex round's budget.
+> collapse entry moved during the 2026-11-19 lenient-hex round's budget. The
+> header-strip (variant A2) entry moved to the archive during the Save-dialog
+> round's budget (2026-11-19).
+
+### 2026-11-19 — `Feat:` the "Save Image" dialog — Save and Save As converge — owner request
+
+- **What:** BOTH File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) now open ONE in-app
+  "Save Image" dialog (owner request 2026-11-19: the png/jpg settings + the file name in the
+  window, and THE FORMAT CHOICE must live there) — the OS save dialog is gone, Save no longer
+  writes silently to the current path. Contents: the file name field (prefilled from the
+  display name minus its image extension), the PNG image / JPEG image radio (prefilled from
+  the current path's extension, else the display name's, else PNG), a JPEG Quality slider
+  1..=100 (default 90 — the old hardcoded value; kept across opens; JPEG only), the live
+  "Saving as: name.ext" preview, and — NATIVE only — a Folder row (prefilled from the
+  document's own folder; Browse… = the native folder picker; hidden on web — the browser owns
+  the download location). With no folder known the Save click opens the picker and a
+  cancelled pick KEEPS the dialog open (observed live in the sandbox probe). Name rules
+  (`save_dialog.rs::compose_file_name`): separators + the Windows-forbidden characters
+  stripped, a typed extension matching the format survives (canonicalized .jpeg → .jpg), a
+  conflicting image extension is replaced, a non-image one stays, empty → "Untitled".
+  Success: `dirty = false`, `display_name` = the saved name, (native) `current_path` updated;
+  an error is the Error popup and the dialog STAYS OPEN. file_io.rs: pub `SaveFormat`
+  (+extension/label/from_extension), `encode_jpeg_with_quality` (clamped 1..=100),
+  `pick_save_folder`, the dialog save `save_image_as(pixmap, dir, name, format, quality)`;
+  the MCP `export_png` keeps `save_image_to` (extension decides — now feature-mcp-gated, its
+  only consumer). NEW debt F17 (owner ask): consider other file formats for open and save.
+- **Files:** NEW `src/app/save_dialog.rs` + `save_dialog/tests.rs` (6 tests);
+  `src/file_io.rs` (+3 tests), `src/app.rs` (fields + frame hook + module map),
+  `src/app/document.rs` (the save glue: `prefill_save_from_path` + `commit_save_dialog`),
+  `src/app/menu.rs` / `input.rs` (no-arg call sites), SPEC §3.7/§3.10, AGENTS.md (module
+  map), DEBTS-functional.md (F17 born), DEBTS-verification.md (V42 born), PROGRESS
+  (snapshot + entry + stamp + compaction), TIMING (2 cold rows).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s — fmt clean, rules HARD green, clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 179 default / 192 mcp
+  green (+1 ignored each; +9 tests); `cargo check --target wasm32-unknown-unknown` green
+  (file_io.rs is web-facing); GUI probes under Xvfb: the dialog opens from BOTH menu items,
+  radio/quality/preview behave live, the cancel-keeps-open path observed, the write core
+  proven through the gates+mcp binary (MCP export_png → PNG + JPEG files PIL-decoded),
+  visual driver ALL SCENARIOS GREEN.
+- **Owner-checks:** V42 born (the Windows save pass: the dialog on Ctrl+S / Ctrl+Shift+S,
+  the radio + quality, Browse… = the native folder dialog, both formats saved). Open: V42,
+  V41, V30 (parked), V8 (parked); NEW debt F17 (which other formats).
+- **Commit title:** `Save Image dialog: Save and Save As converge on the in-app window (PNG/JPEG radio, quality, folder row); F17 debt: consider more file formats`
 
 ### 2026-11-19 — `Feat:` the hex field eats pasted junk + the windows.rs palette split — owner request
 
@@ -141,60 +185,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   (parked), V8 (parked).
 - **Commit title:** `Palette: the color picker edits alpha (OnlyBlend) + a #RRGGBBAA hex field under it`
 
-### 2026-11-19 — `Refactor:` tool_icons.rs split — the icon drawings to the child draw module — owner-approved
-
-- **What:** the file-guard debt paid for `app/tool_icons.rs` (673 lines after the 2026-11-18
-  icon rounds; proposed twice, and the owner approved it at the V39 check: "do the split of
-  app/tool_icons.rs"). PURE code motion, zero behavior change: the SEVEN ICON DRAWINGS — the
-  per-tool `draw_*` fns with their fixed color specs, `TOOL_ANGLE`, `PIPETTE_TIP` and the
-  `rasterize_tool_icon` dispatcher — moved VERBATIM to the child module `app/tool_icons/draw.rs`
-  (400 lines), which imports the parent's shared primitives (`fill`/`stroke`/`arc_pts`/
-  `quad_pts`/`icon_transform`/`OUTLINE_W`); the parent (308 lines) keeps the atlas/cursor
-  pipeline and the shared primitives and imports the dispatcher (`use self::draw::{…}`) — every
-  `tool_icons::` path stays (app.rs/windows.rs untouched) and the tests' `super::` imports are
-  unchanged byte-for-byte (the parent's private bindings resolve them). Same shape as the
-  `tree_window`/`paint` child. No owner check born (the panels-split precedent: pure code
-  motion is proven by the unchanged suite + the gates).
-- **Files:** `src/app/tool_icons.rs` (673 → 308), NEW `src/app/tool_icons/draw.rs` (400),
-  `src/app.rs` (the module map's `tool_icons` entry added, with the child mention),
-  `AGENTS.md` (the module-list entry updated), `DEBTS-verification.md` (V39 verified + moved
-  to Resolved; two resolved-entry owner quotes translated to English per the language
-  whitelist), PROGRESS (snapshot + entry + stamp + the icons-v4 entry → archive).
-- **Verified:** FULL hot gate ALL GATES GREEN 14 s — rules HARD green (the tool_icons
-  OVER-GUARD note retired; only the owner-deferred history_tree.rs 569 remains), fmt clean,
-  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 163 default /
-  176 mcp green (+1 ignored each) — the counts UNCHANGED from the pre-split tree, the
-  pure-code-motion proof. No wasm lane: not a web-facing change (the session rule).
-- **Owner-checks:** none born. Open: V30 (parked), V8 (parked).
-- **Commit title:** `Split app/tool_icons.rs: the icon drawings move to the child tool_icons/draw.rs (pure code motion)`
-
-### 2026-11-19 — `Fix:` the Tools header strip fits the window — variant A2 — owner request
-
-- **What:** the owner picked "variant A2" among the measured header-width options: the title
-  strip's HORIZONTAL padding is zeroed — `tools_window_builder` feeds `Window::title_frame`
-  with egui's default window frame whose `inner_margin.left/right` are 0
-  (`app/windows.rs::tools_title_frame`) — so the both-buttons strip paints EXACTLY the
-  window's width instead of ~11 pt past it and the ✕ no longer lands half outside. BOTH
-  buttons kept (the ask); the VERTICAL padding stays, so the strip's height, fill and
-  rounded corners are unchanged (variant A, `Margin::ZERO`, additionally shrank the strip
-  vertically and shifted the first-open position — NOT picked). Also closed V38 + V36 in
-  chat and carried the probe fix below.
-- **Files:** `src/app/windows.rs` (tools_title_frame + the builder + the `TOOL_GRID_GAP`
-  const extracted), `windows/tests.rs` (+1 regression test: the strip's `__title_click`
-  drag strip spans collapse-icon-right .. close-icon-left, so the ▼/✕ atoms' outer edges
-  `(click ± (heading_h + icon_width)/2)` must stay within the window — verified to FAIL
-  pre-fix), `scripts/gui_collapse_check.sh` (locate_strip_icon now takes the first ≥10-row
-  non-canvas run at x=8 — the idle X11 crosshair cursor's ~6-row crossing fooled it into
-  clicking the cursor's own position; probe bug, not an app bug), `SPEC.md` §3.2,
-  `AGENTS.md` (quirk extended: the chosen fix + the test's atom math),
-  `DEBTS-verification.md` (V38 + V36 verified, V39 born), PROGRESS (compaction: the
-  icons-v3 + language-rule entries → archive; snapshot + entry + stamp), TIMING (2
-  build rows).
-- **Verified:** FULL hot gate ALL GATES GREEN 14 s (163 default / 176 mcp, +1 ignored
-  each); the pre-fix regression check (red with the title_frame line removed, green with
-  it); Xvfb strip probe: window 9..82 / strip 9..82 flush, ▼ 14..23 and ✕ 67..77 fully
-  inside (`download/tools_header_A2_fixed.png`); visual driver ALL SCENARIOS GREEN;
-  gui_collapse_check EXIT=0 (expanded→collapsed→re-expanded).
-- **Owner-checks:** V39 born (the header pass on Windows). Open: V39, V30 (parked),
-  V8 (parked).
-- **Commit title:** `Tools window: the title strip fits the window (zeroed strip side padding, variant A2)`

@@ -36,14 +36,14 @@ impl App {
                         .add(egui::Button::new("Save").shortcut_text("Ctrl+S"))
                         .clicked()
                     {
-                        self.save(ui.ctx());
+                        self.save();
                         ui.close();
                     }
                     if ui
                         .add(egui::Button::new("Save As…").shortcut_text("Ctrl+Shift+S"))
                         .clicked()
                     {
-                        self.save_as(ui.ctx());
+                        self.save_as();
                         ui.close();
                     }
                     #[cfg(not(target_arch = "wasm32"))]

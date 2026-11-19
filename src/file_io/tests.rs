@@ -1,10 +1,13 @@
 //! Unit tests for the platform-independent image plumbing (SPEC §3.7, §5.1):
 //! premultiplied alpha on the way in, demultiplied bytes on the way out, and
-//! the white background JPEG expects.
+//! the white background JPEG expects — plus the "Save Image" dialog's
+//! `SaveFormat` mapping and quality clamp (owner request 2026-11-19).
 
 use tiny_skia::{ColorU8, Pixmap};
 
-use super::{encode_jpeg, encode_png, pixmap_from_image};
+use super::{
+    DEFAULT_JPEG_QUALITY, SaveFormat, encode_jpeg_with_quality, encode_png, pixmap_from_image,
+};
 
 #[test]
 fn png_round_trip_preserves_rgba_bytes() {
@@ -41,7 +44,7 @@ fn loading_an_image_premultiplies_semi_transparent_pixels() {
 fn jpeg_flattens_transparency_onto_white() {
     let pixmap = Pixmap::new(4, 4).expect("4x4 pixmap"); // zeroed = transparent
 
-    let jpeg = encode_jpeg(&pixmap).expect("JPEG encodes");
+    let jpeg = encode_jpeg_with_quality(&pixmap, DEFAULT_JPEG_QUALITY).expect("JPEG encodes");
     let decoded = image::load_from_memory(&jpeg)
         .expect("JPEG decodes")
         .to_rgb8();
@@ -51,4 +54,48 @@ fn jpeg_flattens_transparency_onto_white() {
             "transparent JPEG pixel must be white, got {pixel:?}"
         );
     }
+}
+
+// ---- the Save Image dialog's format mapping + quality (owner request 2026-11-19) ----
+
+#[test]
+fn the_save_format_maps_extensions_both_ways() {
+    assert_eq!(SaveFormat::from_extension("png"), Some(SaveFormat::Png));
+    assert_eq!(SaveFormat::from_extension("jpg"), Some(SaveFormat::Jpeg));
+    assert_eq!(SaveFormat::from_extension("JPEG"), Some(SaveFormat::Jpeg));
+    assert_eq!(SaveFormat::from_extension("gif"), None);
+    assert_eq!(SaveFormat::from_extension(""), None);
+    assert_eq!(SaveFormat::Png.extension(), "png");
+    assert_eq!(SaveFormat::Jpeg.extension(), "jpg");
+}
+
+#[test]
+fn the_jpeg_quality_clamps_instead_of_panicking() {
+    // The dialog slider is not the only writer; the encoder rejects
+    // out-of-range qualities, so the clamp must absorb every input.
+    let pixmap = Pixmap::new(2, 2).expect("2x2 pixmap");
+    for quality in [0, 1, 100, 255] {
+        let jpeg = encode_jpeg_with_quality(&pixmap, quality).expect("JPEG encodes");
+        image::load_from_memory(&jpeg).expect("JPEG decodes");
+    }
+}
+
+#[test]
+fn different_jpeg_qualities_encode_different_bytes() {
+    // Quality 1 vs 100 must not silently collapse to the same encoder
+    // settings — the dialog's Quality slider would be a placebo.
+    let mut pixmap = Pixmap::new(64, 64).expect("64x64 pixmap");
+    for (i, pixel) in pixmap.pixels_mut().iter_mut().enumerate() {
+        let value = (i % 256) as u8;
+        *pixel = ColorU8::from_rgba(value, value.wrapping_mul(7), value.wrapping_mul(13), 255)
+            .premultiply();
+    }
+    let low = encode_jpeg_with_quality(&pixmap, 1).expect("low quality encodes");
+    let high = encode_jpeg_with_quality(&pixmap, 100).expect("high quality encodes");
+    assert!(
+        low.len() < high.len(),
+        "quality 1 ({} bytes) should encode smaller than quality 100 ({} bytes)",
+        low.len(),
+        high.len()
+    );
 }

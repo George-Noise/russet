@@ -16,6 +16,60 @@ pub struct SavedImage {
     pub path: PathBuf,
 }
 
+/// The save formats of the "Save Image" dialog (SPEC §3.7; owner request
+/// 2026-11-19): the format choice lives IN the dialog (a radio), not in the
+/// OS filter list — so the enum is shared by the dialog state, the codecs
+/// and the platform save glue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveFormat {
+    Png,
+    Jpeg,
+}
+
+impl SaveFormat {
+    /// The extension the dialog appends (`.jpg` — the canonical spelling;
+    /// a typed `.jpeg` is canonicalized to it, `compose_file_name` in
+    /// `app/save_dialog.rs`).
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Jpeg => "jpg",
+        }
+    }
+
+    /// The dialog radio label (the filter names of the OS save dialog this
+    /// dialog replaced).
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Png => "PNG image",
+            Self::Jpeg => "JPEG image",
+        }
+    }
+
+    /// The format behind a file-name extension (case-insensitive); `None`
+    /// for anything the app does not read/write.
+    pub fn from_extension(ext: &str) -> Option<Self> {
+        match ext.to_ascii_lowercase().as_str() {
+            "png" => Some(Self::Png),
+            "jpg" | "jpeg" => Some(Self::Jpeg),
+            _ => None,
+        }
+    }
+}
+
+/// The JPEG quality the path-based export (the MCP `export_png` tool) uses
+/// and the "Save Image" dialog starts from (the value the old hardcoded
+/// encoder used — SPEC §3.7). The dialog keeps the user's last choice
+/// across opens.
+pub(crate) const DEFAULT_JPEG_QUALITY: u8 = 90;
+
+/// Whether the "Save Image" dialog shows its folder row (native only — on
+/// web the browser owns where a download lands). A `cfg!()` MACRO, not a
+/// `#[cfg]` attribute: the platform cfg branches live only in the places
+/// AGENTS.md lists, and the dialog code is shared — the row is hidden at
+/// RUNTIME on web (the web `pick_save_folder` stub below returns `None`).
+pub(crate) const FOLDER_PICKING_SUPPORTED: bool = !cfg!(target_arch = "wasm32");
+
 fn pixmap_from_image(image: image::DynamicImage) -> Result<Pixmap, String> {
     let rgba = image.to_rgba8();
     let (width, height) = rgba.dimensions();
@@ -44,7 +98,13 @@ pub(crate) fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>, String> {
     Ok(png)
 }
 
-fn encode_jpeg(pixmap: &Pixmap) -> Result<Vec<u8>, String> {
+/// JPEG encode with the "Save Image" dialog's quality choice (owner
+/// request 2026-11-19 — the quality used to be hardcoded 90). Transparent
+/// pixels flatten onto white (§5.1). The quality is CLAMPED 1..=100: the
+/// slider is not the only writer and the encoder rejects out-of-range
+/// values — no panic ever reaches the user-data path.
+pub(crate) fn encode_jpeg_with_quality(pixmap: &Pixmap, quality: u8) -> Result<Vec<u8>, String> {
+    let quality = quality.clamp(1, 100);
     let mut bytes = Vec::with_capacity(pixmap.width() as usize * pixmap.height() as usize * 3);
     for pixel in pixmap.pixels() {
         let alpha = u32::from(pixel.alpha());
@@ -58,30 +118,12 @@ fn encode_jpeg(pixmap: &Pixmap) -> Result<Vec<u8>, String> {
     let mut jpeg = Vec::new();
     {
         let mut cursor = std::io::Cursor::new(&mut jpeg);
-        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 90);
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, quality);
         encoder
             .encode_image(&image)
             .map_err(|err| format!("Failed to encode JPEG: {err}"))?;
     }
     Ok(jpeg)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn encode_for_name(pixmap: &Pixmap, name: &str) -> Result<Vec<u8>, String> {
-    match extension_of(name).as_deref() {
-        Some("png") => encode_png(pixmap),
-        Some("jpg" | "jpeg") => encode_jpeg(pixmap),
-        _ => Err("Unsupported file extension. Use .png, .jpg or .jpeg.".to_string()),
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn extension_of(name: &str) -> Option<String> {
-    let dot = name.rfind('.')?;
-    if dot + 1 >= name.len() {
-        return None;
-    }
-    Some(name[dot + 1..].to_ascii_lowercase())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -90,7 +132,10 @@ mod native {
 
     use tiny_skia::Pixmap;
 
-    use super::{LoadedImage, SavedImage, pixmap_from_image};
+    use super::{
+        LoadedImage, SaveFormat, SavedImage, encode_jpeg_with_quality, encode_png,
+        pixmap_from_image,
+    };
 
     pub fn open_image() -> Result<Option<LoadedImage>, String> {
         let Some(path) = rfd::FileDialog::new()
@@ -108,68 +153,77 @@ mod native {
         Ok(Some(LoadedImage { pixmap, path, name }))
     }
 
+    /// The "Save Image" dialog's folder row (owner request 2026-11-19): the
+    /// native folder picker, opened at `start` when there is one. On web the
+    /// dialog hides the row and the stub below answers `None`.
+    pub fn pick_save_folder(start: Option<&Path>) -> Option<PathBuf> {
+        let mut dialog = rfd::FileDialog::new();
+        if let Some(start) = start {
+            dialog = dialog.set_directory(start);
+        }
+        dialog.pick_folder()
+    }
+
+    /// The dialog's save: an already-resolved folder + the COMPOSED file
+    /// name (the extension follows the chosen format —
+    /// `app/save_dialog.rs::compose_file_name`). The path-based
+    /// [`save_image_to`] keeps the extension-decides rule for the MCP
+    /// export tool.
     pub fn save_image_as(
         pixmap: &Pixmap,
-        default_name: &str,
-    ) -> Result<Option<SavedImage>, String> {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG image", &["png"])
-            .add_filter("JPEG image", &["jpg", "jpeg"])
-            .set_file_name(default_name)
-            .save_file()
-        else {
-            return Ok(None);
-        };
-        let path = ensure_extension(path);
-        save_image_to(pixmap, &path)?;
+        dir: &Path,
+        name: &str,
+        format: SaveFormat,
+        quality: u8,
+    ) -> Result<SavedImage, String> {
+        let path = dir.join(name);
+        save_image_to_path(pixmap, &path, format, quality)?;
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Untitled".to_string());
-        Ok(Some(SavedImage { path, name }))
+        Ok(SavedImage { path, name })
     }
 
+    /// Path-based export (the MCP `export_png` tool, feature `mcp` — its
+    /// only consumer): the path's EXTENSION decides the format; quality
+    /// [`DEFAULT_JPEG_QUALITY`] (no dialog is involved). Unknown extension —
+    /// an error, never a guess.
+    #[cfg(feature = "mcp")]
     pub fn save_image_to(pixmap: &Pixmap, path: &Path) -> Result<(), String> {
-        let format = format_for_path(path)
+        let format = path
+            .extension()
+            .and_then(|ext| SaveFormat::from_extension(&ext.to_string_lossy()))
             .ok_or_else(|| "Unsupported file extension. Use .png, .jpg or .jpeg.".to_string())?;
+        save_image_to_path(pixmap, path, format, super::DEFAULT_JPEG_QUALITY)
+    }
+
+    fn save_image_to_path(
+        pixmap: &Pixmap,
+        path: &Path,
+        format: SaveFormat,
+        quality: u8,
+    ) -> Result<(), String> {
         let bytes = match format {
-            SaveFormat::Png => super::encode_png(pixmap)?,
-            SaveFormat::Jpeg => super::encode_jpeg(pixmap)?,
+            SaveFormat::Png => encode_png(pixmap)?,
+            SaveFormat::Jpeg => encode_jpeg_with_quality(pixmap, quality)?,
         };
         std::fs::write(path, bytes).map_err(|err| format!("Failed to save image: {err}"))
-    }
-
-    fn ensure_extension(mut path: PathBuf) -> PathBuf {
-        if path.extension().is_none() {
-            path.set_extension("png");
-        }
-        path
-    }
-
-    #[derive(Clone, Copy)]
-    enum SaveFormat {
-        Png,
-        Jpeg,
-    }
-
-    fn format_for_path(path: &Path) -> Option<SaveFormat> {
-        let extension = path.extension()?.to_string_lossy().to_ascii_lowercase();
-        match extension.as_str() {
-            "png" => Some(SaveFormat::Png),
-            "jpg" | "jpeg" => Some(SaveFormat::Jpeg),
-            _ => None,
-        }
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 mod web {
+    use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
     use eframe::egui;
     use tiny_skia::Pixmap;
 
-    use super::{LoadedImage, SavedImage, encode_for_name, pixmap_from_image};
+    use super::{
+        LoadedImage, SaveFormat, SavedImage, encode_jpeg_with_quality, encode_png,
+        pixmap_from_image,
+    };
 
     type OpenSlot = Arc<Mutex<Option<Result<Option<LoadedImage>, String>>>>;
     type SaveSlot = Arc<Mutex<Option<Result<Option<SavedImage>, String>>>>;
@@ -238,23 +292,42 @@ mod web {
         }
     }
 
-    pub fn save_image_as(ctx: &egui::Context, pixmap: Pixmap, default_name: String) -> WebTask {
+    /// Web stub of the dialog's folder row [`super::FOLDER_PICKING_SUPPORTED`]
+    /// hides: the browser owns where a download lands, so there is nothing
+    /// to pick. Present so the SHARED dialog code compiles unchanged — the
+    /// row's Browse… click calls this and answers `None` (unreachable: the
+    /// row is hidden first).
+    pub fn pick_save_folder(_start: Option<&Path>) -> Option<PathBuf> {
+        None
+    }
+
+    /// The dialog's save (owner request 2026-11-19): name/format/quality
+    /// are already collected by the in-app "Save Image" dialog — the
+    /// download carries the composed name and the browser decides where it
+    /// lands, so no filter list here (§3.10).
+    pub fn save_image_as(
+        ctx: &egui::Context,
+        pixmap: Pixmap,
+        name: String,
+        format: SaveFormat,
+        quality: u8,
+    ) -> WebTask {
         let slot = Arc::new(Mutex::new(None));
         let task_slot = Arc::clone(&slot);
         let ctx = ctx.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let result = async {
                 let Some(handle) = rfd::AsyncFileDialog::new()
-                    .add_filter("PNG image", &["png"])
-                    .add_filter("JPEG image", &["jpg", "jpeg"])
-                    .set_file_name(&default_name)
+                    .set_file_name(&name)
                     .save_file()
                     .await
                 else {
                     return Ok(None);
                 };
-                let name = with_default_extension(handle.file_name());
-                let bytes = encode_for_name(&pixmap, &name)?;
+                let bytes = match format {
+                    SaveFormat::Png => encode_png(&pixmap),
+                    SaveFormat::Jpeg => encode_jpeg_with_quality(&pixmap, quality),
+                }?;
                 handle
                     .write(&bytes)
                     .await
@@ -271,21 +344,17 @@ mod web {
             kind: WebTaskKind::Save(slot),
         }
     }
-
-    fn with_default_extension(name: String) -> String {
-        if super::extension_of(&name).is_none() {
-            format!("{name}.png")
-        } else {
-            name
-        }
-    }
 }
 
+/// The MCP `export_png` tool's path export (its only consumer — feature
+/// `mcp`, so the default build carries no dead saver).
+#[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
+pub use native::save_image_to;
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{open_image, save_image_as, save_image_to};
+pub use native::{open_image, pick_save_folder, save_image_as};
 
 #[cfg(target_arch = "wasm32")]
-pub use web::{WebOutcome, WebTask, open_image, save_image_as};
+pub use web::{WebOutcome, WebTask, open_image, pick_save_folder, save_image_as};
 
 #[cfg(test)]
 mod tests;

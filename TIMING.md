@@ -23,6 +23,8 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-19 | `cargo check` (dev lane, save-dialog round: deps cold on the fresh clone — the quick loop after the dialog edits) | **1m 20s** | time'd exactly |
+| 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING again (installed first, the first warm-up attempt died on `cargo: command not found`, re-started manually) | **≈ 3m 12s both stages** (15:42:58→15:46:10; clippy alone "Finished in 1m 39s") | the background log's timestamps ≈ |
 | 2026-11-19 | `cargo check` (dev lane; deps cold after the sandbox recycle — the quick loop after the alpha+hex edits) | **1m 18s** | time'd exactly |
 | 2026-11-19 | `sandbox_check.sh --warm` background warm-up RE-RUN (the recycle wiped `target/` again and rustup was missing AGAIN — the same install-then-restart dance as the row below; this run's gates lane is what made verify.sh hot) | **≈ 96 s** (log 11:15:49→11:17:25, exit 0) | the background log's timestamps ≈ |
 | 2026-11-19 | `sandbox_check.sh --warm` background warm-up (clippy + `cargo test --no-run --features mcp`) on a COLD lane — fresh sandbox, `target/` absent, rustup + the pinned 1.99.1 toolchain installed first (the first warm-up attempt started BEFORE rustup existed and died instantly on `cargo: command not found`, exit 0 — re-run after the install) | **96 s** ("Finished `gates` profile ... in 1m 36s") | the background log's timestamps |
