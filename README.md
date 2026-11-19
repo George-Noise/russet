@@ -9,14 +9,15 @@ automatically via rustup. Rust 1.95 or newer is required for all targets.
 ```bash
 nix build    # build -> ./result/bin/russet
 nix run      # build and start the app
-nix develop  # dev shell with cargo/clippy/rustfmt; plain `cargo run` works here too
+nix develop  # dev shell with cargo/clippy/rustfmt + the pinned trunk
 ```
 
 For quick functional checks there is a fast dev build (`nix build .#russet-dev`,
 `nix run .#russet-dev`): the same source, lock file and unit tests, compiled in
 the repo's fast `gates` profile (opt-level 0, no LTO) — minutes faster than the
 release lane. The UI is unoptimized, so it is for poking the functionality, not
-for judging the feel; plain `nix build` / `nix run` stay release.
+for judging the feel; plain `nix build` / `nix run` stay release. The web
+(trunk) lanes are flake apps too — see the Web section below.
 
 The built binary runs in a Wayland session and under X11 automatically (winit
 tries Wayland first and falls back to X11). To force a specific backend:
@@ -100,7 +101,22 @@ binaries); a normal terminal launch stays GUI-only.
 
 ## Web (WASM)
 
-One-time setup:
+On NixOS (or any other Linux with Nix) skip the one-time setup entirely — the
+flake builds the pinned trunk 0.22.1 itself (nixpkgs' trunk is older) and
+wraps the commands as apps:
+
+```bash
+nix run .#web-serve          # trunk serve — open http://localhost:8080
+nix run .#web-build          # trunk build -> ./dist (dev)
+nix run .#web-build-release  # trunk build --release -> ./dist
+```
+
+(`nix run` without an attribute stays the NATIVE app — the web apps are always
+explicit.) The apps run outside the nix sandbox, so trunk self-manages its
+tools: the wasm-bindgen matching the repo's Cargo.lock and its pinned wasm-opt
+are downloaded on first use and cached under `~/.cache/trunk`.
+
+Manual setup (Windows, or Linux without Nix):
 
 ```bash
 rustup target add wasm32-unknown-unknown

@@ -39,6 +39,7 @@
 | Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
 | Extra: palette alpha + a hex field in the color wells (owner 2026-11-19) | done — gates + driver green | `Alpha::OnlyBlend` (the picker's alpha slider + the A DragValue; the eyedropper's alpha no longer erased on popup open) + a "Hex" row parsing the launch-flag syntax (short form keeps the well's alpha, 8 digits sets it, `#RRGGBBAA` display, canonicalized on blur); one shared `launch.rs::parse_hex_components` feeds both consumers; windows/tests split by topic (rule 7) + 5 color-well tests; windows.rs 571 — OVER guard, the palette split PROPOSED (owner-gated); V40 born |
 | Extra: lenient hex + the windows.rs palette split (owner 2026-11-19) | done — gates + driver green | the Hex field eats pasted junk (every non-hex-digit char stripped, an optional `0x` prefix dropped) and the new digit-count forms 4 `RGBA` / 5 `RGBAA` / 7 `RRGGBBA` (the 5-vs-7 asymmetry is the owner's deliberate design); a per-well SEED alpha keeps a live-typed 5-digit prefix from leaking alpha into a final 6-digit color; the launch flags share the same `parse_hex_components` syntax; PURE code-motion split: `windows.rs` 571 → 351 + the child `windows/palette_window.rs` 287 (the palette window, wells, picker popup, hex field; the color-well tests moved to `palette_window/tests.rs` per Tests rule 2) — both under the guard, the OVER-GUARD note retired; V40 verified in chat, V41 born |
+| Extra: the flake drives the trunk lanes — web-serve / web-build / web-build-release (owner 2026-11-19) | done — hashes verified from the real downloads, gates green; a dup-`russet` app defect (the owner's first `.#web-serve` probe) is fixed, as is the zstd-sys build (nixpkgs' hook forces the system libzstd → pkg-config + zstd inputs — probe 2 confirmed: trunk builds and serves); probe 3 added stdenv.cc to the wrappers' PATH (host build-script linker) | the pinned trunk 0.22.1 is BUILT by the flake from the crates.io source (nixpkgs' trunk is 0.21.14 — the pin honored by construction; both fetchurl hashes computed from the real bytes, the shipped Cargo.lock byte-identical to the v0.22.1 tag, vendored hash-free via `cargoLock.lockFile`); `nix run .#web-serve` → trunk serve, `.#web-build` → trunk build, `.#web-build-release` → trunk build --release — apps run OUTSIDE the sandbox so trunk self-manages wasm-bindgen 0.2.130 + wasm-opt (~/.cache/trunk); `nix run` KEEPS the native app (owner decision same day: the default stays native, easier on the brain — the web apps are always explicit); `nix develop` gains the pinned trunk; README / SPEC §8 / AGENTS synced; a sandboxed `nix build` of the site deliberately NOT provided (no network; a FOD dist/ would pin a hash per commit) |
 | Extra: the delivery-pyc fix — .gitignore landed + deliver.sh guards (owner 2026-11-19) | done — guard tested both ways, gates green | the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside russet.zip (AND the patch): the v5 round CLAIMED the .gitignore entries but they never landed — HEAD carried only /target /dist /result, so the leak reopened on the first new import; `.gitignore` now really carries `__pycache__/` + `*.pyc`; `visual_driver.py` sets `sys.dont_write_bytecode` before the mcp_smoke import (the cache is no longer written at the source); `deliver.sh` gains TWO hard guards (the staged tree + the patch's ^diff headers) that FAIL the delivery on any bytecode cache |
 | Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
 
@@ -50,8 +51,10 @@ save-dialog tests this round), the wasm `cargo check --target wasm32-unknown-unk
 (file_io.rs touched) and the visual driver ALL SCENARIOS GREEN under Xvfb through
 the gates+mcp binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
-here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
-2026-11-16 (see the archived log history);
+here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
+`cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
+the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`); the manual trunk
+lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 (the
 owner-approved 2026-11-19 palette split brought `app/windows.rs` back under the guard:
 571 → 351 + the child `windows/palette_window.rs` 287).
@@ -82,6 +85,52 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > collapse entry moved during the 2026-11-19 lenient-hex round's budget. The
 > header-strip (variant A2) entry moved to the archive during the Save-dialog
 > round's budget (2026-11-19).
+
+### 2026-11-19 — `Feat:` the flake drives the trunk lanes — owner request
+
+- **What:** the owner asked for `nix build` / `nix run` around `trunk build`, `trunk serve`
+  and `trunk build --release`. Mapping: `nix run .#web-serve` → `trunk serve`;
+  `nix run .#web-build` → `trunk build`; `nix run .#web-build-release` →
+  `trunk build --release`; `nix run` (no attribute) KEEPS the native release app (owner
+  decision same day: "easier on the brain" — the default stays native, the web apps are
+  explicit); `nix build` / `.#russet-dev` unchanged. The web commands live as APPS, not
+  packages, deliberately: apps execute OUTSIDE the nix sandbox, so trunk self-manages its
+  tools — the wasm-bindgen 0.2.130 matching OUR Cargo.lock and its pinned wasm-opt
+  download on first use (`~/.cache/trunk`), exactly like a manual run; a sandboxed
+  `nix build` of the site would need a fixed-output dist/ hash per commit. Trunk itself:
+  the repo pins 0.22.1 (SPEC §8 — web/index.html's wasm-opt workaround depends on it)
+  while nixpkgs carries 0.21.14, so the flake BUILDS trunk 0.22.1 from the crates.io
+  source: fetchurl of the .crate, the shipped Cargo.lock vendored hash-free
+  (`cargoLock.lockFile` — the same mechanism the native packages use). Default features =
+  update_check + rustls (openssl-* never compile — the unused native-tls permutation;
+  rustls/ring needs only a C compiler). nixpkgs rustc ships the wasm32 std by default
+  (verified in rustc.nix) — no extra toolchain input. `nix develop` gains the pinned trunk.
+- **Files:** `flake.nix` (the webLane helper + apps + devShell + header), `README.md`,
+  `SPEC.md` (§8), `AGENTS.md` (the flake fact), PROGRESS (snapshot + entry).
+- **Verified:** both fetchurl hashes computed from the REAL downloads (curl: the static
+  CDN and the crates.io api returned identical bytes; hashes and the nixpkgs checks live
+  in flake.nix); no nix binary in this sandbox (`nix build` / `nix run` CANNOT be
+  executed here — that is V43), so the owner probes caught THREE real defects, each
+  fixed same day: (1) a dup-`russet` app (my default-revert) — flake failed to evaluate;
+  alias dropped, and the balance check now also hard-fails on duplicate attrset keys,
+  proven on the defective tree then green; (2) zstd-sys panicked in the trunk build:
+  nixpkgs' cargo-setup-hook exports ZSTD_SYS_USE_PKG_CONFIG=1 for EVERY
+  buildRustPackage (hook :120, rev f4a03c0) — build.rs probes the system libzstd (the
+  feature is off in the chain; zip pulls zstd default-features = false) and the sandbox
+  had neither tool nor lib; fixed with pkg-config + zstd inputs (the fontconfig
+  pattern; fixup rpaths); the NEXT probe CONFIRMED it — trunk 0.22.1 built and started
+  serving; (3) the wasm build died on `linker cc not found` — cargo compiles HOST
+  build-scripts first and a bare NixOS shell has no linker (wasm32 itself links with
+  rustc's built-in rust-lld); fixed with stdenv.cc in the wrappers' binPath; FULL hot
+  gate ALL GATES GREEN 8 s (179 default / 192 mcp, +1 ignored each) — nix/docs only,
+  the counts unchanged.
+- **Owner-checks:** V43 born (on NixOS: `nix run .#web-serve` serves the web dev server;
+  `nix run .#web-build` / `.#web-build-release` write ./dist; plain `nix run` still
+  starts the native app; the FIRST web run downloads trunk's tools — a one-time delay;
+  its probes caught the three defects above — the re-probe is the real pass; the update
+  notice advertised trunk 0.22.2 — the SPEC §8 pin stands).
+  Open: V43, V42, V41, V30 (parked), V8 (parked); debt F17 (the format-set decision).
+- **Commit title:** `Flake: the trunk lanes as nix apps (pinned trunk 0.22.1 built from the crates.io source; nix run .#web-serve / web-build / web-build-release; nix run keeps the native app)`
 
 ### 2026-11-19 — `Fix:` the bytecode-cache leak into the delivery artifacts — owner request
 
@@ -149,36 +198,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   the radio + quality, Browse… = the native folder dialog, both formats saved). Open: V42,
   V41, V30 (parked), V8 (parked); NEW debt F17 (which other formats).
 - **Commit title:** `Save Image dialog: Save and Save As converge on the in-app window (PNG/JPEG radio, quality, folder row); F17 debt: consider more file formats`
-
-### 2026-11-19 — `Feat:` the color wells edit alpha + a hex field under the picker — owner request
-
-- **What:** the owner asked for alpha in the custom-color picker and, bonus, a hex field
-  ("hex is needed too often"). `windows.rs::color_swell_button`: `Alpha::Opaque` →
-  `Alpha::OnlyBlend` — egui's alpha slider + the A DragValue appear, and egui stops forcing
-  the stored alpha to 1.0 (which silently erased an Eyedropper-picked translucent pixel on
-  the first popup open); the pipeline composites alpha end-to-end already. NEW: a "Hex" row
-  under the picker — displays `#RRGGBBAA`, parses the launch-flag syntax (`#RGB` doubled,
-  `#RRGGBB`, `#RRGGBBAA`, `#`/spaces optional): 8 digits SET the alpha, a short form KEEPS
-  the well's current alpha; the raw text lives in egui's per-well `IdTypeMap` (a frame-rebuilt
-  string would fight the caret), re-seeded on popup open / outside changes, canonicalized on
-  blur; invalid text applies nothing. One shared primitive `launch.rs::parse_hex_components`
-  (the old `parse_color` core extracted) feeds BOTH the flags and the field — the syntax
-  cannot drift; launch behavior unchanged (a missing alpha stays opaque). egui's premultiplied
-  `Color32` storage can nudge a translucent channel ±1 — an app-wide property, now noted in
-  the tests + the AGENTS quirk.
-- **Files:** `src/app/windows.rs` (the popup + `hex_edited_color`/`format_color_hex`; 571
-  lines — OVER the 500 guard: a palette-window split PROPOSED at task end, owner-gated),
-  `src/app/launch.rs` (the extraction + docstring), NEW `src/app/windows/tests/{common,
-  settings_panel,tools_strip,color_well}.rs` (the suite split by topic, Tests rule 7 — the
-  old tests.rs sat at 292 lines) + 5 color-well tests, `SPEC.md` §3.3, `AGENTS.md` (+1 quirk:
-  egui 0.37 has NO hex entry in the picker anywhere; the split's test path fixed),
-  `DEBTS-verification.md` (V40 born), PROGRESS (snapshot + entry + stamp + compaction),
-  TIMING (2 rows).
-- **Verified:** FULL hot gate ALL GATES GREEN 8 s — 168 default / 181 mcp green (+1 ignored
-  each; +5 color-well tests, the moved ones byte-identical); the visual driver ALL SCENARIOS
-  GREEN (15 checks) under Xvfb through the gates binary. No wasm lane: not a web-facing
-  change (the session rule).
-- **Owner-checks:** V40 born (the palette alpha + hex pass on Windows). Open: V40, V30
-  (parked), V8 (parked).
-- **Commit title:** `Palette: the color picker edits alpha (OnlyBlend) + a #RRGGBBAA hex field under it`
-

@@ -626,16 +626,27 @@ cargo build --release
 
 # --- Linux via Nix (flake.nix) ---
 nix build                # release (fat LTO) -> ./result/bin/russet
-nix run                  # build and start the release app
+nix run                  # build and start the release app (owner decision
+                         # 2026-11-19: the default keeps its old meaning —
+                         # the web apps are always explicit)
 nix build .#russet-dev   # FAST dev build (owner request 2026-11-16): the repo's
                          # `gates` profile (opt-level 0, no LTO) + the unit
                          # tests; the UI is unoptimized — functional checks,
                          # not feel. Plain `nix build` stays release.
 nix run .#russet-dev     # run the dev binary
-nix develop              # dev shell: cargo/clippy/fmt with the GUI libs on
-                         # LD_LIBRARY_PATH (plain `cargo run` works here)
+nix develop              # dev shell: cargo/clippy/fmt + the pinned trunk 0.22.1,
+                         # GUI libs on LD_LIBRARY_PATH (`cargo run` works here)
 
-# --- Web (milestone M8), installed once ---
+# --- Web via Nix (owner request 2026-11-19): the trunk lanes as apps ---
+# All three run the repo-pinned trunk 0.22.1 that the flake builds from the
+# crates.io source (nixpkgs' trunk is older). They execute OUTSIDE the nix
+# sandbox, so trunk self-manages its tools on first use (the wasm-bindgen
+# 0.2.130 matching Cargo.lock + its pinned wasm-opt, cached in ~/.cache/trunk).
+nix run .#web-serve           # trunk serve — http://127.0.0.1:8080
+nix run .#web-build           # trunk build -> ./dist (dev)
+nix run .#web-build-release   # trunk build --release -> ./dist
+
+# --- Web (milestone M8), installed once (Windows / Linux without Nix) ---
 # Run from the repo root: Trunk.toml points at web/index.html and dist/.
 rustup target add wasm32-unknown-unknown
 cargo install trunk --locked --version 0.22.1      # trunk is PINNED — see AGENTS.md "Repo facts"

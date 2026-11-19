@@ -63,6 +63,38 @@
   V41, V30 (parked), V8 (parked).
 - **Commit title:** `Palette hex field: junk-tolerant parsing + the digit-count forms (seed alpha); Split app/windows.rs: the Palette window to the child palette_window.rs (pure code motion)`
 
+### 2026-11-19 — `Feat:` the color wells edit alpha + a hex field under the picker — owner request
+
+- **What:** the owner asked for alpha in the custom-color picker and, bonus, a hex field
+  ("hex is needed too often"). `windows.rs::color_swell_button`: `Alpha::Opaque` →
+  `Alpha::OnlyBlend` — egui's alpha slider + the A DragValue appear, and egui stops forcing
+  the stored alpha to 1.0 (which silently erased an Eyedropper-picked translucent pixel on
+  the first popup open); the pipeline composites alpha end-to-end already. NEW: a "Hex" row
+  under the picker — displays `#RRGGBBAA`, parses the launch-flag syntax (`#RGB` doubled,
+  `#RRGGBB`, `#RRGGBBAA`, `#`/spaces optional): 8 digits SET the alpha, a short form KEEPS
+  the well's current alpha; the raw text lives in egui's per-well `IdTypeMap` (a frame-rebuilt
+  string would fight the caret), re-seeded on popup open / outside changes, canonicalized on
+  blur; invalid text applies nothing. One shared primitive `launch.rs::parse_hex_components`
+  (the old `parse_color` core extracted) feeds BOTH the flags and the field — the syntax
+  cannot drift; launch behavior unchanged (a missing alpha stays opaque). egui's premultiplied
+  `Color32` storage can nudge a translucent channel ±1 — an app-wide property, now noted in
+  the tests + the AGENTS quirk.
+- **Files:** `src/app/windows.rs` (the popup + `hex_edited_color`/`format_color_hex`; 571
+  lines — OVER the 500 guard: a palette-window split PROPOSED at task end, owner-gated),
+  `src/app/launch.rs` (the extraction + docstring), NEW `src/app/windows/tests/{common,
+  settings_panel,tools_strip,color_well}.rs` (the suite split by topic, Tests rule 7 — the
+  old tests.rs sat at 292 lines) + 5 color-well tests, `SPEC.md` §3.3, `AGENTS.md` (+1 quirk:
+  egui 0.37 has NO hex entry in the picker anywhere; the split's test path fixed),
+  `DEBTS-verification.md` (V40 born), PROGRESS (snapshot + entry + stamp + compaction),
+  TIMING (2 rows).
+- **Verified:** FULL hot gate ALL GATES GREEN 8 s — 168 default / 181 mcp green (+1 ignored
+  each; +5 color-well tests, the moved ones byte-identical); the visual driver ALL SCENARIOS
+  GREEN (15 checks) under Xvfb through the gates binary. No wasm lane: not a web-facing
+  change (the session rule).
+- **Owner-checks:** V40 born (the palette alpha + hex pass on Windows). Open: V40, V30
+  (parked), V8 (parked).
+- **Commit title:** `Palette: the color picker edits alpha (OnlyBlend) + a #RRGGBBAA hex field under it`
+
 ### 2026-11-19 — `Refactor:` tool_icons.rs split — the icon drawings to the child draw module — owner-approved
 
 - **What:** the file-guard debt paid for `app/tool_icons.rs` (673 lines after the 2026-11-18
