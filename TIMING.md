@@ -33,6 +33,8 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-19 | `cargo build --features mcp` (dev GUI binary for the visual driver; deps cold after the sandbox recycle, the crate rebuilt after the header change) | **≈ 5 min** (observed 07:44→07:49 from the binary's mtime; the re-run overwrote its log) | the binary's timestamps ≈ |
+| 2026-11-19 | `cargo build` (dev lane, hot deps, `windows.rs` + `windows/tests.rs` changed) | **1m 39s** | time'd exactly |
 | 2026-11-18 | `bash scripts/verify.sh` after a small code change (About window: 2 files + 2 tests, deps hot, gates profile) | **15.1 s** | time'd exactly |
 | 2026-11-17 | `bash scripts/verify.sh` after docs/script-only changes (no src/ touched — no rebuild; same after a bare `touch` of an unchanged file: cargo detects identical content) | **9 s** | time'd exactly |
 | 2026-11-17 | `cargo clippy --profile gates --all-targets` after real code changes (the magnet round) | 59 s | cargo's own "Finished in" |

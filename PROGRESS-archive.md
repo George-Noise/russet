@@ -1,5 +1,46 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-18 — `Fix:` icons v3 (light-theme buttons, dark rim, cylinder glass) + Theme-button v2 — owner pass
+
+- **What:** the owner CHECKED V36 + V37 (chat) with refinements: (1) ICONS v3 — the v2
+  theme-aware light rim REVERTED to the ONE dark rim in both themes, and the tool buttons
+  carry the LIGHT-theme background in the dark theme instead (`windows.rs::tool_button`
+  picks resting/hover/selected fills from `egui::Visuals::light()` — one drawing reads
+  well everywhere, the owner's stated goal); the pipette's glass is a full CYLINDER with
+  a cone ONLY at the tip and the collar ring got wider (still "a bit like a needle"
+  before); (2) THEME-BUTTON v2 — the button reads just "Theme" (no ": Dark" suffix — the
+  picked theme is visible by opening it), the System radio is plainly "System" (no
+  "(follow the OS)"), and the button sits BETWEEN View and Help — Help ALWAYS last;
+  the now-unused `theme_label()` is gone. SPEC §3.1/§3.2 updated; DEBTS V36/V37 carry
+  the refined asks (first pass done, re-check pending).
+- **Files:** `src/app/tool_icons.rs` (rim revert + pipette cylinder/wider collar),
+  `tool_icons/tests.rs` (the rim test now asserts the DARK rim with BOTH raster colors
+  + no light rim), `src/app/windows.rs` (light-theme button fills), `src/app/menu.rs`
+  (Theme before Help, plain labels), `src/app.rs` (`theme_label` removed), `SPEC.md`
+  (§3.1, §3.2), `DEBTS-verification.md` (V36/V37 updated), PROGRESS (snapshot + entry
+  + stamp).
+- **Verified:** the pipette was iterated on a dump contact sheet (cylinder + wider
+  collar read clean at 24 px on BOTH the dark and light rows); the rim test covers the
+  revert (dark rim with WHITE and BLACK raster); FULL hot gate below; visual driver
+  ALL SCENARIOS GREEN (regression).
+- **Owner-checks:** V36 + V37 updated to "refinements delivered; re-check pending".
+  Open: V37, V36, V30 (parked), V8 (parked).
+- **Commit title:** `Icons v3: light-theme button background + one dark rim, cylinder glass, wider collar; Theme button before Help`
+### 2026-11-18 — `Docs:` the language rule reworded — an English whitelist, not a script blacklist — owner request
+
+- **What:** the owner asked to reword the stamp's language rule: "Zero Cyrillic repo-wide" read as
+  hostile toward people whose writing systems use Cyrillic. The rule is now a WHITELIST: English is
+  the only language written in the repo (comments, docs, commit titles) — nothing is "banned",
+  English is simply what is used. One line in the stamp; no other rule text referenced the old
+  wording (grep: PROGRESS.md only; AGENTS.md's separate "user-facing strings are hardcoded English"
+  product rule is untouched).
+- **Files:** `PROGRESS.md` (stamp line; compaction: the icon-dump entry → archive; snapshot + this
+  entry + quote).
+- **Verified:** no src/ change — the hot gate below re-run for the ritual (161 default / 174 mcp);
+  the delivery rebuilt (byte-compares MATCH), the zip carries the new stamp.
+- **Owner-checks:** open: V36, V30 (parked), V8 (parked).
+- **Commit title:** `Reword the language rule as an English-only whitelist (stamp)`
+
 ### 2026-11-18 — `Tooling:` verify.sh hardened — stdin shield, stage timers, cold-lane hint — owner request
 
 - **What:** the owner (2026-11-18: "make verify.sh good — you work with this file") ordered the

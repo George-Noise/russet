@@ -33,6 +33,11 @@ click() { DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove "$1" "$2" sleep 0.3
 # (the menu bar spans the full width at y 0..~26 and would be matched
 # otherwise); the collapse/expand icon is the light cluster in the run's
 # first 40 rows, x < 48 (the ✕ sits further right). Prints "X Y" or nothing.
+# The run must be >= 10 rows: the X11 crosshair cursor (the Line tool over
+# the canvas) is ~30 px wide, so it ALSO crosses x=8 wherever the mouse
+# happens to idle — a ~6-row run — and clicking its centroid would click the
+# cursor's own position (a no-op) instead of the strip icon (caught by the
+# 2026-11-19 header round: the re-expand click landed on the idle cursor).
 locate_strip_icon() {
   python3 - "$1" <<'PYEOF'
 import sys
@@ -42,7 +47,21 @@ canvas = (64, 64, 64)
 rows = [y for y in range(40, im.height) if im.getpixel((8, y)) != canvas]
 if not rows:
     sys.exit(0)
-top = rows[0]
+runs = []
+start = prev = None
+for y in rows:
+    if start is None:
+        start = prev = y
+    elif y == prev + 1:
+        prev = y
+    else:
+        runs.append((start, prev))
+        start = prev = y
+if start is not None:
+    runs.append((start, prev))
+top = next((a for a, b in runs if b - a + 1 >= 10), None)
+if top is None:
+    sys.exit(0)
 pts = [(x, y) for y in range(top, min(top + 36, im.height))
        for x in range(10, 48) if im.getpixel((x, y))[0] > 100]
 if not pts:

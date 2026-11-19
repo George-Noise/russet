@@ -23,6 +23,10 @@ use crate::tools::{LineMode, ShapeKind, Tool};
 /// two-column grid. The rework is debt F15.
 const TOOL_COLUMNS: usize = 2;
 
+/// The gap between the tool-grid columns and rows (owner request 2026-11-18:
+/// equal gaps both ways).
+const TOOL_GRID_GAP: f32 = 6.0;
+
 /// The tool button's square size in logical points: the 1.5rem icon plus a
 /// small padding on every side.
 const TOOL_BUTTON_PT: f32 = tool_icons::ICON_PT + 4.0;
@@ -76,6 +80,28 @@ fn tool_has_settings(tool: Tool) -> bool {
     !matches!(tool, Tool::Pencil | Tool::Eyedropper)
 }
 
+/// The title strip's frame (owner v6 2026-11-19, "variant A2"): egui's default
+/// window frame with the HORIZONTAL inner margin zeroed. The strip's padding
+/// IS the title frame's inner margin (`window.rs::title_ui` lays the button
+/// atoms out in `Frame::NONE.inner_margin(frame.inner_margin)`), and an
+/// auto-sized window's strip is free to PAINT wider than the window — with the
+/// default 6-pt side padding the both-buttons strip (2 Heading-height atoms +
+/// 4 item-spacing gaps = 73.4 pt) painted 85.4 pt wide against the ~74-pt
+/// window and the ✕ landed half outside it (AGENTS.md quirk; owner report
+/// 2026-11-19). Zeroing the side padding makes the strip's minimum width
+/// (73.4 pt) fit the grid-width window, so the strip paints exactly the
+/// window's width and both buttons sit inside it. The VERTICAL padding stays
+/// (variant A2 keeps the strip's height, the fill and the rounded top corners
+/// exactly as the default window frame draws them — variant A, `Margin::ZERO`,
+/// additionally shrank the strip vertically and shifted the window's first-open
+/// position; the owner picked A2).
+fn tools_title_frame(ctx: &Context) -> egui::Frame {
+    let mut frame = egui::Frame::window(&ctx.global_style());
+    frame.inner_margin.left = 0;
+    frame.inner_margin.right = 0;
+    frame
+}
+
 /// Whether the magnetized settings panel is drawn THIS frame (owner request
 /// 2026-11-19): only while the Tools window shows its BODY — `tools_body_shown`
 /// is `Window::show`'s `inner.is_some()`, which egui reports as `None` exactly
@@ -106,6 +132,10 @@ fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'
         // empty-titled window; `Window::id` doc: "Required if the title
         // changes, or is shared with another window").
         .open(open)
+        // The strip fits the window — see `tools_title_frame` (owner v6,
+        // 2026-11-19, "variant A2"): without this the both-buttons strip paints
+        // ~11 pt past the window's right edge and the ✕ lands half outside it.
+        .title_frame(tools_title_frame(ctx))
         // First open (§3.2): 0.5rem from the left edge; vertically a bit
         // ABOVE center — 40% of the free vertical space above the window
         // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
@@ -141,7 +171,7 @@ impl App {
                 // made the column gap 18 pt while the row gap stayed 6 pt
                 // (owner request 2026-11-18: equal gaps both ways).
                 .min_col_width(TOOL_BUTTON_PT)
-                .spacing([6.0, 6.0])
+                .spacing([TOOL_GRID_GAP, TOOL_GRID_GAP])
                 .show(ui, |ui| {
                     for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {
                         for tool in row {

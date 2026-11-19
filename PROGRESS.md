@@ -34,16 +34,16 @@
 | Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
 | Extra: Tools window v5 — the bar back, only the label hidden (owner pass 2026-11-18) | done — gate + driver + magnet check | `Window::new("")` + the explicit `tools_window_id()` renders the title bar WITHOUT the text (egui derives the Id from the title even when empty); `.open` plumbing restored (the ✕ is back); AGENTS quirk rewritten (the empty-title recipe); .gitignore keeps `__pycache__`/`*.pyc` out of the artifacts; V36 → v5 re-check pending |
 | Extra: language rule → English-only whitelist (owner request 2026-11-18) | done — gate + deliver | the stamp's "Zero Cyrillic repo-wide" reworded: a language WHITELIST (English is the only written language), not a script blacklist — friendlier to readers of any writing system |
+| Extra: Tools strip fits the window — variant A2 (owner 2026-11-19) | done — gates + probes green | the title strip's HORIZONTAL padding zeroed via `Window::title_frame` (`windows.rs::tools_title_frame` = egui's default window frame with `inner_margin.left/right = 0`): the strip paints EXACTLY the window's width instead of ~11 pt past it, the ✕ no longer hangs half outside, BOTH buttons kept, the strip's height/fill/corners unchanged (variant A `Margin::ZERO` shrank the strip vertically — not picked); +1 regression test on the `__title_click` geometry; `gui_collapse_check.sh` locate fixed (the idle crosshair cursor fooled it); V38 + V36 verified in chat, V39 born |
 | Extra: Tools panel hides while collapsed (owner 2026-11-19) | done — gates + click probe green | the magnetized settings panel hides while the Tools window is collapsed to its title bar and returns on expand (`windows.rs::settings_panel_shown` on `Window::show`'s `inner.is_some()`); the header-width PROPOSAL delivered (measured options, no header code change — the owner picks); V38 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane): fmt clean, rules.sh
-HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-162 default / 175 mcp green (+1 ignored each — the permanent #[ignore] icon dump) with
-+1 collapse-panel regression test; the `scripts/gui_collapse_check.sh` click probe
-(expanded→collapsed→re-expanded, PIL-located buttons) ALL GREEN under Xvfb —
-Rust 1.99.1 pinned via rust-toolchain.toml, Linux. The bare-`cargo test --features mcp`
-STDIN TRAP fired once this session (an mcp stage hung 3 min — SANDBOX.md trap 10; only
-verify.sh's `exec </dev/null` shield makes that lane safe to run by hand).
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s): fmt clean,
+rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
+163 default / 176 mcp green (+1 ignored each — the permanent #[ignore] icon dump) with the
+title-strip-fit regression test (verified to FAIL pre-fix); the visual driver ALL SCENARIOS
+GREEN and the `scripts/gui_collapse_check.sh` click probe ALL GREEN under Xvfb
+(expanded→collapsed→re-expanded, PIL-located buttons, the cursor-run locate fix) —
+Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
 2026-11-16 (see the archived log history);
@@ -76,7 +76,39 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > icon-redraw entry moved during the icons-v4 round's budget, and the
 > Tooling entry moved during the v5 round's budget; the icon-dump entry
 > moved during the wording round's budget, and the icons-v2 entry moved
-> during the 2026-11-19 collapse round's budget.
+> during the 2026-11-19 collapse round's budget; the icons-v3 and
+> language-rule entries moved during the 2026-11-19 header round's budget.
+
+### 2026-11-19 — `Fix:` the Tools header strip fits the window — variant A2 — owner request
+
+- **What:** the owner picked "variant A2" among the measured header-width options: the title
+  strip's HORIZONTAL padding is zeroed — `tools_window_builder` feeds `Window::title_frame`
+  with egui's default window frame whose `inner_margin.left/right` are 0
+  (`app/windows.rs::tools_title_frame`) — so the both-buttons strip paints EXACTLY the
+  window's width instead of ~11 pt past it and the ✕ no longer lands half outside. BOTH
+  buttons kept (the ask); the VERTICAL padding stays, so the strip's height, fill and
+  rounded corners are unchanged (variant A, `Margin::ZERO`, additionally shrank the strip
+  vertically and shifted the first-open position — NOT picked). Also closed V38 + V36 in
+  chat and carried the probe fix below.
+- **Files:** `src/app/windows.rs` (tools_title_frame + the builder + the `TOOL_GRID_GAP`
+  const extracted), `windows/tests.rs` (+1 regression test: the strip's `__title_click`
+  drag strip spans collapse-icon-right .. close-icon-left, so the ▼/✕ atoms' outer edges
+  `(click ± (heading_h + icon_width)/2)` must stay within the window — verified to FAIL
+  pre-fix), `scripts/gui_collapse_check.sh` (locate_strip_icon now takes the first ≥10-row
+  non-canvas run at x=8 — the idle X11 crosshair cursor's ~6-row crossing fooled it into
+  clicking the cursor's own position; probe bug, not an app bug), `SPEC.md` §3.2,
+  `AGENTS.md` (quirk extended: the chosen fix + the test's atom math),
+  `DEBTS-verification.md` (V38 + V36 verified, V39 born), PROGRESS (compaction: the
+  icons-v3 + language-rule entries → archive; snapshot + entry + stamp), TIMING (2
+  build rows).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s (163 default / 176 mcp, +1 ignored
+  each); the pre-fix regression check (red with the title_frame line removed, green with
+  it); Xvfb strip probe: window 9..82 / strip 9..82 flush, ▼ 14..23 and ✕ 67..77 fully
+  inside (`download/tools_header_A2_fixed.png`); visual driver ALL SCENARIOS GREEN;
+  gui_collapse_check EXIT=0 (expanded→collapsed→re-expanded).
+- **Owner-checks:** V39 born (the header pass on Windows). Open: V39, V30 (parked),
+  V8 (parked).
+- **Commit title:** `Tools window: the title strip fits the window (zeroed strip side padding, variant A2)`
 
 ### 2026-11-19 — `Fix:` the settings panel hides while the Tools window is collapsed — owner request
 
@@ -104,21 +136,6 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V38 born (the collapse pass on Windows). Open: V38, V36 (v5 re-check
   pending), V30 (parked), V8 (parked).
 - **Commit title:** `Tools window: hide the magnetized settings panel while collapsed`
-
-### 2026-11-18 — `Docs:` the language rule reworded — an English whitelist, not a script blacklist — owner request
-
-- **What:** the owner asked to reword the stamp's language rule: "Zero Cyrillic repo-wide" read as
-  hostile toward people whose writing systems use Cyrillic. The rule is now a WHITELIST: English is
-  the only language written in the repo (comments, docs, commit titles) — nothing is "banned",
-  English is simply what is used. One line in the stamp; no other rule text referenced the old
-  wording (grep: PROGRESS.md only; AGENTS.md's separate "user-facing strings are hardcoded English"
-  product rule is untouched).
-- **Files:** `PROGRESS.md` (stamp line; compaction: the icon-dump entry → archive; snapshot + this
-  entry + quote).
-- **Verified:** no src/ change — the hot gate below re-run for the ritual (161 default / 174 mcp);
-  the delivery rebuilt (byte-compares MATCH), the zip carries the new stamp.
-- **Owner-checks:** open: V36, V30 (parked), V8 (parked).
-- **Commit title:** `Reword the language rule as an English-only whitelist (stamp)`
 
 ### 2026-11-18 — `Fix:` Tools window v5: the bar is back, only the label hidden — owner pass
 
@@ -171,30 +188,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V37 verified (owner approved the look). V36 → "v3 approved; v4
   polish delivered — re-check pending". Open: V36, V30 (parked), V8 (parked).
 - **Commit title:** `Icons v4: eraser rim in the set, dimmed buttons, fixed mono ink (theme-independent atlas), title-bar-less Tools`
-
-### 2026-11-18 — `Fix:` icons v3 (light-theme buttons, dark rim, cylinder glass) + Theme-button v2 — owner pass
-
-- **What:** the owner CHECKED V36 + V37 (chat) with refinements: (1) ICONS v3 — the v2
-  theme-aware light rim REVERTED to the ONE dark rim in both themes, and the tool buttons
-  carry the LIGHT-theme background in the dark theme instead (`windows.rs::tool_button`
-  picks resting/hover/selected fills from `egui::Visuals::light()` — one drawing reads
-  well everywhere, the owner's stated goal); the pipette's glass is a full CYLINDER with
-  a cone ONLY at the tip and the collar ring got wider (still "a bit like a needle"
-  before); (2) THEME-BUTTON v2 — the button reads just "Theme" (no ": Dark" suffix — the
-  picked theme is visible by opening it), the System radio is plainly "System" (no
-  "(follow the OS)"), and the button sits BETWEEN View and Help — Help ALWAYS last;
-  the now-unused `theme_label()` is gone. SPEC §3.1/§3.2 updated; DEBTS V36/V37 carry
-  the refined asks (first pass done, re-check pending).
-- **Files:** `src/app/tool_icons.rs` (rim revert + pipette cylinder/wider collar),
-  `tool_icons/tests.rs` (the rim test now asserts the DARK rim with BOTH raster colors
-  + no light rim), `src/app/windows.rs` (light-theme button fills), `src/app/menu.rs`
-  (Theme before Help, plain labels), `src/app.rs` (`theme_label` removed), `SPEC.md`
-  (§3.1, §3.2), `DEBTS-verification.md` (V36/V37 updated), PROGRESS (snapshot + entry
-  + stamp).
-- **Verified:** the pipette was iterated on a dump contact sheet (cylinder + wider
-  collar read clean at 24 px on BOTH the dark and light rows); the rim test covers the
-  revert (dark rim with WHITE and BLACK raster); FULL hot gate below; visual driver
-  ALL SCENARIOS GREEN (regression).
-- **Owner-checks:** V36 + V37 updated to "refinements delivered; re-check pending".
-  Open: V37, V36, V30 (parked), V8 (parked).
-- **Commit title:** `Icons v3: light-theme button background + one dark rim, cylinder glass, wider collar; Theme button before Help`
