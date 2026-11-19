@@ -18,6 +18,10 @@
 //!   [`mcp`]       — owner request 2026-11-12, feature `mcp`: the stdio
 //!                   MCP server (compiled out without the feature)
 //!   [`menu`]      — owner request 2026-11-13: the top menu bar (§3.1)
+//!   [`tool_icons`] — owner request 2026-11-18: the Tools window's ICON
+//!                   buttons — the tiny-skia atlas + the Eyedropper's
+//!                   pipette cursor; the icon drawings live in the child
+//!                   `tool_icons/draw` (the 2026-11-19 file-guard split)
 //!   [`tool_log`]  — owner request 2026-11-10: the "Tool Log" window (the
 //!                   read-only action log, named "History" until 2026-11-13)
 //!                   — both were `app/panels.rs` until the 2026-11-17 split

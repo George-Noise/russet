@@ -29,7 +29,6 @@
 
 | # | Opened | What the human must check | Source (PROGRESS.md log) | Status |
 |---|---|---|---|---|
-| V39 | 2026-11-19 | The Tools-window header pass (Windows `cargo run`): the title strip now paints EXACTLY the window's width — the ✕ no longer hangs half outside the window's right edge (the "variant A2" fix: the strip's side padding zeroed, both the ▼ and the ✕ kept, the strip's height and look otherwise unchanged). Check the strip in BOTH themes, expanded (both buttons inside the window), collapsed (the strip is the whole window, the ▼/✕ still work), and after a collapse/expand round trip; the magnetized panel must still follow (it was unaffected — V38 already verified the hide-while-collapsed rule). | 2026-11-19 header-A2 entry | open |
 | V37 | 2026-11-18 | The theme-switcher pass (Windows `cargo run`): the menu-bar button sits BETWEEN View and Help (Help always LAST), reads just "Theme" (no ": Dark" suffix), the radio options are plainly Dark / Light / System; picking one re-styles the WHOLE UI immediately; System follows the OS preference and is the startup default; the Tool Log records "Theme: …"; the MCP tool `set_theme` (dark/light/system) switches the theme the same way. | 2026-11-18 theme-switcher entry | **verified 2026-11-18 via chat** (owner approved the look; no further asks) |
 | V35 | 2026-11-18 | The redrawn-icons look pass (Windows `cargo run`, Tools window): the BRUSH reads at a glance as a classic round brush (round volumetric bristle belly, crimped metal ferrule, wooden handle, dark paint-loaded tip — no longer "a second pencil") and the EYEDROPPER as a classic pipette (round red rubber bulb, wider metal collar, tapering glass with the blue liquid — no longer "a pen"); the two-column grid gaps are EQUAL horizontally and vertically; hover tooltips still name each tool. | 2026-11-18 icon-redraw entry | **verified 2026-11-18 via chat** (owner checked the icons; his improvement list became V36) |
 | V34 | 2026-11-18 | The fully-unoptimized-dev pass (Windows `cargo run` on the delivered tree): the dev profile now compiles EVERYTHING unoptimized (`opt-level 0`, no debuginfo, no per-dependency overrides) — the pass only confirms the build completes and the app runs with every feature still visually checkable (draw, zoom/pan, floating windows, dialogs, history). UI responsiveness MAY lag — expected and accepted (owner: "it's dev — it's fine if it lags"); the owner judges whether the faster build is enough for quick visual feature checks. | 2026-11-18 unoptimized-dev entry (PROGRESS-archive.md) | **verified 2026-11-18 via chat** (owner: the build is fast "and nothing even lags") |
@@ -44,13 +43,16 @@
 
 Resolved (kept until the next compaction, then dropped):
 
-- V38 — verified 2026-11-19 via chat (owner: "V38 проверил"): the collapse-hide
+- V39 — verified 2026-11-19 via chat (owner: "checked V39"): the header pass
+  clicked through on Windows — the title strip fits the window (variant A2),
+  both the ▼ and the ✕ kept.
+- V38 — verified 2026-11-19 via chat (owner: "checked V38"): the collapse-hide
   pass clicked through on Windows — the panel vanishes with the collapsed
   window and returns on expand.
-- V36 — verified 2026-11-19 via chat (owner: "V36 иконки я проверил и шапку без
-  текста тоже"): the icons pass AND the v5 label-less header both checked; the
-  owner's follow-up (the strip still overflows the window) became the header
-  task and V39.
+- V36 — verified 2026-11-19 via chat (owner: "checked the V36 icons and the
+  text-less header too"): the icons pass AND the v5 label-less header both
+  checked; the owner's follow-up (the strip still overflows the window) became
+  the header task and V39.
 - V1, V2, V3 — verified 2026-11-13 via chat (owner: "verified V1 V2 V3"): the six
   tools, the six UX-fix items, the §3.11 magnetize/shadow pass — all clicked through
   on Windows.

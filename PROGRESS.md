@@ -36,6 +36,7 @@
 | Extra: language rule → English-only whitelist (owner request 2026-11-18) | done — gate + deliver | the stamp's "Zero Cyrillic repo-wide" reworded: a language WHITELIST (English is the only written language), not a script blacklist — friendlier to readers of any writing system |
 | Extra: Tools strip fits the window — variant A2 (owner 2026-11-19) | done — gates + probes green | the title strip's HORIZONTAL padding zeroed via `Window::title_frame` (`windows.rs::tools_title_frame` = egui's default window frame with `inner_margin.left/right = 0`): the strip paints EXACTLY the window's width instead of ~11 pt past it, the ✕ no longer hangs half outside, BOTH buttons kept, the strip's height/fill/corners unchanged (variant A `Margin::ZERO` shrank the strip vertically — not picked); +1 regression test on the `__title_click` geometry; `gui_collapse_check.sh` locate fixed (the idle crosshair cursor fooled it); V38 + V36 verified in chat, V39 born |
 | Extra: Tools panel hides while collapsed (owner 2026-11-19) | done — gates + click probe green | the magnetized settings panel hides while the Tools window is collapsed to its title bar and returns on expand (`windows.rs::settings_panel_shown` on `Window::show`'s `inner.is_some()`); the header-width PROPOSAL delivered (measured options, no header code change — the owner picks); V38 born |
+| Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
 
 **Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
@@ -47,10 +48,9 @@ Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
 2026-11-16 (see the archived log history);
-every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
-`app/tool_icons.rs` 673 (grew in the 2026-11-18 icon rounds; the natural split is the icon
-draw fns vs the atlas/cursor pipeline — re-proposed to the owner at the 2026-11-19 delivery,
-not done without his approval).
+every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569
+(the 2026-11-19 owner-approved split retired the last agent-side exception:
+`app/tool_icons.rs` 673 → 308 + the child `app/tool_icons/draw.rs` 400).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -77,7 +77,35 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > Tooling entry moved during the v5 round's budget; the icon-dump entry
 > moved during the wording round's budget, and the icons-v2 entry moved
 > during the 2026-11-19 collapse round's budget; the icons-v3 and
-> language-rule entries moved during the 2026-11-19 header round's budget.
+> language-rule entries moved during the 2026-11-19 header round's budget;
+> the icons-v4 entry moved during the 2026-11-19 split round's budget.
+
+### 2026-11-19 — `Refactor:` tool_icons.rs split — the icon drawings to the child draw module — owner-approved
+
+- **What:** the file-guard debt paid for `app/tool_icons.rs` (673 lines after the 2026-11-18
+  icon rounds; proposed twice, and the owner approved it at the V39 check: "do the split of
+  app/tool_icons.rs"). PURE code motion, zero behavior change: the SEVEN ICON DRAWINGS — the
+  per-tool `draw_*` fns with their fixed color specs, `TOOL_ANGLE`, `PIPETTE_TIP` and the
+  `rasterize_tool_icon` dispatcher — moved VERBATIM to the child module `app/tool_icons/draw.rs`
+  (400 lines), which imports the parent's shared primitives (`fill`/`stroke`/`arc_pts`/
+  `quad_pts`/`icon_transform`/`OUTLINE_W`); the parent (308 lines) keeps the atlas/cursor
+  pipeline and the shared primitives and imports the dispatcher (`use self::draw::{…}`) — every
+  `tool_icons::` path stays (app.rs/windows.rs untouched) and the tests' `super::` imports are
+  unchanged byte-for-byte (the parent's private bindings resolve them). Same shape as the
+  `tree_window`/`paint` child. No owner check born (the panels-split precedent: pure code
+  motion is proven by the unchanged suite + the gates).
+- **Files:** `src/app/tool_icons.rs` (673 → 308), NEW `src/app/tool_icons/draw.rs` (400),
+  `src/app.rs` (the module map's `tool_icons` entry added, with the child mention),
+  `AGENTS.md` (the module-list entry updated), `DEBTS-verification.md` (V39 verified + moved
+  to Resolved; two resolved-entry owner quotes translated to English per the language
+  whitelist), PROGRESS (snapshot + entry + stamp + the icons-v4 entry → archive).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s — rules HARD green (the tool_icons
+  OVER-GUARD note retired; only the owner-deferred history_tree.rs 569 remains), fmt clean,
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 163 default /
+  176 mcp green (+1 ignored each) — the counts UNCHANGED from the pre-split tree, the
+  pure-code-motion proof. No wasm lane: not a web-facing change (the session rule).
+- **Owner-checks:** none born. Open: V30 (parked), V8 (parked).
+- **Commit title:** `Split app/tool_icons.rs: the icon drawings move to the child tool_icons/draw.rs (pure code motion)`
 
 ### 2026-11-19 — `Fix:` the Tools header strip fits the window — variant A2 — owner request
 
@@ -159,32 +187,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V36 → "v3 approved; v4 bar over-removed, v5 label-only delivered —
   re-check pending". Open: V36, V30 (parked), V8 (parked).
 - **Commit title:** `Tools window: keep the title bar, hide only the label (empty title + explicit id)`
-
-### 2026-11-18 — `Fix:` icons v4 (eraser rim, dimmed buttons, fixed ink) + title-bar-less Tools — owner pass
-
-- **What:** the owner APPROVED the v3 pass ("much better now") and ordered four
-  leftovers: (1) the ERASER's outline joined the set's style — dark plum (92,52,66)
-  instead of the light pink that blended with the faces; (2) the tool buttons' REST/HOVER
-  fills dimmed A STEP (−14/channel: gray 230 → 216 rest, 220 → 206 hover — the full
-  light-theme button contrasted hard against BOTH themes' window backgrounds; the
-  selection fill keeps the bright blue); (3) the MONO icons' ink FIXED — `TOOL_INK`
-  gray 64 (the light theme's text gray 80, a bit darker), no white/black flip on theme
-  switch → the icons are FULLY theme-independent → the atlas key dropped to just
-  `pixels_per_point` (the theme re-raster died with its reason; the atlas test reworked:
-  a theme switch uploads only egui's theme-dependent font atlas, never our 7 — AGENTS
-  quirk); (4) the Tools window has NO TITLE BAR (`title_bar(false)` — the header was
-  wider than the tiny window): egui derives the Id from the title even with the bar
-  hidden (the explicit `tools_window_id()` keeps the identity — AGENTS quirk),
-  `WindowDrag::TitleBar` falls back to Anywhere (still draggable), the ✕ is gone →
-  View ▸ Tools closes.
-- **Files:** `src/app/tool_icons.rs` (TOOL_INK, eraser rims, key/ensure), 
-  `tool_icons/tests.rs` (atlas test reworked, mono-ink test, eraser-rim asserts),
-  `src/app/windows.rs` (dim + title_bar(false)), `SPEC.md` (§3.2), `AGENTS.md` (+2
-  quirks), `DEBTS-verification.md` (V37 verified; V36 → v4), `PROGRESS.md` (compaction:
-  the icon-redraw entry → PROGRESS-archive.md; snapshot + entry + stamp).
-- **Verified:** the eraser iterated on the dump contact sheet (reads as the set);
-  FULL hot gate below (161 default / 174 mcp); headless visual driver ALL SCENARIOS
-  GREEN (regression).
-- **Owner-checks:** V37 verified (owner approved the look). V36 → "v3 approved; v4
-  polish delivered — re-check pending". Open: V36, V30 (parked), V8 (parked).
-- **Commit title:** `Icons v4: eraser rim in the set, dimmed buttons, fixed mono ink (theme-independent atlas), title-bar-less Tools`

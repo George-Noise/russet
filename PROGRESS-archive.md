@@ -1,5 +1,34 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-18 — `Fix:` icons v4 (eraser rim, dimmed buttons, fixed ink) + title-bar-less Tools — owner pass
+
+- **What:** the owner APPROVED the v3 pass ("much better now") and ordered four
+  leftovers: (1) the ERASER's outline joined the set's style — dark plum (92,52,66)
+  instead of the light pink that blended with the faces; (2) the tool buttons' REST/HOVER
+  fills dimmed A STEP (−14/channel: gray 230 → 216 rest, 220 → 206 hover — the full
+  light-theme button contrasted hard against BOTH themes' window backgrounds; the
+  selection fill keeps the bright blue); (3) the MONO icons' ink FIXED — `TOOL_INK`
+  gray 64 (the light theme's text gray 80, a bit darker), no white/black flip on theme
+  switch → the icons are FULLY theme-independent → the atlas key dropped to just
+  `pixels_per_point` (the theme re-raster died with its reason; the atlas test reworked:
+  a theme switch uploads only egui's theme-dependent font atlas, never our 7 — AGENTS
+  quirk); (4) the Tools window has NO TITLE BAR (`title_bar(false)` — the header was
+  wider than the tiny window): egui derives the Id from the title even with the bar
+  hidden (the explicit `tools_window_id()` keeps the identity — AGENTS quirk),
+  `WindowDrag::TitleBar` falls back to Anywhere (still draggable), the ✕ is gone →
+  View ▸ Tools closes.
+- **Files:** `src/app/tool_icons.rs` (TOOL_INK, eraser rims, key/ensure), 
+  `tool_icons/tests.rs` (atlas test reworked, mono-ink test, eraser-rim asserts),
+  `src/app/windows.rs` (dim + title_bar(false)), `SPEC.md` (§3.2), `AGENTS.md` (+2
+  quirks), `DEBTS-verification.md` (V37 verified; V36 → v4), `PROGRESS.md` (compaction:
+  the icon-redraw entry → PROGRESS-archive.md; snapshot + entry + stamp).
+- **Verified:** the eraser iterated on the dump contact sheet (reads as the set);
+  FULL hot gate below (161 default / 174 mcp); headless visual driver ALL SCENARIOS
+  GREEN (regression).
+- **Owner-checks:** V37 verified (owner approved the look). V36 → "v3 approved; v4
+  polish delivered — re-check pending". Open: V36, V30 (parked), V8 (parked).
+- **Commit title:** `Icons v4: eraser rim in the set, dimmed buttons, fixed mono ink (theme-independent atlas), title-bar-less Tools`
+
 ### 2026-11-18 — `Fix:` icons v3 (light-theme buttons, dark rim, cylinder glass) + Theme-button v2 — owner pass
 
 - **What:** the owner CHECKED V36 + V37 (chat) with refinements: (1) ICONS v3 — the v2
