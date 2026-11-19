@@ -150,10 +150,14 @@
         # stdenv's cc rides on PATH because cargo compiles HOST build-scripts
         # (wasm-bindgen-shared, rustversion, ...) BEFORE the wasm code, and
         # the host linker must exist there — a plain NixOS shell has none
-        # (owner probe 2026-11-19). The wasm32 target itself links with
-        # rustc's built-in rust-lld, so no wasm cc is needed.
+        # (owner probe 2026-11-19). lld sits next to it for the FINAL wasm
+        # link: stock rustc would self-link via its bundled rust-lld, but
+        # the owner's cargo environment asks for a PATH `lld` (probe 4; no
+        # repo file does — no .cargo/config.toml exists — so most plausibly
+        # a ~/.cargo/config.toml from the manual SPEC §8 era). The wrapper
+        # honors the request instead of overriding back to rust-lld.
         binPath = pkgs.lib.makeBinPath [
-          trunk pkgs.cargo pkgs.rustc pkgs.stdenv.cc
+          trunk pkgs.cargo pkgs.rustc pkgs.stdenv.cc pkgs.lld
         ];
 
         serve = pkgs.writeShellScriptBin "russet-web-serve" ''
@@ -300,6 +304,10 @@
               rust-analyzer
               pkg-config
               fontconfig
+              # The final wasm link needs this in ANY shell the owner's
+              # cargo environment drives (it asks for a PATH `lld`; see the
+              # webLane binPath comment) — same fix as the wrappers.
+              lld
               # The repo-pinned trunk 0.22.1, so a manual `trunk serve` /
               # `trunk build` inside the shell hits the same binary the
               # apps use (its wasm-bindgen/wasm-opt self-manage on first
