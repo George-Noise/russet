@@ -7,7 +7,8 @@
 //! is §3.11 and lives in [`super::placement`]. The "Tools" window also owns
 //! its magnetized per-tool settings panel (owner request 2026-11-17): the
 //! position math is `super::placement::magnet_settings_pos`, the window
-//! itself is `tool_settings_window` below.
+//! itself is `tool_settings_window` below, and the panel hides while the
+//! Tools window is collapsed to its title bar (owner request 2026-11-19).
 
 use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 
@@ -75,6 +76,51 @@ fn tool_has_settings(tool: Tool) -> bool {
     !matches!(tool, Tool::Pencil | Tool::Eyedropper)
 }
 
+/// Whether the magnetized settings panel is drawn THIS frame (owner request
+/// 2026-11-19): only while the Tools window shows its BODY — `tools_body_shown`
+/// is `Window::show`'s `inner.is_some()`, which egui reports as `None` exactly
+/// while the window is collapsed to its title bar (the collapse button /
+/// double-click state; `window.rs` show-doc: "Returns
+/// `Some(InnerResponse { inner: None })` if the window is collapsed") — and
+/// while the current tool has settings at all. A collapsed window shows no
+/// tool list, so the panel glued to it has nothing to attach to; it comes
+/// back the frame the window is expanded again.
+fn settings_panel_shown(tools_body_shown: bool, tool: Tool) -> bool {
+    tools_body_shown && tool_has_settings(tool)
+}
+
+/// The builder of the "Tools" window itself (§3.2). Exposed as a function so
+/// the regression tests (`windows/tests.rs`) run the exact builder the app
+/// runs.
+fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'a> {
+    egui::Window::new("")
+        .id(tools_window_id())
+        // Owner v5 (2026-11-18): the v4 `title_bar(false)` removed the
+        // WHOLE bar (drag strip + buttons), but the owner wanted only
+        // the LABEL hidden — the header (drag + close) is part of the
+        // window's look. An EMPTY title string does exactly that:
+        // `title_ui` builds the bar from the button atoms and the drag
+        // strip regardless of the text (`window.rs`), the text atom is
+        // just empty. The Id stays EXPLICIT — egui derives it from the
+        // title (an empty string would collide with any other
+        // empty-titled window; `Window::id` doc: "Required if the title
+        // changes, or is shared with another window").
+        .open(open)
+        // First open (§3.2): 0.5rem from the left edge; vertically a bit
+        // ABOVE center — 40% of the free vertical space above the window
+        // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
+        // pivot + `default_pos` set the left gap and a centered start;
+        // the exact 40/60 split is applied once by the placement glue on
+        // the first frame (`placement::TOOLS_FIRST_OPEN_RATIO`), because
+        // the auto-sized height is only known after the first layout.
+        // `default_pos` is consumed only while the window has no stored
+        // position — after any user move or §3.11 repositioning the
+        // stored position always wins.
+        .pivot(egui::Align2::LEFT_CENTER)
+        .default_pos(ctx.content_rect().left_center() + egui::vec2(FIRST_OPEN_GAP, 0.0))
+        .auto_sized() // size follows the content; no resize handles
+}
+
 impl App {
     pub(super) fn tools_window(&mut self, ctx: &Context) {
         if !self.tools_window_open {
@@ -84,53 +130,27 @@ impl App {
         // `App::ui` — before the canvas, so the Eyedropper's pipette cursor
         // exists too; here every frame just blits the cached textures.
         let mut open = true;
-        let shown = egui::Window::new("")
-            .id(tools_window_id())
-            // Owner v5 (2026-11-18): the v4 `title_bar(false)` removed the
-            // WHOLE bar (drag strip + buttons), but the owner wanted only
-            // the LABEL hidden — the header (drag + close) is part of the
-            // window's look. An EMPTY title string does exactly that:
-            // `title_ui` builds the bar from the button atoms and the drag
-            // strip regardless of the text (`window.rs`), the text atom is
-            // just empty. The Id stays EXPLICIT — egui derives it from the
-            // title (an empty string would collide with any other
-            // empty-titled window; `Window::id` doc: "Required if the title
-            // changes, or is shared with another window").
-            .open(&mut open)
-            // First open (§3.2): 0.5rem from the left edge; vertically a bit
-            // ABOVE center — 40% of the free vertical space above the window
-            // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
-            // pivot + `default_pos` set the left gap and a centered start;
-            // the exact 40/60 split is applied once by the placement glue on
-            // the first frame (`placement::TOOLS_FIRST_OPEN_RATIO`), because
-            // the auto-sized height is only known after the first layout.
-            // `default_pos` is consumed only while the window has no stored
-            // position — after any user move or §3.11 repositioning the
-            // stored position always wins.
-            .pivot(egui::Align2::LEFT_CENTER)
-            .default_pos(ctx.content_rect().left_center() + egui::vec2(FIRST_OPEN_GAP, 0.0))
-            .auto_sized() // size follows the content; no resize handles
-            .show(ctx, |ui| {
-                // The Tools window itself is ONLY the tool list: the per-tool
-                // settings live in the magnetized panel below/above it (owner
-                // request 2026-11-17, see `tool_settings_window`).
-                egui::Grid::new("tools_grid")
-                    .num_columns(TOOL_COLUMNS)
-                    // egui floors every column at `interact_size.x` (40 pt),
-                    // which padded the 28 pt buttons with invisible width and
-                    // made the column gap 18 pt while the row gap stayed 6 pt
-                    // (owner request 2026-11-18: equal gaps both ways).
-                    .min_col_width(TOOL_BUTTON_PT)
-                    .spacing([6.0, 6.0])
-                    .show(ui, |ui| {
-                        for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {
-                            for tool in row {
-                                self.tool_button(ui, *tool);
-                            }
-                            ui.end_row();
+        let shown = tools_window_builder(ctx, &mut open).show(ctx, |ui| {
+            // The Tools window itself is ONLY the tool list: the per-tool
+            // settings live in the magnetized panel below/above it (owner
+            // request 2026-11-17, see `tool_settings_window`).
+            egui::Grid::new("tools_grid")
+                .num_columns(TOOL_COLUMNS)
+                // egui floors every column at `interact_size.x` (40 pt),
+                // which padded the 28 pt buttons with invisible width and
+                // made the column gap 18 pt while the row gap stayed 6 pt
+                // (owner request 2026-11-18: equal gaps both ways).
+                .min_col_width(TOOL_BUTTON_PT)
+                .spacing([6.0, 6.0])
+                .show(ui, |ui| {
+                    for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {
+                        for tool in row {
+                            self.tool_button(ui, *tool);
                         }
-                    });
-            });
+                        ui.end_row();
+                    }
+                });
+        });
         if let Some(response) = &shown {
             place_floating_window(
                 ctx,
@@ -144,7 +164,9 @@ impl App {
             // frame: a title-bar drag moves both in the same frame, and the
             // §3.11 resize repositioning (which persists into the next frame)
             // is followed the frame it becomes visible.
-            self.tool_settings_window(ctx, response.response.rect);
+            if settings_panel_shown(response.inner.is_some(), self.tools.tool) {
+                self.tool_settings_window(ctx, response.response.rect);
+            }
         }
         if !open {
             self.tools_window_open = false;

@@ -23,15 +23,11 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-19 | `sandbox_check.sh --warm` background warm-up (clippy + `cargo test --no-run --features mcp`) on a COLD lane — fresh sandbox, `target/` absent, rustup + the pinned 1.99.1 toolchain installed first (the first warm-up attempt started BEFORE rustup existed and died instantly on `cargo: command not found`, exit 0 — re-run after the install) | **96 s** ("Finished `gates` profile ... in 1m 36s") | the background log's timestamps |
 | 2026-11-18 | `cargo build --features mcp` (dev lane for the visual driver; deps warm, the crate rebuilt after 5 src files changed — icons, theme, MCP) | **104 s** | time'd exactly |
 | 2026-11-18 | `sandbox_check.sh --warm` background warm-up (clippy + `cargo test --no-run --features mcp`) on a TRULY cold lane (`rm -rf target/gates` first) — the session's first action; verify.sh after it is hot | **192 s** (19:00:20→19:03:32, exit 0) | the background log's timestamps |
 | 2026-11-18 | `bash scripts/verify.sh` FULL gate on a COLD lane (first run of the hardened gate — `exec </dev/null` shield + stage timers): rules 0 s / fmt 0 s / clippy 84 s / test 156 green 98 s / mcp clippy 3 s / mcp test 168 green 6 s — the mcp stage exited instantly, no stdin hang | **191 s total** | the script's own stage timers |
 | 2026-11-18 | `cargo check` (dev, FIRST run under the FULLY UNOPTIMIZED policy — owner decision 2026-11-18: fresh sandbox, all deps compiled unoptimized; toolchain fetched before the timer) | **1m31s** (was 3m51s the same morning under optimized deps) | time'd exactly |
-| 2026-11-18 | `cargo check` (dev, fresh sandbox: rustup 1.99.1 installed first, then ALL deps compiled; docs/comment-only tree) | 3m51s | time'd exactly |
-| 2026-11-17 | rustup install + fetch pinned 1.99.1 toolchain (fresh sandbox, no rustup at all) | ≈ 3–4 min | ≈ (background-log mtimes) |
-| 2026-11-17 | `cargo test --profile gates` (gates profile fresh: all test deps compiled) | ≈ 4–6 min | ≈ (observed via background poll) |
-| 2026-11-18 | `bash scripts/verify.sh` FIRST run in a cold gates lane (all gate deps compiled; the run itself FAILED at a new test — the 3 min is the compile cost, the fix re-ran hot) | ≈ 3 min | time'd exactly |
-| 2026-11-17 | `cargo check --target wasm32-unknown-unknown` (target triple fresh; deps recompiled for wasm) | ≈ 1.5–2.5 min + one-time `rustup target add` download | ≈ (background-log mtimes; the finishing pass measured 1m38s) |
 
 ## Hot
 

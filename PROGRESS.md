@@ -21,29 +21,6 @@
 | M7 Resize Canvas + New | done | |
 | M8 Web (WASM) | built + headless Firefox check (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` + Firefox: UI renders, canvas draws, WebGL2 — a headless smoke test, not a human pass. Owner must click through drawing/zoom/pan/Open/Save with a real mouse |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
-| Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; 2026-11-18: + "written in Rust" description + GitHub repo hyperlink; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
-| Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |
-| Extra: README.md | done | English, build & run only (Windows / NixOS / Web); declared the human-facing doc in AGENTS.md + SPEC §8 |
-| Extra: 6 tools/panels (owner 2026-11-10) | code written, tests green | Eyedropper (I), Line/Curve (L), Shape (U), Text (T), History log window, Layers placeholder window — see the log entries below; deliberately simple first iterations, followed by a UX-polish patch the same day (window positions, Shape outline+fill, preview fidelity) |
-| Extra: CI + CONTRIBUTING.md + doc-tree removal (owner 2026-11-11) | done — first CI run GREEN (success for `0188c52`, GitHub Actions) | `.github/workflows/ci.yml` (native gate: fmt/clippy/test, Rust pinned 1.99.1; wasm job postponed by the owner); `CONTRIBUTING.md` + PR template for outsiders (one logical change per non-owner PR; the owner pushes directly); file trees removed from AGENTS.md and SPEC §2 — the filesystem is the source of truth; trunk pinned 0.22.1 everywhere, PERF P9 added |
-| Extra: machine rules job (owner 2026-11-11) | code written, rules.sh tested in sandbox | new `scripts/rules.sh` — grep-level subset of AGENTS.md, single source of truth shared by verify.sh and CI: HARD (exit 1) = inline test modules + `unwrap()` anywhere in `src/`; SOFT report-only = `expect()` outside tests (5 known sites listed) + 500-line guard; CI gained a fast `rules` job (no Rust toolchain) |
-| Extra: dependency approval flow (owner 2026-11-12) | done | AGENTS.md "Dependencies — approval flow" + SPEC §6 exception + CONTRIBUTING.md — the hard no-deps ban became propose → discuss → owner decides; no code touched |
-| Extra: opt-in MCP server (owner 2026-11-12) | done — 10 tools behind `mcp` | default build byte-identical graph (no serde_json/threads); `get_tree_layout` + `add_layer` added 2026-11-13; verify.sh gates the feature |
-| Extra: History Tree windows (owner 2026-11-12) | done — lanes reworked 2026-11-13 | divergence-only forks, recency lanes, shared connector exits, per-row labels; MCP-driven scenarios + Xvfb screenshots green |
-| Extra: 500-guard splits (owner 2026-11-13) | done — pure code motion | `history_tree/layout.rs`, `tree_window/paint.rs`, `app/document.rs` + `menu.rs` + `input.rs`; app.rs 936 → ~440, every src file ≤ 500 |
-| Extra: agent workflow v2 (owner 2026-11-13) | done | DEBTS-verification.md + DEBTS-functional.md debt lists; rules.sh PROGRESS budget check; baseline-before-edits rule; CI runs the mcp gates; visual_driver.py rewritten as the scenario runner |
-| Extra: REAL layers + per-node PNG history (owner 2026-11-13) | done — gates green | pays F1+F4: interactive Layers window, per-layer git-style trees whose nodes carry full fast-PNG canvases, node-dot LEFT-click switching; SPEC §3.6 rewritten; GUI click-through = V13 (owner) |
-| Extra: headless-GUI sandbox recipe (owner 2026-11-13) | done — driver all green headless | `SANDBOX.md` + `scripts/gui_recipe_test.sh`: raw Xvfb + two user-space .debs, no root; MCP `add_layer` added (10 tools); visual_driver.py 3/3 scenarios green in-sandbox; V13 narrowed to pointer feel |
-| Extra: MCP tools split + commit-title ritual (owner 2026-11-13) | done — pure code motion | root `mcp/tools.rs` = the tool map (dispatch + declarations, 157); themed `tools/queries.rs` (200) + `tools/edits.rs` (177); rules.sh rule 6 prints the newest commit title (backticks kept) at every done-gate; AGENTS.md Delivery ritual requires it verbatim, backtick-wrapped, in the reply |
-| Extra: UX round (owner 2026-11-13) | done — gates green | History window → Tool Log (list max height halved to 140 pt, 0.5rem entries, zero row spacing, bottom edge flush), Help item → About, dialog button rows per IBM/Apple/Google via shared `dialog_button_row`, Shape RMB-drag swaps the color wells, wheel pan ×2 (`SCROLL_PAN_SPEED` 3.0) |
-| Extra: dialog epoch + Shape RMB round (owner 2026-11-15) | done — gates green | dialogs arise centered on EVERY open and hug their content (`dialog_window` + `forget_dialog_position`, NOT §3.11); Shape RMB uses the wells inverted WITHOUT swapping; Palette "Swap (X)" → "Swap"; 3 headless-egui regression tests + a scripted 9-check real-binary pass |
-| Extra: layers split + two-color history chips (owner 2026-11-16) | done — gates green | pure code motion into `layers/snapshot.rs` + `layers/composite.rs` (tests split the same way); `TreeNode.color2` + the outline\|fill chip halves for two-color gestures; MCP `get_history_tree` dumps `color2`; preview's pure color rules → `app/preview/colors.rs` |
-| Extra: Shift-proportional shapes (owner 2026-11-16) | done — gates green | Shape (U) drag with held Shift = square/circle, Paint.NET-style, LIVE (mid-drag snap/release); pure `proportional_current` in `app/preview.rs` + 5 unit tests; SPEC §3.2 bullet + §3.9 hold-gesture row; V22 born |
-| Extra: third debt triage (owner 2026-11-16) | done — docs only | V13/V14/V17–V22 verified via chat; V15 closed into the NEW F11 (wheel pan ANOTHER ×5 — `SCROLL_PAN_SPEED` 3.0 → 15.0, how-to recorded in DEBTS-functional.md); AGENTS.md gained the zip-priority rule (a delivered .zip is used immediately — no git pull/clone); open after this edit: V8, V9, F3, F5, F8–F11 |
-| Extra: V9 pass + platform-gap analysis (owner 2026-11-16) | done — docs only | V9 verified via chat (web build clicked through in a browser); the pass surfaced F12 (wheel-pan platform parity — `camera.rs` reads the RAW wheel delta in EVENT UNITS: Line ±1/notch on Windows/X11 vs DOM px as-is on the web) and F13 (window jitter on Wayland/Web resize — per-frame repositioning meets non-monotonic content rects); both analysis-only, fixes postponed by the owner |
-| Extra: wheel-pan parity F12-B + resize-jitter fix F13-A + diag feature (owner 2026-11-16) | done — gates green | owner picked F12 variant B (INTERIM, not final; F11 folded into the math) and F13 variant A, approved the diagnostic patch behind a build flag; `wheel_notches` (unit → notches) + fixed `WHEEL_NOTCH_PAN` 15 pt/notch on every platform; `resize_step` pins the pre-resize rects and recomputes from the pin; temporary `diag` cargo feature ([diag] wheel/resize/reposition logs, compiled out of the default build); SPEC §3.4 + §7 rewritten; V23/V24 born |
-| Extra: web-Line notch retune + `diag` → `diagnostics` rename (owner 2026-11-16) | done — gates green | Firefox scroll-pan ~3× overshoot fixed inside F12-B: Firefox emits `DOM_DELTA_LINE` ×3 lines/notch, so web `Line` deltas now divide by `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0 (native pass-through); the approved Windows/Chrome feel UNCHANGED (15 pt/notch); the temporary feature renamed `diag` → `diagnostics` (owner: the abbreviation was unclear) — feature, cfg sites, fn, `[diagnostics]` prefix; trunk-serve how-to: `trunk serve --features diagnostics` (logs → browser console); V23/V24 narrowed, not closed |
-| Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
 | Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
 | Extra: repo-wide English-only owner quotes (owner 2026-11-18) | done — docs only | every verbatim Russian owner quote across docs/scripts/comments translated to English (meaning kept); PROGRESS Log compacted — 2 entries moved to PROGRESS-archive.md |
 | Extra: debt F14 — in-house windows later (owner 2026-11-18) | done — docs only | egui::Window → an in-house `egui::Area` frame recorded in DEBTS-functional.md from the owner's pros/cons chat review; owner-gated, no code touched |
@@ -57,37 +34,23 @@
 | Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
 | Extra: Tools window v5 — the bar back, only the label hidden (owner pass 2026-11-18) | done — gate + driver + magnet check | `Window::new("")` + the explicit `tools_window_id()` renders the title bar WITHOUT the text (egui derives the Id from the title even when empty); `.open` plumbing restored (the ✕ is back); AGENTS quirk rewritten (the empty-title recipe); .gitignore keeps `__pycache__`/`*.pyc` out of the artifacts; V36 → v5 re-check pending |
 | Extra: language rule → English-only whitelist (owner request 2026-11-18) | done — gate + deliver | the stamp's "Zero Cyrillic repo-wide" reworded: a language WHITELIST (English is the only written language), not a script blacklist — friendlier to readers of any writing system |
+| Extra: Tools panel hides while collapsed (owner 2026-11-19) | done — gates + click probe green | the magnetized settings panel hides while the Tools window is collapsed to its title bar and returns on expand (`windows.rs::settings_panel_shown` on `Window::show`'s `inner.is_some()`); the header-width PROPOSAL delivered (measured options, no header code change — the owner picks); V38 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-18 (fresh sandbox): fmt clean, rules.sh
-HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 156 default /
-168 mcp green (+11 new tool-icon tests), `cargo check --target wasm32-unknown-unknown` green,
-visual driver ALL SCENARIOS GREEN + `--shots` — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
-The hardened gate (stdin shield + stage timers, same day) then re-ran EVERYTHING on a cold lane
-after the dev-profile de-optimization: 191 s total, 156/168 green again — the profile change is
-fully gate-verified. The icon-redraw round (same day) exercised the hardened gate on a REAL
-change: hot run 14 s (156/168 green), the glass test caught a real drawing bug pre-delivery,
-driver ALL SCENARIOS GREEN, the grid gaps pixel-measured 6 pt = 6 pt. The tooling round (same
-day) proved `sandbox_check.sh --warm` on a truly cold lane (0.6 s return, the double-start
-guard fired, a hot gate after the log's "finished") and closed V33 (NixOS + Windows). The
-test round added the permanent #[ignore] icon dump (explicit-only: 14 PNGs live-checked,
-the plain gate counts it as 1 ignored) and recorded CI rust-cache as F16 (owner: not now).
-The icons-v2 round (same day) iterated the redraw on contact sheets, added the theme
-switcher (menu bar + MCP `set_theme`, System default) and gate-verified it all. The
-icons-v3 round (the owner's pass) reverted the rim to ONE dark rim over the now
-light-theme tool-button background, made the pipette glass a cylinder and moved the
-Theme button before Help. The icons-v4 round (the owner approved v3) fixed the mono
-ink (`TOOL_INK`) — the atlas went fully theme-independent (key = ppp) — dimmed the
-buttons a step, put the eraser's rim in the set and removed the Tools window's title
-bar (v4; the v5 round restored the bar and hides only the label — an empty title
-string + the explicit id): the gate run below is green with 161 default / 174 mcp
-passed (+1 ignored each).
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane): fmt clean, rules.sh
+HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
+162 default / 175 mcp green (+1 ignored each — the permanent #[ignore] icon dump) with
++1 collapse-panel regression test; the `scripts/gui_collapse_check.sh` click probe
+(expanded→collapsed→re-expanded, PIL-located buttons) ALL GREEN under Xvfb —
+Rust 1.99.1 pinned via rust-toolchain.toml, Linux. The bare-`cargo test --features mcp`
+STDIN TRAP fired once this session (an mcp stage hung 3 min — SANDBOX.md trap 10; only
+verify.sh's `exec </dev/null` shield makes that lane safe to run by hand).
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 AND
-`app/tool_icons.rs` 610 (grew in the 2026-11-18 icon redraw — the natural split is the icon
-draw fns vs the atlas/cursor pipeline; proposed to the owner at delivery, not done without
-his approval).
+`app/tool_icons.rs` 673 (grew in the 2026-11-18 icon rounds; the natural split is the icon
+draw fns vs the atlas/cursor pipeline — re-proposed to the owner at the 2026-11-19 delivery,
+not done without his approval).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -112,7 +75,35 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > completed the day's compactions (the icons-v2 round's budget), the
 > icon-redraw entry moved during the icons-v4 round's budget, and the
 > Tooling entry moved during the v5 round's budget; the icon-dump entry
-> moved during the wording round's budget.
+> moved during the wording round's budget, and the icons-v2 entry moved
+> during the 2026-11-19 collapse round's budget.
+
+### 2026-11-19 — `Fix:` the settings panel hides while the Tools window is collapsed — owner request
+
+- **What:** two asks. (1) IMPLEMENTED: when the Tools window is collapsed to its title bar
+  (the strip's ▼ button or a double-click), the magnetized settings panel now hides with it
+  and returns the frame the window is expanded again — the guard is the pure
+  `app/windows.rs::settings_panel_shown(tools_body_shown, tool)` fed with `Window::show`'s
+  `response.inner.is_some()` (egui reports `inner: None` exactly while the collapsing body is
+  closed; the collapse state is stored every frame under `area_id.with("collapsing")`), so the
+  ✕ and View ▸ Tools are unaffected. (2) PROPOSED, not implemented: the header-width options
+  (the strip paints 85.4 pt wide vs the 76-pt window — the ✕ lands half outside; root cause:
+  `title_ui`'s zero-width advance in auto-sized windows — AGENTS quirks) — the owner picks.
+- **Files:** `src/app/windows.rs` (the guard + the builder extracted as `tools_window_builder`),
+  `windows/tests.rs` (+1 collapse regression test: the pure decision both ways + the egui
+  semantic pinned on the real builder, expanded vs seeded-collapsed), `scripts/gui_collapse_check.sh`
+  (NEW click probe: PIL-locates the strip icons, asserts panel present→absent→present),
+  `SPEC.md` §3.2, `AGENTS.md` (+2 quirks: the title-strip overflow mechanics + collapse
+  semantics incl. the pivot re-anchor on size change), `DEBTS-verification.md` (V38 born),
+  PROGRESS (compaction: the icons-v2 entry → archive; snapshot + entry + stamp), TIMING
+  (cold warm-up row; the table trimmed to 5).
+- **Verified:** FULL hot gate ALL GATES GREEN 9 s (162 default / 175 mcp, +1 ignored each);
+  `gui_collapse_check.sh` EXIT=0 under Xvfb (clicks at PIL-located positions); the bare
+  `cargo test --features mcp` STDIN trap fired once (hang, no damage — verify.sh's
+  `exec </dev/null` shield is mandatory for that lane).
+- **Owner-checks:** V38 born (the collapse pass on Windows). Open: V38, V36 (v5 re-check
+  pending), V30 (parked), V8 (parked).
+- **Commit title:** `Tools window: hide the magnetized settings panel while collapsed`
 
 ### 2026-11-18 — `Docs:` the language rule reworded — an English whitelist, not a script blacklist — owner request
 
@@ -207,34 +198,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V36 + V37 updated to "refinements delivered; re-check pending".
   Open: V37, V36, V30 (parked), V8 (parked).
 - **Commit title:** `Icons v3: light-theme button background + one dark rim, cylinder glass, wider collar; Theme button before Help`
-
-### 2026-11-18 — `Feat:` icons v2 + theme switcher (UI + MCP) + dump dir — owner request
-
-- **What:** the owner VERIFIED V35 + V34 (chat) and ordered on top: (1) icon refinements —
-  outlines 0.9 → 1.25 pt and THEME-AWARE (`outline_color` picks the rim from the text color's
-  luminance: a LIGHT rim in the dark theme — the graphite + the brush's loaded tip no longer
-  blend into the dark background); the pipette's collar is the classic WIDE band between glass
-  and bulb with the bulb dominant (the slim collar read as a NEEDLE at 1.5rem); Line = a smooth
-  S-curve of two quad arcs (the tool has curve mode); Shape's diamond → circle; Text = a
-  serif-curved T plus a small lowercase t; (2) the THEME SWITCHER — a menu-bar button right of
-  Help (Dark/Light/System radios; System = follow the OS, the startup default) through
-  `App::apply_theme` → `ctx.set_theme` (egui's `ThemePreference` — `Theme` itself has no
-  System/FollowSystem variant: an API quirk caught by the first compile, AGENTS.md); the Tool
-  Log records it; the MCP `set_theme` tool (dark/light/system) runs the SAME path; SPEC §6
-  drops "themes/appearance customization" from the out-of-scope list; (3) the ignored dump
-  takes `RUSSET_ICON_DUMP_DIR` (a leading ~ expands to HOME/USERPROFILE) — README documents
-  the ~/Pictures run (POSIX + PowerShell).
-- **Files:** `src/app/tool_icons.rs` (outline_color/quad_pts + 5 redraws), `tool_icons/tests.rs`
-  (+4 tests, dump dir), `src/app.rs` (theme field + apply_theme/theme_label), `src/app/menu.rs`
-  (switcher), `mcp/tools.rs` + `edits.rs` + `tools/tests.rs` (set_theme), `README.md` (dump
-  section), `SPEC.md` (§3.1 Theme, §3.2 icon v2, §6, §7 item 21), `AGENTS.md` (theme-API quirk),
-  DEBTS (V35/V34 verified; V36/V37 born), PROGRESS (compaction: verify.sh entry → archive;
-  snapshot + entry + stamp).
-- **Verified:** the icons were iterated on dump contact sheets (4 rounds, dark + light rows +
-  the real 24 px row); the new tests: the S's bends off the chord on BOTH sides, the 45° arc
-  vs the empty old-diamond point, the serif hooks + small t, the theme-following rim; the dump
-  live-ran with RUSSET_ICON_DUMP_DIR; `set_theme` MCP test (light / purple-error / system);
-  FULL hot gate below (160 default / 173 mcp + 1 ignored); visual driver ALL SCENARIOS GREEN.
-- **Owner-checks:** V36 (icons-v2 look, both themes) and V37 (theme switcher, three states)
-  born. Open: V37, V36 (new), V30 (parked), V8 (parked).
-- **Commit title:** `Icons v2: theme-aware rims, pipette collar, S-curve, circle, T+t; theme switcher in menu + MCP; dump dir param`
