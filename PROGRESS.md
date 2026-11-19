@@ -38,19 +38,19 @@
 | Extra: Tools panel hides while collapsed (owner 2026-11-19) | done — gates + click probe green | the magnetized settings panel hides while the Tools window is collapsed to its title bar and returns on expand (`windows.rs::settings_panel_shown` on `Window::show`'s `inner.is_some()`); the header-width PROPOSAL delivered (measured options, no header code change — the owner picks); V38 born |
 | Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
 | Extra: palette alpha + a hex field in the color wells (owner 2026-11-19) | done — gates + driver green | `Alpha::OnlyBlend` (the picker's alpha slider + the A DragValue; the eyedropper's alpha no longer erased on popup open) + a "Hex" row parsing the launch-flag syntax (short form keeps the well's alpha, 8 digits sets it, `#RRGGBBAA` display, canonicalized on blur); one shared `launch.rs::parse_hex_components` feeds both consumers; windows/tests split by topic (rule 7) + 5 color-well tests; windows.rs 571 — OVER guard, the palette split PROPOSED (owner-gated); V40 born |
+| Extra: lenient hex + the windows.rs palette split (owner 2026-11-19) | done — gates + driver green | the Hex field eats pasted junk (every non-hex-digit char stripped, an optional `0x` prefix dropped) and the new digit-count forms 4 `RGBA` / 5 `RGBAA` / 7 `RRGGBBA` (the 5-vs-7 asymmetry is the owner's deliberate design); a per-well SEED alpha keeps a live-typed 5-digit prefix from leaking alpha into a final 6-digit color; the launch flags share the same `parse_hex_components` syntax; PURE code-motion split: `windows.rs` 571 → 351 + the child `windows/palette_window.rs` 287 (the palette window, wells, picker popup, hex field; the color-well tests moved to `palette_window/tests.rs` per Tests rule 2) — both under the guard, the OVER-GUARD note retired; V40 verified in chat, V41 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 8 s): fmt clean,
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 9 s): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-168 default / 181 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +5
-color-well tests this round) with the alpha/hex popup logic covered by the pure helpers and
-the visual driver ALL SCENARIOS GREEN (15 checks) under Xvfb through the gates binary —
-Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+170 default / 183 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +2
+lenient-hex tests this round) and the visual driver ALL SCENARIOS GREEN under Xvfb through
+the gates binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes last verified
 2026-11-16 (see the archived log history);
-every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 and
-`app/windows.rs` 571 (this round's growth; the palette-window split is PROPOSED,
-owner-gated — never split mid-task).
+every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 (the
+owner-approved 2026-11-19 palette split brought `app/windows.rs` back under the guard:
+571 → 351 + the child `windows/palette_window.rs` 287).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -72,14 +72,42 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > joined them in the evening (the icon-redraw round), the About entry followed
 > it (V33's closure freed it — the tooling round's budget), the unoptimized-dev
 > entry followed that (the dump round's budget), the verify.sh-hardening entry
-> completed the day's compactions (the icons-v2 round's budget), the
-> icon-redraw entry moved during the icons-v4 round's budget, and the
-> Tooling entry moved during the v5 round's budget; the icon-dump entry
-> moved during the wording round's budget, and the icons-v2 entry moved
-> during the 2026-11-19 collapse round's budget; the icons-v3 and
-> language-rule entries moved during the 2026-11-19 header round's budget;
-> the icons-v4 entry moved during the 2026-11-19 split round's budget, and
-> the v5 entry moved during the 2026-11-19 alpha+hex round's budget.
+> completed the day's compactions (the icons-v2 round's budget); on 2026-11-18/19 the
+> icon-redraw, v5, Tooling, icon-dump, icons-v2, icons-v3, language-rule and
+> icons-v4 entries each moved under their following rounds' budgets, and the
+> collapse entry moved during the 2026-11-19 lenient-hex round's budget.
+
+### 2026-11-19 — `Feat:` the hex field eats pasted junk + the windows.rs palette split — owner request
+
+- **What:** two asks, one round. (1) LENIENT HEX (V41): `launch.rs::parse_hex_components`
+  strips EVERY non-hex-digit character (an optional `0x`/`0X` prefix first — the owner: "keep
+  only what means color") and reads the DIGIT COUNT: 3 `RGB` (doubled), 4 `RGBA` (doubled),
+  5 `RGBAA` (shorthand RGB + a FULL alpha byte), 6 `RRGGBB`, 7 `RRGGBBA` (full RGB + a DOUBLED
+  alpha digit), 8 `RRGGBBAA`; <3 or >8 digits is invalid. The 5-vs-7 RGB-count asymmetry is
+  the owner's deliberate design (SPEC §3.3). A live-typed longer entry passes THROUGH
+  alpha-carrying prefixes (`FF7F0` inside `FF7F00`) — a NEW per-well SEED alpha (snapshotted
+  with the text on popup open / outside changes) holds the short forms' fallback at the
+  session-start alpha, so a prefix cannot leak its alpha (+1 regression test;
+  `hex_edited_color(fallback_alpha, text)` carries the seed). The launch flags inherit the
+  same leniency (one primitive, no drift; a missing alpha stays opaque; the old "12345 →
+  invalid" garbage case became a valid `RGBAA` form). (2) THE SPLIT (owner-approved):
+  `app/windows.rs` was 571, over the 500 guard — the palette half (the window, the wells with
+  the picker popup, the hex helpers) moved VERBATIM to the child `windows/palette_window.rs`;
+  the color-well tests moved with the code to `palette_window/tests.rs` (Tests rule 2 — the
+  parent cannot re-import items nothing uses). Same shape as the `tool_icons`/`draw` split.
+- **Files:** `src/app/launch.rs` (+ tests: +1, the garbage set re-based), `src/app/windows.rs`
+  (571 → 351; `pub(super)` → `pub(in crate::app)` — the only non-verbatim line), NEW
+  `windows/palette_window.rs` (287) + `palette_window/tests.rs` (6 tests), `windows/tests.rs`
+  (color_well → the child), `src/app.rs` (module map), `SPEC.md` (§3.3 + §3.12; the §3.3
+  "§5.1" mis-link fixed — no such section), `AGENTS.md` (module map + hex quirk),
+  `DEBTS-verification.md` (V40 verified, V41 born), PROGRESS (snapshot + entry + stamp +
+  compaction). TIMING: no rows — every command ran under a minute.
+- **Verified:** FULL hot gate ALL GATES GREEN 9 s — 170 default / 183 mcp green (+1 ignored
+  each; +2 tests, the moved 5 rewritten in place); the visual driver ALL SCENARIOS GREEN under
+  Xvfb through the gates binary. No wasm lane: not a web-facing change (the session rule).
+- **Owner-checks:** V41 born (the lenient hex pass on Windows). V40 verified in chat. Open:
+  V41, V30 (parked), V8 (parked).
+- **Commit title:** `Palette hex field: junk-tolerant parsing + the digit-count forms (seed alpha); Split app/windows.rs: the Palette window to the child palette_window.rs (pure code motion)`
 
 ### 2026-11-19 — `Feat:` the color wells edit alpha + a hex field under the picker — owner request
 
@@ -170,30 +198,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V39 born (the header pass on Windows). Open: V39, V30 (parked),
   V8 (parked).
 - **Commit title:** `Tools window: the title strip fits the window (zeroed strip side padding, variant A2)`
-
-### 2026-11-19 — `Fix:` the settings panel hides while the Tools window is collapsed — owner request
-
-- **What:** two asks. (1) IMPLEMENTED: when the Tools window is collapsed to its title bar
-  (the strip's ▼ button or a double-click), the magnetized settings panel now hides with it
-  and returns the frame the window is expanded again — the guard is the pure
-  `app/windows.rs::settings_panel_shown(tools_body_shown, tool)` fed with `Window::show`'s
-  `response.inner.is_some()` (egui reports `inner: None` exactly while the collapsing body is
-  closed; the collapse state is stored every frame under `area_id.with("collapsing")`), so the
-  ✕ and View ▸ Tools are unaffected. (2) PROPOSED, not implemented: the header-width options
-  (the strip paints 85.4 pt wide vs the 76-pt window — the ✕ lands half outside; root cause:
-  `title_ui`'s zero-width advance in auto-sized windows — AGENTS quirks) — the owner picks.
-- **Files:** `src/app/windows.rs` (the guard + the builder extracted as `tools_window_builder`),
-  `windows/tests.rs` (+1 collapse regression test: the pure decision both ways + the egui
-  semantic pinned on the real builder, expanded vs seeded-collapsed), `scripts/gui_collapse_check.sh`
-  (NEW click probe: PIL-locates the strip icons, asserts panel present→absent→present),
-  `SPEC.md` §3.2, `AGENTS.md` (+2 quirks: the title-strip overflow mechanics + collapse
-  semantics incl. the pivot re-anchor on size change), `DEBTS-verification.md` (V38 born),
-  PROGRESS (compaction: the icons-v2 entry → archive; snapshot + entry + stamp), TIMING
-  (cold warm-up row; the table trimmed to 5).
-- **Verified:** FULL hot gate ALL GATES GREEN 9 s (162 default / 175 mcp, +1 ignored each);
-  `gui_collapse_check.sh` EXIT=0 under Xvfb (clicks at PIL-located positions); the bare
-  `cargo test --features mcp` STDIN trap fired once (hang, no damage — verify.sh's
-  `exec </dev/null` shield is mandatory for that lane).
-- **Owner-checks:** V38 born (the collapse pass on Windows). Open: V38, V36 (v5 re-check
-  pending), V30 (parked), V8 (parked).
-- **Commit title:** `Tools window: hide the magnetized settings panel while collapsed`

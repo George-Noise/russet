@@ -6,10 +6,11 @@
 //! constants.
 
 use super::App;
-use super::{LaunchConfig, TOOL_NAMES, parse_canvas, parse_color, parse_tool};
+use super::{
+    LaunchConfig, TOOL_NAMES, parse_canvas, parse_color, parse_hex_components, parse_tool,
+};
 use crate::USAGE;
 use crate::tools::Tool;
-
 use eframe::egui::Color32;
 
 /// The test's argv: `parse` is generic over `Item = String`.
@@ -243,8 +244,10 @@ fn startup_canvas_drives_the_resize_dialog_prefill_only() {
 #[test]
 fn color_and_canvas_helpers_reject_garbage() {
     assert_eq!(parse_color(""), None);
+    assert_eq!(parse_color("0x"), None);
+    assert_eq!(parse_color("#F"), None);
     assert_eq!(parse_color("#12"), None);
-    assert_eq!(parse_color("12345"), None);
+    assert_eq!(parse_color("123456789"), None);
     assert_eq!(parse_color("zzzzzz"), None);
     assert_eq!(parse_color("#GGGGGG"), None);
     assert_eq!(parse_canvas("800"), None);
@@ -252,4 +255,31 @@ fn color_and_canvas_helpers_reject_garbage() {
     assert_eq!(parse_canvas("800x"), None);
     assert_eq!(parse_canvas("800xsix"), None);
     assert_eq!(parse_canvas("-800x600"), None);
+}
+
+#[test]
+fn color_hex_is_junk_tolerant_and_reads_the_digit_count() {
+    // The owner's paste list (2026-11-19): every non-hex-digit character is
+    // stripped brazenly — doubled `#`, spaces, an `0x` prefix — and the
+    // remaining DIGIT COUNT picks the form. The 5- and 7-digit forms carry
+    // different RGB digit counts (3 vs 6): the owner calls the asymmetry
+    // deliberate, do not "fix" it into one shape.
+    // 4 digits: `RGBA`, every digit doubled.
+    let ([r, g, b], alpha) = parse_hex_components("##f70a").expect("parses");
+    assert_eq!((r, g, b, alpha), (0xFF, 0x77, 0x00, Some(0xAA)));
+    // 5 digits: the shorthand `RGB` + a FULL alpha byte.
+    let ([r, g, b], alpha) = parse_hex_components("f70ab").expect("parses");
+    assert_eq!((r, g, b, alpha), (0xFF, 0x77, 0x00, Some(0xAB)));
+    // 7 digits: full `RRGGBB` + a DOUBLED alpha digit.
+    let ([r, g, b], alpha) = parse_hex_components("ff7f00c").expect("parses");
+    assert_eq!((r, g, b, alpha), (0xFF, 0x7F, 0x00, Some(0xCC)));
+    // Junk-stripping: the 0x prefix, inner spaces, the doubled hash.
+    assert_eq!(parse_color("0xFF7F00"), parse_color("#ff7f00"));
+    assert_eq!(parse_color("ff 7f 00"), parse_color("#ff7f00"));
+    assert_eq!(parse_color("##ff7f00"), parse_color("#ff7f00"));
+    // The alpha-less forms stay opaque through the launch-argument lens.
+    assert_eq!(
+        parse_color("f70"),
+        Some(Color32::from_rgb(0xFF, 0x77, 0x00))
+    );
 }

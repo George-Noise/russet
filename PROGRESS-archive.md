@@ -1,5 +1,33 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-19 — `Fix:` the settings panel hides while the Tools window is collapsed — owner request
+
+- **What:** two asks. (1) IMPLEMENTED: when the Tools window is collapsed to its title bar
+  (the strip's ▼ button or a double-click), the magnetized settings panel now hides with it
+  and returns the frame the window is expanded again — the guard is the pure
+  `app/windows.rs::settings_panel_shown(tools_body_shown, tool)` fed with `Window::show`'s
+  `response.inner.is_some()` (egui reports `inner: None` exactly while the collapsing body is
+  closed; the collapse state is stored every frame under `area_id.with("collapsing")`), so the
+  ✕ and View ▸ Tools are unaffected. (2) PROPOSED, not implemented: the header-width options
+  (the strip paints 85.4 pt wide vs the 76-pt window — the ✕ lands half outside; root cause:
+  `title_ui`'s zero-width advance in auto-sized windows — AGENTS quirks) — the owner picks.
+- **Files:** `src/app/windows.rs` (the guard + the builder extracted as `tools_window_builder`),
+  `windows/tests.rs` (+1 collapse regression test: the pure decision both ways + the egui
+  semantic pinned on the real builder, expanded vs seeded-collapsed), `scripts/gui_collapse_check.sh`
+  (NEW click probe: PIL-locates the strip icons, asserts panel present→absent→present),
+  `SPEC.md` §3.2, `AGENTS.md` (+2 quirks: the title-strip overflow mechanics + collapse
+  semantics incl. the pivot re-anchor on size change), `DEBTS-verification.md` (V38 born),
+  PROGRESS (compaction: the icons-v2 entry → archive; snapshot + entry + stamp), TIMING
+  (cold warm-up row; the table trimmed to 5).
+- **Verified:** FULL hot gate ALL GATES GREEN 9 s (162 default / 175 mcp, +1 ignored each);
+  `gui_collapse_check.sh` EXIT=0 under Xvfb (clicks at PIL-located positions); the bare
+  `cargo test --features mcp` STDIN trap fired once (hang, no damage — verify.sh's
+  `exec </dev/null` shield is mandatory for that lane).
+- **Owner-checks:** V38 born (the collapse pass on Windows). Open: V38, V36 (v5 re-check
+  pending), V30 (parked), V8 (parked).
+- **Commit title:** `Tools window: hide the magnetized settings panel while collapsed`
+
+
 ### 2026-11-18 — `Fix:` Tools window v5: the bar is back, only the label hidden — owner pass
 
 - **What:** the owner corrected the v4 window change: the whole bar had vanished while only

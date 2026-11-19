@@ -39,6 +39,10 @@
 //!                   switches the canvas, clones, anchored scrolling); the
 //!                   model lives in `history_tree`
 //!   [`windows`]   — §3.2/§3.3: the floating "Tools" and "Palette" windows
+//!                   (the palette half — the color wells, egui's picker
+//!                   popup and the hex field — lives in the child
+//!                   `windows/palette_window.rs`, the owner-approved
+//!                   2026-11-19 file-guard split, pure code motion)
 //!
 //! Keep new subsystems as child modules instead of growing this file.
 

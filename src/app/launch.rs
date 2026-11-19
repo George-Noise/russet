@@ -239,22 +239,34 @@ impl LaunchConfig {
 }
 
 /// The color-hex TEXT SYNTAX shared by the `--primary`/`--secondary` launch
-/// flags and the Palette window's hex field (owner request 2026-11-19):
-/// `RRGGBB` with an optional leading `#`; `RGB` (3 digits, each doubled:
-/// `#0f0` = `#00ff00`) and `RRGGBBAA` (explicit alpha) also work;
-/// surrounding spaces are fine. Returns the RGB triple plus the alpha ONLY
-/// when the text carried one — the CALLER decides the fallback, which is
-/// the one behavioral difference between the two consumers: the launch
-/// flags default a missing alpha to opaque, the hex field keeps the well's
-/// current alpha (the way its R/G/B DragValues don't touch it either).
+/// flags and the Palette window's hex field (owner request 2026-11-19).
+/// JUNK-TOLERANT (owner request 2026-11-19: keep only what means color and
+/// delete every other character): an optional `0x`/`0X` prefix is dropped
+/// first, then EVERY non-hex-digit character (`#` signs, spaces, anything
+/// else) is stripped, and the remaining digit COUNT picks the form:
+/// 3 = `RGB` (each digit doubled: `#0f0` = `#00ff00`), 4 = `RGBA` (each
+/// doubled), 5 = `RGBAA` (the shorthand RGB + a FULL alpha byte), 6 =
+/// `RRGGBB`, 7 = `RRGGBBA` (the full RGB + a DOUBLED alpha digit), 8 =
+/// `RRGGBBAA`. The 5- and 7-digit forms carry DIFFERENT RGB digit counts
+/// (3 vs 6) — the owner calls the asymmetry deliberate. Fewer than 3 or
+/// more than 8 digits left is `None`. Returns the RGB triple plus the
+/// alpha ONLY when the text carried one — the CALLER decides the fallback,
+/// which is the one behavioral difference between the two consumers: the
+/// launch flags default a missing alpha to opaque, the hex field keeps the
+/// alpha the well had when its edit session started (the way its R/G/B
+/// DragValues don't touch it either).
 pub(crate) fn parse_hex_components(value: &str) -> Option<([u8; 3], Option<u8>)> {
     let trimmed = value.trim();
-    let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
-    if hex.is_empty() || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
-    // The all-ASCII-hex check above makes the byte-indexed slicing below
-    // panic-free (every byte is exactly one char).
+    let no_prefix = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
+    let hex: String = no_prefix
+        .chars()
+        .filter(|character| character.is_ascii_hexdigit())
+        .collect();
+    // The filter above leaves only ASCII hex digits — one byte per char —
+    // so the byte-indexed slicing below stays panic-free.
     let pair = |index: usize| u8::from_str_radix(&hex[index..index + 2], 16).ok();
     let digit = |index: usize| {
         u8::from_str_radix(&hex[index..index + 1], 16)
@@ -263,7 +275,10 @@ pub(crate) fn parse_hex_components(value: &str) -> Option<([u8; 3], Option<u8>)>
     };
     match hex.len() {
         3 => Some(([digit(0)?, digit(1)?, digit(2)?], None)),
+        4 => Some(([digit(0)?, digit(1)?, digit(2)?], Some(digit(3)?))),
+        5 => Some(([digit(0)?, digit(1)?, digit(2)?], Some(pair(3)?))),
         6 => Some(([pair(0)?, pair(2)?, pair(4)?], None)),
+        7 => Some(([pair(0)?, pair(2)?, pair(4)?], Some(digit(6)?))),
         8 => Some(([pair(0)?, pair(2)?, pair(4)?], Some(pair(6)?))),
         _ => None,
     }
