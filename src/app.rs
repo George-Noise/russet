@@ -64,7 +64,7 @@ use crate::file_io::WebTask;
 use crate::history::ActionLog;
 use crate::history_tree::{ActionKind, NodeId, ResizeAnchor, ResizeFilter, ResizeMode};
 use crate::layers::LayerStack;
-use crate::tools::{Tool, ToolState};
+use crate::tools::{SmoothStroke, Tool, ToolState};
 
 mod camera;
 mod dialogs;
@@ -156,7 +156,15 @@ pub struct App {
     zoom: f32,
     pan: Vec2,
     is_stroking: bool,
-    last_pos: Option<Pos2>,
+    /// Smoothed-stroke emission window (owner request 2026-11-19): the
+    /// midpoint-quadratic window every coalesced pointer move of the
+    /// frame feeds; the frame's pieces rasterize in one batch. Model in
+    /// `tools::smooth`, gesture in [`input`].
+    stroke_smooth: SmoothStroke,
+    /// The pencil's last plotted integer pixel — the dedupe state carried
+    /// across pieces and frames so a translucent color does not
+    /// double-blend at the subdivision/frame joints.
+    stroke_last_pixel: Option<(i64, i64)>,
     stroke_button: Option<PointerButton>,
     /// The rasterized tool-icon atlas ([`tool_icons`]; owner request
     /// 2026-11-18): built once per scale/theme change, otherwise the Tools
@@ -352,7 +360,8 @@ impl App {
             zoom: 1.0,
             pan: Vec2::ZERO,
             is_stroking: false,
-            last_pos: None,
+            stroke_smooth: SmoothStroke::new(Pos2::ZERO),
+            stroke_last_pixel: None,
             stroke_button: None,
             tool_icons: None,
             tools_window_open: true,

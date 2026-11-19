@@ -23,13 +23,11 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING (installed first; the first warm-up attempt died on `cargo: command not found`, re-started with the PATH set) | **≈ 3m 15s both stages** (20:46:47→20:50:02; clippy "Finished in 1m 32s", test --no-run "1m 42s") | the background log's timestamps ≈ |
+| 2026-11-19 | `cargo check` (dev lane, smooth-strokes round: deps cold on the fresh clone — the quick loop after the rasterizer/input edits) | **1m 23s** | cargo's own "Finished in" |
 | 2026-11-19 | `cargo check` (dev lane, save-dialog round: deps cold on the fresh clone — the quick loop after the dialog edits) | **1m 20s** | time'd exactly |
 | 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING again (installed first, the first warm-up attempt died on `cargo: command not found`, re-started manually) | **≈ 3m 12s both stages** (15:42:58→15:46:10; clippy alone "Finished in 1m 39s") | the background log's timestamps ≈ |
 | 2026-11-19 | `cargo check` (dev lane; deps cold after the sandbox recycle — the quick loop after the alpha+hex edits) | **1m 18s** | time'd exactly |
-| 2026-11-19 | `sandbox_check.sh --warm` background warm-up RE-RUN (the recycle wiped `target/` again and rustup was missing AGAIN — the same install-then-restart dance as the row below; this run's gates lane is what made verify.sh hot) | **≈ 96 s** (log 11:15:49→11:17:25, exit 0) | the background log's timestamps ≈ |
-| 2026-11-19 | `sandbox_check.sh --warm` background warm-up (clippy + `cargo test --no-run --features mcp`) on a COLD lane — fresh sandbox, `target/` absent, rustup + the pinned 1.99.1 toolchain installed first (the first warm-up attempt started BEFORE rustup existed and died instantly on `cargo: command not found`, exit 0 — re-run after the install) | **96 s** ("Finished `gates` profile ... in 1m 36s") | the background log's timestamps |
-| 2026-11-18 | `cargo build --features mcp` (dev lane for the visual driver; deps warm, the crate rebuilt after 5 src files changed — icons, theme, MCP) | **104 s** | time'd exactly |
-| 2026-11-18 | `bash scripts/verify.sh` FULL gate on a COLD lane (first run of the hardened gate — `exec </dev/null` shield + stage timers): rules 0 s / fmt 0 s / clippy 84 s / test 156 green 98 s / mcp clippy 3 s / mcp test 168 green 6 s — the mcp stage exited instantly, no stdin hang | **191 s total** | the script's own stage timers |
 
 ## Hot
 

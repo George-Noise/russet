@@ -4,6 +4,10 @@ use tiny_skia::{
     Transform,
 };
 
+mod smooth;
+
+pub use smooth::{SmoothPiece, SmoothStroke, pencil_pixel, rasterize_smooth_pieces};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
     Pencil,

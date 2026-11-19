@@ -1,5 +1,45 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-19 — `Feat:` the "Save Image" dialog — Save and Save As converge — owner request
+
+- **What:** BOTH File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) now open ONE in-app
+  "Save Image" dialog (owner request 2026-11-19: the png/jpg settings + the file name in the
+  window, and THE FORMAT CHOICE must live there) — the OS save dialog is gone, Save no longer
+  writes silently to the current path. Contents: the file name field (prefilled from the
+  display name minus its image extension), the PNG image / JPEG image radio (prefilled from
+  the current path's extension, else the display name's, else PNG), a JPEG Quality slider
+  1..=100 (default 90 — the old hardcoded value; kept across opens; JPEG only), the live
+  "Saving as: name.ext" preview, and — NATIVE only — a Folder row (prefilled from the
+  document's own folder; Browse… = the native folder picker; hidden on web — the browser owns
+  the download location). With no folder known the Save click opens the picker and a
+  cancelled pick KEEPS the dialog open (observed live in the sandbox probe). Name rules
+  (`save_dialog.rs::compose_file_name`): separators + the Windows-forbidden characters
+  stripped, a typed extension matching the format survives (canonicalized .jpeg → .jpg), a
+  conflicting image extension is replaced, a non-image one stays, empty → "Untitled".
+  Success: `dirty = false`, `display_name` = the saved name, (native) `current_path` updated;
+  an error is the Error popup and the dialog STAYS OPEN. file_io.rs: pub `SaveFormat`
+  (+extension/label/from_extension), `encode_jpeg_with_quality` (clamped 1..=100),
+  `pick_save_folder`, the dialog save `save_image_as(pixmap, dir, name, format, quality)`;
+  the MCP `export_png` keeps `save_image_to` (extension decides — now feature-mcp-gated, its
+  only consumer). NEW debt F17 (owner ask): consider other file formats for open and save.
+- **Files:** NEW `src/app/save_dialog.rs` + `save_dialog/tests.rs` (6 tests);
+  `src/file_io.rs` (+3 tests), `src/app.rs` (fields + frame hook + module map),
+  `src/app/document.rs` (the save glue: `prefill_save_from_path` + `commit_save_dialog`),
+  `src/app/menu.rs` / `input.rs` (no-arg call sites), SPEC §3.7/§3.10, AGENTS.md (module
+  map), DEBTS-functional.md (F17 born), DEBTS-verification.md (V42 born), PROGRESS
+  (snapshot + entry + stamp + compaction), TIMING (2 cold rows).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s — fmt clean, rules HARD green, clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 179 default / 192 mcp
+  green (+1 ignored each; +9 tests); `cargo check --target wasm32-unknown-unknown` green
+  (file_io.rs is web-facing); GUI probes under Xvfb: the dialog opens from BOTH menu items,
+  radio/quality/preview behave live, the cancel-keeps-open path observed, the write core
+  proven through the gates+mcp binary (MCP export_png → PNG + JPEG files PIL-decoded),
+  visual driver ALL SCENARIOS GREEN.
+- **Owner-checks:** V42 born (the Windows save pass: the dialog on Ctrl+S / Ctrl+Shift+S,
+  the radio + quality, Browse… = the native folder dialog, both formats saved). Open: V42,
+  V41, V30 (parked), V8 (parked); NEW debt F17 (which other formats).
+- **Commit title:** `Save Image dialog: Save and Save As converge on the in-app window (PNG/JPEG radio, quality, folder row); F17 debt: consider more file formats`
+
 ### 2026-11-19 — `Fix:` the Tools header strip fits the window — variant A2 — owner request
 
 - **What:** the owner picked "variant A2" among the measured header-width options: the title

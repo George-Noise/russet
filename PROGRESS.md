@@ -42,14 +42,14 @@
 | Extra: the flake drives the trunk lanes — web-serve / web-build / web-build-release (owner 2026-11-19) | done — hashes verified from the real downloads, gates green; a dup-`russet` app defect (the owner's first `.#web-serve` probe) is fixed, as is the zstd-sys build (nixpkgs' hook forces the system libzstd → pkg-config + zstd inputs — probe 2 confirmed: trunk builds and serves); probe 3 added stdenv.cc to the wrappers' PATH (host build-script linker); probe 4 added pkgs.lld (the final wasm link asks for a PATH `lld` from the owner's cargo env — honored, not overridden) | the pinned trunk 0.22.1 is BUILT by the flake from the crates.io source (nixpkgs' trunk is 0.21.14 — the pin honored by construction; both fetchurl hashes computed from the real bytes, the shipped Cargo.lock byte-identical to the v0.22.1 tag, vendored hash-free via `cargoLock.lockFile`); `nix run .#web-serve` → trunk serve, `.#web-build` → trunk build, `.#web-build-release` → trunk build --release — apps run OUTSIDE the sandbox so trunk self-manages wasm-bindgen 0.2.130 + wasm-opt (~/.cache/trunk); `nix run` KEEPS the native app (owner decision same day: the default stays native, easier on the brain — the web apps are always explicit); `nix develop` gains the pinned trunk; README / SPEC §8 / AGENTS synced; a sandboxed `nix build` of the site deliberately NOT provided (no network; a FOD dist/ would pin a hash per commit) |
 | Extra: the delivery-pyc fix — .gitignore landed + deliver.sh guards (owner 2026-11-19) | done — guard tested both ways, gates green | the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside russet.zip (AND the patch): the v5 round CLAIMED the .gitignore entries but they never landed — HEAD carried only /target /dist /result, so the leak reopened on the first new import; `.gitignore` now really carries `__pycache__/` + `*.pyc`; `visual_driver.py` sets `sys.dont_write_bytecode` before the mcp_smoke import (the cache is no longer written at the source); `deliver.sh` gains TWO hard guards (the staged tree + the patch's ^diff headers) that FAIL the delivery on any bytecode cache |
 | Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
+| Extra: smooth freehand strokes — coalesced pointer moves + midpoint-quadratic pieces (owner 2026-11-19) | done — gates + driver green | NEW `tools/smooth.rs`: every coalesced `Event::PointerMoved` feeds the midpoint-quadratic window (the old one-point-per-frame stream drew the fast-stroke polygon); brush/eraser stroke ONE C1-continuous tiny-skia path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline (quads flattened to ~1 px steps, translucent-safe joint dedupe); `draw_segment` stays for the press dot + MCP paths; SPEC §3.5 rewritten; V44 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 8 s — after the
-delivery-hygiene round; scripts/docs only, the counts unchanged): fmt clean,
-rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-179 default / 192 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +9
-save-dialog tests this round), the wasm `cargo check --target wasm32-unknown-unknown` green
-(file_io.rs touched) and the visual driver ALL SCENARIOS GREEN under Xvfb through
-the gates+mcp binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s — the
+smooth-strokes round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+(default + mcp), `cargo test --profile gates` 209 default / 209 mcp green (+1
+ignored each — the permanent #[ignore] icon dump; +17 smooth-stroke tests this
+round) and the visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp
+binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
 `cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
@@ -84,7 +84,46 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > icons-v4 entries each moved under their following rounds' budgets, and the
 > collapse entry moved during the 2026-11-19 lenient-hex round's budget. The
 > header-strip (variant A2) entry moved to the archive during the Save-dialog
-> round's budget (2026-11-19).
+> round's budget (2026-11-19); the Save-dialog entry followed during the
+> smooth-strokes round's budget (same day).
+
+### 2026-11-19 — `Feat:` smooth freehand strokes — owner request
+
+- **What:** the fast-stroke polygon look is gone on ALL THREE freehand tools (owner:
+  "when you move the mouse fast you get a jagged line" — pencil, brush and eraser alike).
+  The gesture now feeds EVERY coalesced `Event::PointerMoved` of the frame (the old code
+  kept only `latest_pos` — one point per frame) into a midpoint-quadratic smoothing
+  window — NEW `tools/smooth.rs`: the first point emits the straight filler
+  `start → mid(start, p)`, every next point the quad
+  `mid(prev2, prev1) → (control prev1) → mid(prev1, p)` (C1-continuous, never overshoots),
+  release closes with `mid(prev1, p) → p`. Brush/eraser stroke the frame's pieces as ONE
+  tiny-skia path (no per-segment cap seams; the horizontal/vertical zero-bounds epsilon
+  nudge carried over from `rasterize_polyline`); the pencil keeps its 1 px Bresenham
+  trail — quads flatten to ~1 px steps (≤ 64 per piece) and consecutive duplicate pixels
+  are DEDUPED (`stroke_last_pixel` lives on the gesture — a translucent color must not
+  double-blend at the subdivision/frame joints). Pieces rasterize in ONE batch per frame
+  (one composite + one `set_partial` per frame); the gesture paints with the color
+  captured at stroke start — a mid-gesture well swap no longer recolors the remainder
+  (matches the single-color history node). `draw_segment` stays for the press dot + MCP
+  paths; SPEC §3.5 rewritten in the same edit.
+- **Files:** NEW `src/tools/smooth.rs` (301) + `smooth/tests.rs` split by Tests rule 7
+  into `tests/window.rs` (7 tests) + `tests/raster.rs` (8), `src/tools.rs` (the child
+  module + re-exports), `src/app/input.rs` (+ NEW `input/tests.rs`, 2 tests — the
+  pointer-move stream helper), `src/app.rs` (`last_pos` → `stroke_smooth` +
+  `stroke_last_pixel`), SPEC §3.5, DEBTS-verification.md (V44 born; V43's row restored
+  + closed, V42/V41 closed), TIMING (2 cold rows), PROGRESS (snapshot + entry + stamp
+  + compaction).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s — fmt clean, rules HARD green,
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 209 default /
+  209 mcp green (+1 ignored each; +17 tests); visual driver ALL SCENARIOS GREEN under
+  Xvfb through the gates+mcp binary.
+- **Owner-checks:** V44 born (the Windows feel pass: fast strokes smooth on all three
+  tools, the pencil stays 1 px with staircase diagonals, translucent colors behave,
+  undo still one node per gesture). Closed by the owner's word in chat: V43, V42, V41
+  (V43's DEBTS row had never landed — the flake round's bookkeeping gap; restored +
+  closed). Open: V44, V30 (parked), V8 (parked); debts F17 (the format-set decision),
+  F16, F15.
+- **Commit title:** `Smooth freehand strokes: every coalesced pointer move feeds the midpoint-quadratic window (new tools/smooth.rs); brush/eraser stroke one C1 path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline`
 
 ### 2026-11-19 — `Feat:` the flake drives the trunk lanes — owner request
 
@@ -158,43 +197,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none born. Open: V42, V41, V30 (parked), V8 (parked); debt F17 (the
   format-set decision).
 - **Commit title:** `Delivery hygiene: close the pyc leak for good (.gitignore entries finally land; the driver stops writing bytecode; deliver.sh hard-fails on any cache)`
-
-### 2026-11-19 — `Feat:` the "Save Image" dialog — Save and Save As converge — owner request
-
-- **What:** BOTH File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) now open ONE in-app
-  "Save Image" dialog (owner request 2026-11-19: the png/jpg settings + the file name in the
-  window, and THE FORMAT CHOICE must live there) — the OS save dialog is gone, Save no longer
-  writes silently to the current path. Contents: the file name field (prefilled from the
-  display name minus its image extension), the PNG image / JPEG image radio (prefilled from
-  the current path's extension, else the display name's, else PNG), a JPEG Quality slider
-  1..=100 (default 90 — the old hardcoded value; kept across opens; JPEG only), the live
-  "Saving as: name.ext" preview, and — NATIVE only — a Folder row (prefilled from the
-  document's own folder; Browse… = the native folder picker; hidden on web — the browser owns
-  the download location). With no folder known the Save click opens the picker and a
-  cancelled pick KEEPS the dialog open (observed live in the sandbox probe). Name rules
-  (`save_dialog.rs::compose_file_name`): separators + the Windows-forbidden characters
-  stripped, a typed extension matching the format survives (canonicalized .jpeg → .jpg), a
-  conflicting image extension is replaced, a non-image one stays, empty → "Untitled".
-  Success: `dirty = false`, `display_name` = the saved name, (native) `current_path` updated;
-  an error is the Error popup and the dialog STAYS OPEN. file_io.rs: pub `SaveFormat`
-  (+extension/label/from_extension), `encode_jpeg_with_quality` (clamped 1..=100),
-  `pick_save_folder`, the dialog save `save_image_as(pixmap, dir, name, format, quality)`;
-  the MCP `export_png` keeps `save_image_to` (extension decides — now feature-mcp-gated, its
-  only consumer). NEW debt F17 (owner ask): consider other file formats for open and save.
-- **Files:** NEW `src/app/save_dialog.rs` + `save_dialog/tests.rs` (6 tests);
-  `src/file_io.rs` (+3 tests), `src/app.rs` (fields + frame hook + module map),
-  `src/app/document.rs` (the save glue: `prefill_save_from_path` + `commit_save_dialog`),
-  `src/app/menu.rs` / `input.rs` (no-arg call sites), SPEC §3.7/§3.10, AGENTS.md (module
-  map), DEBTS-functional.md (F17 born), DEBTS-verification.md (V42 born), PROGRESS
-  (snapshot + entry + stamp + compaction), TIMING (2 cold rows).
-- **Verified:** FULL hot gate ALL GATES GREEN 14 s — fmt clean, rules HARD green, clippy
-  `-D warnings` green (default + mcp), `cargo test --profile gates` 179 default / 192 mcp
-  green (+1 ignored each; +9 tests); `cargo check --target wasm32-unknown-unknown` green
-  (file_io.rs is web-facing); GUI probes under Xvfb: the dialog opens from BOTH menu items,
-  radio/quality/preview behave live, the cancel-keeps-open path observed, the write core
-  proven through the gates+mcp binary (MCP export_png → PNG + JPEG files PIL-decoded),
-  visual driver ALL SCENARIOS GREEN.
-- **Owner-checks:** V42 born (the Windows save pass: the dialog on Ctrl+S / Ctrl+Shift+S,
-  the radio + quality, Browse… = the native folder dialog, both formats saved). Open: V42,
-  V41, V30 (parked), V8 (parked); NEW debt F17 (which other formats).
-- **Commit title:** `Save Image dialog: Save and Save As converge on the in-app window (PNG/JPEG radio, quality, folder row); F17 debt: consider more file formats`
