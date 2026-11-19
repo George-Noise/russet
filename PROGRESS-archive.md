@@ -31,6 +31,38 @@
   V8 (parked).
 - **Commit title:** `Tools window: the title strip fits the window (zeroed strip side padding, variant A2)`
 
+### 2026-11-19 — `Feat:` the hex field eats pasted junk + the windows.rs palette split — owner request
+
+- **What:** two asks, one round. (1) LENIENT HEX (V41): `launch.rs::parse_hex_components`
+  strips EVERY non-hex-digit character (an optional `0x`/`0X` prefix first — the owner: "keep
+  only what means color") and reads the DIGIT COUNT: 3 `RGB` (doubled), 4 `RGBA` (doubled),
+  5 `RGBAA` (shorthand RGB + a FULL alpha byte), 6 `RRGGBB`, 7 `RRGGBBA` (full RGB + a DOUBLED
+  alpha digit), 8 `RRGGBBAA`; <3 or >8 digits is invalid. The 5-vs-7 RGB-count asymmetry is
+  the owner's deliberate design (SPEC §3.3). A live-typed longer entry passes THROUGH
+  alpha-carrying prefixes (`FF7F0` inside `FF7F00`) — a NEW per-well SEED alpha (snapshotted
+  with the text on popup open / outside changes) holds the short forms' fallback at the
+  session-start alpha, so a prefix cannot leak its alpha (+1 regression test;
+  `hex_edited_color(fallback_alpha, text)` carries the seed). The launch flags inherit the
+  same leniency (one primitive, no drift; a missing alpha stays opaque; the old "12345 →
+  invalid" garbage case became a valid `RGBAA` form). (2) THE SPLIT (owner-approved):
+  `app/windows.rs` was 571, over the 500 guard — the palette half (the window, the wells with
+  the picker popup, the hex helpers) moved VERBATIM to the child `windows/palette_window.rs`;
+  the color-well tests moved with the code to `palette_window/tests.rs` (Tests rule 2 — the
+  parent cannot re-import items nothing uses). Same shape as the `tool_icons`/`draw` split.
+- **Files:** `src/app/launch.rs` (+ tests: +1, the garbage set re-based), `src/app/windows.rs`
+  (571 → 351; `pub(super)` → `pub(in crate::app)` — the only non-verbatim line), NEW
+  `windows/palette_window.rs` (287) + `palette_window/tests.rs` (6 tests), `windows/tests.rs`
+  (color_well → the child), `src/app.rs` (module map), `SPEC.md` (§3.3 + §3.12; the §3.3
+  "§5.1" mis-link fixed — no such section), `AGENTS.md` (module map + hex quirk),
+  `DEBTS-verification.md` (V40 verified, V41 born), PROGRESS (snapshot + entry + stamp +
+  compaction). TIMING: no rows — every command ran under a minute.
+- **Verified:** FULL hot gate ALL GATES GREEN 9 s — 170 default / 183 mcp green (+1 ignored
+  each; +2 tests, the moved 5 rewritten in place); the visual driver ALL SCENARIOS GREEN under
+  Xvfb through the gates binary. No wasm lane: not a web-facing change (the session rule).
+- **Owner-checks:** V41 born (the lenient hex pass on Windows). V40 verified in chat. Open:
+  V41, V30 (parked), V8 (parked).
+- **Commit title:** `Palette hex field: junk-tolerant parsing + the digit-count forms (seed alpha); Split app/windows.rs: the Palette window to the child palette_window.rs (pure code motion)`
+
 ### 2026-11-19 — `Refactor:` tool_icons.rs split — the icon drawings to the child draw module — owner-approved
 
 - **What:** the file-guard debt paid for `app/tool_icons.rs` (673 lines after the 2026-11-18

@@ -39,9 +39,11 @@
 | Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
 | Extra: palette alpha + a hex field in the color wells (owner 2026-11-19) | done — gates + driver green | `Alpha::OnlyBlend` (the picker's alpha slider + the A DragValue; the eyedropper's alpha no longer erased on popup open) + a "Hex" row parsing the launch-flag syntax (short form keeps the well's alpha, 8 digits sets it, `#RRGGBBAA` display, canonicalized on blur); one shared `launch.rs::parse_hex_components` feeds both consumers; windows/tests split by topic (rule 7) + 5 color-well tests; windows.rs 571 — OVER guard, the palette split PROPOSED (owner-gated); V40 born |
 | Extra: lenient hex + the windows.rs palette split (owner 2026-11-19) | done — gates + driver green | the Hex field eats pasted junk (every non-hex-digit char stripped, an optional `0x` prefix dropped) and the new digit-count forms 4 `RGBA` / 5 `RGBAA` / 7 `RRGGBBA` (the 5-vs-7 asymmetry is the owner's deliberate design); a per-well SEED alpha keeps a live-typed 5-digit prefix from leaking alpha into a final 6-digit color; the launch flags share the same `parse_hex_components` syntax; PURE code-motion split: `windows.rs` 571 → 351 + the child `windows/palette_window.rs` 287 (the palette window, wells, picker popup, hex field; the color-well tests moved to `palette_window/tests.rs` per Tests rule 2) — both under the guard, the OVER-GUARD note retired; V40 verified in chat, V41 born |
+| Extra: the delivery-pyc fix — .gitignore landed + deliver.sh guards (owner 2026-11-19) | done — guard tested both ways, gates green | the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside russet.zip (AND the patch): the v5 round CLAIMED the .gitignore entries but they never landed — HEAD carried only /target /dist /result, so the leak reopened on the first new import; `.gitignore` now really carries `__pycache__/` + `*.pyc`; `visual_driver.py` sets `sys.dont_write_bytecode` before the mcp_smoke import (the cache is no longer written at the source); `deliver.sh` gains TWO hard guards (the staged tree + the patch's ^diff headers) that FAIL the delivery on any bytecode cache |
 | Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s): fmt clean,
+**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 8 s — after the
+delivery-hygiene round; scripts/docs only, the counts unchanged): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
 179 default / 192 mcp green (+1 ignored each — the permanent #[ignore] icon dump; +9
 save-dialog tests this round), the wasm `cargo check --target wasm32-unknown-unknown` green
@@ -80,6 +82,33 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > collapse entry moved during the 2026-11-19 lenient-hex round's budget. The
 > header-strip (variant A2) entry moved to the archive during the Save-dialog
 > round's budget (2026-11-19).
+
+### 2026-11-19 — `Fix:` the bytecode-cache leak into the delivery artifacts — owner request
+
+- **What:** the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside the
+  delivered russet.zip — the SECOND time (2026-11-18 was the first, and that round's
+  snapshot row CLAIMS ".gitignore keeps `__pycache__`/`*.pyc` out of the artifacts" while
+  HEAD's .gitignore carried only /target /dist /result — the entries never landed in the
+  owner's tree, deliver.sh's comment drifted from reality, and the leak reopened on the
+  first new import). Fixed at all three layers: (1) `.gitignore` NOW really carries
+  `__pycache__/` + `*.pyc` — deliver.sh's stage mirrors the ignore rules, so this alone
+  cleans both artifacts; (2) `scripts/visual_driver.py` sets `sys.dont_write_bytecode = True`
+  before `from mcp_smoke import Russet` — the owner's own driver runs stop writing the cache
+  into the worktree (the source of every stray pyc); (3) `scripts/deliver.sh` gains TWO hard
+  guards — the staged tree (find for `__pycache__`/`*.pyc`) and the patch (a
+  `^diff --git a/…(__pycache__|\.pyc)` header grep, immune to source-comment mentions) — any
+  bytecode cache FAILS the delivery with EXIT=1. The workspace probe that re-triggered the
+  leak this round got the same `dont_write_bytecode` line.
+- **Files:** `.gitignore`, `scripts/deliver.sh`, `scripts/visual_driver.py`, PROGRESS
+  (snapshot + entry + stamp).
+- **Verified:** the guard tested BOTH ways — a stray pyc with the ignore entries
+  temporarily removed → `deliver.sh: Python bytecode cache in the stage` EXIT=1; the
+  entries restored → the delivery runs clean and the guard stays silent; `unzip -l` and a
+  patch grep = ZERO pycache entries in the final artifacts; FULL hot gate ALL GATES GREEN
+  8 s (179 default / 192 mcp, +1 ignored each) — no Rust touched, the counts unchanged.
+- **Owner-checks:** none born. Open: V42, V41, V30 (parked), V8 (parked); debt F17 (the
+  format-set decision).
+- **Commit title:** `Delivery hygiene: close the pyc leak for good (.gitignore entries finally land; the driver stops writing bytecode; deliver.sh hard-fails on any cache)`
 
 ### 2026-11-19 — `Feat:` the "Save Image" dialog — Save and Save As converge — owner request
 
@@ -120,38 +149,6 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   the radio + quality, Browse… = the native folder dialog, both formats saved). Open: V42,
   V41, V30 (parked), V8 (parked); NEW debt F17 (which other formats).
 - **Commit title:** `Save Image dialog: Save and Save As converge on the in-app window (PNG/JPEG radio, quality, folder row); F17 debt: consider more file formats`
-
-### 2026-11-19 — `Feat:` the hex field eats pasted junk + the windows.rs palette split — owner request
-
-- **What:** two asks, one round. (1) LENIENT HEX (V41): `launch.rs::parse_hex_components`
-  strips EVERY non-hex-digit character (an optional `0x`/`0X` prefix first — the owner: "keep
-  only what means color") and reads the DIGIT COUNT: 3 `RGB` (doubled), 4 `RGBA` (doubled),
-  5 `RGBAA` (shorthand RGB + a FULL alpha byte), 6 `RRGGBB`, 7 `RRGGBBA` (full RGB + a DOUBLED
-  alpha digit), 8 `RRGGBBAA`; <3 or >8 digits is invalid. The 5-vs-7 RGB-count asymmetry is
-  the owner's deliberate design (SPEC §3.3). A live-typed longer entry passes THROUGH
-  alpha-carrying prefixes (`FF7F0` inside `FF7F00`) — a NEW per-well SEED alpha (snapshotted
-  with the text on popup open / outside changes) holds the short forms' fallback at the
-  session-start alpha, so a prefix cannot leak its alpha (+1 regression test;
-  `hex_edited_color(fallback_alpha, text)` carries the seed). The launch flags inherit the
-  same leniency (one primitive, no drift; a missing alpha stays opaque; the old "12345 →
-  invalid" garbage case became a valid `RGBAA` form). (2) THE SPLIT (owner-approved):
-  `app/windows.rs` was 571, over the 500 guard — the palette half (the window, the wells with
-  the picker popup, the hex helpers) moved VERBATIM to the child `windows/palette_window.rs`;
-  the color-well tests moved with the code to `palette_window/tests.rs` (Tests rule 2 — the
-  parent cannot re-import items nothing uses). Same shape as the `tool_icons`/`draw` split.
-- **Files:** `src/app/launch.rs` (+ tests: +1, the garbage set re-based), `src/app/windows.rs`
-  (571 → 351; `pub(super)` → `pub(in crate::app)` — the only non-verbatim line), NEW
-  `windows/palette_window.rs` (287) + `palette_window/tests.rs` (6 tests), `windows/tests.rs`
-  (color_well → the child), `src/app.rs` (module map), `SPEC.md` (§3.3 + §3.12; the §3.3
-  "§5.1" mis-link fixed — no such section), `AGENTS.md` (module map + hex quirk),
-  `DEBTS-verification.md` (V40 verified, V41 born), PROGRESS (snapshot + entry + stamp +
-  compaction). TIMING: no rows — every command ran under a minute.
-- **Verified:** FULL hot gate ALL GATES GREEN 9 s — 170 default / 183 mcp green (+1 ignored
-  each; +2 tests, the moved 5 rewritten in place); the visual driver ALL SCENARIOS GREEN under
-  Xvfb through the gates binary. No wasm lane: not a web-facing change (the session rule).
-- **Owner-checks:** V41 born (the lenient hex pass on Windows). V40 verified in chat. Open:
-  V41, V30 (parked), V8 (parked).
-- **Commit title:** `Palette hex field: junk-tolerant parsing + the digit-count forms (seed alpha); Split app/windows.rs: the Palette window to the child palette_window.rs (pure code motion)`
 
 ### 2026-11-19 — `Feat:` the color wells edit alpha + a hex field under the picker — owner request
 

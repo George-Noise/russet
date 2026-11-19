@@ -58,6 +58,18 @@ else
       --exclude='result*' --exclude='.env' . | tar -xf - -C "$STAGE/russet"
 fi
 
+# HARD guard on the bytecode caches (re-caught 2026-11-19: the v5 round
+# CLAIMED the .gitignore entries in its Files list but they never landed in
+# the owner's tree — the comment drifted, the leak reopened on the next
+# import). The entries are in .gitignore NOW and visual_driver.py stops
+# writing them; this guard fails the delivery regardless of any future
+# drift. Both artifacts come from the stage (the patch from the intent-add
+# index, the zip from the staged tree), so one check covers both.
+if find "$STAGE" \( -name '__pycache__' -o -name '*.pyc' \) | grep -q .; then
+  echo "deliver.sh: Python bytecode cache in the stage — delete it and fix .gitignore" >&2
+  exit 1
+fi
+
 # 1. russet.zip
 (cd "$STAGE" && zip -qr "$OUT/russet.zip" russet)
 
@@ -71,6 +83,14 @@ if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
   git diff --binary --no-renames "$BASE" > "$OUT/russet.patch"
 else
   echo "deliver.sh: NO git here — russet.patch skipped, russet.zip is the only artifact" >&2
+fi
+# Patch-side half of the same guard (the stage check above sees the tree;
+# the patch is a diff of the index — the ^diff header pattern avoids false
+# positives on source comments mentioning "__pycache__", e.g. deliver.sh's).
+if [ -f "$OUT/russet.patch" ] \
+    && grep -qE '^diff --git a/.*(__pycache__|\.pyc)' "$OUT/russet.patch"; then
+  echo "deliver.sh: Python bytecode cache in the patch — delete it and fix .gitignore" >&2
+  exit 1
 fi
 
 # 3. Byte-compares (all must match).

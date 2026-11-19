@@ -23,6 +23,11 @@ import subprocess
 import sys
 import time
 
+# The mcp_smoke import would drop a __pycache__/ into scripts/ (the owner
+# caught the .pyc inside the delivered artifacts twice — 2026-11-18 and
+# 2026-11-19): .gitignore now keeps it out of the artifacts, and this stops
+# the cache from being written at the source.
+sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(__file__))
 from mcp_smoke import Russet  # noqa: E402
 
