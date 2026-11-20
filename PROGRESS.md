@@ -34,15 +34,16 @@
 | Extra: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 (owner 2026-11-20) | done — docs only | DEBTS-verification bookkeeping: V45 closed verified in chat (the owner's Windows AND Web passes), the same smooth-stroke checklist on Linux (X11 AND Wayland backends) born as V46; no code touched |
 | Extra: the docs-only gate exemption into AGENTS.md (owner 2026-11-20) | done — docs only | a `.md`-only diff runs `scripts/rules.sh` + the delivery byte-compares ONLY — no builds, no tests; the full gate stays for anything beyond `.md` (Rust, scripts, Cargo, flake, CI, web); comment-only `.rs` edits keep the `cargo check` quick loop |
 | Extra: the web save downloads directly — rfd's fallback window gone (owner 2026-11-20) | done — gates + wasm check + driver green | the web Save dialog's confirm no longer routes through `rfd::AsyncFileDialog::save_file()` (its wasm backend pops the "click here to download your file" Ok/Cancel window): `file_io.rs::web::download_image` encodes → Blob (the format's MIME type, new `SaveFormat::mime_type`) → object URL → one synthetic click on a detached `<a download>` with the composed name → the URL revoked on a 10 s grace timer; js-sys/wasm-bindgen ride wasm-bindgen-futures' public re-exports (zero manifest additions; the web-sys line gains 8 feature gates); rfd stays only on the Open path; V47 born |
+| Extra: the Save-dialog slider captions — the numbers explain themselves (owner 2026-11-20) | done — gates + wasm check + driver green | under EACH encoding knob a live caption names the CURRENT number's effect (the owner: the digits "were not obvious even to me"): PNG "<level> — stored raw / light packing / balanced packing / tight packing …" + the tail "The picture is identical at every level — the slider only trades file size against save speed."; JPEG "<quality> — near-perfect picture / high / medium / low quality …" + the tail "Lower = a smaller file, but the picture loses more detail."; pure bucket helpers exhaustively tested (every stop 0..=9 / 1..=100 names its own number), the two headless dialog render tests assert the captions; V49 born |
 | Extra: the Save-dialog compression slider + the Lossless row (owner 2026-11-20) | done — gates + wasm check + driver green | the PNG row gains the "Compression" slider 0..=9 — the encoder's REAL stops (`CompressionType::Level`: 0 stores raw, 1..=9 the exact deflate effort; default 6 = flate2's balanced middle; file size + encode time trade, pixels NEVER, the round-trip test proves it) — and both formats gain the owner's "Lossless" row: a per-format LOCKED DISPLAY of the guarantee (PNG on — lossless by design; JPEG off — no lossless mode the pinned encoder could write nor browsers decode); JPEG keeps Quality; the dialog's choices ride a new `SaveOptions` through the native save AND the web download; V48 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the save-compression
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the slider-captions
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
-mcp), `cargo test --profile gates` 218 default / 218 mcp green (+1 ignored each
-— the permanent #[ignore] icon dump; +6 tests this round), the wasm
-`cargo check --target wasm32-unknown-unknown` green (the web-facing change), the
-visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp binary
-— Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+mcp), `cargo test --profile gates` 220 default / 220 mcp green (+1 ignored each
+— the permanent #[ignore] icon dump; +2 tests this round), the wasm
+`cargo check --target wasm32-unknown-unknown` green (the dialog compiles into
+the web build), the visual driver ALL SCENARIOS GREEN under Xvfb through the
+gates+mcp binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
 `cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
@@ -81,7 +82,39 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > smooth-strokes round's budget (same day); the flake entry moved during this
 > docs round's budget (2026-11-20); the smooth-strokes entry followed during
 > this round's budget (2026-11-20); the pencil-drifting-pen entry followed
-> during the save-compression round's budget (2026-11-20).
+> during the save-compression round's budget (2026-11-20); the docs-only +
+> V45/V46 bookkeeping entries moved to PROGRESS-archive.md during this
+> round's budget (2026-11-20).
+
+### 2026-11-20 — `Feat:` the Save dialog's slider meaning captions — owner request
+
+- **What:** the owner looked at the V48 dialog and asked to tell the user what
+  the slider's numbers MEAN ("even I wasn't quite sure"). Under EACH knob the
+  dialog now shows a live caption + a fixed trade-off line: PNG —
+  "<level> — stored raw / light packing / balanced packing / tight packing: …"
+  + "The picture is identical at every level — the slider only trades file
+  size against save speed."; JPEG — "<quality> — near-perfect picture / high
+  quality / medium quality / low quality: …" + "Lower = a smaller file, but
+  the picture loses more detail." The captions are pure bucket helpers
+  (`png_compression_hint` / `jpeg_quality_hint`), loop-tested over EVERY stop
+  (each of 0..=9 / 1..=100 names its own number); the two headless render
+  tests over the REAL dialog assert the default captions + tails. No encoding
+  change — pixels and bytes are exactly what V48 saved.
+- **Files:** `src/app/save_dialog.rs` (the two helpers + the two tails + the
+  caption rows), `src/app/save_dialog/tests.rs` (+2 tests, 2 extended),
+  SPEC §3.7, DEBTS-verification (V49 born), PROGRESS (snapshot + entry +
+  stamp; the docs-only + V45/V46 entries moved to PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 16 s hot: fmt clean, rules HARD
+  green, clippy `-D warnings` green (default + mcp), `cargo test --profile
+  gates` 220 default / 220 mcp green (+1 ignored each; +2 tests); `cargo
+  check --target wasm32-unknown-unknown` green (the dialog compiles into the
+  web build); the visual driver ALL SCENARIOS GREEN under Xvfb (the gates+mcp
+  binary). No TIMING rows — every command ran under a minute.
+- **Owner-checks:** V49 born (the Windows + Web pass: drag each slider — the
+  caption tracks the number and names its effect; the wording must be clear
+  to a fresh user). Open: V49, V48, V46; parked: V30, V8. Debts open: F17,
+  F16, F15.
+- **Commit title:** `Save dialog: a live caption under each slider explains the current number (PNG level = packing effort: file size vs save speed, pixels identical at every level; JPEG quality = look vs file size) + the fixed trade-off tails`
 
 ### 2026-11-20 — `Feat:` the Save dialog's Compression slider + the Lossless row — owner request
 
@@ -156,41 +189,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   composed names; title/dirty state update as before; Open still opens the picker).
   Open: V47, V46 (X11/Wayland), V30 (parked), V8 (parked); debts F17, F16, F15.
 - **Commit title:** `Web save downloads directly: the Save dialog's bytes go straight to the browser as a Blob over an object URL + one synthetic anchor click (rfd's "click here to download your file" fallback window is gone; the URL revokes on a grace timer; js-sys rides the wasm-bindgen-futures re-exports)`
-
-### 2026-11-20 — Docs: the docs-only gate exemption into AGENTS.md — owner request
-
-- **What:** rules only, zero code: the owner asked to record that a task touching ONLY the
-  documentation (a `.md`-only diff) runs NO tests and NO builds — the full gate repeatedly ran
-  over such diffs. AGENTS.md "Commands": the old "docs/comment-only edits: `cargo check` is
-  enough" bullet is REWRITTEN — a docs-only round's done-gate is `scripts/rules.sh` ALONE
-  (grep-level, no cargo; still validates the PROGRESS.md budgets) plus the delivery
-  byte-compares; NO `verify.sh`, NO `cargo check`/fmt/clippy/test, NO wasm check, NO new
-  tests; anything beyond `.md` (Rust, `scripts/`, `Cargo.toml`/lock, flake, CI, `web/`) runs
-  the full gate as before, and comment-only edits INSIDE `.rs` files keep the `cargo check`
-  quick loop. Pointers added in the Done-gate bullet and Tests rule 4.
-- **Files:** `AGENTS.md` (the docs-only bullet rewritten + 2 pointers), PROGRESS.md
-  (snapshot row + this entry).
-- **Verified:** docs-only per the new rule — `scripts/rules.sh` HARD green (no cargo runs),
-  the deliver.sh byte-compares green.
-- **Owner-checks:** none born. Open: V46; parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `AGENTS.md: docs-only rounds skip the cargo gate (rules.sh + delivery byte-compares suffice; builds/tests stay for any non-.md diff)`
-
-### 2026-11-20 — Docs: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 — owner request
-
-- **What:** bookkeeping only, zero code: the owner verified the pencil drifting-pen pass
-  in chat in BOTH Windows and the Web build — V45 closed verified in DEBTS-verification.md;
-  his remaining platform leg (the same smooth-stroke checklist on Linux, X11 AND Wayland,
-  the flake's native lanes) born as V46 in the same edit. The chat also answered,
-  informationally, the per-tool coverage of the smooth-stroke work: the V44 curve
-  smoothing feeds ALL THREE freehand tools; the V45 drifting-pen stability fix is
-  PENCIL-ONLY — `rasterize_smooth_pieces` branches on `Tool::Pencil`, while the brush and
-  eraser stroke ONE continuous tiny-skia path per frame (`trail`/`pin` ignored there), so
-  the per-run-restart defect class (double-covered columns, holes) cannot exist on them.
-- **Files:** DEBTS-verification.md (V46 born; V45 → Resolved), PROGRESS.md (snapshot row
-  + this entry; the flake entry moved to PROGRESS-archive.md — the Log budget).
-- **Verified:** docs-only — the Rust tree stays byte-identical to the owner-verified V45
-  delivery; `rules.sh` HARD green + `cargo fmt --check` clean before and after; the
-  deliver.sh byte-compares green.
-- **Owner-checks:** V45 verified in chat (Windows + Web). Open: V46; parked: V30, V8.
-  Debts open: F17, F16, F15.
-- **Commit title:** `Debts: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46`

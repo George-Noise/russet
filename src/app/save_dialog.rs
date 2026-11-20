@@ -3,7 +3,9 @@
 //! in-app dialog replacing the OS save dialog, with everything the save
 //! needs collected IN THE DIALOG: the format radio (PNG / JPEG), the file
 //! name, the per-format encoding knob (the PNG compression slider, the
-//! JPEG quality), the Lossless row (owner request 2026-11-20) and —
+//! JPEG quality) with a live caption explaining what the CURRENT number
+//! means (owner request 2026-11-20 — the numbers were not obvious even
+//! to the owner), the Lossless row (owner request 2026-11-20) and —
 //! native only — the destination folder.
 //!
 //! This module owns the dialog UI, its `App` state prefill and the pure
@@ -22,6 +24,17 @@ use crate::file_io::{self, SaveFormat};
 /// The file name shown when the current name has no usable text — the
 /// fallback of [`base_name_of`] and [`compose_file_name`] alike.
 pub(super) const FALLBACK_NAME: &str = "Untitled";
+
+/// The fixed trade-off line under the Compression slider (owner request
+/// 2026-11-20: the slider's numbers must explain themselves — the live
+/// [`png_compression_hint`] names the current level, this line pins the
+/// one fact no level ever changes).
+const PNG_COMPRESSION_TAIL: &str = "The picture is identical at every level — the slider only trades file size against save speed.";
+
+/// The fixed trade-off line under the Quality slider (same request: the
+/// live [`jpeg_quality_hint`] names the current number, this line states
+/// which way the scale goes).
+const JPEG_QUALITY_TAIL: &str = "Lower = a smaller file, but the picture loses more detail.";
 
 /// The characters stripped from the typed file name: the two path
 /// separators (a separator would make `Path::join` write outside the
@@ -71,6 +84,33 @@ pub(super) fn base_name_of(name: &str) -> String {
     }
 }
 
+/// The live caption under the Compression slider (owner request
+/// 2026-11-20: what does 0..=9 even mean?): what THIS level does to the
+/// file. The stops are the encoder's real deflate levels (SPEC §3.7) —
+/// 0 stores the rows raw, higher packs tighter into a smaller file but
+/// takes longer to save; the picture never changes.
+fn png_compression_hint(level: u8) -> String {
+    let meaning = match level {
+        0 => "stored raw: the largest file, saved fastest",
+        1..=3 => "light packing: a larger file, saved fast",
+        4..=6 => "balanced packing: a middle file size and speed",
+        _ => "tight packing: the smallest file, saved slowest",
+    };
+    format!("{level} — {meaning}")
+}
+
+/// The live caption under the Quality slider (same request): what THIS
+/// quality number means — higher looks better, lower takes fewer bytes.
+fn jpeg_quality_hint(quality: u8) -> String {
+    let meaning = match quality {
+        95..=100 => "near-perfect picture: a large file",
+        75..=94 => "high quality: a moderate file",
+        50..=74 => "medium quality: a small file",
+        _ => "low quality: the smallest file, the picture visibly degrades",
+    };
+    format!("{quality} — {meaning}")
+}
+
 impl App {
     /// Prefills the dialog from the document and shows it. The name comes
     /// from `display_name` without its image extension; the format from the
@@ -91,10 +131,12 @@ impl App {
     /// The dialog itself: the file name field, the format radio (THE format
     /// choice — owner request 2026-11-19), the per-format encoding knob —
     /// the PNG Compression slider or the JPEG Quality slider (the values
-    /// are kept across opens) — the Lossless row (owner request
-    /// 2026-11-20: THE guarantee, displayed per format — PNG locks it ON,
-    /// JPEG locks it OFF; neither format can do otherwise), the native
-    /// folder row and the resulting-name preview. Save (rightmost per
+    /// are kept across opens) with its live meaning caption and fixed
+    /// trade-off line (owner request 2026-11-20: the numbers must explain
+    /// themselves) — the Lossless row (owner request 2026-11-20: THE
+    /// guarantee, displayed per format — PNG locks it ON, JPEG locks it
+    /// OFF; neither format can do otherwise), the native folder row and
+    /// the resulting-name preview. Save (rightmost per
     /// §3.7) hands over to [`super::document::commit_save_dialog`] — the
     /// dialog closes only on success (or, on web, once the download task
     /// is spawned); Cancel and the ✕ close without writing.
@@ -134,6 +176,11 @@ impl App {
                             ui.label("Compression");
                             ui.add(egui::Slider::new(&mut self.save_png_compression, 0..=9));
                         });
+                        // The numbers must explain themselves (owner request
+                        // 2026-11-20): the live caption names the CURRENT
+                        // level's effect, the tail pins the never-changes fact.
+                        ui.weak(png_compression_hint(self.save_png_compression));
+                        ui.weak(PNG_COMPRESSION_TAIL);
                         // PNG cannot be lossy, so the owner-requested
                         // Lossless row is a locked-ON display of the
                         // guarantee, not a toggle (a toggle would be a
@@ -149,6 +196,10 @@ impl App {
                             ui.label("Quality");
                             ui.add(egui::Slider::new(&mut self.save_quality, 1..=100));
                         });
+                        // The live caption + the scale direction, same as the
+                        // PNG row (owner request 2026-11-20).
+                        ui.weak(jpeg_quality_hint(self.save_quality));
+                        ui.weak(JPEG_QUALITY_TAIL);
                         // JPEG is always lossy — the pinned encoder cannot
                         // write a lossless JPEG and browsers cannot decode
                         // one — so the row displays the absence of the

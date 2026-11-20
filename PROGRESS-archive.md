@@ -1,5 +1,43 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — Docs: the docs-only gate exemption into AGENTS.md — owner request
+
+- **What:** rules only, zero code: the owner asked to record that a task touching ONLY the
+  documentation (a `.md`-only diff) runs NO tests and NO builds — the full gate repeatedly ran
+  over such diffs. AGENTS.md "Commands": the old "docs/comment-only edits: `cargo check` is
+  enough" bullet is REWRITTEN — a docs-only round's done-gate is `scripts/rules.sh` ALONE
+  (grep-level, no cargo; still validates the PROGRESS.md budgets) plus the delivery
+  byte-compares; NO `verify.sh`, NO `cargo check`/fmt/clippy/test, NO wasm check, NO new
+  tests; anything beyond `.md` (Rust, `scripts/`, `Cargo.toml`/lock, flake, CI, `web/`) runs
+  the full gate as before, and comment-only edits INSIDE `.rs` files keep the `cargo check`
+  quick loop. Pointers added in the Done-gate bullet and Tests rule 4.
+- **Files:** `AGENTS.md` (the docs-only bullet rewritten + 2 pointers), PROGRESS.md
+  (snapshot row + this entry).
+- **Verified:** docs-only per the new rule — `scripts/rules.sh` HARD green (no cargo runs),
+  the deliver.sh byte-compares green.
+- **Owner-checks:** none born. Open: V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `AGENTS.md: docs-only rounds skip the cargo gate (rules.sh + delivery byte-compares suffice; builds/tests stay for any non-.md diff)`
+
+### 2026-11-20 — Docs: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 — owner request
+
+- **What:** bookkeeping only, zero code: the owner verified the pencil drifting-pen pass
+  in chat in BOTH Windows and the Web build — V45 closed verified in DEBTS-verification.md;
+  his remaining platform leg (the same smooth-stroke checklist on Linux, X11 AND Wayland,
+  the flake's native lanes) born as V46 in the same edit. The chat also answered,
+  informationally, the per-tool coverage of the smooth-stroke work: the V44 curve
+  smoothing feeds ALL THREE freehand tools; the V45 drifting-pen stability fix is
+  PENCIL-ONLY — `rasterize_smooth_pieces` branches on `Tool::Pencil`, while the brush and
+  eraser stroke ONE continuous tiny-skia path per frame (`trail`/`pin` ignored there), so
+  the per-run-restart defect class (double-covered columns, holes) cannot exist on them.
+- **Files:** DEBTS-verification.md (V46 born; V45 → Resolved), PROGRESS.md (snapshot row
+  + this entry; the flake entry moved to PROGRESS-archive.md — the Log budget).
+- **Verified:** docs-only — the Rust tree stays byte-identical to the owner-verified V45
+  delivery; `rules.sh` HARD green + `cargo fmt --check` clean before and after; the
+  deliver.sh byte-compares green.
+- **Owner-checks:** V45 verified in chat (Windows + Web). Open: V46; parked: V30, V8.
+  Debts open: F17, F16, F15.
+- **Commit title:** `Debts: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46`
+
 ### 2026-11-19 — `Feat:` smooth freehand strokes — owner request
 
 - **What:** the fast-stroke polygon look is gone on ALL THREE freehand tools (owner:

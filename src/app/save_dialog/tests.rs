@@ -3,7 +3,10 @@
 //! extension) and the prefill base name. The dialog's modal plumbing is
 //! the shared `dialogs.rs` helpers — covered in `dialogs/tests.rs`.
 
-use super::{FALLBACK_NAME, base_name_of, compose_file_name};
+use super::{
+    FALLBACK_NAME, JPEG_QUALITY_TAIL, PNG_COMPRESSION_TAIL, base_name_of, compose_file_name,
+    jpeg_quality_hint, png_compression_hint,
+};
 use crate::file_io::SaveFormat;
 
 #[test]
@@ -147,6 +150,13 @@ fn the_png_rows_show_the_compression_slider_and_the_locked_lossless_promise() {
         !rendered.contains("(never — JPEG is always lossy)"),
         "rows: {rendered}"
     );
+    // The live meaning caption under the slider (owner request
+    // 2026-11-20): the current level's effect + the never-changes tail.
+    assert!(
+        rendered.contains("6 — balanced packing"),
+        "rows: {rendered}"
+    );
+    assert!(rendered.contains(PNG_COMPRESSION_TAIL), "rows: {rendered}");
 }
 
 #[test]
@@ -167,4 +177,41 @@ fn the_jpeg_rows_show_quality_and_no_lossless_promise() {
         !rendered.contains("(always — PNG is lossless)"),
         "rows: {rendered}"
     );
+    // The live meaning caption under the slider (owner request
+    // 2026-11-20): the current quality's effect + the scale direction.
+    assert!(rendered.contains("90 — high quality"), "rows: {rendered}");
+    assert!(rendered.contains(JPEG_QUALITY_TAIL), "rows: {rendered}");
+}
+
+#[test]
+fn the_png_caption_names_every_compression_level() {
+    // Each stop lands in the bucket whose sentence names its packing
+    // trade, and the caption always names the CURRENT number (the owner's
+    // whole point: the bare 0..=9 told nothing).
+    assert!(png_compression_hint(0).starts_with("0 — stored raw"));
+    assert!(png_compression_hint(2).starts_with("2 — light packing"));
+    assert!(png_compression_hint(6).starts_with("6 — balanced packing"));
+    assert!(png_compression_hint(9).starts_with("9 — tight packing"));
+    for level in 0..=9 {
+        assert!(
+            png_compression_hint(level).starts_with(&format!("{level} — ")),
+            "level {level} is not named in its caption"
+        );
+    }
+}
+
+#[test]
+fn the_jpeg_caption_names_every_quality_value() {
+    // The four buckets cover the whole 1..=100 scale, and the caption
+    // always names the CURRENT number.
+    assert!(jpeg_quality_hint(100).starts_with("100 — near-perfect picture"));
+    assert!(jpeg_quality_hint(90).starts_with("90 — high quality"));
+    assert!(jpeg_quality_hint(60).starts_with("60 — medium quality"));
+    assert!(jpeg_quality_hint(30).starts_with("30 — low quality"));
+    for quality in 1..=100 {
+        assert!(
+            jpeg_quality_hint(quality).starts_with(&format!("{quality} — ")),
+            "quality {quality} is not named in its caption"
+        );
+    }
 }
