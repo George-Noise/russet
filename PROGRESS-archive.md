@@ -2577,8 +2577,45 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   Open: V54, V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
 - **Commit title:** `PROBLEMS.md: the file becomes a pure log written only by scripts/log_problem.sh (prepend-only, integrity-checked, nothing deletable without the owner); the template moves to AGENTS.md`
 
+### 2026-11-20 — `Feat:` the Line panel's icon buttons in the Shape panel's style — owner request
+
+- **What:** the owner verified V54 ("V54 проверил") and asked for the LINE
+  tool's panel the same pass: "сделаем также кнопочки как в Shape, то есть
+  такие же по стилю и отступам, вместо текущих радио Mode". Done: the word
+  "Mode" radio became ONE row of TWO icon buttons — Straight / Curve —
+  extracted as `line_settings_ui` (the `shape_settings_ui` sibling): the
+  shared `icon_button` (28-pt squares, the light-theme states), the row laid
+  out with `item_spacing.x = TOOL_GRID_GAP` (the panel has a single button
+  row — no group gap), the Curve hint lines stay UNDER the row. The buttons
+  draw the LINE TOOL's emblem (`tool_icons::LineIcon`, the Shape MODE trio's
+  one-geometry principle): Curve = the tool button's mark pixel-for-pixel
+  (`draw_line`'s curve extracted into the shared `line_emblem_curve`),
+  Straight = the same stroke UNBENT between the emblem's endpoints. Tooltips
+  carry the old words. The atlas gained the `line_icons` pair (the same
+  retain-count handling as `shape_icons`); `LineMode` gained Debug.
+- **Files:** `src/app/windows.rs` (line_settings_ui + the match arm),
+  `src/app/tool_icons.rs` (LineIcon/LINE_ICONS/line_texture_id + the atlas
+  pair), `src/app/tool_icons/draw.rs` (the emblem extraction +
+  draw_line_straight + rasterize_line_icon), `src/tools.rs` (Debug),
+  SPEC §3.2, DEBTS-verification (V54 closed verified in chat, V55 born),
+  PROGRESS (snapshot + entry + stamp), `scripts/gui_line_panel_check.sh` (the
+  new pixel probe), tests +6.
+- **Verified:** FULL gate ALL GATES GREEN hot (see the stamp): fmt, rules HARD
+  green, clippy `-D warnings` both lanes, `cargo test --profile gates` 233
+  default / 246 mcp (+6 net: the line_panel topic + the panel's
+  radio/compact/gap tests); the visual driver ALL SCENARIOS GREEN under Xvfb
+  through the dev+mcp binary; the NEW `scripts/gui_line_panel_check.sh` pixel
+  probe PASS on the same binary: the Line panel's in-row gap == the Tools
+  grid's == every Shape row's (7 px on screen = the 6-pt gap + the 1-px
+  stroke rounding), the Shape rows 12/12 px.
+- **Owner-checks:** V55 born (the Windows + Web pass of the Line panel).
+  V54 closed verified in chat. Open: V55, V53, V46; parked: V30, V8. Debts
+  open: F17, F16, F15.
+- **Commit title:** `Line panel: the word Mode radio becomes two icon buttons in the Shape panel's style (the tool's emblem per mode — Curve pixel-for-pixel the tool icon, Straight unbent; the same grid-gap row)`
+
 ## Compaction history
 
+- Compaction history (newest first): 2026-11-20 (manual-entry bug-fix round) — the Line-panel entry moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (docs round) — the PROBLEMS-v2 tooling entry moved under the docs-round budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (outline-placement round) — the save-dialog-layout entry moved under the new round's budget (the Log would have passed ~150 lines).
 

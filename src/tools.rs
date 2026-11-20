@@ -129,6 +129,17 @@ pub struct DirtyRect {
     pub h: u32,
 }
 
+/// The sanity ceiling of any stroke width entering the rasterizers — the
+/// same bound the Size block's manual-entry box enforces in the UI. Owner
+/// request 2026-11-20: sizes above 100 must be enterable ("а сам слайдер
+/// пусть и дальше будет ограничен 100"), the ceiling is "not a design
+/// limit" and the owner set none — 10 000 only guards against absurd
+/// strokes. The rasterizers clamp to THIS, not to the slider-era 1..=100:
+/// that old clamp silently ate a manually entered size (owner bug report
+/// 2026-11-20: a typed 200 still drew at 100 — the UI accepted the value,
+/// every draw path ignored it).
+pub const MAX_STROKE_SIZE: f32 = 10_000.0;
+
 pub fn draw_segment(
     pixmap: &mut Pixmap,
     tool: Tool,
@@ -139,10 +150,12 @@ pub fn draw_segment(
 ) -> Option<DirtyRect> {
     let width = match tool {
         Tool::Pencil => 1.0,
-        Tool::Brush | Tool::Eraser => size.clamp(1.0, 100.0),
+        Tool::Brush | Tool::Eraser => size.clamp(1.0, MAX_STROKE_SIZE),
         // Unreachable: the preview tools commit through `rasterize_polyline`
         // / `rasterize_shape`, not through this freehand path.
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => size.clamp(1.0, 100.0),
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => {
+            size.clamp(1.0, MAX_STROKE_SIZE)
+        }
     };
 
     let pad = (width * 0.5).ceil() + 2.0;
@@ -307,7 +320,7 @@ pub fn rasterize_polyline(
     width: f32,
     color: Color32,
 ) -> Option<DirtyRect> {
-    let width = width.clamp(1.0, 100.0);
+    let width = width.clamp(1.0, MAX_STROKE_SIZE);
     let (&first, rest) = points.split_first()?;
 
     let mut min_x = first.x;
@@ -429,7 +442,7 @@ pub fn rasterize_shape(
     fill: Option<Color32>,
     outline_pos: ShapeOutline,
 ) -> Option<DirtyRect> {
-    let width = width.clamp(1.0, 100.0);
+    let width = width.clamp(1.0, MAX_STROKE_SIZE);
     let (min_x, max_x) = (from.x.min(to.x), from.x.max(to.x));
     let (min_y, max_y) = (from.y.min(to.y), from.y.max(to.y));
     if max_x - min_x < 0.01 || max_y - min_y < 0.01 {

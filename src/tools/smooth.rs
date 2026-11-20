@@ -22,7 +22,7 @@
 use eframe::egui::{Color32, Pos2};
 use tiny_skia::{BlendMode, LineCap, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
-use super::{DirtyRect, Tool, blend_pixel, dirty_rect_for};
+use super::{DirtyRect, MAX_STROKE_SIZE, Tool, blend_pixel, dirty_rect_for};
 
 /// Subdivision cap for the pencil's flattened quadratic centerline: the
 /// quads are cut into ~1 px chords so the drifting pen follows the curve's
@@ -236,10 +236,12 @@ pub fn rasterize_smooth_pieces(
 ) -> Option<DirtyRect> {
     let width = match tool {
         Tool::Pencil => 1.0,
-        Tool::Brush | Tool::Eraser => size.clamp(1.0, 100.0),
+        Tool::Brush | Tool::Eraser => size.clamp(1.0, MAX_STROKE_SIZE),
         // Unreachable: the preview tools commit through `rasterize_polyline`
         // / `rasterize_shape`, not through this freehand path.
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => size.clamp(1.0, 100.0),
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => {
+            size.clamp(1.0, MAX_STROKE_SIZE)
+        }
     };
     let (first, rest) = pieces.split_first()?;
 

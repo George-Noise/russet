@@ -1,6 +1,8 @@
 use super::*;
 use eframe::egui::pos2;
 
+mod stroke_size;
+
 fn line_points(x0: i64, y0: i64, x1: i64, y1: i64) -> Vec<(i64, i64)> {
     let mut pts = Vec::new();
     bresenham_line(x0, y0, x1, y1, |x, y| pts.push((x, y)));

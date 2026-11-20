@@ -24,7 +24,9 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense, TextureId};
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use super::tool_icons::{self, LineIcon, ShapeIcon};
-use crate::tools::{LineMode, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState};
+use crate::tools::{
+    LineMode, MAX_STROKE_SIZE, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState,
+};
 
 mod palette_window;
 
@@ -347,20 +349,13 @@ fn line_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<too
 /// Size element was the panel's widest row).
 const SIZE_SLIDER_W: f32 = TOOL_BUTTON_PT * 3.0 + TOOL_GRID_GAP * 2.0;
 
-/// The upper bound of the Size block's manual-entry box — an
-/// [`egui::DragValue`], click it and type (owner request 2026-11-20: sizes
-/// ABOVE 100 must be enterable, "а сам слайдер пусть и дальше будет
-/// ограничен 100"). The floor is the slider's own minimum; the ceiling is
-/// only a sanity guard against absurd strokes, not a design limit.
-const SIZE_ENTRY_MAX: f32 = 10_000.0;
-
 /// The Size block of the settings panel (owner request 2026-11-20): the
 /// "Size" label sits ABOVE the slider and the slider is narrowed to the
 /// button grid's row width ([`SIZE_SLIDER_W`]); right of the slider a
 /// click-to-type number box ([`egui::DragValue`]) accepts any size ≥ 1 —
-/// including above 100 ([`SIZE_ENTRY_MAX`]) — while the SLIDER itself stays
-/// limited to 1..=100: it binds to a clamp COPY and writes back only when
-/// dragged. (egui's `Slider` with its default `SliderClamping::Always`
+/// including above 100 ([`crate::tools::MAX_STROKE_SIZE`]) — while the
+/// SLIDER itself stays limited to 1..=100: it binds to a clamp COPY and
+/// writes back only when dragged. (egui's `Slider` with its default `SliderClamping::Always`
 /// would otherwise clamp the bound value EVERY frame — a typed 250 would
 /// snap back to 100 — and with the copy the thumb just pins at the right
 /// end while the entered size stays.) For Line and Shape a
@@ -393,7 +388,7 @@ fn size_block_ui(ui: &mut egui::Ui, tools: &mut ToolState, tool: Tool) {
         }
         ui.add(
             egui::DragValue::new(&mut tools.size)
-                .range(1.0..=SIZE_ENTRY_MAX)
+                .range(1.0..=MAX_STROKE_SIZE)
                 .speed(1.0),
         );
     });

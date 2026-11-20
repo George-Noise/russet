@@ -16,8 +16,8 @@ use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect};
 use super::App;
 use crate::history_tree::ActionKind;
 use crate::tools::{
-    PencilTrail, SmoothPiece, SmoothStroke, Tool, draw_segment, pencil_pixel, pick_color,
-    rasterize_smooth_pieces,
+    MAX_STROKE_SIZE, PencilTrail, SmoothPiece, SmoothStroke, Tool, draw_segment, pencil_pixel,
+    pick_color, rasterize_smooth_pieces,
 };
 
 impl App {
@@ -61,11 +61,15 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::T)) {
             self.tools.tool = Tool::Text;
         }
+        // The bracket keys step the size by one — the ceiling is the entry
+        // box's sanity bound ([`MAX_STROKE_SIZE`]), NOT the slider's 100: a
+        // manually entered 200 must survive a nudge (owner bug report
+        // 2026-11-20 — the old slider-era clamp snapped it back to 100).
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::OpenBracket)) {
-            self.tools.size = (self.tools.size - 1.0).clamp(1.0, 100.0);
+            self.tools.size = (self.tools.size - 1.0).clamp(1.0, MAX_STROKE_SIZE);
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::CloseBracket)) {
-            self.tools.size = (self.tools.size + 1.0).clamp(1.0, 100.0);
+            self.tools.size = (self.tools.size + 1.0).clamp(1.0, MAX_STROKE_SIZE);
         }
         // egui's consume_key matches modifiers logically (extra Shift is
         // ignored), so Ctrl+Shift+Z also matches the plain Ctrl+Z binding:
