@@ -23,13 +23,11 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` (the web direct-download round) on a COLD clone — the sandbox was recycled: rustup + the pinned toolchain installed first, the whole dep graph + the crate per stage | **ALL GATES GREEN 114 s** (the gate's own print; the first attempt failed fast on the dead-code lint, fixed, re-run) | the gate's own print |
+| 2026-11-20 | `cargo check --target wasm32-unknown-unknown` (the web-facing round's wasm economy check) — COLD dep graph on the fresh wasm triple | **≈ a few minutes** (inside one bounded call; the exact seconds were not captured — the HOT re-run finishes in 0.3 s) | observed ≈, not precisely timed |
 | 2026-11-20 | `bash scripts/verify.sh` on a COLD clone (fresh sandbox: rustup missing, installed first; the whole dep graph + the crate per stage) | **≈ 2m 05s total** (the first run failed on fmt at ~2m; the re-run after `cargo fmt`: ALL GATES GREEN 74 s — copied from the gate's own print) | the gate's per-stage seconds + the wall clock ≈ |
 | 2026-11-20 | `cargo build --profile gates --features mcp` (the GUI binary for the visual driver + the pencil GUI probe; gates deps hot after verify.sh) | **2 s** | time'd exactly |
 | 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING (installed first; the first warm-up attempt died on `cargo: command not found`, re-started with the PATH set) | **≈ 3m 15s both stages** (20:46:47→20:50:02; clippy "Finished in 1m 32s", test --no-run "1m 42s") | the background log's timestamps ≈ |
-| 2026-11-19 | `cargo check` (dev lane, smooth-strokes round: deps cold on the fresh clone — the quick loop after the rasterizer/input edits) | **1m 23s** | cargo's own "Finished in" |
-| 2026-11-19 | `cargo check` (dev lane, save-dialog round: deps cold on the fresh clone — the quick loop after the dialog edits) | **1m 20s** | time'd exactly |
-| 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING again (installed first, the first warm-up attempt died on `cargo: command not found`, re-started manually) | **≈ 3m 12s both stages** (15:42:58→15:46:10; clippy alone "Finished in 1m 39s") | the background log's timestamps ≈ |
-| 2026-11-19 | `cargo check` (dev lane; deps cold after the sandbox recycle — the quick loop after the alpha+hex edits) | **1m 18s** | time'd exactly |
 
 ## Hot
 

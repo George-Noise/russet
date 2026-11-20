@@ -1,5 +1,43 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-19 — `Feat:` smooth freehand strokes — owner request
+
+- **What:** the fast-stroke polygon look is gone on ALL THREE freehand tools (owner:
+  "when you move the mouse fast you get a jagged line" — pencil, brush and eraser alike).
+  The gesture now feeds EVERY coalesced `Event::PointerMoved` of the frame (the old code
+  kept only `latest_pos` — one point per frame) into a midpoint-quadratic smoothing
+  window — NEW `tools/smooth.rs`: the first point emits the straight filler
+  `start → mid(start, p)`, every next point the quad
+  `mid(prev2, prev1) → (control prev1) → mid(prev1, p)` (C1-continuous, never overshoots),
+  release closes with `mid(prev1, p) → p`. Brush/eraser stroke the frame's pieces as ONE
+  tiny-skia path (no per-segment cap seams; the horizontal/vertical zero-bounds epsilon
+  nudge carried over from `rasterize_polyline`); the pencil keeps its 1 px Bresenham
+  trail — quads flatten to ~1 px steps (≤ 64 per piece) and consecutive duplicate pixels
+  are DEDUPED (`stroke_last_pixel` lives on the gesture — a translucent color must not
+  double-blend at the subdivision/frame joints). Pieces rasterize in ONE batch per frame
+  (one composite + one `set_partial` per frame); the gesture paints with the color
+  captured at stroke start — a mid-gesture well swap no longer recolors the remainder
+  (matches the single-color history node). `draw_segment` stays for the press dot + MCP
+  paths; SPEC §3.5 rewritten in the same edit.
+- **Files:** NEW `src/tools/smooth.rs` (301) + `smooth/tests.rs` split by Tests rule 7
+  into `tests/window.rs` (7 tests) + `tests/raster.rs` (8), `src/tools.rs` (the child
+  module + re-exports), `src/app/input.rs` (+ NEW `input/tests.rs`, 2 tests — the
+  pointer-move stream helper), `src/app.rs` (`last_pos` → `stroke_smooth` +
+  `stroke_last_pixel`), SPEC §3.5, DEBTS-verification.md (V44 born; V43's row restored
+  + closed, V42/V41 closed), TIMING (2 cold rows), PROGRESS (snapshot + entry + stamp
+  + compaction).
+- **Verified:** FULL hot gate ALL GATES GREEN 14 s — fmt clean, rules HARD green,
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 209 default /
+  209 mcp green (+1 ignored each; +17 tests); visual driver ALL SCENARIOS GREEN under
+  Xvfb through the gates+mcp binary.
+- **Owner-checks:** V44 born (the Windows feel pass: fast strokes smooth on all three
+  tools, the pencil stays 1 px with staircase diagonals, translucent colors behave,
+  undo still one node per gesture). Closed by the owner's word in chat: V43, V42, V41
+  (V43's DEBTS row had never landed — the flake round's bookkeeping gap; restored +
+  closed). Open: V44, V30 (parked), V8 (parked); debts F17 (the format-set decision),
+  F16, F15.
+- **Commit title:** `Smooth freehand strokes: every coalesced pointer move feeds the midpoint-quadratic window (new tools/smooth.rs); brush/eraser stroke one C1 path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline`
+
 ### 2026-11-19 — `Feat:` the flake drives the trunk lanes — owner request
 
 - **What:** the owner asked for `nix build` / `nix run` around `trunk build`, `trunk serve`

@@ -33,14 +33,14 @@
 | Extra: pencil drifting pen — the 1 px staircase made stable (owner 2026-11-20) | done — gates + driver + a real-pointer Xvfb probe green | the owner's ragged-pencil screenshot diagnosed: per-run Bresenham restarts between independently rounded ~1 px endpoints stacked double-covered columns and punched holes on every diagonal, the pattern varying per computer (the pixel pattern followed the per-frame event batching); the pencil now walks a gesture-level DRIFTING PEN (`PencilTrail`: the pen + the dedupe, carried across pieces and frames) — unit steps along the chord-dominant axis, the minor coordinate an EXACT float (the same error accumulation one long Bresenham run performs), each step plotting one pixel; the release pins the raw release point; the subdivision cap 64 → 4096 (fidelity on fast strokes); V44 closed failed → V45 born |
 | Extra: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 (owner 2026-11-20) | done — docs only | DEBTS-verification bookkeeping: V45 closed verified in chat (the owner's Windows AND Web passes), the same smooth-stroke checklist on Linux (X11 AND Wayland backends) born as V46; no code touched |
 | Extra: the docs-only gate exemption into AGENTS.md (owner 2026-11-20) | done — docs only | a `.md`-only diff runs `scripts/rules.sh` + the delivery byte-compares ONLY — no builds, no tests; the full gate stays for anything beyond `.md` (Rust, scripts, Cargo, flake, CI, web); comment-only `.rs` edits keep the `cargo check` quick loop |
+| Extra: the web save downloads directly — rfd's fallback window gone (owner 2026-11-20) | done — gates + wasm check + driver green | the web Save dialog's confirm no longer routes through `rfd::AsyncFileDialog::save_file()` (its wasm backend pops the "click here to download your file" Ok/Cancel window): `file_io.rs::web::download_image` encodes → Blob (the format's MIME type, new `SaveFormat::mime_type`) → object URL → one synthetic click on a detached `<a download>` with the composed name → the URL revoked on a 10 s grace timer; js-sys/wasm-bindgen ride wasm-bindgen-futures' public re-exports (zero manifest additions; the web-sys line gains 8 feature gates); rfd stays only on the Open path; V47 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the pencil drifting-pen
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the web direct-download
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
-mcp), `cargo test --profile gates` 211 default / 211 mcp green (+1 ignored each
-— the permanent #[ignore] icon dump; +2 drifting-pen regression tests this
-round), the visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp
-binary, and a real-pointer Xvfb probe (xdotool drags) drew pixel-perfect
-diagonals through the real app: 0 double-covered columns, 0 holes, 8-connected
+mcp), `cargo test --profile gates` 212 default / 212 mcp green (+1 ignored each
+— the permanent #[ignore] icon dump; +1 MIME-mapping test this round), the wasm
+`cargo check --target wasm32-unknown-unknown` green (the web-facing change), the
+visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp binary
 — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
@@ -78,7 +78,42 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > header-strip (variant A2) entry moved to the archive during the Save-dialog
 > round's budget (2026-11-19); the Save-dialog entry followed during the
 > smooth-strokes round's budget (same day); the flake entry moved during this
-> docs round's budget (2026-11-20).
+> docs round's budget (2026-11-20); the smooth-strokes entry followed during
+> this round's budget (2026-11-20).
+
+### 2026-11-20 — `Fix:` the web save's rfd fallback window — the direct Blob download — owner request
+
+- **What:** on web the "Save Image" dialog's confirm handed the composed name + format +
+  quality to `rfd::AsyncFileDialog::save_file()` — and rfd 0.15.4's wasm backend pops its
+  own DOM fallback ("click here to download your file", Ok/Cancel — the owner's screenshot)
+  BEFORE writing the bytes. Replaced by the DIRECT download: `file_io.rs::web::download_image`
+  encodes the pixmap, wraps it in a Blob of the format's MIME type (new
+  `SaveFormat::mime_type`), creates an object URL, one synthetic click on a DETACHED
+  `<a download>` anchor carrying the composed name, the URL revoked on a 10 s grace timer
+  (a one-shot forgotten Closure); the browser owns where the file lands (§3.10), there is
+  nothing to cancel — the task always resolves to a saved image or the "Error" popup, and
+  rfd stays only on the OPEN path. js-sys + wasm-bindgen reached through
+  wasm-bindgen-futures' PUBLIC re-exports (`pub use js_sys; pub use wasm_bindgen;`) — zero
+  manifest additions; the web-sys line gains the 8 feature gates the DOM path needs. The
+  defect class is browser-only: the headless regression guard is the MIME-mapping test,
+  the look pass is V47.
+- **Files:** `src/file_io.rs` (SaveFormat::mime_type + web::download_image;
+  save_image_as rewritten), `Cargo.toml` (the web-sys feature gates + the why-comment),
+  `src/file_io/tests.rs` (+1 test), SPEC §3.7, TIMING (2 rows), DEBTS-verification
+  (V47 born), PROGRESS (snapshot + entry + stamp; the smooth-strokes entry moved to
+  PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 114 s cold (fresh sandbox, toolchain re-installed)
+  — fmt clean, rules HARD green, clippy `-D warnings` green (default + mcp),
+  `cargo test --profile gates` 212 default / 212 mcp green (+1 ignored each; +1 test);
+  `cargo check --target wasm32-unknown-unknown` green (the wasm economy rule — a
+  web-facing change); the visual driver ALL SCENARIOS GREEN under Xvfb. NOTE: the wasm
+  clippy/test lane has a PRE-EXISTING failure (launch/tests.rs imports the native-only
+  `crate::USAGE`) — untouched this round; the repo's wasm bar is the cargo check.
+- **Owner-checks:** V47 born (the browser pass: Save/Save As download the image
+  IMMEDIATELY — no fallback window; both formats + the JPEG quality land with the
+  composed names; title/dirty state update as before; Open still opens the picker).
+  Open: V47, V46 (X11/Wayland), V30 (parked), V8 (parked); debts F17, F16, F15.
+- **Commit title:** `Web save downloads directly: the Save dialog's bytes go straight to the browser as a Blob over an object URL + one synthetic anchor click (rfd's "click here to download your file" fallback window is gone; the URL revokes on a grace timer; js-sys rides the wasm-bindgen-futures re-exports)`
 
 ### 2026-11-20 — Docs: the docs-only gate exemption into AGENTS.md — owner request
 
@@ -161,41 +196,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   debts F17, F16, F15.
 - **Commit title:** `Pencil drifting pen: the 1 px staircase stops depending on the frame batching (exact-float minor phase carried across the gesture, one pixel per unit step, the release pins the raw release point; the per-run Bresenham restarts drew double-covered columns and holes, differently per machine)`
 
-
-### 2026-11-19 — `Feat:` smooth freehand strokes — owner request
-
-- **What:** the fast-stroke polygon look is gone on ALL THREE freehand tools (owner:
-  "when you move the mouse fast you get a jagged line" — pencil, brush and eraser alike).
-  The gesture now feeds EVERY coalesced `Event::PointerMoved` of the frame (the old code
-  kept only `latest_pos` — one point per frame) into a midpoint-quadratic smoothing
-  window — NEW `tools/smooth.rs`: the first point emits the straight filler
-  `start → mid(start, p)`, every next point the quad
-  `mid(prev2, prev1) → (control prev1) → mid(prev1, p)` (C1-continuous, never overshoots),
-  release closes with `mid(prev1, p) → p`. Brush/eraser stroke the frame's pieces as ONE
-  tiny-skia path (no per-segment cap seams; the horizontal/vertical zero-bounds epsilon
-  nudge carried over from `rasterize_polyline`); the pencil keeps its 1 px Bresenham
-  trail — quads flatten to ~1 px steps (≤ 64 per piece) and consecutive duplicate pixels
-  are DEDUPED (`stroke_last_pixel` lives on the gesture — a translucent color must not
-  double-blend at the subdivision/frame joints). Pieces rasterize in ONE batch per frame
-  (one composite + one `set_partial` per frame); the gesture paints with the color
-  captured at stroke start — a mid-gesture well swap no longer recolors the remainder
-  (matches the single-color history node). `draw_segment` stays for the press dot + MCP
-  paths; SPEC §3.5 rewritten in the same edit.
-- **Files:** NEW `src/tools/smooth.rs` (301) + `smooth/tests.rs` split by Tests rule 7
-  into `tests/window.rs` (7 tests) + `tests/raster.rs` (8), `src/tools.rs` (the child
-  module + re-exports), `src/app/input.rs` (+ NEW `input/tests.rs`, 2 tests — the
-  pointer-move stream helper), `src/app.rs` (`last_pos` → `stroke_smooth` +
-  `stroke_last_pixel`), SPEC §3.5, DEBTS-verification.md (V44 born; V43's row restored
-  + closed, V42/V41 closed), TIMING (2 cold rows), PROGRESS (snapshot + entry + stamp
-  + compaction).
-- **Verified:** FULL hot gate ALL GATES GREEN 14 s — fmt clean, rules HARD green,
-  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 209 default /
-  209 mcp green (+1 ignored each; +17 tests); visual driver ALL SCENARIOS GREEN under
-  Xvfb through the gates+mcp binary.
-- **Owner-checks:** V44 born (the Windows feel pass: fast strokes smooth on all three
-  tools, the pencil stays 1 px with staircase diagonals, translucent colors behave,
-  undo still one node per gesture). Closed by the owner's word in chat: V43, V42, V41
-  (V43's DEBTS row had never landed — the flake round's bookkeeping gap; restored +
-  closed). Open: V44, V30 (parked), V8 (parked); debts F17 (the format-set decision),
-  F16, F15.
-- **Commit title:** `Smooth freehand strokes: every coalesced pointer move feeds the midpoint-quadratic window (new tools/smooth.rs); brush/eraser stroke one C1 path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline`

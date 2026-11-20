@@ -46,6 +46,18 @@ impl SaveFormat {
         }
     }
 
+    /// The MIME type the web download's Blob carries (the browser names the
+    /// file by the `download` attribute, the type is what it knows the bytes
+    /// to be). Its production caller is the wasm download path only — on
+    /// native the mapping is exercised by the test below.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub fn mime_type(self) -> &'static str {
+        match self {
+            Self::Png => "image/png",
+            Self::Jpeg => "image/jpeg",
+        }
+    }
+
     /// The format behind a file-name extension (case-insensitive); `None`
     /// for anything the app does not read/write.
     pub fn from_extension(ext: &str) -> Option<Self> {
@@ -219,6 +231,8 @@ mod web {
 
     use eframe::egui;
     use tiny_skia::Pixmap;
+    use wasm_bindgen_futures::js_sys;
+    use wasm_bindgen_futures::wasm_bindgen::JsCast;
 
     use super::{
         LoadedImage, SaveFormat, SavedImage, encode_jpeg_with_quality, encode_png,
@@ -302,9 +316,15 @@ mod web {
     }
 
     /// The dialog's save (owner request 2026-11-19): name/format/quality
-    /// are already collected by the in-app "Save Image" dialog — the
-    /// download carries the composed name and the browser decides where it
-    /// lands, so no filter list here (§3.10).
+    /// are already collected by the in-app "Save Image" dialog. The encoded
+    /// bytes go STRAIGHT to the browser (owner request 2026-11-20 — rfd's
+    /// web save fallback window with its "click here to download your file"
+    /// link is gone): a Blob of the format's MIME type over an object URL,
+    /// one synthetic click on a detached `<a download>` anchor carrying the
+    /// composed name, the URL revoked on a grace timer. The browser owns
+    /// where the file lands (§3.10), so no filter list here, and there is
+    /// nothing to cancel — the task always resolves to a saved image (or an
+    /// error popup).
     pub fn save_image_as(
         ctx: &egui::Context,
         pixmap: Pixmap,
@@ -316,25 +336,8 @@ mod web {
         let task_slot = Arc::clone(&slot);
         let ctx = ctx.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            let result = async {
-                let Some(handle) = rfd::AsyncFileDialog::new()
-                    .set_file_name(&name)
-                    .save_file()
-                    .await
-                else {
-                    return Ok(None);
-                };
-                let bytes = match format {
-                    SaveFormat::Png => encode_png(&pixmap),
-                    SaveFormat::Jpeg => encode_jpeg_with_quality(&pixmap, quality),
-                }?;
-                handle
-                    .write(&bytes)
-                    .await
-                    .map_err(|err| format!("Failed to save image: {err}"))?;
-                Ok(Some(SavedImage { name }))
-            }
-            .await;
+            let result =
+                download_image(&name, &pixmap, format, quality).map(|()| Some(SavedImage { name }));
             if let Ok(mut guard) = task_slot.lock() {
                 *guard = Some(result);
             }
@@ -343,6 +346,64 @@ mod web {
         WebTask {
             kind: WebTaskKind::Save(slot),
         }
+    }
+
+    /// The synchronous DOM download behind [`save_image_as`]: encode → Blob
+    /// → object URL → one click on a detached `<a download>` (rfd's own
+    /// `set_download_link` mechanics, minus its fallback window). Never
+    /// panics — every browser failure becomes the dialog's "Error" popup
+    /// text (§3.7's error rule).
+    fn download_image(
+        name: &str,
+        pixmap: &Pixmap,
+        format: SaveFormat,
+        quality: u8,
+    ) -> Result<(), String> {
+        let bytes = match format {
+            SaveFormat::Png => encode_png(pixmap),
+            SaveFormat::Jpeg => encode_jpeg_with_quality(pixmap, quality),
+        }?;
+
+        let window = web_sys::window()
+            .ok_or_else(|| "Failed to save image: no browser window".to_string())?;
+        let document = window
+            .document()
+            .ok_or_else(|| "Failed to save image: no browser document".to_string())?;
+        let anchor: web_sys::HtmlAnchorElement = document
+            .create_element("a")
+            .map_err(|err| format!("Failed to save image: {err:?}"))?
+            .dyn_into()
+            .map_err(|err| format!("Failed to save image: {err:?}"))?;
+
+        let array = js_sys::Array::new();
+        array.push(&js_sys::Uint8Array::from(bytes.as_slice()));
+        let bag = web_sys::BlobPropertyBag::new();
+        bag.set_type(format.mime_type());
+        let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&array, &bag)
+            .map_err(|err| format!("Failed to save image: {err:?}"))?;
+        let url = web_sys::Url::create_object_url_with_blob(&blob)
+            .map_err(|err| format!("Failed to save image: {err:?}"))?;
+
+        anchor.set_href(&url);
+        anchor.set_download(name);
+        anchor.click();
+
+        // A grace timer revokes the object URL once the download has
+        // certainly started (an immediate revoke can abort the file in some
+        // browsers). The one-shot closure is forgotten on purpose — a save
+        // costs one tiny timer until the callback fires.
+        let revoke =
+            wasm_bindgen_futures::wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
+                let _ = web_sys::Url::revoke_object_url(&url);
+            })
+                as Box<dyn FnMut()>);
+        let callback: &js_sys::Function = revoke.as_ref().unchecked_ref();
+        const REVOKE_GRACE_MS: i32 = 10_000;
+        let _ =
+            window.set_timeout_with_callback_and_timeout_and_arguments_0(callback, REVOKE_GRACE_MS);
+        revoke.forget();
+
+        Ok(())
     }
 }
 

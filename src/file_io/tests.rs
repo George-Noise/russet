@@ -99,3 +99,13 @@ fn different_jpeg_qualities_encode_different_bytes() {
         high.len()
     );
 }
+
+#[test]
+fn the_web_download_blob_carries_the_format_mime_type() {
+    // The web save hands the bytes to the browser as a Blob whose `type`
+    // comes straight from the dialog's format choice (owner request
+    // 2026-11-20: the download starts at once, no fallback window) — the
+    // mapping must stay in lockstep with SaveFormat.
+    assert_eq!(SaveFormat::Png.mime_type(), "image/png");
+    assert_eq!(SaveFormat::Jpeg.mime_type(), "image/jpeg");
+}

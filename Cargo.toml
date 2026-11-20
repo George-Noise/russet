@@ -51,7 +51,24 @@ winit = { version = "0.30.13", features = ["wayland-csd-adwaita"] }
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
-web-sys = "0.3"
+# The web save hands the encoded bytes STRAIGHT to the browser (owner
+# request 2026-11-20): a Blob of the format's MIME type over an object URL,
+# one synthetic click on a detached `<a download>` — rfd's web save
+# fallback window ("click here to download your file") is gone from the
+# flow. The features below gate exactly that path's DOM APIs. js-sys and
+# wasm-bindgen themselves are NOT declared: wasm-bindgen-futures re-exports
+# both (`pub use js_sys; pub use wasm_bindgen;` — its lib.rs), so the glue
+# stays reachable with zero manifest additions beyond these feature gates.
+web-sys = { version = "0.3", features = [
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlAnchorElement",
+] }
 
 [features]
 # MCP server (owner request 2026-11-12, chat-approved): compiles the in-tree
