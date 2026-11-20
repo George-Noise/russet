@@ -340,6 +340,68 @@ fn line_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<too
     }
 }
 
+/// The width of the Size block's slider: EXACTLY the Shape panel's widest
+/// button row (3 × [`TOOL_BUTTON_PT`] + 2 × [`TOOL_GRID_GAP`]) — the owner's
+/// 2026-11-20 pass moved the "Size" label ABOVE the slider and narrowed the
+/// slider to the button grid's own rhythm (with the label to its left the
+/// Size element was the panel's widest row).
+const SIZE_SLIDER_W: f32 = TOOL_BUTTON_PT * 3.0 + TOOL_GRID_GAP * 2.0;
+
+/// The upper bound of the Size block's manual-entry box — an
+/// [`egui::DragValue`], click it and type (owner request 2026-11-20: sizes
+/// ABOVE 100 must be enterable, "а сам слайдер пусть и дальше будет
+/// ограничен 100"). The floor is the slider's own minimum; the ceiling is
+/// only a sanity guard against absurd strokes, not a design limit.
+const SIZE_ENTRY_MAX: f32 = 10_000.0;
+
+/// The Size block of the settings panel (owner request 2026-11-20): the
+/// "Size" label sits ABOVE the slider and the slider is narrowed to the
+/// button grid's row width ([`SIZE_SLIDER_W`]); right of the slider a
+/// click-to-type number box ([`egui::DragValue`]) accepts any size ≥ 1 —
+/// including above 100 ([`SIZE_ENTRY_MAX`]) — while the SLIDER itself stays
+/// limited to 1..=100: it binds to a clamp COPY and writes back only when
+/// dragged. (egui's `Slider` with its default `SliderClamping::Always`
+/// would otherwise clamp the bound value EVERY frame — a typed 250 would
+/// snap back to 100 — and with the copy the thumb just pins at the right
+/// end while the entered size stays.) For Line and Shape a
+/// [`SHAPE_GROUP_GAP`] is added after the block, so it separates from the
+/// button rows by the same 12-pt step that separates the Shape panel's own
+/// button rows (owner request 2026-11-20: "такой же высоты что и между
+/// кнопками в Shape" — the 9-pt group gap + egui's 3-pt item spacing; the
+/// Brush/Eraser panels have nothing below the slider, so no gap).
+///
+/// Extracted as a free fn over [`ToolState`] so the regression tests run
+/// the exact UI the app runs (headless; the same pattern as
+/// [`shape_settings_ui`]).
+fn size_block_ui(ui: &mut egui::Ui, tools: &mut ToolState, tool: Tool) {
+    ui.label("Size");
+    ui.horizontal(|ui| {
+        // The same element gap the button rows use, so the slider and the
+        // number box read as one row of the panel's grid.
+        ui.spacing_mut().item_spacing.x = TOOL_GRID_GAP;
+        // egui's Slider takes its width ONLY from `spacing.slider_width`
+        // (`SliderCore::desired_size` — the default 100 pt; a container's
+        // max width cannot narrow it), so the scope pins it to the button
+        // grid's row width (owner request 2026-11-20).
+        ui.spacing_mut().slider_width = SIZE_SLIDER_W;
+        let mut slider_size = tools.size.clamp(1.0, 100.0);
+        if ui
+            .add(egui::Slider::new(&mut slider_size, 1.0..=100.0).show_value(false))
+            .changed()
+        {
+            tools.size = slider_size;
+        }
+        ui.add(
+            egui::DragValue::new(&mut tools.size)
+                .range(1.0..=SIZE_ENTRY_MAX)
+                .speed(1.0),
+        );
+    });
+    if matches!(tool, Tool::Line | Tool::Shape) {
+        ui.add_space(SHAPE_GROUP_GAP);
+    }
+}
+
 /// The builder of the "Tools" window itself (§3.2). Exposed as a function so
 /// the regression tests (`windows/tests.rs`) run the exact builder the app
 /// runs.
@@ -467,7 +529,7 @@ impl App {
                 // Always enabled when shown: a tool without a size setting
                 // does not get a disabled slider, it gets NO slider (owner
                 // request 2026-11-17).
-                ui.add(egui::Slider::new(&mut self.tools.size, 1.0..=100.0).text("Size"));
+                size_block_ui(ui, &mut self.tools, tool);
             }
             match tool {
                 Tool::Line => {
