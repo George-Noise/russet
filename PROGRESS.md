@@ -36,27 +36,19 @@
 | Extra: the manual-entry size reaches the drawing — bug fix (owner 2026-11-20) | done — gates + driver + probe green | the owner's report ("задаю вручную size 200 всё ещё рисуется с радиусом 100") landed in the DRAW paths: all FOUR rasterizers (draw_segment, smooth, polyline, shape) still clamped the stroke width to the slider-era 1..=100, and the [ / ] hotkeys clamped tools.size itself — the UI accepted 200, every path drew 100; the ceiling is now `tools::MAX_STROKE_SIZE` = 10 000 (the entry box's own sanity bound, "not a design limit"), all clamps + the DragValue range use it, a typed 200 survives the bracket keys (→ 199); +5 pixel probes (`tools/tests/stroke_size.rs`) proving a 200-wide stroke covers what a 100-clamped one cannot; sizes ≤ 100 draw pixel-identical; V57 born |
 | Extra: the Select tool — regions, copy/cut/paste/move, crop (owner 2026-11-20) | done — gates + driver + GUI probes green | ONE "Select (V)" button (the grid is 8 tools), the icon = the mode's mark (dashed square/blob), while active L-click cycles the mode forward / R-click backward (over `SelectMode::ALL` — ready for more kinds); the panel: the MODE row (Rect/Lasso) + the OPS row (Copy/Cut/Paste/Crop, grayed without a selection/clipboard; the Edit menu + Ctrl+C/X/V run the same ops); a plain drag replaces, Shift-drag adds, Alt-drag subtracts (rect AND lasso — the mask derives from the op list, so subtract cuts true holes); the ants = the crack-boundary loops of the mask (the true contour, holes, checkerboard corners) drawn under every tool; move = press inside the selection lifts the pixels (a full-layer backup) + the drag re-draws at the integer offset + ONE `move` node, Esc/pan/tool-switch restores; crop = `layers::crop_all` reusing the resize machinery's `fit_copy_at` (one `crop` node per layer, `CropInfo` in the tree rows) — the owner's "связать с resize"; the pure domain in `selection.rs`, the gestures/ops in `app/selection.rs`, the panel in `app/windows/select_panel.rs`; the clipboard is in-app and paste stamps immediately (F18); V58 born |
 | Extra: the V58 fixes — the move ghost, the dead combos, the blot (owner 2026-11-20) | done — gates + driver + probes green | the owner's three findings fixed: (1) the move drag printed a GHOST every frame (the restore covered only the origin — the previous frame's stamp survived); now the restore covers origin ∪ last frame ∪ new position + the regression test (two redraws, the intermediate stamp vanishes); (2) Ctrl+C/X/V never fired — egui-winit's `clipboard_shortcuts` (ON by default) converts the combos into DEDICATED `Event::Copy/Cut/Paste` and swallows the Key events (issue #3653; matches PHYSICAL keys — non-Latin layouts work too); the handler consumes the dedicated events, the wants-keyboard guard keeps the Text-tool field its OS-text semantics + 2 tests (the events drive the ops; a bare Key event does not); (3) the lasso icon was circle-like — redrawn as an irregular round blot (6 anchors, varying radii, C1 midpoints, the same dashes); V59 born |
+| Extra: the V59 fixes — clipboard_shortcuts OFF, the overlay move, the pan guard, the real blot (owner 2026-11-20) | done — gates + driver + probes green | (1) the egui-winit conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`, owner: "я не согласен с разработчиками") — Ctrl+C/X/V arrive as plain Key events (logical-or-physical `key`, so non-Latin layouts still work); the dedicated events stay consumed as the WEB fallback (the browser's DOM copy/cut/paste — not flag-controlled) with a one-op-per-frame twin guard + 2 tests; (2) Ctrl+S / Ctrl+Shift+S no longer PAN on S: an accelerator modifier (Ctrl/⌘/Alt) suppresses the W/A/S/D pan (Shift stays allowed) + a test; (3) the move drag is an OVERLAY ELEMENT: the layer is written exactly TWICE (the erase at the lift, the stamp at the release), the drag rides a Foreground painter (the floating texture + the ants, whole-viewport clip, visible past the canvas bounds) + 3 tests (no-write-until-release, the live texture, the past-the-bounds geometry); (4) the lasso icon = five lobes + five deep waists, picked from rendered candidates (the pear is gone) |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the V58-fixes
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the V59-fixes
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 265 default / 278 mcp green
-(+1 ignored; +24 net tests since b54a7fd — the Select-tool topics AND this
-round's: the move-drag ghost regression (two redraws — the intermediate
-stamp must vanish), the dedicated-event path (Event::Copy/Cut/Paste drive
-the ops through a headless pass; a bare Key event does NOT), plus the
-Select round's `selection/tests.rs` (the pixel semantics, the add/subtract
-algebra, the crack-boundary loops — rect corners merged, holes,
-checkerboard splits — and the extract/erase/restore/stamp helpers),
-`app/selection/tests.rs` (the copy→cut→paste round trip, the crop ×
-layers, the move commit and its cancel restore, through `new_headless`),
-`windows/tests/select_panel.rs` (the rows' 12-pt step, the grayed ops, an
-INJECTED click writing the mode), the atlas counts (8 tool + 8 shape +
-2 line + 6 select + 1 font = 25 first pass), the launch/mcp names),
-the visual driver ALL SCENARIOS GREEN under Xvfb through the dev+mcp binary
-+ the GUI probes PASS (the NEW `scripts/gui_select_check.sh`: the 2/2/2/2
-grid, the Select panel 2 mode + 4 ops buttons, the 6-px in-row gaps, the
-12-px rows step; the updated `gui_line_panel_check.sh`: the Size block and
-the Line/Shape rows untouched; the blot icon verified on the cropped
+(default + mcp), `cargo test --profile gates` 269 default / 282 mcp green
+(+1 ignored; +28 net tests since b54a7fd — the Select-tool topics, the
+V58-fixes and this round's: the Key-path combos (a plain Ctrl+C Key event
+runs the copy), the one-op twin guard (a translucent paste stays 127 red),
+the pan-modifier suppression, the move-drag no-write-until-release, the
+live overlay texture, the past-the-bounds overlay geometry, plus the
+earlier rounds' topics), the visual driver ALL SCENARIOS GREEN under Xvfb
+through the dev+mcp binary + the GUI probes PASS (the select probe: the
+2/2/2/2 grid, the panel rows, the gaps; the blot verified on the cropped
 screenshot) — Rust 1.99.1
 pinned via rust-toolchain.toml, Linux. NO wasm check this round (the diff
 touches no web-facing code — the economy rule). NOTE 2026-11-20 (still true):
@@ -95,10 +87,45 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-20) lives in
-> PROGRESS-archive.md; the latest move: the manual-entry bug-fix entry
-> (the V58-fixes round's second cut — the total still passed ~200 after
-> the Docs entry went; the Size-block entry went the round before — all
+> PROGRESS-archive.md; the latest move: the Select-tool entry (during the
+> V59 round's budget — the total passed ~200 after two V58-fixes cuts; all
 > in the archive).
+
+### 2026-11-20 — `Fix:` the V59 pass — clipboard_shortcuts OFF, the overlay move drag, the pan-on-Ctrl+S guard, the real blot — owner bug report
+
+- **What:** the owner's V59 findings: (1) the egui-winit `clipboard_shortcuts`
+  conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`,
+  owner: "я не согласен с разработчиками этой библиотеки") — Ctrl+C/X/V now
+  arrive as plain Key events and `consume_key` sees them again; the dedicated
+  `Event::Copy/Cut/Paste` stay consumed as the WEB fallback (the browser's
+  copy/cut/paste DOM events are the only channel there) with a one-op guard
+  (a web frame can carry the same gesture twice — 2 tests); (2) Ctrl+S /
+  Ctrl+Shift+S also PANNED on S (the pan reads `key_down` — the pressed
+  state — and the save's consume_key does not lift it): an accelerator
+  modifier (Ctrl/⌘/Alt) now suppresses the W/A/S/D pan, Shift stays allowed
+  (+ test); (3) the move drag REDESIGNED (owner: "отдельным элементом от
+  холста... видно за границами холста... при отпускании"): the layer is
+  written exactly TWICE — the erase at the lift, the stamp at the release —
+  the drag rides a FOREGROUND overlay (the floating pixels as a GPU texture
+  + the ants, whole-viewport clip, visible past the canvas bounds; the old
+  per-frame restore/erase/stamp painted unclear artifacts) (+ 3 tests: the
+  no-write-until-release, the live overlay texture, the past-the-bounds
+  geometry); (4) the lasso icon is now a real blot: five lobes (9.3–7.2)
+  interleaved with five deep waists (5.0–6.2), picked from rendered
+  candidates (the second take read as an upside-down pear).
+- **Files:** `main.rs`, `app/input.rs` (+ tests), `app/camera.rs` (+ tests),
+  `app/selection.rs` (+ tests), `app/tool_icons/draw.rs`, SPEC §3.9 (the
+  combo row + the pan row) and §3.13 (the move row).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp); the visual driver
+  + the select probe PASS; the blot verified on the cropped screenshot. No
+  wasm check — no web-facing code (the economy rule).
+- **Owner-checks:** V60 born (Windows + web: the combos fire ONCE and pan
+  does not run on Ctrl+S; a clean overlay drag visible past the canvas; the
+  blot reads as a blot). Open: V60, V59, V58, V57; parked: V30, V8.
+  Debts open: F18, F17, F16, F15. NOTE: `app/selection.rs` (611) and
+  `app/tool_icons/draw.rs` (798) grew past the 500-guard — the standing
+  split proposal, at task end as the rules ask.
+- **Commit title:** `Fix: clipboard_shortcuts off (the combos arrive as Key events), the move drag rides a foreground overlay (no canvas writes until release), Ctrl+S no longer pans, the lasso icon is a five-lobe blot`
 
 ### 2026-11-20 — `Fix:` the V58 pass — the move-drag ghost, the dead Ctrl+C/X/V combos, the lasso blot — owner bug report
 
@@ -125,51 +152,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   combos, the blot mark). Open: V59, V58, V57, V56; parked: V30, V8.
   Debts open: F18, F17, F16, F15.
 - **Commit title:** `Fix: the move drag leaves no per-frame ghosts (the restore covers the last stamp), Ctrl+C/X/V consume egui-winit's dedicated Copy/Cut/Paste events (consume_key never sees the combos), the lasso icon is an irregular blot`
-
-### 2026-11-20 — `Feat:` the Select tool — rect/lasso regions, Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery — owner request
-
-- **What:** one "Select (V)" button in the Tools grid (after the paint
-  trio — 8 tools now): a click activates it, and WHILE ACTIVE the left
-  click cycles the sub-mode FORWARD, the right click BACKWARD (over
-  `SelectMode::ALL` — "типов выделений потом будет больше чем 2"). The
-  magnetized panel: the MODE row (Rect/Lasso — the dashed outline says
-  "selection", the shape says the kind) + the OPS row (Copy/Cut/Paste/
-  Crop, grayed without a selection/clipboard; the Edit menu gains
-  Copy/Cut/Paste). A plain drag REPLACES, Shift-drag ADDS, Alt-drag
-  SUBTRACTS (frozen at press; the lasso auto-closes, a plain click
-  deselects). The ants = the TRUE mask contour (crack-boundary loops,
-  holes included) drawn under EVERY tool; Esc cancels/deselects. Move =
-  press INSIDE the selection lifts the pixels (a full-layer backup) and
-  the drag re-draws them at the integer offset; release = ONE `move`
-  node. Copy (no node) / Cut (one `cut` node, the selection stays) /
-  Paste (centered in the viewport, selects the pasted rect, one `paste`
-  node; the in-app clipboard survives document switches — F18). Crop =
-  the resize machinery's per-layer top-left crop (`fit_copy_at`, one
-  `crop` node per layer — the owner's "связать с resize"), the buffer
-  rebuilds, the gestures drop, the selection clears.
-- **Files:** NEW `selection.rs` + tests, `app/selection.rs` + tests,
-  `app/windows/select_panel.rs` + `windows/tests/select_panel.rs`,
-  `scripts/gui_select_check.sh`; `tools.rs`, `history_tree.rs`
-  (Crop/Cut/Paste/Move + CropInfo + record_crop), `layers.rs`
-  (`crop_all`), `app.rs`, `app/input.rs` (V, Ctrl+C/X/V consumed BEFORE
-  the plain V), `app/menu.rs`, `app/windows.rs`, `app/tool_icons.rs` +
-  `draw.rs` (SelectIcon ×6, TOOLS 8), `app/document.rs`, `app/launch.rs`
-  + `main.rs`, `app/mcp/tools/queries.rs`, `app/tree_window/paint.rs`,
-  SPEC (§3.13 + §3.1 + §3.9 + §3.12), AGENTS.md (the module map + the
-  atlas-count quirk), `gui_line_panel_check.sh` (the 2/2/2/2 grid).
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp): fmt, rules
-  HARD green, clippy `-D warnings` both lanes, `cargo test --profile
-  gates` 262 default / 275 mcp (+21 net: the selection topics), the
-  visual driver ALL SCENARIOS GREEN, the pixel probes PASS (the NEW
-  select probe: the 2/2/2/2 grid, the panel 2+4 buttons, the 6-px gaps,
-  the 12-px rows step; the line/shape probe: the Size block untouched).
-  No wasm check — the diff touches no web-facing code (the economy rule).
-- **Owner-checks:** V58 born (Windows + web: the full loop). Open: V58,
-  V57, V56, V53; parked: V30, V8. Debts open: F18 (born this round),
-  F17, F16, F15. Over-guard growth (warn only, no split without the
-  owner's OK): `windows.rs` 652, `tool_icons.rs` 602, `draw.rs` 761,
-  `tools.rs` 598, `selection.rs` 649, `app/selection.rs` 558 — the
-  proposed splits at task end: the select panel out of `windows.rs`
-  (the palette-split pattern), the select icons out of `draw.rs`.
-- **Commit title:** `Select tool: rect/lasso regions with Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery (the dashed true-contour ants, the mode-cycling Tools button, the panel's mode+ops rows)`
 

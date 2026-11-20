@@ -2705,8 +2705,11 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **Commit title:** `Fix: a manually entered size above 100 reaches the drawing (the rasterizers and the bracket hotkeys clamp to MAX_STROKE_SIZE, 10 000, instead of the slider-era 100)`
 
 
+### 2026-11-20 — `Feat:` the Select tool — rect/lasso regions, Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery — owner request
+
 ## Compaction history
 
+- Compaction history (newest first): 2026-11-20 (V59 round) — the Select-tool feature entry moved (the total passed ~200 again).
 - Compaction history (newest first): 2026-11-20 (V58-fixes round, second cut) — the manual-entry bug-fix entry moved (the total still passed ~200 after the Docs entry).
 - Compaction history (newest first): 2026-11-20 (V58-fixes round) — the Docs entry (the hand-over rule) moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (Select-tool round) — the Size-block entry moved under the new round's budget (the PROGRESS total passed ~200 lines).

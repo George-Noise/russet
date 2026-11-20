@@ -633,20 +633,26 @@ fn draw_select_rect(pm: &mut Pixmap, ts: Transform, mono: Color32) {
 
 /// The dashed LASSO selection mark: the same dashes around an irregular
 /// round BLOT (owner request 2026-11-20: "не кружочком, а в виде круглой
-/// кляксы" — the first blob was too regular and read as a circle). Six
-/// anchors with strongly varying radii around the center, smoothed C1
+/// кляксы"; the second take read as an upside-down PEAR — one smooth
+/// taper). Ten anchors: FIVE lobes (radii 9.3/7.6/8.8/7.2/9.0 at
+/// 0°/72°/144°/216°/288°) interleaved with FIVE deep WAISTS (5.0–6.2)
+/// pulled toward the center — pinched notches between the lumps, no
+/// smooth taper anywhere. The shape was picked from rendered candidates
+/// (the lobe/waist splat beat a 4-lobe diamond and the pear). Smoothed C1
 /// through the anchors' midpoints (each anchor is its segment's quadratic
-/// control) — lobes and waists make it unmistakably a freeform blot —
-/// then dashed like the rect mark.
+/// control), then dashed like the rect mark.
 fn draw_select_lasso(pm: &mut Pixmap, ts: Transform, mono: Color32) {
-    // (angle°, radius) around (12, 12): 8.5, 6.0, 9.0, 5.5, 8.0, 9.5.
-    const ANCHORS: [(f32, f32); 6] = [
-        (20.5, 12.0), // 0°
-        (15.9, 16.6), // 50°
-        (8.9, 20.5),  // 110°
-        (6.6, 13.0),  // 170°
-        (6.3, 6.3),   // 225°
-        (15.2, 3.1),  // 290°
+    const ANCHORS: [(f32, f32); 10] = [
+        (21.3, 12.0), // lobe 0° r9.3
+        (16.0, 14.9), // waist 36° r5.0
+        (14.3, 19.2), // lobe 72° r7.6
+        (10.1, 17.9), // waist 108° r6.2
+        (4.9, 17.2),  // lobe 144° r8.8
+        (7.4, 12.0),  // waist 180° r4.6
+        (6.2, 7.8),   // lobe 216° r7.2
+        (10.3, 6.7),  // waist 252° r5.6
+        (14.8, 3.4),  // lobe 288° r9.0
+        (16.0, 9.1),  // waist 324° r4.9
     ];
     let n = ANCHORS.len();
     let mut blob = Vec::new();

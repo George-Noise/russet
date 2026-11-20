@@ -7,7 +7,7 @@
 use super::*;
 use crate::history_tree::ActionKind;
 use crate::selection::{IRect, Region};
-use eframe::egui::pos2;
+use eframe::egui::{Rect, pos2};
 
 /// Fills a rect of the app's active layer with a premultiplied color
 /// (the direct pixel write the raster helpers would produce).
@@ -120,9 +120,10 @@ fn crop_to_selection_resizes_every_layer_and_records_crop_nodes() {
 fn the_move_gesture_commits_one_move_node_and_translates() {
     let mut app = app_with_square();
 
-    // Lift (the erase runs over the bounds) + drag + commit.
+    // Lift (the erase runs over the bounds) + drag (the overlay carries
+    // the pixels) + release commit (the layer's second and last write).
     app.start_move(pos2(15.0, 15.0));
-    app.redraw_moved((5, 3));
+    app.update_move((5, 3));
     app.commit_move((5, 3));
 
     assert_eq!(alpha_at(&app, 15, 13), 255, "the square's new top-left");
@@ -146,7 +147,7 @@ fn cancel_select_gesture_restores_the_lifted_pixels() {
     let mut app = app_with_square();
 
     app.start_move(pos2(15.0, 15.0));
-    app.redraw_moved((5, 3));
+    app.update_move((5, 3));
     app.cancel_select_gesture();
 
     assert_eq!(alpha_at(&app, 15, 15), 255, "the square is back");
@@ -214,25 +215,83 @@ fn a_translucent_paste_blends_with_its_alpha() {
 }
 
 #[test]
-fn redrawing_the_move_cleans_the_previous_stamp() {
+fn the_move_drag_writes_nothing_to_the_layer_until_release() {
+    // Owner redesign 2026-11-20: the dragged part must be a separate
+    // element from the canvas — the layer sees exactly TWO writes, the
+    // lift's erase and the release's stamp; the drag itself paints
+    // nothing (the old per-frame restore/erase/stamp printed unclear
+    // artifacts).
     let mut app = app_with_square();
 
     app.start_move(pos2(15.0, 15.0));
-    app.redraw_moved((5, 3)); // the square at (15..35, 13..33)
-    app.redraw_moved((10, 0)); // the square at (20..40, 10..30)
+    assert_eq!(alpha_at(&app, 12, 12), 0, "the lift erased the square");
 
+    app.update_move((5, 3));
+    app.update_move((10, 0));
     assert_eq!(
         alpha_at(&app, 16, 14),
         0,
-        "the first frame's stamp must be gone (owner bug report 2026-11-20: every drag frame printed a ghost)"
+        "the drag painted nothing at the intermediate offset"
     );
     assert_eq!(
         alpha_at(&app, 25, 20),
-        255,
-        "the current position is stamped"
+        0,
+        "the drag painted nothing anywhere"
     );
-    assert_eq!(alpha_at(&app, 12, 12), 0, "the lift stays erased");
 
     app.commit_move((10, 0));
+    assert_eq!(
+        alpha_at(&app, 20, 10),
+        255,
+        "the square at the final offset"
+    );
+    assert_eq!(alpha_at(&app, 39, 29), 255, "the whole square stamped");
+    assert_eq!(alpha_at(&app, 12, 12), 0, "the origin stays erased");
     assert_eq!(head_kind(&app), ActionKind::Move, "ONE move node");
+}
+
+#[test]
+fn the_move_gesture_carries_a_live_overlay_texture() {
+    let mut app = app_with_square();
+
+    app.start_move(pos2(15.0, 15.0));
+    let SelectGesture::MoveDrag {
+        overlay, origin, ..
+    } = &app.select_gesture
+    else {
+        panic!("the move gesture must carry the overlay texture");
+    };
+    assert_eq!(
+        overlay.size(),
+        [origin.w as usize, origin.h as usize],
+        "the texture is the floating pixels, sized to the selection bounds"
+    );
+
+    app.commit_move((0, 0));
+    assert!(
+        !matches!(app.select_gesture, SelectGesture::MoveDrag { .. }),
+        "the commit drops the gesture and with it the texture handle"
+    );
+}
+
+#[test]
+fn the_move_overlay_rect_extends_past_the_canvas_bounds() {
+    // Owner redesign 2026-11-20: the dragged part is a separate element
+    // from the canvas, VISIBLE PAST THE CANVAS BOUNDS until release — the
+    // overlay rect keeps its full pixel size wherever the drag goes (the
+    // Foreground painter clips to the whole viewport, not the canvas).
+    let mut app = app_with_square();
+
+    app.start_move(pos2(15.0, 15.0));
+    app.update_move((95, 95));
+    let canvas_rect = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(100.0, 100.0));
+    let rect = app.move_overlay_rect(canvas_rect);
+
+    assert_eq!(rect.left(), 105.0, "origin.x 10 + offset 95, zoom 1");
+    assert_eq!(rect.top(), 105.0);
+    assert!(
+        rect.left() >= canvas_rect.right(),
+        "the floating piece sits fully past the canvas and is still drawn"
+    );
+    assert_eq!(rect.width(), 20.0, "the pixel size is preserved");
 }

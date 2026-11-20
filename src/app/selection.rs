@@ -14,10 +14,12 @@
 //!   drag — replace (no modifier), add (Shift), subtract (Alt), frozen at
 //!   press like the Shape tools freeze their colors;
 //! - press INSIDE the selection without modifiers starts a MOVE: the
-//!   selected pixels lift into a floating buffer (erased from the layer;
-//!   a FULL-layer backup rides along for the restore), and every frame of
-//!   the drag re-draws them at the integer offset; release commits ONE
-//!   move node, Esc / a tool switch / a pan restores the backup;
+//!   selected pixels lift into a floating buffer (erased from the layer —
+//!   the layer's ONLY write until the release) and follow the pointer as
+//!   a GPU overlay ABOVE the canvas, visible past the canvas bounds
+//!   (owner redesign 2026-11-20); release commits the stamp at the final
+//!   offset with ONE move node, Esc / a tool switch / a pan restores the
+//!   backup;
 //! - release of a region gesture applies the region to the selection (a
 //!   plain lasso click — fewer than 3 points — deselects);
 //! - Esc with no pending gesture deselects.
@@ -57,16 +59,25 @@ pub(super) enum SelectGesture {
     },
     /// The selected pixels are lifted: `floating` holds the mask-shaped
     /// copy, `backup` the FULL pre-drag bytes of the active layer (the
-    /// cancel restore), `mask` the lift's pixel truth, `origin` the bounds
-    /// the lift happened at, `offset` the live integer shift. Every changed
-    /// frame re-draws restore(origin) + erase(mask) + stamp(origin+offset).
+    /// cancel restore), `origin` the bounds the lift happened at, `offset`
+    /// the live integer shift. The LAYER is
+    /// written exactly TWICE total — the erase at the lift and the stamp
+    /// at the release; during the drag the floating pixels ride as a GPU
+    /// overlay ABOVE the canvas, visible past the canvas bounds (owner
+    /// redesign 2026-11-20: the per-frame restore/erase/stamp painted
+    /// unclear artifacts, and the dragged part must be a separate element
+    /// from the canvas until release).
     MoveDrag {
         floating: tiny_skia::Pixmap,
         backup: tiny_skia::Pixmap,
-        mask: selection::Mask,
         origin: IRect,
         grab: Pos2,
         offset: (i64, i64),
+        /// The floating pixels as a GPU texture (premultiplied sRGBA),
+        /// drawn by [`App::draw_move_overlay`]. The gesture keeps the
+        /// handle alive for as long as the id is sampled (the
+        /// texture-dies-with-handle rule) and drops it at the commit.
+        overlay: egui::TextureHandle,
     },
 }
 
@@ -131,19 +142,19 @@ impl App {
             return;
         }
 
-        // The move drag consumes the frame: read the grab/offset, redraw at
-        // the new integer offset, commit on release.
+        // The move drag consumes the frame: track the offset (the canvas
+        // is not written during the drag — the overlay carries the pixels),
+        // commit the stamp on release.
         if let SelectGesture::MoveDrag { grab, offset, .. } = &self.select_gesture {
             let (grab, last) = (*grab, *offset);
             let offset = match pos {
                 Some(p) => ((p.x - grab.x).round() as i64, (p.y - grab.y).round() as i64),
                 None => last,
             };
-            if offset != last || any_released {
-                self.redraw_moved(offset);
-            }
             if any_released {
                 self.commit_move(offset);
+            } else if offset != last {
+                self.update_move(offset);
             }
             return;
         }
@@ -279,8 +290,18 @@ impl App {
         };
         let backup = self.layers.active().pixmap().clone();
         // The lift: erase the selected pixels (one composite + texture sync
-        // over the bounds) — the floating buffer rides in the gesture.
+        // over the bounds) — the ONLY layer write until the release. The
+        // floating buffer rides as a GPU overlay texture (kept alive by the
+        // gesture) instead of being re-stamped into the layer per frame.
         selection::erase_masked(self.layers.active_mut().pixmap_mut(), &mask);
+        let overlay = self.ctx.load_texture(
+            "select_move_overlay",
+            egui::ColorImage::from_rgba_premultiplied(
+                [floating.width() as usize, floating.height() as usize],
+                floating.data(),
+            ),
+            self.canvas_texture_options(),
+        );
         self.composite_dirty(
             origin.x.max(0) as u32,
             origin.y.max(0) as u32,
@@ -297,79 +318,57 @@ impl App {
         self.select_gesture = SelectGesture::MoveDrag {
             floating,
             backup,
-            mask,
             origin,
             grab,
             offset: (0, 0),
+            overlay,
         };
         self.ctx.request_repaint();
     }
 
-    /// One frame of a moved selection: restore the pre-drag bytes, erase
-    /// the lifted pixels, stamp the floating at the new offset — all over
-    /// the union rect of the origin, the PREVIOUS frame's stamp and the
-    /// new position (owner bug report 2026-11-20: restoring the origin
-    /// alone left the previous frame's stamp on the canvas — the drag
-    /// printed a ghost every frame). The gesture is taken out and put
-    /// back (the pixel work borrows the layer).
-    fn redraw_moved(&mut self, offset: (i64, i64)) {
+    /// One frame of a moved selection: ONLY the integer offset updates —
+    /// the layer is not written (owner redesign 2026-11-20: the drag must
+    /// not paint onto the canvas at all; the pixels follow the pointer as
+    /// the overlay element).
+    fn update_move(&mut self, offset: (i64, i64)) {
+        if let SelectGesture::MoveDrag { offset: last, .. } = &mut self.select_gesture
+            && *last != offset
+        {
+            *last = offset;
+            self.ctx.request_repaint();
+        }
+    }
+
+    /// Commits a released move: stamp the floating at the final offset
+    /// (the layer's second and last write — the drag itself painted
+    /// nothing), refresh that region, translate the selection, and record
+    /// ONE move node with the post-move layer (the pixels already sit at
+    /// the final position).
+    fn commit_move(&mut self, offset: (i64, i64)) {
         let state = std::mem::replace(&mut self.select_gesture, SelectGesture::None);
         let SelectGesture::MoveDrag {
-            floating,
-            backup,
-            mask,
-            origin,
-            grab,
-            offset: last,
+            floating, origin, ..
         } = state
         else {
-            self.select_gesture = state;
             return;
         };
-        let at = |dx: i64, dy: i64| IRect {
-            x: origin.x + dx,
-            y: origin.y + dy,
+        let moved = IRect {
+            x: origin.x + offset.0,
+            y: origin.y + offset.1,
             w: origin.w,
             h: origin.h,
         };
-        let moved = at(offset.0, offset.1);
-        selection::restore_region(
-            self.layers.active_mut().pixmap_mut(),
-            &backup,
-            origin.union(at(last.0, last.1)).union(moved),
-        );
-        selection::erase_masked(self.layers.active_mut().pixmap_mut(), &mask);
         selection::stamp(
             self.layers.active_mut().pixmap_mut(),
             &floating,
             moved.x,
             moved.y,
         );
-        if let Some(dirty) = origin
-            .union(at(last.0, last.1))
-            .union(moved)
-            .clamped(self.canvas.width, self.canvas.height)
-        {
+        if let Some(dirty) = moved.clamped(self.canvas.width, self.canvas.height) {
             self.composite_dirty(dirty.x as u32, dirty.y as u32, dirty.w, dirty.h);
             self.sync_texture(dirty.x as u32, dirty.y as u32, dirty.w, dirty.h);
-            self.dirty = true;
         }
-        self.select_gesture = SelectGesture::MoveDrag {
-            floating,
-            backup,
-            mask,
-            origin,
-            grab,
-            offset,
-        };
-        self.ctx.request_repaint();
-    }
-
-    /// Commits a released move: the selection translates by the drag's
-    /// integer offset and ONE move node records the post-move layer (the
-    /// pixels already sit at the final position).
-    fn commit_move(&mut self, offset: (i64, i64)) {
-        self.select_gesture = SelectGesture::None;
+        self.dirty = true;
         let (width, height) = (self.canvas.width, self.canvas.height);
         self.selection.translate(offset.0, offset.1, width, height);
         self.record_active_action(ActionKind::Move, Color32::WHITE, None);
@@ -505,38 +504,21 @@ impl App {
 
     /// The dashed selection overlay (white underlay + black dashes): the
     /// committed selection's boundary loops under EVERY tool, plus the
-    /// pending gesture's outline. The move drag shifts the loops by its
-    /// live offset. Never touches the Pixmap.
+    /// pending gesture's outline — all clipped to the canvas panel. While
+    /// a move drag is live the committed loops are drawn by
+    /// [`App::draw_move_overlay`][Self::draw_move_overlay] instead, on the
+    /// foreground layer, so they follow the floating pixels past the
+    /// canvas bounds. Never touches the Pixmap.
     pub(super) fn draw_selection_overlay(&self, painter: &egui::Painter, canvas_rect: Rect) {
         let ppp = self.ctx.pixels_per_point();
-        // The dash rhythm lives in SCREEN points — the ants read the same
-        // at every zoom.
-        let white = Stroke::new(1.0, Color32::from_white_alpha(230));
-        let black = Stroke::new(1.0, Color32::from_black_alpha(230));
-        let (dash, gap) = (4.0 / ppp.max(0.5), 3.0 / ppp.max(0.5));
-        let move_offset = match &self.select_gesture {
-            SelectGesture::MoveDrag { offset, .. } => egui::vec2(offset.0 as f32, offset.1 as f32),
-            _ => egui::Vec2::ZERO,
-        };
-        let draw_points = |painter: &egui::Painter, points: Vec<Pos2>| {
-            if points.len() < 2 {
-                return;
-            }
-            painter.add(Shape::closed_line(points.clone(), white));
-            let mut dashed_path = points.clone();
-            dashed_path.push(points[0]); // dashed_line is open — close it
-            for shape in Shape::dashed_line(&dashed_path, black, dash, gap) {
-                painter.add(shape);
-            }
-        };
         let to_screen = |p: Pos2| self.screen_pos(canvas_rect, p);
-        // The committed selection's loops, shifted live during a move drag.
-        for loop_points in self.selection.ants() {
-            let screen: Vec<Pos2> = loop_points
-                .iter()
-                .map(|p| to_screen(Pos2::new(p.x + move_offset.x, p.y + move_offset.y)))
-                .collect();
-            draw_points(painter, screen);
+        if !matches!(self.select_gesture, SelectGesture::MoveDrag { .. }) {
+            // The committed selection's loops — unless a move drag carries
+            // them on the foreground overlay.
+            for loop_points in self.selection.ants() {
+                let screen: Vec<Pos2> = loop_points.iter().map(|p| to_screen(*p)).collect();
+                draw_ant_loop(painter, &screen, ppp);
+            }
         }
         // The pending region gesture's outline.
         match &self.select_gesture {
@@ -544,22 +526,105 @@ impl App {
                 let a = to_screen(*start);
                 let b = to_screen(*current);
                 let rect = Rect::from_two_pos(a, b);
-                draw_points(
+                draw_ant_loop(
                     painter,
-                    vec![
+                    &[
                         rect.left_top(),
                         rect.right_top(),
                         rect.right_bottom(),
                         rect.left_bottom(),
                     ],
+                    ppp,
                 );
             }
             SelectGesture::LassoDrag { points, .. } => {
                 let screen: Vec<Pos2> = points.iter().map(|p| to_screen(*p)).collect();
-                draw_points(painter, screen);
+                draw_ant_loop(painter, &screen, ppp);
             }
             _ => {}
         }
+    }
+
+    /// The move drag's floating pixels as a SEPARATE element ABOVE
+    /// everything (owner redesign 2026-11-20): the dragged part is an
+    /// overlay, visible past the canvas bounds until release, and the
+    /// canvas texture is not touched while it moves. Painted on
+    /// `Order::Foreground` with the whole-screen clip: the floating
+    /// texture at the dragged offset plus the selection's dashed loops
+    /// riding with it.
+    pub(super) fn draw_move_overlay(&self, canvas_rect: Rect) {
+        let SelectGesture::MoveDrag {
+            overlay, offset, ..
+        } = &self.select_gesture
+        else {
+            return;
+        };
+        let painter = egui::Painter::new(
+            self.ctx.clone(),
+            egui::LayerId::new(
+                egui::Order::Foreground,
+                // Id::unique hashes deterministically (fixed seeds) — a
+                // stable layer id across frames; `Id::new` is deprecated
+                // in egui 0.37.
+                egui::Id::unique("select_move_overlay"),
+            ),
+            self.ctx.viewport_rect(),
+        );
+        let to_screen = |p: Pos2| {
+            self.screen_pos(
+                canvas_rect,
+                Pos2::new(p.x + offset.0 as f32, p.y + offset.1 as f32),
+            )
+        };
+        for loop_points in self.selection.ants() {
+            let screen: Vec<Pos2> = loop_points.iter().map(|p| to_screen(*p)).collect();
+            draw_ant_loop(&painter, &screen, self.ctx.pixels_per_point());
+        }
+        let rect = self.move_overlay_rect(canvas_rect);
+        painter.image(
+            overlay.id(),
+            rect,
+            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+
+    /// The screen rect the floating pixels are drawn at for the CURRENT
+    /// drag offset (a helper so the overlay geometry is unit-testable —
+    /// the owner's "видно за границами холста" promise). `Rect::NOTHING`
+    /// when no move drag is live.
+    fn move_overlay_rect(&self, canvas_rect: Rect) -> Rect {
+        let SelectGesture::MoveDrag { origin, offset, .. } = &self.select_gesture else {
+            return Rect::NOTHING;
+        };
+        let min = self.screen_pos(
+            canvas_rect,
+            Pos2::new((origin.x + offset.0) as f32, (origin.y + offset.1) as f32),
+        );
+        let scale = self.zoom / self.ctx.pixels_per_point();
+        Rect::from_min_size(
+            min,
+            egui::vec2(origin.w as f32 * scale, origin.h as f32 * scale),
+        )
+    }
+}
+
+/// One dashed ant loop (white underlay + black dashes) over SCREEN points.
+/// The dash rhythm lives in SCREEN points — the ants read the same at
+/// every zoom. Shared by the canvas-painter overlay and the foreground
+/// move overlay.
+fn draw_ant_loop(painter: &egui::Painter, points: &[Pos2], ppp: f32) {
+    if points.len() < 2 {
+        return;
+    }
+    let white = Stroke::new(1.0, Color32::from_white_alpha(230));
+    let black = Stroke::new(1.0, Color32::from_black_alpha(230));
+    let (dash, gap) = (4.0 / ppp.max(0.5), 3.0 / ppp.max(0.5));
+    painter.add(Shape::closed_line(points.to_vec(), white));
+    let mut dashed_path = points.to_vec();
+    dashed_path.push(points[0]); // dashed_line is open — close it
+    for shape in Shape::dashed_line(&dashed_path, black, dash, gap) {
+        painter.add(shape);
     }
 }
 

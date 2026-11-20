@@ -1,3 +1,10 @@
+### 2026-11-20 — visual_driver.py exits 0 SILENTLY against a non-MCP binary
+
+- Expected: the driver prints its per-scenario lines (or fails loudly when the binary cannot speak MCP).
+- Actual: `python3 scripts/visual_driver.py target/debug/russet` built WITHOUT `--features mcp` printed NOTHING and exited 0; piped output stayed empty for the full 600s Bash timeout (stdout buffering + no scenario attempts), and a rerun with `-u` also produced a 0-byte log and exit 0.
+- Cost: one 600s hung Bash call + a wasted rerun (~12 min) before the cause was spotted (the driver needs the MCP stdio server; the plain dev build does not speak it).
+- What could improve: a startup probe in visual_driver.py — if the binary does not answer the first MCP handshake within ~5 s, print one loud line ("binary has no MCP server? build with --features mcp") and exit non-zero. None of the docs state the MCP-build requirement in the driver's own usage line.
+
 ### 2026-11-20 — egui `Rect` has no `min_x`/`max_x` fields (a wrong guess that cost one compile)
 
 - **When:** 2026-11-20, the Shape-panel spacing round — writing the new

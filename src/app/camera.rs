@@ -190,15 +190,18 @@ impl App {
         if ui.ctx().egui_wants_keyboard_input() {
             return false;
         }
-        let dir = ui.input(|i| {
-            key_pan_dir(
-                i.key_down(Key::W),
-                i.key_down(Key::A),
-                i.key_down(Key::S),
-                i.key_down(Key::D),
+        let (dir, suppressed) = ui.input(|i| {
+            (
+                key_pan_dir(
+                    i.key_down(Key::W),
+                    i.key_down(Key::A),
+                    i.key_down(Key::S),
+                    i.key_down(Key::D),
+                ),
+                pan_suppressed_by_modifiers(i.modifiers),
             )
         });
-        if dir == Vec2::ZERO {
+        if suppressed || dir == Vec2::ZERO {
             return false;
         }
         self.pan += dir * (KEY_PAN_SPEED * ui.input(|i| i.stable_dt.min(0.1)));
@@ -282,6 +285,17 @@ fn key_pan_dir(w: bool, a: bool, s: bool, d: bool) -> Vec2 {
     }
     // `normalized` is the safe variant in emath 0.37 (zero in → zero out).
     dir.normalized()
+}
+
+/// An ACCELERATOR modifier (Ctrl/⌘/Alt) suppresses the W/A/S/D pan (owner
+/// bug report 2026-11-20: Ctrl+S and Ctrl+Shift+S also panned, because the
+/// pan reads the PRESSED state — `i.key_down` — and the save's
+/// `consume_key` does not lift the key back up; with Ctrl held the keys
+/// belong to the hotkey layer). Shift stays allowed: it is no
+/// accelerator, and Shift+pan is harmless (the region-edit modifiers
+/// apply to pointer drags only).
+fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
+    m.ctrl || m.command || m.mac_cmd || m.alt
 }
 
 #[cfg(test)]

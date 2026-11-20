@@ -730,8 +730,13 @@ impl App {
         self.draw_text_preview(&painter, rect);
         // The selection's boundary loops (owner request 2026-11-20) draw
         // under EVERY tool — the selection is document state — plus the
-        // pending Select gesture's outline. Overlay shapes only.
+        // pending Select gesture's outline. Overlay shapes only. During a
+        // move drag the floating pixels ride a FOREGROUND overlay above
+        // everything (owner redesign 2026-11-20: a separate element,
+        // visible past the canvas bounds; the canvas is written only at
+        // the lift and the release).
         self.draw_selection_overlay(&painter, rect);
+        self.draw_move_overlay(rect);
 
         let zoom_label = format!("{}%", (self.zoom * 100.0).round() as i32);
         painter.text(

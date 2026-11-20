@@ -33,6 +33,9 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` (the V59-fixes round's full gate — rules + fmt + clippy ×2 + test ×2; warm deps) | **21 s** | the gate's own print |
+| 2026-11-20 | `cargo build --features mcp` (the dev MCP binary for the driver; warm deps) | **2 s** | cargo's print |
+| 2026-11-20 | `cargo test --profile gates` (the V59-fixes round's suite; warm deps, the crate recompile per iteration) | **≈ 5 s** × 6 runs | the gate's own print |
 | 2026-11-20 | `bash scripts/verify.sh` (the panel-spacing round's gate; the dev `cargo build` for the GUI probe ran just before — 1m 43s, the dev-lane codegen cold from a check-only session) | **73 s** | the gate's own print |
 | 2026-11-20 | `cargo build` (the dev GUI-probe binary; check-artifacts existed but codegen was cold) | **1m 43s** | cargo's print |
 | 2026-11-20 | `cargo build` (the dev GUI-probe binary; deps hot from this round's cargo check) | **1m 40s** | cargo's print |

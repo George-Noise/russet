@@ -1,4 +1,4 @@
-use super::{App, key_pan_dir, wheel_notches};
+use super::{App, key_pan_dir, pan_suppressed_by_modifiers, wheel_notches};
 use eframe::egui::{MouseWheelUnit, Vec2};
 
 fn percent(zoom: f32) -> i32 {
@@ -91,4 +91,24 @@ fn web_line_mode_divides_by_the_lines_per_notch() {
     // emitted 1 line per notch would pan 1/3 of a notch (5 pt) — an accepted
     // INTERIM mismatch, retuned from --features diagnostics wheel logs.
     assert!((wheel_notches(MouseWheelUnit::Line, Vec2::new(0.0, 1.5), true).y - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn an_accelerator_modifier_suppresses_the_key_pan() {
+    // Owner bug report 2026-11-20: Ctrl+S / Ctrl+Shift+S also panned on S
+    // — with an accelerator held, the WASD keys belong to the hotkey
+    // layer, not the viewport.
+    assert!(pan_suppressed_by_modifiers(
+        eframe::egui::Modifiers::COMMAND
+    ));
+    assert!(pan_suppressed_by_modifiers(
+        eframe::egui::Modifiers::COMMAND | eframe::egui::Modifiers::SHIFT
+    ));
+    assert!(pan_suppressed_by_modifiers(eframe::egui::Modifiers::CTRL));
+    assert!(pan_suppressed_by_modifiers(eframe::egui::Modifiers::ALT));
+    assert!(!pan_suppressed_by_modifiers(eframe::egui::Modifiers::NONE));
+    assert!(
+        !pan_suppressed_by_modifiers(eframe::egui::Modifiers::SHIFT),
+        "Shift alone is no accelerator — the pan stays"
+    );
 }

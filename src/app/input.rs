@@ -72,19 +72,35 @@ impl App {
             self.tools.tool = Tool::Text;
         }
         // The selection ops (owner request 2026-11-20): Ctrl+C/X/V mirror
-        // the Edit menu and the Select panel's buttons. The combos NEVER
-        // arrive as Key events: egui-winit converts them into DEDICATED
-        // `Event::Copy` / `Event::Cut` / `Event::Paste` events (its
-        // `clipboard_shortcuts` feature, ON by default — egui-winit issue
-        // #3653; the conversion also matches the PHYSICAL keys, so the
-        // combos work on non-Latin keyboard layouts) and RETURNS before
-        // pushing the Key event — `consume_key(Modifiers::COMMAND, …)`
-        // can never match. Consume the dedicated events instead; the
-        // plain `V` below is untouched (no Ctrl, no conversion). The
-        // `egui_wants_keyboard_input` guard above keeps a focused text
-        // field (the Text tool window) receiving its own OS-text
-        // copy/cut/paste semantics.
-        let clipboard_op = ctx.input_mut(|i| {
+        // the Edit menu and the Select panel's buttons. The egui-winit
+        // `clipboard_shortcuts` conversion is DISABLED (owner decision
+        // 2026-11-20 — `NativeOptions::clipboard_shortcuts = false` in
+        // main.rs), so on NATIVE the combos arrive as plain Key events and
+        // `consume_key` sees them; egui-winit fills the Key event's `key`
+        // field as logical-or-physical (issue #3653), so the combos still
+        // match on non-Latin keyboard layouts. The DEDICATED
+        // `Event::Copy`/`Cut`/`Paste` events are consumed TOO — the web
+        // backend synthesizes them from the browser's own copy/cut/paste
+        // DOM events (eframe `web/events.rs`, not flag-controlled); a
+        // frame that already fired an op from a Key event does not repeat
+        // it for the dedicated twin (a web keydown AND a copy event can
+        // carry the same gesture). At most ONE op runs per frame. A no-op
+        // when the selection or the clipboard is empty — never a
+        // fall-through (the redo-keys convention). The keys run BEFORE
+        // the plain tool keys: consume_key matches modifiers logically
+        // (extra Ctrl is ignored), so Ctrl+V must be consumed first or
+        // the plain `V` (Select) would also fire — the same ordering the
+        // redo/undo pair uses below.
+        let key_op = if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::C)) {
+            Some(ClipboardOp::Copy)
+        } else if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::X)) {
+            Some(ClipboardOp::Cut)
+        } else if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::V)) {
+            Some(ClipboardOp::Paste)
+        } else {
+            None
+        };
+        let dedicated_op = ctx.input_mut(|i| {
             let mut op = None;
             i.events.retain(|event| match event {
                 egui::Event::Copy => {
@@ -103,7 +119,7 @@ impl App {
             });
             op
         });
-        match clipboard_op {
+        match key_op.or(dedicated_op) {
             Some(ClipboardOp::Copy) => self.copy_selection(),
             Some(ClipboardOp::Cut) => self.cut_selection(),
             Some(ClipboardOp::Paste) => self.paste_clipboard(),
