@@ -31,6 +31,7 @@
 | Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
 | Extra: smooth freehand strokes — coalesced pointer moves + midpoint-quadratic pieces (owner 2026-11-19) | done — gates + driver green | NEW `tools/smooth.rs`: every coalesced `Event::PointerMoved` feeds the midpoint-quadratic window (the old one-point-per-frame stream drew the fast-stroke polygon); brush/eraser stroke ONE C1-continuous tiny-skia path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline (quads flattened to ~1 px steps, translucent-safe joint dedupe); `draw_segment` stays for the press dot + MCP paths; SPEC §3.5 rewritten; V44 born — the pencil half FAILED on the owner's pass and was reworked 2026-11-20 (the next row) |
 | Extra: pencil drifting pen — the 1 px staircase made stable (owner 2026-11-20) | done — gates + driver + a real-pointer Xvfb probe green | the owner's ragged-pencil screenshot diagnosed: per-run Bresenham restarts between independently rounded ~1 px endpoints stacked double-covered columns and punched holes on every diagonal, the pattern varying per computer (the pixel pattern followed the per-frame event batching); the pencil now walks a gesture-level DRIFTING PEN (`PencilTrail`: the pen + the dedupe, carried across pieces and frames) — unit steps along the chord-dominant axis, the minor coordinate an EXACT float (the same error accumulation one long Bresenham run performs), each step plotting one pixel; the release pins the raw release point; the subdivision cap 64 → 4096 (fidelity on fast strokes); V44 closed failed → V45 born |
+| Extra: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 (owner 2026-11-20) | done — docs only | DEBTS-verification bookkeeping: V45 closed verified in chat (the owner's Windows AND Web passes), the same smooth-stroke checklist on Linux (X11 AND Wayland backends) born as V46; no code touched |
 
 **Verification stamp:** FULL gate re-verified 2026-11-20 (the pencil drifting-pen
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
@@ -75,7 +76,28 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > collapse entry moved during the 2026-11-19 lenient-hex round's budget. The
 > header-strip (variant A2) entry moved to the archive during the Save-dialog
 > round's budget (2026-11-19); the Save-dialog entry followed during the
-> smooth-strokes round's budget (same day).
+> smooth-strokes round's budget (same day); the flake entry moved during this
+> docs round's budget (2026-11-20).
+
+### 2026-11-20 — Docs: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 — owner request
+
+- **What:** bookkeeping only, zero code: the owner verified the pencil drifting-pen pass
+  in chat in BOTH Windows and the Web build — V45 closed verified in DEBTS-verification.md;
+  his remaining platform leg (the same smooth-stroke checklist on Linux, X11 AND Wayland,
+  the flake's native lanes) born as V46 in the same edit. The chat also answered,
+  informationally, the per-tool coverage of the smooth-stroke work: the V44 curve
+  smoothing feeds ALL THREE freehand tools; the V45 drifting-pen stability fix is
+  PENCIL-ONLY — `rasterize_smooth_pieces` branches on `Tool::Pencil`, while the brush and
+  eraser stroke ONE continuous tiny-skia path per frame (`trail`/`pin` ignored there), so
+  the per-run-restart defect class (double-covered columns, holes) cannot exist on them.
+- **Files:** DEBTS-verification.md (V46 born; V45 → Resolved), PROGRESS.md (snapshot row
+  + this entry; the flake entry moved to PROGRESS-archive.md — the Log budget).
+- **Verified:** docs-only — the Rust tree stays byte-identical to the owner-verified V45
+  delivery; `rules.sh` HARD green + `cargo fmt --check` clean before and after; the
+  deliver.sh byte-compares green.
+- **Owner-checks:** V45 verified in chat (Windows + Web). Open: V46; parked: V30, V8.
+  Debts open: F17, F16, F15.
+- **Commit title:** `Debts: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46`
 
 ### 2026-11-20 — `Fix:` the pencil's ragged 1 px trail — the drifting pen — owner request
 
@@ -158,49 +180,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   closed). Open: V44, V30 (parked), V8 (parked); debts F17 (the format-set decision),
   F16, F15.
 - **Commit title:** `Smooth freehand strokes: every coalesced pointer move feeds the midpoint-quadratic window (new tools/smooth.rs); brush/eraser stroke one C1 path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline`
-
-### 2026-11-19 — `Feat:` the flake drives the trunk lanes — owner request
-
-- **What:** the owner asked for `nix build` / `nix run` around `trunk build`, `trunk serve`
-  and `trunk build --release`. Mapping: `nix run .#web-serve` → `trunk serve`;
-  `nix run .#web-build` → `trunk build`; `nix run .#web-build-release` →
-  `trunk build --release`; `nix run` (no attribute) KEEPS the native release app (owner
-  decision same day: "easier on the brain" — the default stays native, the web apps are
-  explicit); `nix build` / `.#russet-dev` unchanged. The web commands live as APPS, not
-  packages, deliberately: apps execute OUTSIDE the nix sandbox, so trunk self-manages its
-  tools — the wasm-bindgen 0.2.130 matching OUR Cargo.lock and its pinned wasm-opt
-  download on first use (`~/.cache/trunk`), exactly like a manual run; a sandboxed
-  `nix build` of the site would need a fixed-output dist/ hash per commit. Trunk itself:
-  the repo pins 0.22.1 (SPEC §8 — web/index.html's wasm-opt workaround depends on it)
-  while nixpkgs carries 0.21.14, so the flake BUILDS trunk 0.22.1 from the crates.io
-  source: fetchurl of the .crate, the shipped Cargo.lock vendored hash-free
-  (`cargoLock.lockFile` — the same mechanism the native packages use). Default features =
-  update_check + rustls (openssl-* never compile — the unused native-tls permutation;
-  rustls/ring needs only a C compiler). nixpkgs rustc ships the wasm32 std by default
-  (verified in rustc.nix) — no extra toolchain input. `nix develop` gains the pinned trunk.
-- **Files:** `flake.nix` (the webLane helper + apps + devShell + header), `README.md`,
-  `SPEC.md` (§8), `AGENTS.md` (the flake fact), PROGRESS (snapshot + entry).
-- **Verified:** both fetchurl hashes computed from the REAL downloads (hashes and the
-  nixpkgs checks live in flake.nix); no nix binary in this sandbox (`nix build` /
-  `nix run` are V43), so the owner probes caught FOUR real defects, each fixed same
-  day: (1) a dup-`russet` app (my default-revert) — flake failed to evaluate; alias
-  dropped; the balance check now also hard-fails on duplicate attrset keys (proven
-  on the defective tree); (2) zstd-sys panicked in the trunk build: nixpkgs'
-  cargo-setup-hook exports ZSTD_SYS_USE_PKG_CONFIG=1 for EVERY buildRustPackage
-  (hook :120, rev f4a03c0) — build.rs probes the system libzstd, absent from the
-  sandbox; fixed with pkg-config + zstd inputs; the next probe CONFIRMED it: trunk
-  built and started serving; (3) `linker cc not found` — cargo compiles HOST
-  build-scripts first and a bare NixOS shell has no linker; fixed with stdenv.cc in
-  binPath (next probe: the whole dep graph compiled); (4) the final wasm link asked
-  for a PATH `lld` — no repo file does that (no .cargo/config.toml exists), so it is
-  the owner's cargo environment (most plausibly ~/.cargo/config.toml from the
-  manual era); fixed with pkgs.lld in binPath + the devShell — honored, not
-  overridden; FULL hot gate ALL GATES GREEN 8 s (179 default / 192 mcp, +1 ignored
-  each) — nix/docs only, the counts unchanged.
-- **Owner-checks:** V43 born (on NixOS: `nix run .#web-serve` serves the web dev server;
-  `nix run .#web-build` / `.#web-build-release` write ./dist; plain `nix run` still
-  starts the native app; the FIRST web run downloads trunk's tools — a one-time delay;
-  its probes caught the four defects above — the re-probe is the real pass; the update
-  notice advertised trunk 0.22.2 — the SPEC §8 pin stands).
-  Open: V43, V42, V41, V30 (parked), V8 (parked); debt F17 (the format-set decision).
-- **Commit title:** `Flake: the trunk lanes as nix apps (pinned trunk 0.22.1 built from the crates.io source; nix run .#web-serve / web-build / web-build-release; nix run keeps the native app)`

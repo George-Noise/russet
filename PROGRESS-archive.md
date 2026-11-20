@@ -1,5 +1,51 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-19 — `Feat:` the flake drives the trunk lanes — owner request
+
+- **What:** the owner asked for `nix build` / `nix run` around `trunk build`, `trunk serve`
+  and `trunk build --release`. Mapping: `nix run .#web-serve` → `trunk serve`;
+  `nix run .#web-build` → `trunk build`; `nix run .#web-build-release` →
+  `trunk build --release`; `nix run` (no attribute) KEEPS the native release app (owner
+  decision same day: "easier on the brain" — the default stays native, the web apps are
+  explicit); `nix build` / `.#russet-dev` unchanged. The web commands live as APPS, not
+  packages, deliberately: apps execute OUTSIDE the nix sandbox, so trunk self-manages its
+  tools — the wasm-bindgen 0.2.130 matching OUR Cargo.lock and its pinned wasm-opt
+  download on first use (`~/.cache/trunk`), exactly like a manual run; a sandboxed
+  `nix build` of the site would need a fixed-output dist/ hash per commit. Trunk itself:
+  the repo pins 0.22.1 (SPEC §8 — web/index.html's wasm-opt workaround depends on it)
+  while nixpkgs carries 0.21.14, so the flake BUILDS trunk 0.22.1 from the crates.io
+  source: fetchurl of the .crate, the shipped Cargo.lock vendored hash-free
+  (`cargoLock.lockFile` — the same mechanism the native packages use). Default features =
+  update_check + rustls (openssl-* never compile — the unused native-tls permutation;
+  rustls/ring needs only a C compiler). nixpkgs rustc ships the wasm32 std by default
+  (verified in rustc.nix) — no extra toolchain input. `nix develop` gains the pinned trunk.
+- **Files:** `flake.nix` (the webLane helper + apps + devShell + header), `README.md`,
+  `SPEC.md` (§8), `AGENTS.md` (the flake fact), PROGRESS (snapshot + entry).
+- **Verified:** both fetchurl hashes computed from the REAL downloads (hashes and the
+  nixpkgs checks live in flake.nix); no nix binary in this sandbox (`nix build` /
+  `nix run` are V43), so the owner probes caught FOUR real defects, each fixed same
+  day: (1) a dup-`russet` app (my default-revert) — flake failed to evaluate; alias
+  dropped; the balance check now also hard-fails on duplicate attrset keys (proven
+  on the defective tree); (2) zstd-sys panicked in the trunk build: nixpkgs'
+  cargo-setup-hook exports ZSTD_SYS_USE_PKG_CONFIG=1 for EVERY buildRustPackage
+  (hook :120, rev f4a03c0) — build.rs probes the system libzstd, absent from the
+  sandbox; fixed with pkg-config + zstd inputs; the next probe CONFIRMED it: trunk
+  built and started serving; (3) `linker cc not found` — cargo compiles HOST
+  build-scripts first and a bare NixOS shell has no linker; fixed with stdenv.cc in
+  binPath (next probe: the whole dep graph compiled); (4) the final wasm link asked
+  for a PATH `lld` — no repo file does that (no .cargo/config.toml exists), so it is
+  the owner's cargo environment (most plausibly ~/.cargo/config.toml from the
+  manual era); fixed with pkgs.lld in binPath + the devShell — honored, not
+  overridden; FULL hot gate ALL GATES GREEN 8 s (179 default / 192 mcp, +1 ignored
+  each) — nix/docs only, the counts unchanged.
+- **Owner-checks:** V43 born (on NixOS: `nix run .#web-serve` serves the web dev server;
+  `nix run .#web-build` / `.#web-build-release` write ./dist; plain `nix run` still
+  starts the native app; the FIRST web run downloads trunk's tools — a one-time delay;
+  its probes caught the four defects above — the re-probe is the real pass; the update
+  notice advertised trunk 0.22.2 — the SPEC §8 pin stands).
+  Open: V43, V42, V41, V30 (parked), V8 (parked); debt F17 (the format-set decision).
+- **Commit title:** `Flake: the trunk lanes as nix apps (pinned trunk 0.22.1 built from the crates.io source; nix run .#web-serve / web-build / web-build-release; nix run keeps the native app)`
+
 ### 2026-11-19 — `Fix:` the bytecode-cache leak into the delivery artifacts — owner request
 
 - **What:** the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside the
