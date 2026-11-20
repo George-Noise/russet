@@ -32,15 +32,18 @@
 | Extra: the Shape panel's MODE radio over the tool's icon (owner 2026-11-20) | done — gates + driver + GUI probes green | the owner verified V51 and reshaped the MODE row: the two toggles (whose "both on" state hid behind a second click) became a THREE-way radio `ShapePaint` — Fill / Outline / the explicit Fill+Outline — whose three icons draw the Shape TOOL's emblem (solid / hollow / gray-under-the-rim), no longer the selected kind (the atlas key is pixels-per-point ALONE again); the old words stay as tooltips, the third reads "Fill + Outline"; wells/commit logic untouched (`rasterize_shape` always supported both); +4 net tests; V51 + V48 closed verified in chat, V52 born |
 | Extra: the Shape tool's outline placement radio (owner 2026-11-20) | done — gates + driver + GUI probes green | the second THREE-way radio `ShapeOutline` (Outside / Centered / Inside — the outline band shifted half a stroke width outward/on/inside the drag's boundary, the clamp for tiny shapes, the dirty rect reaching the full width beyond); the panel's THIRD group row of corner icons (square's corner + gray fill quadrant + click dot + the outline bands, kind-independent, tooltips carry the words); the preview matches all three modes; V52 closed verified in chat («Отлично»), V53 born |
 | Extra: PROBLEMS.md (the write-only agent-friction log) + the Shape panel's spacing pass (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | two owner requests in one session: (1) PROBLEMS.md born — every agent problem logged raw at the top, the file is NOT read until the owner says so (the AGENTS.md rule + abstract template + the first entry: the false warm-up verdict); (2) the Shape panel's buttons sit EXACTLY the Tools window's grid gap apart horizontally (`TOOL_GRID_GAP` 6 pt via `item_spacing.x`) and the rows a step further apart vertically (12 pt = 3 + `SHAPE_GROUP_GAP` 9); pixel-measured on the Xvfb screenshots: in-row 6 px == the Tools grid's own 6 px on the SAME shot, rows 12 px apart; V54 born |
+| Extra: PROBLEMS.md v2 (the pure log written only by scripts/log_problem.sh) + the Line panel's icon-button pass (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | two owner requests in one session: (1) PROBLEMS.md v2 — the file is LITERALLY a log (no header/template — they moved into the AGENTS.md section), entries go in ONLY through the new prepend-only `scripts/log_problem.sh` (byte-checks the old content survives; nothing deletable without the owner); (2) the owner verified V54 and reshaped the LINE panel the same way («кнопочки как в Shape, такие же по стилю и отступам, вместо радио Mode»): ONE row of TWO icon buttons — Straight / Curve — drawing the Line TOOL's emblem (Curve pixel-for-pixel the tool's icon, Straight the same stroke unbent), the row exactly the grid gap apart (the pixel probe: the same 7-px-on-screen gap as the Tools grid and every Shape row on the SAME binary); the Curve hints stay; V54 closed verified in chat, V55 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the panel-spacing +
-PROBLEMS.md rounds; v2 = the pure-log script `scripts/log_problem.sh`, exercised
-on a /tmp copy): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 240 green both lanes (+1 ignored;
-+1 net test this round — the gap-measuring panel test), the visual driver ALL
-SCENARIOS GREEN under Xvfb through the dev+mcp binary + the GUI probe (ffmpeg
-screenshot of the real binary: the panel's in-row gaps PIXEL-MEASURED 6 px ==
-the Tools grid's own 6 px on the SAME shot, the rows 12 px apart) — Rust 1.99.1
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the PROBLEMS.md rounds
++ the Line-panel round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green (default + mcp), `cargo test --profile gates` 233 default / 246 mcp green
+(+1 ignored; +6 net tests this round — the Line icons' topic + the Line panel's
+radio/compact/gap tests), the visual driver ALL SCENARIOS GREEN under Xvfb
+through the dev+mcp binary + the NEW GUI probe `scripts/gui_line_panel_check.sh`
+PASS (ffmpeg screenshots of the real binary: the Line panel's ONE row of TWO
+buttons with the in-row gap PIXEL-EQUAL to the Tools grid's own and to every
+Shape panel row's on the SAME binary — 7 px on screen = the 6-pt gap + the 1-px
+stroke rounding; the Shape rows 12/12 px) — Rust 1.99.1
 pinned via rust-toolchain.toml, Linux. NO wasm check this round (the diff
 touches no web-facing code — the economy rule). NOTE 2026-11-20 (still true):
 RECYCLED sandbox — rustup/toolchain/GUI .debs reinstalled, the repo RE-CLONED
@@ -51,10 +54,11 @@ here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: t
 the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`); the manual trunk
 lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only over-guard set — the owner-deferred
-`history_tree.rs` 569 PLUS the outline round's growth: `app/preview.rs` 538,
-`app/tool_icons/draw.rs` 574, `tools.rs` 538 (warn + propose splits at task end;
-no split mid-task); the tool_icons tests topic-split (Tests rule 7) kept every
-test file under 300.
+`history_tree.rs` 569 PLUS the rounds' growth: `app/preview.rs` 538,
+`app/tool_icons/draw.rs` 616, `tools.rs` 538 (warn +
+propose splits at task end; no split mid-task; `app/windows.rs` grew to 495 —
+one round from the guard); the tool_icons tests
+topic-split (Tests rule 7) kept every test file under 470.
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -72,9 +76,45 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-20) lives in
-> PROGRESS-archive.md; the latest move: the MODE-radio entry (during the
-> 2026-11-20 pure-log-script round's budget; the outline-placement and
-> icon-buttons entries went the round before — all in the archive).
+> PROGRESS-archive.md; the latest move: the PROBLEMS.md docs entry + the
+> panel-spacing entry (during the 2026-11-20 Line-panel round's budget; the
+> MODE-radio entry went the round before — all in the archive).
+
+### 2026-11-20 — `Feat:` the Line panel's icon buttons in the Shape panel's style — owner request
+
+- **What:** the owner verified V54 ("V54 проверил") and asked for the LINE
+  tool's panel the same pass: "сделаем также кнопочки как в Shape, то есть
+  такие же по стилю и отступам, вместо текущих радио Mode". Done: the word
+  "Mode" radio became ONE row of TWO icon buttons — Straight / Curve —
+  extracted as `line_settings_ui` (the `shape_settings_ui` sibling): the
+  shared `icon_button` (28-pt squares, the light-theme states), the row laid
+  out with `item_spacing.x = TOOL_GRID_GAP` (the panel has a single button
+  row — no group gap), the Curve hint lines stay UNDER the row. The buttons
+  draw the LINE TOOL's emblem (`tool_icons::LineIcon`, the Shape MODE trio's
+  one-geometry principle): Curve = the tool button's mark pixel-for-pixel
+  (`draw_line`'s curve extracted into the shared `line_emblem_curve`),
+  Straight = the same stroke UNBENT between the emblem's endpoints. Tooltips
+  carry the old words. The atlas gained the `line_icons` pair (the same
+  retain-count handling as `shape_icons`); `LineMode` gained Debug.
+- **Files:** `src/app/windows.rs` (line_settings_ui + the match arm),
+  `src/app/tool_icons.rs` (LineIcon/LINE_ICONS/line_texture_id + the atlas
+  pair), `src/app/tool_icons/draw.rs` (the emblem extraction +
+  draw_line_straight + rasterize_line_icon), `src/tools.rs` (Debug),
+  SPEC §3.2, DEBTS-verification (V54 closed verified in chat, V55 born),
+  PROGRESS (snapshot + entry + stamp), `scripts/gui_line_panel_check.sh` (the
+  new pixel probe), tests +6.
+- **Verified:** FULL gate ALL GATES GREEN hot (see the stamp): fmt, rules HARD
+  green, clippy `-D warnings` both lanes, `cargo test --profile gates` 233
+  default / 246 mcp (+6 net: the line_panel topic + the panel's
+  radio/compact/gap tests); the visual driver ALL SCENARIOS GREEN under Xvfb
+  through the dev+mcp binary; the NEW `scripts/gui_line_panel_check.sh` pixel
+  probe PASS on the same binary: the Line panel's in-row gap == the Tools
+  grid's == every Shape row's (7 px on screen = the 6-pt gap + the 1-px
+  stroke rounding), the Shape rows 12/12 px.
+- **Owner-checks:** V55 born (the Windows + Web pass of the Line panel).
+  V54 closed verified in chat. Open: V55, V53, V46; parked: V30, V8. Debts
+  open: F17, F16, F15.
+- **Commit title:** `Line panel: the word Mode radio becomes two icon buttons in the Shape panel's style (the tool's emblem per mode — Curve pixel-for-pixel the tool icon, Straight unbent; the same grid-gap row)`
 
 ### 2026-11-20 — `Tooling:` PROBLEMS.md becomes a pure log written only by scripts/log_problem.sh — owner request
 
@@ -104,59 +144,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none new (docs + a shell script — nothing to click).
   Open: V54, V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
 - **Commit title:** `PROBLEMS.md: the file becomes a pure log written only by scripts/log_problem.sh (prepend-only, integrity-checked, nothing deletable without the owner); the template moves to AGENTS.md`
-
-### 2026-11-20 — `Docs:` PROBLEMS.md — the write-only agent-friction log — owner request
-
-- **What:** the owner asked for a file where EVERY problem the LLM agent runs
-  into is recorded, prepended at the very top each time, write-only until HE
-  says to read it (then a review of what to improve). Born: `PROBLEMS.md` —
-  the rules header, an ABSTRACT entry template (fields are guidance, style
-  may vary; content carries the meaning) and the Log with the first real
-  entry: `sandbox_check.sh --warm` reported a warm-up that never ran (rustup
-  missing, `cargo: command not found`, yet "[yes] … verify.sh is hot" printed).
-  The same edit adds the AGENTS.md section "Agent-friction log — PROBLEMS.md"
-  (write-only rule: never read/dedup/act/clean; prepend on the spot; bookkeeping,
-  never a task; durable facts still move to their canonical homes) + one line in
-  "Source of truth". The second entry (same session): egui `Rect` has no
-  `min_x/max_x` fields — the `left()/right()/top()/bottom()` methods, now an
-  AGENTS.md API-quirks line.
-- **Files:** `PROBLEMS.md` (new), `AGENTS.md`; PROGRESS (snapshot row + this
-  entry + stamp).
-- **Verified:** part of the round's FULL gate (see the panel-spacing entry
-  below — the diff touches `.md` + `.rs`, so the docs-only shortcut does NOT
-  apply; rules.sh HARD green covers the doc side).
-- **Owner-checks:** none new — the owner reads PROBLEMS.md whenever HE decides
-  to (no V; the file's purpose is the review itself). Open: V54, V53, V46;
-  parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `Add PROBLEMS.md — the write-only agent-friction log (entries prepended raw, never read until the owner says so) + the AGENTS.md rule`
-
-### 2026-11-20 — `Feat:` the Shape panel's spacing pass — owner request
-
-- **What:** the owner's two spacing rules for the magnetized Shape panel:
-  the buttons' HORIZONTAL gap must be EXACTLY the gap between the elements
-  in the Tools window, and VERTICALLY the rows sit "чуть дальше" — a bit
-  further apart. Done: `shape_settings_ui` sets `item_spacing.x =
-  TOOL_GRID_GAP` (6 pt — the Tools grid's own gap; egui's default 8 pt
-  applied before) so all three rows inherit it, and `SHAPE_GROUP_GAP`
-  6 → 9 (the rows separate by 12 pt = the 3-pt item spacing + the gap, a
-  step above the 6-pt horizontal one). No other behavior touched — the
-  Line/Text/Size panels keep egui's defaults.
-- **Files:** `src/app/windows.rs` (the two constants + the fn doc), tests:
-  `windows/tests/settings_panel.rs` (+1 gap-measuring test over the real
-  rects: 2/3/3 buttons, in-row gaps == `TOOL_GRID_GAP`, row gaps == 3 +
-  `SHAPE_GROUP_GAP` > the horizontal one); SPEC §3.2 (the spacing facts),
-  PROGRESS (snapshot + entry + stamp; the icon-buttons entry moved to the
-  archive under this round's budget).
-- **Verified:** FULL gate ALL GATES GREEN 73 s: fmt clean, rules HARD green,
-  clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-  240 green both lanes (+1 ignored; +1 net test); NO wasm check (no
-  web-facing code — the economy rule); the visual driver ALL SCENARIOS
-  GREEN under Xvfb; PLUS the GUI probe (the probe scripts kept OUT of the
-  repo): the real binary's screenshot PIXEL-MEASURED — every panel square
-  28 px, in-row gaps 6 px == the Tools grid's own measured 6 px on the SAME
-  shot, the rows 12 px apart.
-- **Owner-checks:** V54 born (the Windows + Web pass: the panel's buttons
-  horizontal gap reads the same as the Tools window's grid gap, the three
-  groups read further apart vertically; nothing else moved). Open: V54,
-  V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `Shape panel: the buttons sit exactly the Tools window's grid gap apart horizontally, the rows a step further apart vertically`

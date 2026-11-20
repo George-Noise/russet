@@ -25,7 +25,7 @@ pub enum Tool {
 }
 
 /// Sub-mode of the [`Tool::Line`] tool (owner request 2026-11-10).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LineMode {
     /// Press–drag–release draws one straight segment.
     Straight,

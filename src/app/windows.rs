@@ -23,7 +23,7 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense, TextureId};
 
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
-use super::tool_icons::{self, ShapeIcon};
+use super::tool_icons::{self, LineIcon, ShapeIcon};
 use crate::tools::{LineMode, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState};
 
 mod palette_window;
@@ -290,6 +290,56 @@ fn shape_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<to
     });
 }
 
+/// The Line tool's settings panel (owner request 2026-11-20: the word
+/// "Mode" radio became icon buttons in the Tools window's style — "такие же
+/// по стилю и отступам" as the reshaped Shape panel): ONE row of two icon
+/// buttons — Straight and Curve — sitting EXACTLY the Tools window's
+/// element gap apart ([`TOOL_GRID_GAP`] via `item_spacing.x`, the same
+/// one-liner [`shape_settings_ui`] uses; the panel has a single button row,
+/// so no group gap). The buttons draw the LINE TOOL's emblem per mode
+/// ([`tool_icons::LineIcon`]: the Curve choice strokes it pixel-for-pixel
+/// as the Tools window's Line button does, the Straight choice draws the
+/// same stroke unbent); the tooltips carry the words the old radio showed
+/// ([`tool_icons::line_icon_label`]). While the Curve mode is active the
+/// panel keeps its two hint lines under the row — the multi-point
+/// interaction's copy, unchanged by this pass.
+///
+/// Extracted as a free fn over [`ToolState`] so the regression tests run
+/// the exact UI the app runs (headless; the atlas is optional — the buttons
+/// render without icons the same way [`shape_settings_ui`] does).
+fn line_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<tool_icons::Atlas>) {
+    // The horizontal gap between the buttons: EXACTLY the Tools window's
+    // grid gap (owner request 2026-11-20), the same setting the Shape rows
+    // use.
+    ui.spacing_mut().item_spacing.x = TOOL_GRID_GAP;
+    ui.horizontal(|ui| {
+        for (mode, icon) in [
+            (LineMode::Straight, LineIcon::Straight),
+            (LineMode::Curve, LineIcon::Curve),
+        ] {
+            let response = icon_button(
+                ui,
+                TOOL_BUTTON_PT,
+                tool_icons::line_texture_id(icons, icon),
+                tool_icons::line_icon_label(icon),
+                tools.line_mode == mode,
+            );
+            // Radio semantics: clicking a choice selects it — selecting the
+            // already-active one is a no-op, and EXACTLY one of the two is
+            // ever active (the enum's own invariant).
+            if response.clicked() {
+                tools.line_mode = mode;
+            }
+        }
+    });
+    if tools.line_mode == LineMode::Curve {
+        // Short lines: one long hint stretches the panel (as it once
+        // stretched the Tools window — owner request 2026-11-10).
+        ui.weak("Click adds points.");
+        ui.weak("Enter/double-click places, Esc cancels.");
+    }
+}
+
 /// The builder of the "Tools" window itself (§3.2). Exposed as a function so
 /// the regression tests (`windows/tests.rs`) run the exact builder the app
 /// runs.
@@ -421,18 +471,7 @@ impl App {
             }
             match tool {
                 Tool::Line => {
-                    ui.horizontal(|ui| {
-                        ui.label("Mode");
-                        ui.radio_value(&mut self.tools.line_mode, LineMode::Straight, "Straight");
-                        ui.radio_value(&mut self.tools.line_mode, LineMode::Curve, "Curve");
-                    });
-                    if self.tools.line_mode == LineMode::Curve {
-                        // Short lines: one long hint stretches the panel (as
-                        // it once stretched the Tools window — owner
-                        // request 2026-11-10).
-                        ui.weak("Click adds points.");
-                        ui.weak("Enter/double-click places, Esc cancels.");
-                    }
+                    line_settings_ui(ui, &mut self.tools, &self.tool_icons);
                 }
                 Tool::Shape => {
                     shape_settings_ui(ui, &mut self.tools, &self.tool_icons);

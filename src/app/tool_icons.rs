@@ -51,7 +51,9 @@ use crate::tools::Tool;
 
 mod draw;
 
-use self::draw::{PIPETTE_TIP, TOOL_ANGLE, rasterize_shape_icon, rasterize_tool_icon};
+use self::draw::{
+    PIPETTE_TIP, TOOL_ANGLE, rasterize_line_icon, rasterize_shape_icon, rasterize_tool_icon,
+};
 
 /// The button/icon size in logical points: 1.5rem = 24 pt (1rem = 16 pt;
 /// egui 0.37 has no rem API — same convention as `placement::FIRST_OPEN_GAP`).
@@ -169,6 +171,10 @@ pub(super) struct Atlas {
     /// reason as `handles` above — the panel holds nothing, so the ATLAS is
     /// the only owner of these handles).
     pub(super) shape_icons: [TextureHandle; 8],
+    /// The uploaded textures of the Line panel's two buttons, same order
+    /// as [`LINE_ICONS`] (owner request 2026-11-20; the same retain-count
+    /// reason as `shape_icons` above).
+    pub(super) line_icons: [TextureHandle; 2],
     /// The pipette's cursor bitmap (STRAIGHT alpha) — set on the canvas
     /// while the Eyedropper is the active tool (owner request 2026-11-18).
     pub(super) pipette_cursor: Option<egui::CustomCursorImage>,
@@ -232,10 +238,30 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let Ok(shape_icons) = <[TextureHandle; 8]>::try_from(shape_icons) else {
         return;
     };
+    // The Line panel's two buttons (owner request 2026-11-20): the tool's
+    // own emblem per mode — the same fixed-drawing pipeline as the Shape
+    // set above.
+    let mut line_icons = Vec::with_capacity(LINE_ICONS.len());
+    for icon in LINE_ICONS {
+        let Some(pm) = rasterize_line_icon(icon, px, text) else {
+            return; // keep the previous atlas; retried next frame
+        };
+        let image = egui::ColorImage::from_rgba_premultiplied([px, px], pm.data());
+        line_icons.push(ctx.load_texture_cached(
+            format!("russet_line_icon_{icon:?}"),
+            Id::unique(format!("russet_line_icon_{icon:?}")),
+            image,
+            TextureOptions::LINEAR,
+        ));
+    }
+    let Ok(line_icons) = <[TextureHandle; 2]>::try_from(line_icons) else {
+        return;
+    };
     *atlas = Some(Atlas {
         key: ppp,
         handles,
         shape_icons,
+        line_icons,
         pipette_cursor: Some(pipette_cursor),
     });
 }
@@ -259,6 +285,42 @@ pub(super) fn shape_texture_id(atlas: &Option<Atlas>, icon: ShapeIcon) -> Option
         .map(TextureHandle::id)
 }
 
+/// A Line-panel icon's TextureId, if the atlas is ready (owner request
+/// 2026-11-20).
+pub(super) fn line_texture_id(atlas: &Option<Atlas>, icon: LineIcon) -> Option<TextureId> {
+    let i = LINE_ICONS.iter().position(|s| s == &icon)?;
+    atlas
+        .as_ref()
+        .and_then(|a| a.line_icons.get(i))
+        .map(TextureHandle::id)
+}
+
+/// One icon of the Line tool's settings panel (owner request 2026-11-20:
+/// the word "Mode" radio became icon buttons in the Tools window's style —
+/// the same pass that reshaped the Shape panel, "такие же по стилю и
+/// отступам"). Both buttons draw the LINE TOOL's emblem (the mark the
+/// Tools window's Line button strokes — one geometry, the Shape MODE
+/// trio's principle): the Curve choice strokes it EXACTLY as the tool
+/// button does, the Straight choice draws the same stroke UNBENT — the
+/// straight segment between the emblem curve's endpoints.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LineIcon {
+    Straight,
+    Curve,
+}
+
+/// The Line-panel icons' canonical order — the atlas and the panel's row
+/// iterate this array, so the two always agree.
+pub(super) const LINE_ICONS: [LineIcon; 2] = [LineIcon::Straight, LineIcon::Curve];
+
+/// The hover tooltip of a Line-panel button: EXACTLY the words the old
+/// word radio showed (owner request 2026-11-20 — the Shape tooltip rule).
+pub(super) fn line_icon_label(icon: LineIcon) -> &'static str {
+    match icon {
+        LineIcon::Straight => "Straight",
+        LineIcon::Curve => "Curve",
+    }
+}
 // ---------------------------------------------------------------------------
 // The shared draw pipeline (owner request 2026-11-18: colored and monochrome
 // icons must not duplicate code) — every icon is closed polygons + strokes

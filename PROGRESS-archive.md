@@ -1,5 +1,62 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Docs:` PROBLEMS.md — the write-only agent-friction log — owner request
+
+- **What:** the owner asked for a file where EVERY problem the LLM agent runs
+  into is recorded, prepended at the very top each time, write-only until HE
+  says to read it (then a review of what to improve). Born: `PROBLEMS.md` —
+  the rules header, an ABSTRACT entry template (fields are guidance, style
+  may vary; content carries the meaning) and the Log with the first real
+  entry: `sandbox_check.sh --warm` reported a warm-up that never ran (rustup
+  missing, `cargo: command not found`, yet "[yes] … verify.sh is hot" printed).
+  The same edit adds the AGENTS.md section "Agent-friction log — PROBLEMS.md"
+  (write-only rule: never read/dedup/act/clean; prepend on the spot; bookkeeping,
+  never a task; durable facts still move to their canonical homes) + one line in
+  "Source of truth". The second entry (same session): egui `Rect` has no
+  `min_x/max_x` fields — the `left()/right()/top()/bottom()` methods, now an
+  AGENTS.md API-quirks line.
+- **Files:** `PROBLEMS.md` (new), `AGENTS.md`; PROGRESS (snapshot row + this
+  entry + stamp).
+- **Verified:** part of the round's FULL gate (see the panel-spacing entry
+  below — the diff touches `.md` + `.rs`, so the docs-only shortcut does NOT
+  apply; rules.sh HARD green covers the doc side).
+- **Owner-checks:** none new — the owner reads PROBLEMS.md whenever HE decides
+  to (no V; the file's purpose is the review itself). Open: V54, V53, V46;
+  parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `Add PROBLEMS.md — the write-only agent-friction log (entries prepended raw, never read until the owner says so) + the AGENTS.md rule`
+
+### 2026-11-20 — `Feat:` the Shape panel's spacing pass — owner request
+
+- **What:** the owner's two spacing rules for the magnetized Shape panel:
+  the buttons' HORIZONTAL gap must be EXACTLY the gap between the elements
+  in the Tools window, and VERTICALLY the rows sit "чуть дальше" — a bit
+  further apart. Done: `shape_settings_ui` sets `item_spacing.x =
+  TOOL_GRID_GAP` (6 pt — the Tools grid's own gap; egui's default 8 pt
+  applied before) so all three rows inherit it, and `SHAPE_GROUP_GAP`
+  6 → 9 (the rows separate by 12 pt = the 3-pt item spacing + the gap, a
+  step above the 6-pt horizontal one). No other behavior touched — the
+  Line/Text/Size panels keep egui's defaults.
+- **Files:** `src/app/windows.rs` (the two constants + the fn doc), tests:
+  `windows/tests/settings_panel.rs` (+1 gap-measuring test over the real
+  rects: 2/3/3 buttons, in-row gaps == `TOOL_GRID_GAP`, row gaps == 3 +
+  `SHAPE_GROUP_GAP` > the horizontal one); SPEC §3.2 (the spacing facts),
+  PROGRESS (snapshot + entry + stamp; the icon-buttons entry moved to the
+  archive under this round's budget).
+- **Verified:** FULL gate ALL GATES GREEN 73 s: fmt clean, rules HARD green,
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
+  240 green both lanes (+1 ignored; +1 net test); NO wasm check (no
+  web-facing code — the economy rule); the visual driver ALL SCENARIOS
+  GREEN under Xvfb; PLUS the GUI probe (the probe scripts kept OUT of the
+  repo): the real binary's screenshot PIXEL-MEASURED — every panel square
+  28 px, in-row gaps 6 px == the Tools grid's own measured 6 px on the SAME
+  shot, the rows 12 px apart.
+- **Owner-checks:** V54 born (the Windows + Web pass: the panel's buttons
+  horizontal gap reads the same as the Tools window's grid gap, the three
+  groups read further apart vertically; nothing else moved). Open: V54,
+  V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `Shape panel: the buttons sit exactly the Tools window's grid gap apart horizontally, the rows a step further apart vertically`
+
+
 ### 2026-11-20 — `Feat:` the Shape panel's MODE radio over the tool's icon — owner request
 
 - **What:** the owner verified V51 and asked to make the MODE row better: the

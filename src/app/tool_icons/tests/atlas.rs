@@ -7,8 +7,8 @@
 //! diagnostic.
 
 use super::super::{
-    PIPETTE_TIP, SHAPE_ICONS, TOOL_ANGLE, TOOL_INK, TOOLS, cursor_bitmap, ensure, icon_transform,
-    rasterize_shape_icon, rasterize_tool_icon,
+    LINE_ICONS, PIPETTE_TIP, SHAPE_ICONS, TOOL_ANGLE, TOOL_INK, TOOLS, cursor_bitmap, ensure,
+    icon_transform, rasterize_line_icon, rasterize_shape_icon, rasterize_tool_icon,
 };
 use crate::tools::Tool;
 use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme, Visuals};
@@ -83,7 +83,11 @@ fn atlas_rebuilds_only_on_scale_change() {
     }
     let mut atlas = None;
     ensure(&mut atlas, &ctx);
-    assert_eq!(pass(&ctx), 16, "7 tool + 8 shape icons + egui's font atlas");
+    assert_eq!(
+        pass(&ctx),
+        18,
+        "7 tool + 8 shape + 2 line icons + egui's font atlas"
+    );
     let first = atlas.as_ref().expect("the first ensure builds the atlas");
     assert_eq!(first.key, 1.0);
     let cursor0 = first.pipette_cursor.as_ref().expect("the pipette cursor");
@@ -102,7 +106,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     ensure(&mut atlas, &ctx);
     assert_eq!(
         pass(&ctx),
-        15,
+        17,
         "rebuilt after the scale change (the font atlas only uploads once)"
     );
     let scaled = atlas.as_ref().expect("rebuilt after the scale change");
@@ -117,11 +121,11 @@ fn atlas_rebuilds_only_on_scale_change() {
     // the icons theme-independent (owner v4: one drawing reads well in both
     // themes; the old theme re-raster died with its reason). The pass still
     // uploads ONE texture: egui's font atlas follows the theme too. OUR
-    // fifteen icons would make it 16 — the count stays the "did the atlas
+    // seventeen icons would make it 18 — the count stays the "did the atlas
     // rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
     ensure(&mut atlas, &ctx);
-    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 15 icons");
+    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 17 icons");
     assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
 }
 
@@ -157,13 +161,18 @@ fn atlas_ids_are_one_per_tool() {
         .handles
         .iter()
         .chain(atlas.shape_icons.iter())
+        .chain(atlas.line_icons.iter())
         .map(TextureHandle::id)
         .collect();
     let n = ids.len();
     ids.sort_by_key(|id| format!("{id:?}"));
     ids.dedup();
     assert_eq!(ids.len(), n, "every icon owns its own texture");
-    assert_eq!(n, TOOLS.len() + SHAPE_ICONS.len());
+    assert_eq!(
+        n,
+        TOOLS.len() + SHAPE_ICONS.len() + LINE_ICONS.len(),
+        "one texture per tool, per Shape-panel icon and per Line-panel icon"
+    );
 }
 
 /// The icon contact sheet, kept PERMANENTLY as an ignored test (owner
@@ -176,7 +185,9 @@ fn atlas_ids_are_one_per_tool() {
 /// It rasterizes every tool at 256 px (the design view) and at the real
 /// button size 24 px (cleared first), and since owner request 2026-11-20
 /// also the Shape panel's eight icons (the kind-independent MODE radios and
-/// the OUTLINE-PLACEMENT trio — owner requests 2026-11-20). The raster
+/// the OUTLINE-PLACEMENT trio — owner requests 2026-11-20) and the Line
+/// panel's two icons (the emblem per mode — the same day's Line-panel
+/// round). The raster
 /// color is BLACK so the monochrome
 /// icons
 /// (Line/Shape/Text and the Shape panel take the raster color) stay
@@ -206,13 +217,21 @@ fn icons_dump_when_requested() {
                 .expect("tiny-skia's default features include png");
         }
     }
+    for icon in LINE_ICONS {
+        for px in [256, 24] {
+            let pm = rasterize_line_icon(icon, px, Color32::BLACK).expect("px is in 1..=256");
+            let path = dir.join(format!("{px}px_line_{icon:?}.png"));
+            pm.save_png(&path)
+                .expect("tiny-skia's default features include png");
+        }
+    }
     let n = std::fs::read_dir(&dir)
         .expect("the dir was just created")
         .count();
     assert_eq!(
         n,
-        TOOLS.len() * 2 + SHAPE_ICONS.len() * 2,
-        "one 256 px + one 24 px PNG per tool and per shape icon"
+        TOOLS.len() * 2 + SHAPE_ICONS.len() * 2 + LINE_ICONS.len() * 2,
+        "one 256 px + one 24 px PNG per tool, shape icon and line icon"
     );
 }
 

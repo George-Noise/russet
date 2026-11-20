@@ -339,10 +339,17 @@ fn draw_pipette(pm: &mut Pixmap, ts: Transform) {
 /// at it: a smooth S of two quadratic arcs (the first bends along the
 /// bottom, the second turns over the top), unmistakably a curve at both
 /// the 256 px design view and the real 24 px button.
-fn draw_line(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+/// The Line TOOL's emblem, shared by the Tools window's Line button and the
+/// panel's Curve button (owner request 2026-11-20 — one geometry, the Shape
+/// emblem's principle): the two quadratic arcs `draw_line` strokes.
+fn line_emblem_curve() -> Vec<(f32, f32)> {
     let mut curve = quad_pts((4.8, 18.6), (13.5, 18.8), (14.4, 11.4), 14);
     curve.extend(quad_pts((14.4, 11.4), (15.0, 4.2), (19.2, 4.8), 14));
-    stroke(pm, ts, &curve, false, mono, 1.9);
+    curve
+}
+
+fn draw_line(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    stroke(pm, ts, &line_emblem_curve(), false, mono, 1.9);
 }
 
 /// The Shape TOOL's emblem, shared by the Tools window's Shape button and
@@ -569,6 +576,41 @@ pub(super) fn rasterize_shape_icon(
         ShapeIcon::OutlineOutside => draw_outline_mode(&mut pm, ts, ShapeOutline::Outside, text),
         ShapeIcon::OutlineCenter => draw_outline_mode(&mut pm, ts, ShapeOutline::Center, text),
         ShapeIcon::OutlineInside => draw_outline_mode(&mut pm, ts, ShapeOutline::Inside, text),
+    }
+    Some(pm)
+}
+
+// ---------------------------------------------------------------------------
+// The Line panel's icons (owner request 2026-11-20): the word "Mode" radio
+// became icon buttons in the Tools window's style, the same pass that
+// reshaped the Shape panel. The pair shares the LINE TOOL's emblem's
+// geometry ([`line_emblem_curve`], the Shape MODE trio's principle) and
+// differs only in how the mark bends: the Curve button strokes it EXACTLY
+// as the tool button does, the Straight button draws the same stroke
+// UNBENT — the straight segment between the emblem curve's endpoints.
+// ---------------------------------------------------------------------------
+
+/// The panel's Straight button: the tool's mark unbent (owner request
+/// 2026-11-20) — the straight segment between the emblem curve's two
+/// endpoints, the same 1.9 round-cap stroke.
+fn draw_line_straight(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    stroke(pm, ts, &[(4.8, 18.6), (19.2, 4.8)], false, mono, 1.9);
+}
+
+/// Rasterizes one Line-panel icon into a `px × px` premultiplied-RGBA
+/// pixmap (owner request 2026-11-20). Same failure contract as
+/// [`rasterize_tool_icon`].
+pub(super) fn rasterize_line_icon(
+    icon: super::LineIcon,
+    px: usize,
+    text: Color32,
+) -> Option<Pixmap> {
+    use super::LineIcon;
+    let mut pm = Pixmap::new(px as u32, px as u32)?;
+    let ts = icon_transform(px, 0.0);
+    match icon {
+        LineIcon::Straight => draw_line_straight(&mut pm, ts, text),
+        LineIcon::Curve => draw_line(&mut pm, ts, text),
     }
     Some(pm)
 }

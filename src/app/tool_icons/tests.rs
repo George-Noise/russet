@@ -12,11 +12,15 @@
 //! set in [`shape_panel`]. The pixel-poking helpers below are shared by all
 //! three topics (children reach them with `use super::*;`).
 
-use super::{SHAPE_ICONS, TOOL_INK, TOOLS, rasterize_shape_icon, rasterize_tool_icon};
+use super::{
+    LINE_ICONS, SHAPE_ICONS, TOOL_INK, TOOLS, rasterize_line_icon, rasterize_shape_icon,
+    rasterize_tool_icon,
+};
 use eframe::egui::Color32;
 
 mod atlas;
 mod drawings;
+mod line_panel;
 mod shape_panel;
 
 /// Opaque-pixel threshold: every icon must draw a substantial mark in its
@@ -125,8 +129,10 @@ fn count_opaque_in_box(pm: &tiny_skia::Pixmap, bx: (f32, f32, f32, f32)) -> usiz
 }
 
 /// The shared smoke pass over EVERY raster the pipeline serves: the seven
-/// tool icons (the pipeline's original contract) and the Shape panel's
-/// eight fixed drawings (owner requests 2026-11-20 — kind-independent).
+/// tool icons (the pipeline's original contract), the Shape panel's eight
+/// fixed drawings (owner requests 2026-11-20 — kind-independent) and the
+/// Line panel's two fixed drawings (the same day's Line-panel round —
+/// emblem-independent: both draw the tool's mark).
 #[test]
 fn every_icon_rasterizes_with_a_substantial_mark() {
     for tool in TOOLS {
@@ -138,6 +144,13 @@ fn every_icon_rasterizes_with_a_substantial_mark() {
     }
     for icon in SHAPE_ICONS {
         let pm = rasterize_shape_icon(icon, 24, TOOL_INK).expect("px is in 1..=256");
+        assert!(
+            count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
+            "{icon:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"
+        );
+    }
+    for icon in LINE_ICONS {
+        let pm = rasterize_line_icon(icon, 24, TOOL_INK).expect("px is in 1..=256");
         assert!(
             count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
             "{icon:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"

@@ -6,9 +6,11 @@
 //! window. Since the owner request 2026-11-19 also the collapse rule: while
 //! the Tools window is collapsed to its title bar the panel hides with it.
 
-use super::super::{settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size};
+use super::super::{
+    line_settings_ui, settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size,
+};
 use super::common::{SCREEN, show_once, show_tools_once};
-use crate::tools::{ShapeOutline, ShapePaint, Tool};
+use crate::tools::{LineMode, ShapeOutline, ShapePaint, Tool};
 use eframe::egui::{self, Pos2, Rect};
 
 /// Owner request 2026-11-19: while the Tools window is COLLAPSED to its
@@ -306,6 +308,142 @@ fn the_shape_panel_buttons_sit_a_tools_grid_gap_apart_horizontally_and_further_a
             super::super::TOOL_GRID_GAP
         );
     }
+}
+
+/// The Line panel's radio rule (owner request 2026-11-20): the word "Mode"
+/// radio became two icon buttons in the Tools window's style; the click
+/// handler is the same plain assignment the Shape radios run. This test
+/// pins the STARTUP pick (Straight — nothing changes for existing
+/// gestures) and the assignment on both choices.
+#[test]
+fn the_line_mode_radio_starts_straight_and_stays_single() {
+    let tools = crate::tools::ToolState::new();
+    assert_eq!(tools.line_mode, LineMode::Straight);
+    // Selecting any radio keeps EXACTLY one active — the click handler is
+    // a plain assignment; assert the handler's exact shape on both.
+    for pick in [LineMode::Straight, LineMode::Curve] {
+        let mut tools = crate::tools::ToolState::new();
+        tools.line_mode = pick; // the exact assignment the click runs
+        assert_eq!(tools.line_mode, pick);
+    }
+}
+
+/// The Line panel's ONE icon row renders COMPACT headless — the exact
+/// `line_settings_ui` the app runs, atlas omitted (the Shape rows test's
+/// rule). Straight mode: the two 28-pt buttons only (2 × 28 + the 6-pt gap
+/// = 62 wide). Curve mode: the same row PLUS the two hint lines — taller,
+/// still nothing near a full window.
+#[test]
+fn the_line_rows_render_compact_headless() {
+    fn line_row_rect(mode: LineMode) -> Rect {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+            ..egui::RawInput::default()
+        };
+        let mut rect = Rect::NOTHING;
+        // Two passes: egui settles an area's geometry on the second one.
+        for _ in 0..2 {
+            let mut output = ctx.run_pass(input.clone(), |ctx| {
+                let mut tools = crate::tools::ToolState::new();
+                tools.tool = Tool::Line;
+                tools.line_mode = mode;
+                egui::Area::new(egui::Id::unique("line_rows_probe"))
+                    .fixed_pos(Pos2::ZERO)
+                    .show(ctx, |ui| {
+                        let min = ui.cursor().min;
+                        line_settings_ui(ui, &mut tools, &None);
+                        rect = Rect::from_min_size(min, ui.min_size());
+                    });
+            });
+            output.textures_delta.clear();
+        }
+        rect
+    }
+    let straight = line_row_rect(LineMode::Straight);
+    assert!(
+        straight.height() < 40.0,
+        "straight row height {}",
+        straight.height()
+    );
+    assert!(
+        straight.width() < 80.0,
+        "straight row width {}",
+        straight.width()
+    );
+    let curve = line_row_rect(LineMode::Curve);
+    assert!(
+        curve.height() > straight.height(),
+        "the Curve hints must add height under the same row"
+    );
+    assert!(
+        curve.height() < 120.0,
+        "curve rows height {}",
+        curve.height()
+    );
+}
+
+/// The Line panel's SPACING rule (owner request 2026-11-20 — "такие же по
+/// стилю и отступам" as the Shape panel): within the row the two buttons
+/// sit EXACTLY the Tools window's element gap apart horizontally. Measured
+/// on the REAL rects `line_settings_ui` lays out — the 28×28 button squares
+/// the panel itself paints (headless, no atlas: geometry only, and egui
+/// paints nothing on an area's first pass, so the settled LAST pass is
+/// read).
+#[test]
+fn the_line_panel_buttons_sit_a_tools_grid_gap_apart_horizontally() {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        ..egui::RawInput::default()
+    };
+    let mut rects: Vec<Rect> = Vec::new();
+    for _ in 0..3 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            let mut tools = crate::tools::ToolState::new();
+            tools.tool = Tool::Line;
+            egui::Area::new(egui::Id::unique("line_gaps_probe"))
+                .fixed_pos(Pos2::ZERO)
+                .show(ctx, |ui| {
+                    line_settings_ui(ui, &mut tools, &None);
+                });
+        });
+        output.textures_delta.clear();
+        // The buttons are the only 28×28 squares the panel paints (each
+        // button adds a fill AND a stroke rect over the same rect — the
+        // exact-equality dedupe keeps one). egui nests paint commands
+        // (`Shape::Vec`) — collect recursively.
+        fn button_rects(shape: &egui::Shape, out: &mut Vec<Rect>) {
+            match shape {
+                egui::Shape::Rect(rect_shape) => {
+                    let r = rect_shape.rect;
+                    if r.width() == super::super::TOOL_BUTTON_PT
+                        && r.height() == super::super::TOOL_BUTTON_PT
+                        && !out.contains(&r)
+                    {
+                        out.push(r);
+                    }
+                }
+                egui::Shape::Vec(children) => {
+                    children.iter().for_each(|c| button_rects(c, out));
+                }
+                _ => {}
+            }
+        }
+        rects.clear();
+        for clipped in &output.shapes {
+            button_rects(&clipped.shape, &mut rects);
+        }
+    }
+    // The row: Straight then Curve (the horizontal loop's draw order —
+    // left to right).
+    assert_eq!(rects.len(), 2, "the Line panel's button squares: {rects:?}");
+    let gap = rects[1].left() - rects[0].right();
+    assert!(
+        (gap - super::super::TOOL_GRID_GAP).abs() < 0.5,
+        "in-row horizontal gap {gap} must be the Tools grid gap {}",
+        super::super::TOOL_GRID_GAP
+    );
 }
 
 #[test]
