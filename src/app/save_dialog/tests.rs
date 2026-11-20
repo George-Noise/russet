@@ -1,5 +1,5 @@
 //! Unit tests of the "Save Image" dialog's pure helpers (SPEC §3.7; owner
-//! request 2026-11-19): the composed file name (the format radio owns the
+//! request 2026-11-19): the composed file name (the format choice owns the
 //! extension) and the prefill base name. The dialog's modal plumbing is
 //! the shared `dialogs.rs` helpers — covered in `dialogs/tests.rs`.
 
@@ -31,7 +31,7 @@ fn a_typed_extension_matching_the_format_survives() {
 
 #[test]
 fn a_conflicting_typed_extension_is_replaced() {
-    // The radio owns the format — a stale extension must not win.
+    // The dropdown owns the format — a stale extension must not win.
     assert_eq!(
         compose_file_name("photo.png", SaveFormat::Jpeg),
         "photo.jpg"
@@ -87,7 +87,8 @@ fn the_prefill_strips_a_known_extension_only() {
 }
 
 // ---- the dialog's rendered rows (owner request 2026-11-20: the PNG
-// Compression slider + the per-format Lossless row) ----
+// Compression slider + the per-format Lossless row; the same day's layout
+// pass — the dropdown, the preview/name/folder cluster, the encoding group) ----
 
 use crate::app::App;
 use eframe::egui::{self, Pos2, Rect};
@@ -214,4 +215,43 @@ fn the_jpeg_caption_names_every_quality_value() {
             "quality {quality} is not named in its caption"
         );
     }
+}
+
+// ---- the layout pass (owner request 2026-11-20: the preview above the
+// name field, the folder row under it, the format dropdown, the encoding
+// group — Lossless ABOVE the knob — separated by distance) ----
+
+#[test]
+fn the_layout_reads_what_where_format_then_the_encoding_group() {
+    let rendered = rendered_save_texts(SaveFormat::Png);
+    // First paint of each row's text, in dialog order: the composed-name
+    // preview ABOVE the file name (owner 2026-11-20: the result reads
+    // first), the folder row directly under the name field, the format
+    // dropdown after them.
+    let saving_as = rendered.find("Saving as:").expect("preview row rendered");
+    let file_name = rendered.find("File name").expect("name field rendered");
+    let folder = rendered
+        .find("Folder")
+        .expect("folder row rendered (native test build)");
+    let format = rendered.find("Format").expect("format row rendered");
+    assert!(saving_as < file_name, "rows: {rendered}");
+    assert!(file_name < folder, "rows: {rendered}");
+    assert!(folder < format, "rows: {rendered}");
+    // The encoding group: the Lossless row ABOVE the Compression slider.
+    let lossless = rendered.find("Lossless").expect("lossless row rendered");
+    let compression = rendered.find("Compression").expect("slider rendered");
+    assert!(lossless < compression, "rows: {rendered}");
+    // The dropdown paints the SELECTED format's label (a radio's active
+    // label painted the same text — the choice row is still recognizable).
+    assert!(rendered.contains("PNG image"), "rows: {rendered}");
+}
+
+#[test]
+fn the_jpeg_group_keeps_lossless_above_quality() {
+    let rendered = rendered_save_texts(SaveFormat::Jpeg);
+    let lossless = rendered.find("Lossless").expect("lossless row rendered");
+    let quality = rendered.find("Quality").expect("quality slider rendered");
+    assert!(lossless < quality, "rows: {rendered}");
+    // The dropdown's selected text is the JPEG label.
+    assert!(rendered.contains("JPEG image"), "rows: {rendered}");
 }

@@ -1,12 +1,14 @@
 //! The "Save Image" dialog (SPEC §3.7; owner request 2026-11-19): BOTH
 //! File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) open it — an
 //! in-app dialog replacing the OS save dialog, with everything the save
-//! needs collected IN THE DIALOG: the format radio (PNG / JPEG), the file
-//! name, the per-format encoding knob (the PNG compression slider, the
-//! JPEG quality) with a live caption explaining what the CURRENT number
-//! means (owner request 2026-11-20 — the numbers were not obvious even
-//! to the owner), the Lossless row (owner request 2026-11-20) and —
-//! native only — the destination folder.
+//! needs collected IN THE DIALOG: the format dropdown (PNG / JPEG — a
+//! radio until 2026-11-20), the file name, the per-format encoding knob
+//! (the PNG compression slider, the JPEG quality) with a live caption
+//! explaining what the CURRENT number means (owner request 2026-11-20 —
+//! the numbers were not obvious even to the owner), the Lossless row
+//! (owner request 2026-11-20; same day it moved ABOVE the knob into the
+//! distance-separated encoding group) and — native only — the
+//! destination folder.
 //!
 //! This module owns the dialog UI, its `App` state prefill and the pure
 //! name helpers; the platform save glue lives in [`super::document`]
@@ -25,6 +27,12 @@ use crate::file_io::{self, SaveFormat};
 /// fallback of [`base_name_of`] and [`compose_file_name`] alike.
 pub(super) const FALLBACK_NAME: &str = "Untitled";
 
+/// The vertical distance around the encoding group (owner request
+/// 2026-11-20: the Lossless row + the knob + its captions are one
+/// semantic unit and must read as a block — the gap around it separates
+/// it from the name/folder/format rows, ~4× the default 3 pt row gap).
+const GROUP_GAP: f32 = 12.0;
+
 /// The fixed trade-off line under the Compression slider (owner request
 /// 2026-11-20: the slider's numbers must explain themselves — the live
 /// [`png_compression_hint`] names the current level, this line pins the
@@ -42,8 +50,8 @@ const JPEG_QUALITY_TAIL: &str = "Lower = a smaller file, but the picture loses m
 const FORBIDDEN_CHARS: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
 /// The file name the Save click writes: the cleaned typed name plus the
-/// CHOSEN format's extension — the format radio owns the extension (owner
-/// request 2026-11-19: the format is chosen in the dialog). A typed image
+/// CHOSEN format's extension — the format choice owns the extension
+/// (owner request 2026-11-19: the format is chosen in the dialog). A typed image
 /// extension matching the format survives (canonicalized — `.jpeg` becomes
 /// `.jpg`), a conflicting one is replaced, a non-image one stays part of
 /// the base; separators and the Windows-forbidden characters never reach
@@ -58,8 +66,8 @@ pub(super) fn compose_file_name(raw: &str, format: SaveFormat) -> String {
 }
 
 /// Strips a KNOWN image extension (`.png` / `.jpg` / `.jpeg`,
-/// case-insensitive) for the dialog's prefill — the format radio owns the
-/// extension, so `display_name` must not pin one. Unknown or no extension:
+/// case-insensitive) for the dialog's prefill — the format choice owns
+/// the extension, so `display_name` must not pin one. Unknown or no extension:
 /// the trimmed name as-is; nothing usable: [`FALLBACK_NAME`].
 pub(super) fn base_name_of(name: &str) -> String {
     let name = name.trim();
@@ -128,18 +136,23 @@ impl App {
         self.show_save_dialog = true;
     }
 
-    /// The dialog itself: the file name field, the format radio (THE format
-    /// choice — owner request 2026-11-19), the per-format encoding knob —
-    /// the PNG Compression slider or the JPEG Quality slider (the values
-    /// are kept across opens) with its live meaning caption and fixed
-    /// trade-off line (owner request 2026-11-20: the numbers must explain
-    /// themselves) — the Lossless row (owner request 2026-11-20: THE
-    /// guarantee, displayed per format — PNG locks it ON, JPEG locks it
-    /// OFF; neither format can do otherwise), the native folder row and
-    /// the resulting-name preview. Save (rightmost per
-    /// §3.7) hands over to [`super::document::commit_save_dialog`] — the
-    /// dialog closes only on success (or, on web, once the download task
-    /// is spawned); Cancel and the ✕ close without writing.
+    /// The dialog itself, top to bottom (the order and the grouping are
+    /// owner requests 2026-11-20): the composed-name preview ("Saving
+    /// as") ABOVE the file name field — the result reads first — then the
+    /// native Folder row DIRECTLY under it, so "what is it called" and
+    /// "where does it go" read as one cluster; the format DROPDOWN (THE
+    /// format choice — owner request 2026-11-19, a compact menu instead
+    /// of the two-radio row since 2026-11-20); and after a visible gap
+    /// the per-format encoding GROUP — the Lossless row (THE guarantee,
+    /// displayed per format: PNG locks it ON, JPEG locks it OFF) sits
+    /// ABOVE the knob — the PNG Compression slider or the JPEG Quality
+    /// slider (the values are kept across opens) with its live meaning
+    /// caption and fixed trade-off line (owner request 2026-11-20: the
+    /// numbers must explain themselves) — and a matching gap closes the
+    /// group before the buttons. Save (rightmost per §3.7) hands over to
+    /// [`super::document::commit_save_dialog`] — the dialog closes only
+    /// on success (or, on web, once the download task is spawned); Cancel
+    /// and the ✕ close without writing.
     pub(super) fn save_dialog(&mut self, ctx: &Context) {
         if !self.show_save_dialog {
             return;
@@ -151,66 +164,22 @@ impl App {
         dialog_window("Save Image", id, ctx)
             .open(&mut open)
             .show(ctx, |ui| {
+                // The composed-name preview ABOVE the file name (owner
+                // request 2026-11-20): the result reads first, then the
+                // field that drives it.
+                ui.weak(format!(
+                    "Saving as: {}",
+                    compose_file_name(&self.save_file_name, self.save_format)
+                ));
                 ui.horizontal(|ui| {
                     ui.label("File name");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.save_file_name).desired_width(160.0),
                     );
                 });
-                ui.horizontal(|ui| {
-                    ui.label("Format");
-                    ui.radio_value(
-                        &mut self.save_format,
-                        SaveFormat::Png,
-                        SaveFormat::Png.label(),
-                    );
-                    ui.radio_value(
-                        &mut self.save_format,
-                        SaveFormat::Jpeg,
-                        SaveFormat::Jpeg.label(),
-                    );
-                });
-                match self.save_format {
-                    SaveFormat::Png => {
-                        ui.horizontal(|ui| {
-                            ui.label("Compression");
-                            ui.add(egui::Slider::new(&mut self.save_png_compression, 0..=9));
-                        });
-                        // The numbers must explain themselves (owner request
-                        // 2026-11-20): the live caption names the CURRENT
-                        // level's effect, the tail pins the never-changes fact.
-                        ui.weak(png_compression_hint(self.save_png_compression));
-                        ui.weak(PNG_COMPRESSION_TAIL);
-                        // PNG cannot be lossy, so the owner-requested
-                        // Lossless row is a locked-ON display of the
-                        // guarantee, not a toggle (a toggle would be a
-                        // placebo — unchecking could not change anything).
-                        let mut lossless = true;
-                        ui.horizontal(|ui| {
-                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
-                            ui.weak("(always — PNG is lossless)");
-                        });
-                    }
-                    SaveFormat::Jpeg => {
-                        ui.horizontal(|ui| {
-                            ui.label("Quality");
-                            ui.add(egui::Slider::new(&mut self.save_quality, 1..=100));
-                        });
-                        // The live caption + the scale direction, same as the
-                        // PNG row (owner request 2026-11-20).
-                        ui.weak(jpeg_quality_hint(self.save_quality));
-                        ui.weak(JPEG_QUALITY_TAIL);
-                        // JPEG is always lossy — the pinned encoder cannot
-                        // write a lossless JPEG and browsers cannot decode
-                        // one — so the row displays the absence of the
-                        // guarantee (locked OFF, like the PNG row's ON).
-                        let mut lossless = false;
-                        ui.horizontal(|ui| {
-                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
-                            ui.weak("(never — JPEG is always lossy)");
-                        });
-                    }
-                }
+                // The folder row DIRECTLY under the file name (same
+                // request): "what is it called" and "where does it go" read
+                // as one cluster.
                 if file_io::FOLDER_PICKING_SUPPORTED {
                     ui.horizontal(|ui| {
                         ui.label("Folder");
@@ -230,10 +199,76 @@ impl App {
                         }
                     });
                 }
-                ui.weak(format!(
-                    "Saving as: {}",
-                    compose_file_name(&self.save_file_name, self.save_format)
-                ));
+                // The format choice is a DROPDOWN (owner request
+                // 2026-11-20: the two-radio row became a compact menu).
+                ui.horizontal(|ui| {
+                    ui.label("Format");
+                    egui::ComboBox::from_id_salt("save_format")
+                        .selected_text(self.save_format.label())
+                        .width(120.0)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.save_format,
+                                SaveFormat::Png,
+                                SaveFormat::Png.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.save_format,
+                                SaveFormat::Jpeg,
+                                SaveFormat::Jpeg.label(),
+                            );
+                        });
+                });
+                // The encoding group is separated from the rows above by
+                // vertical distance (owner request 2026-11-20: the Lossless
+                // row + the knob + its captions are one semantic unit and
+                // must read as a block).
+                ui.add_space(GROUP_GAP);
+                match self.save_format {
+                    SaveFormat::Png => {
+                        // The Lossless row ABOVE the knob (same request): the
+                        // guarantee is the headline, the effort slider is the
+                        // detail under it. PNG cannot be lossy, so the row is
+                        // a locked-ON display of the guarantee, not a toggle
+                        // (a toggle would be a placebo — unchecking could not
+                        // change anything).
+                        let mut lossless = true;
+                        ui.horizontal(|ui| {
+                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
+                            ui.weak("(always — PNG is lossless)");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Compression");
+                            ui.add(egui::Slider::new(&mut self.save_png_compression, 0..=9));
+                        });
+                        // The numbers must explain themselves (owner request
+                        // 2026-11-20): the live caption names the CURRENT
+                        // level's effect, the tail pins the never-changes fact.
+                        ui.weak(png_compression_hint(self.save_png_compression));
+                        ui.weak(PNG_COMPRESSION_TAIL);
+                    }
+                    SaveFormat::Jpeg => {
+                        // The locked-OFF Lossless row above the knob, like the
+                        // PNG branch (JPEG is always lossy — the pinned encoder
+                        // cannot write a lossless JPEG and browsers cannot
+                        // decode one).
+                        let mut lossless = false;
+                        ui.horizontal(|ui| {
+                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
+                            ui.weak("(never — JPEG is always lossy)");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Quality");
+                            ui.add(egui::Slider::new(&mut self.save_quality, 1..=100));
+                        });
+                        // The live caption + the scale direction, same as the
+                        // PNG row (owner request 2026-11-20).
+                        ui.weak(jpeg_quality_hint(self.save_quality));
+                        ui.weak(JPEG_QUALITY_TAIL);
+                    }
+                }
+                // A matching gap closes the group before the buttons.
+                ui.add_space(GROUP_GAP);
                 let (save_hit, cancel_hit) = dialog_button_row(ui, "Save", "Cancel");
                 save = save_hit;
                 cancel = cancel_hit;

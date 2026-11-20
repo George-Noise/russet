@@ -17,9 +17,9 @@ pub struct SavedImage {
 }
 
 /// The save formats of the "Save Image" dialog (SPEC §3.7; owner request
-/// 2026-11-19): the format choice lives IN the dialog (a radio), not in the
-/// OS filter list — so the enum is shared by the dialog state, the codecs
-/// and the platform save glue.
+/// 2026-11-19): the format choice lives IN the dialog — a dropdown since
+/// 2026-11-20, a radio before — not in the OS filter list — so the enum is
+/// shared by the dialog state, the codecs and the platform save glue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SaveFormat {
     Png,
@@ -37,8 +37,8 @@ impl SaveFormat {
         }
     }
 
-    /// The dialog radio label (the filter names of the OS save dialog this
-    /// dialog replaced).
+    /// The dialog dropdown label (the filter names of the OS save dialog
+    /// this dialog replaced).
     pub fn label(self) -> &'static str {
         match self {
             Self::Png => "PNG image",
@@ -70,7 +70,7 @@ impl SaveFormat {
 }
 
 /// The "Save Image" dialog's encoding choices for one save (SPEC §3.7):
-/// the format radio plus the per-format knob — JPEG's quality, PNG's
+/// the format dropdown plus the per-format knob — JPEG's quality, PNG's
 /// compression effort. A struct, not two loose `u8` parameters after the
 /// format: a transposed knob would compile silently.
 #[derive(Clone, Copy, Debug)]

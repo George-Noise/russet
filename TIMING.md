@@ -23,11 +23,11 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `cargo check` (the save-dialog layout round's quick loop — COLD dep graph on the dev lane, fresh sandbox recycle: rustup + the pinned toolchain installed first) | **1m 35s** | time'd exactly |
 | 2026-11-20 | `cargo check` (the save-compression round's quick loop, COLD dep graph on a fresh sandbox — rustup installed first, the whole dep graph compiled) | **1m 17s** | time'd exactly |
 | 2026-11-20 | `bash scripts/verify.sh` (the save-compression round's first gate run — the gates lane's dep graph was cold; only the dev lane was warm from cargo check) | **ALL GATES GREEN 186 s** | the gate's own print |
 | 2026-11-20 | `bash scripts/verify.sh` (the web direct-download round) on a COLD clone — the sandbox was recycled: rustup + the pinned toolchain installed first, the whole dep graph + the crate per stage | **ALL GATES GREEN 114 s** (the gate's own print; the first attempt failed fast on the dead-code lint, fixed, re-run) | the gate's own print |
 | 2026-11-20 | `cargo check --target wasm32-unknown-unknown` (the web-facing round's wasm economy check) — COLD dep graph on the fresh wasm triple | **≈ a few minutes** (inside one bounded call; the exact seconds were not captured — the HOT re-run finishes in 0.3 s) | observed ≈, not precisely timed |
-| 2026-11-20 | `bash scripts/verify.sh` on a COLD clone (fresh sandbox: rustup missing, installed first; the whole dep graph + the crate per stage) | **≈ 2m 05s total** (the first run failed on fmt at ~2m; the re-run after `cargo fmt`: ALL GATES GREEN 74 s — copied from the gate's own print) | the gate's per-stage seconds + the wall clock ≈ |
 
 ## Hot
 

@@ -18,6 +18,40 @@
 - **Owner-checks:** none born. Open: V46; parked: V30, V8. Debts open: F17, F16, F15.
 - **Commit title:** `AGENTS.md: docs-only rounds skip the cargo gate (rules.sh + delivery byte-compares suffice; builds/tests stay for any non-.md diff)`
 
+### 2026-11-20 — `Fix:` the web save's rfd fallback window — the direct Blob download — owner request
+
+- **What:** on web the "Save Image" dialog's confirm handed the composed name + format +
+  quality to `rfd::AsyncFileDialog::save_file()` — and rfd 0.15.4's wasm backend pops its
+  own DOM fallback ("click here to download your file", Ok/Cancel — the owner's screenshot)
+  BEFORE writing the bytes. Replaced by the DIRECT download: `file_io.rs::web::download_image`
+  encodes the pixmap, wraps it in a Blob of the format's MIME type (new
+  `SaveFormat::mime_type`), creates an object URL, one synthetic click on a DETACHED
+  `<a download>` anchor carrying the composed name, the URL revoked on a 10 s grace timer
+  (a one-shot forgotten Closure); the browser owns where the file lands (§3.10), there is
+  nothing to cancel — the task always resolves to a saved image or the "Error" popup, and
+  rfd stays only on the OPEN path. js-sys + wasm-bindgen reached through
+  wasm-bindgen-futures' PUBLIC re-exports (`pub use js_sys; pub use wasm_bindgen;`) — zero
+  manifest additions; the web-sys line gains the 8 feature gates the DOM path needs. The
+  defect class is browser-only: the headless regression guard is the MIME-mapping test,
+  the look pass is V47.
+- **Files:** `src/file_io.rs` (SaveFormat::mime_type + web::download_image;
+  save_image_as rewritten), `Cargo.toml` (the web-sys feature gates + the why-comment),
+  `src/file_io/tests.rs` (+1 test), SPEC §3.7, TIMING (2 rows), DEBTS-verification
+  (V47 born), PROGRESS (snapshot + entry + stamp; the smooth-strokes entry moved to
+  PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 114 s cold (fresh sandbox, toolchain re-installed)
+  — fmt clean, rules HARD green, clippy `-D warnings` green (default + mcp),
+  `cargo test --profile gates` 212 default / 212 mcp green (+1 ignored each; +1 test);
+  `cargo check --target wasm32-unknown-unknown` green (the wasm economy rule — a
+  web-facing change); the visual driver ALL SCENARIOS GREEN under Xvfb. NOTE: the wasm
+  clippy/test lane has a PRE-EXISTING failure (launch/tests.rs imports the native-only
+  `crate::USAGE`) — untouched this round; the repo's wasm bar is the cargo check.
+- **Owner-checks:** V47 born (the browser pass: Save/Save As download the image
+  IMMEDIATELY — no fallback window; both formats + the JPEG quality land with the
+  composed names; title/dirty state update as before; Open still opens the picker).
+  Open: V47, V46 (X11/Wayland), V30 (parked), V8 (parked); debts F17, F16, F15.
+- **Commit title:** `Web save downloads directly: the Save dialog's bytes go straight to the browser as a Blob over an object URL + one synthetic anchor click (rfd's "click here to download your file" fallback window is gone; the URL revokes on a grace timer; js-sys rides the wasm-bindgen-futures re-exports)`
+
 ### 2026-11-20 — Docs: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 — owner request
 
 - **What:** bookkeeping only, zero code: the owner verified the pencil drifting-pen pass

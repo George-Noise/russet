@@ -34,12 +34,13 @@
 | Extra: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 (owner 2026-11-20) | done — docs only | DEBTS-verification bookkeeping: V45 closed verified in chat (the owner's Windows AND Web passes), the same smooth-stroke checklist on Linux (X11 AND Wayland backends) born as V46; no code touched |
 | Extra: the docs-only gate exemption into AGENTS.md (owner 2026-11-20) | done — docs only | a `.md`-only diff runs `scripts/rules.sh` + the delivery byte-compares ONLY — no builds, no tests; the full gate stays for anything beyond `.md` (Rust, scripts, Cargo, flake, CI, web); comment-only `.rs` edits keep the `cargo check` quick loop |
 | Extra: the web save downloads directly — rfd's fallback window gone (owner 2026-11-20) | done — gates + wasm check + driver green | the web Save dialog's confirm no longer routes through `rfd::AsyncFileDialog::save_file()` (its wasm backend pops the "click here to download your file" Ok/Cancel window): `file_io.rs::web::download_image` encodes → Blob (the format's MIME type, new `SaveFormat::mime_type`) → object URL → one synthetic click on a detached `<a download>` with the composed name → the URL revoked on a 10 s grace timer; js-sys/wasm-bindgen ride wasm-bindgen-futures' public re-exports (zero manifest additions; the web-sys line gains 8 feature gates); rfd stays only on the Open path; V47 born |
-| Extra: the Save-dialog slider captions — the numbers explain themselves (owner 2026-11-20) | done — gates + wasm check + driver green | under EACH encoding knob a live caption names the CURRENT number's effect (the owner: the digits "were not obvious even to me"): PNG "<level> — stored raw / light packing / balanced packing / tight packing …" + the tail "The picture is identical at every level — the slider only trades file size against save speed."; JPEG "<quality> — near-perfect picture / high / medium / low quality …" + the tail "Lower = a smaller file, but the picture loses more detail."; pure bucket helpers exhaustively tested (every stop 0..=9 / 1..=100 names its own number), the two headless dialog render tests assert the captions; V49 born |
+| Extra: the Save-dialog slider captions — the numbers explain themselves (owner 2026-11-20) | done — gates + wasm check + driver green | under EACH encoding knob a live caption names the CURRENT number's effect (the owner: the digits "were not obvious even to me"): PNG "<level> — stored raw / light packing / balanced packing / tight packing …" + the tail "The picture is identical at every level — the slider only trades file size against save speed."; JPEG "<quality> — near-perfect picture / high / medium / low quality …" + the tail "Lower = a smaller file, but the picture loses more detail."; pure bucket helpers exhaustively tested (every stop 0..=9 / 1..=100 names its own number), the two headless dialog render tests assert the captions; V49 born, closed verified in chat the same day |
+| Extra: the Save-dialog layout pass — preview above the name, the dropdown, the distance-separated encoding group (owner 2026-11-20) | done — gates + wasm check + driver + dialog screenshots green | the owner reviewed the V49 captions and reshaped the dialog: "Saving as" ABOVE the File name field (the result reads first), the Folder row (native) DIRECTLY under it — the "what + where" cluster; the Format radios → a `egui::ComboBox` dropdown ("PNG image" / "JPEG image" — the knob and the preview re-compose on the pick); the encoding group [Lossless ABOVE the knob + the captions] separated by a 12 pt `GROUP_GAP` (vs the 3 pt row gap) so related controls read as one block; +2 layout-order tests over the REAL dialog; no encoding change — pixels/bytes as V48 saved; V50 born |
 | Extra: the Save-dialog compression slider + the Lossless row (owner 2026-11-20) | done — gates + wasm check + driver green | the PNG row gains the "Compression" slider 0..=9 — the encoder's REAL stops (`CompressionType::Level`: 0 stores raw, 1..=9 the exact deflate effort; default 6 = flate2's balanced middle; file size + encode time trade, pixels NEVER, the round-trip test proves it) — and both formats gain the owner's "Lossless" row: a per-format LOCKED DISPLAY of the guarantee (PNG on — lossless by design; JPEG off — no lossless mode the pinned encoder could write nor browsers decode); JPEG keeps Quality; the dialog's choices ride a new `SaveOptions` through the native save AND the web download; V48 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the slider-captions
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the save-dialog layout
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
-mcp), `cargo test --profile gates` 220 default / 220 mcp green (+1 ignored each
+mcp), `cargo test --profile gates` 222 default / 222 mcp green (+1 ignored each
 — the permanent #[ignore] icon dump; +2 tests this round), the wasm
 `cargo check --target wasm32-unknown-unknown` green (the dialog compiles into
 the web build), the visual driver ALL SCENARIOS GREEN under Xvfb through the
@@ -84,7 +85,43 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > this round's budget (2026-11-20); the pencil-drifting-pen entry followed
 > during the save-compression round's budget (2026-11-20); the docs-only +
 > V45/V46 bookkeeping entries moved to PROGRESS-archive.md during this
-> round's budget (2026-11-20).
+> round's budget (2026-11-20); the web-download entry followed during the
+> layout round's budget (2026-11-20).
+
+### 2026-11-20 — `Feat:` the Save-dialog layout pass — owner request
+
+- **What:** the owner reviewed the V49 captions ("надписи посмотрел") and reshaped
+  the dialog: (1) the composed-name preview "Saving as" moved ABOVE the File name
+  field — the result reads first; (2) the Folder row (native) sits DIRECTLY under
+  the name field — "what is it called" and "where does it go" read as one cluster;
+  (3) the Format row's two radios became a `egui::ComboBox` dropdown ("PNG image" /
+  "JPEG image"; picking one swaps the knob and re-composes the preview live);
+  (4) the encoding GROUP [Lossless + knob + captions] is separated by vertical
+  distance (`GROUP_GAP` 12 pt above and below vs the 3 pt row gap) and the Lossless
+  row sits ABOVE the Compression/Quality slider — the guarantee is the headline,
+  the effort slider the detail under it. No encoding change — pixels and bytes are
+  exactly what V48 saved; the captions are unchanged.
+- **Files:** `src/app/save_dialog.rs` (the reordered body + the ComboBox + the gap
+  constant + the module/method docs), `src/app/save_dialog/tests.rs` (+2
+  layout-order tests over the REAL dialog), `src/file_io.rs` (3 doc comments:
+  radio → dropdown), SPEC §3.7 (the rows, top to bottom), TIMING (1 row),
+  DEBTS-verification (V49 closed verified; V48 + the re-run note; V50 born),
+  PROGRESS (snapshot + entry + stamp; the web-download entry moved to
+  PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 16 s hot: fmt clean, rules HARD green,
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates` 222
+  default / 222 mcp green (+1 ignored each; +2 tests); `cargo check --target
+  wasm32-unknown-unknown` green (the dialog compiles into the web build — the
+  owner's V50 pass covers the browser too); the visual driver ALL SCENARIOS GREEN
+  under Xvfb (the gates+mcp binary); PLUS an Xvfb probe of the REAL dialog —
+  Ctrl+S screenshots of BOTH branches (the PNG and the JPEG picked through the
+  real dropdown): the order, the dropdown and the group gap all visible.
+- **Owner-checks:** V50 born (the Windows + Web layout pass: the preview above the
+  name, the folder under it, the dropdown picks both formats, the group reads as
+  one block). V49 closed verified in chat ("надписи посмотрел"). Open: V50, V48
+  (+ the re-run-on-V50-build note), V46; parked: V30, V8. Debts open: F17, F16,
+  F15.
+- **Commit title:** `Save dialog layout: the Saving-as preview above the file name, the folder row under it, the format dropdown instead of the radio, and the encoding group (Lossless above the knob) separated by distance`
 
 ### 2026-11-20 — `Feat:` the Save dialog's slider meaning captions — owner request
 
@@ -156,36 +193,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   F16, F15.
 - **Commit title:** `Save dialog: a PNG Compression slider 0..=9 (the encoder's real deflate stops, pixels never change) + the per-format Lossless row (locked on for PNG, locked off for JPEG) carried by SaveOptions through native and web`
 
-### 2026-11-20 — `Fix:` the web save's rfd fallback window — the direct Blob download — owner request
-
-- **What:** on web the "Save Image" dialog's confirm handed the composed name + format +
-  quality to `rfd::AsyncFileDialog::save_file()` — and rfd 0.15.4's wasm backend pops its
-  own DOM fallback ("click here to download your file", Ok/Cancel — the owner's screenshot)
-  BEFORE writing the bytes. Replaced by the DIRECT download: `file_io.rs::web::download_image`
-  encodes the pixmap, wraps it in a Blob of the format's MIME type (new
-  `SaveFormat::mime_type`), creates an object URL, one synthetic click on a DETACHED
-  `<a download>` anchor carrying the composed name, the URL revoked on a 10 s grace timer
-  (a one-shot forgotten Closure); the browser owns where the file lands (§3.10), there is
-  nothing to cancel — the task always resolves to a saved image or the "Error" popup, and
-  rfd stays only on the OPEN path. js-sys + wasm-bindgen reached through
-  wasm-bindgen-futures' PUBLIC re-exports (`pub use js_sys; pub use wasm_bindgen;`) — zero
-  manifest additions; the web-sys line gains the 8 feature gates the DOM path needs. The
-  defect class is browser-only: the headless regression guard is the MIME-mapping test,
-  the look pass is V47.
-- **Files:** `src/file_io.rs` (SaveFormat::mime_type + web::download_image;
-  save_image_as rewritten), `Cargo.toml` (the web-sys feature gates + the why-comment),
-  `src/file_io/tests.rs` (+1 test), SPEC §3.7, TIMING (2 rows), DEBTS-verification
-  (V47 born), PROGRESS (snapshot + entry + stamp; the smooth-strokes entry moved to
-  PROGRESS-archive.md).
-- **Verified:** FULL gate ALL GATES GREEN 114 s cold (fresh sandbox, toolchain re-installed)
-  — fmt clean, rules HARD green, clippy `-D warnings` green (default + mcp),
-  `cargo test --profile gates` 212 default / 212 mcp green (+1 ignored each; +1 test);
-  `cargo check --target wasm32-unknown-unknown` green (the wasm economy rule — a
-  web-facing change); the visual driver ALL SCENARIOS GREEN under Xvfb. NOTE: the wasm
-  clippy/test lane has a PRE-EXISTING failure (launch/tests.rs imports the native-only
-  `crate::USAGE`) — untouched this round; the repo's wasm bar is the cargo check.
-- **Owner-checks:** V47 born (the browser pass: Save/Save As download the image
-  IMMEDIATELY — no fallback window; both formats + the JPEG quality land with the
-  composed names; title/dirty state update as before; Open still opens the picker).
-  Open: V47, V46 (X11/Wayland), V30 (parked), V8 (parked); debts F17, F16, F15.
-- **Commit title:** `Web save downloads directly: the Save dialog's bytes go straight to the browser as a Blob over an object URL + one synthetic anchor click (rfd's "click here to download your file" fallback window is gone; the URL revokes on a grace timer; js-sys rides the wasm-bindgen-futures re-exports)`
