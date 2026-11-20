@@ -8,7 +8,7 @@
 
 use super::super::{settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size};
 use super::common::{SCREEN, show_once, show_tools_once};
-use crate::tools::{ShapePaint, Tool};
+use crate::tools::{ShapeOutline, ShapePaint, Tool};
 use eframe::egui::{self, Pos2, Rect};
 
 /// Owner request 2026-11-19: while the Tools window is COLLAPSED to its
@@ -147,7 +147,31 @@ fn the_shape_paint_radio_starts_on_outline_and_stays_single() {
     }
 }
 
-/// The Shape panel's two icon rows (owner request 2026-11-20) render
+/// The Shape panel's PLACEMENT radio rule (owner request 2026-11-20, the
+/// second three-way radio): three outline placements — outside the two
+/// mouse points / centered (exactly the old look) / inside them — clicking
+/// a radio selects it (the same assignment semantics as the paint radio).
+/// This test pins the STARTUP pick (Center — nothing changes for existing
+/// gestures until the owner picks a mode) and the assignment on all three
+/// choices.
+#[test]
+fn the_shape_outline_radio_starts_centered_and_stays_single() {
+    let tools = crate::tools::ToolState::new();
+    assert_eq!(tools.shape_outline, ShapeOutline::Center);
+    // Selecting any radio keeps EXACTLY one active — the click handler is
+    // a plain assignment; assert the handler's exact shape on all three.
+    for pick in [
+        ShapeOutline::Outside,
+        ShapeOutline::Center,
+        ShapeOutline::Inside,
+    ] {
+        let mut tools = crate::tools::ToolState::new();
+        tools.shape_outline = pick; // the exact assignment the click runs
+        assert_eq!(tools.shape_outline, pick);
+    }
+}
+
+/// The Shape panel's three icon rows (owner requests 2026-11-20) render
 /// COMPACT headless — the exact `shape_settings_ui` the app runs, atlas
 /// omitted (the buttons draw without icons the same way the Tools window
 /// does before the atlas lands). A leaked width/height (egui's 340-pt
@@ -175,10 +199,11 @@ fn the_shape_rows_render_compact_headless() {
         });
         output.textures_delta.clear();
     }
-    // Two 28-pt button rows + the group gap; the MODE row now carries
-    // THREE buttons (the 2026-11-20 radio) — 3 × 28 + 2 × 8 pt spacing
-    // ≈ 100 pt. Nothing near a full window.
-    assert!(rect.height() < 80.0, "shape rows height {}", rect.height());
+    // Three 28-pt button rows + the two group gaps (the KIND pair, the
+    // three-button MODE radio and the three-button PLACEMENT radio —
+    // owner requests 2026-11-20): 3 × 28 + 2 × (6 gap + 3 spacing) ≈ 102.
+    // Nothing near a full window.
+    assert!(rect.height() < 120.0, "shape rows height {}", rect.height());
     assert!(rect.width() < 110.0, "shape rows width {}", rect.width());
 }
 

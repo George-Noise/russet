@@ -24,7 +24,7 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense, TextureId};
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use super::tool_icons::{self, ShapeIcon};
-use crate::tools::{LineMode, ShapeKind, ShapePaint, Tool, ToolState};
+use crate::tools::{LineMode, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState};
 
 mod palette_window;
 
@@ -37,11 +37,13 @@ const TOOL_COLUMNS: usize = 2;
 /// equal gaps both ways).
 const TOOL_GRID_GAP: f32 = 6.0;
 
-/// The vertical gap that separates the Shape panel's two rows — the KIND
-/// choice and the paint MODE — so the two groups read apart (the same
-/// distance-separates-meaning principle the owner set for the Save dialog's
-/// encoding group, V50): the rows' own gap is egui's 3-pt item spacing, this
-/// adds 6 more between the two button rows.
+/// The vertical gap that separates the Shape panel's button rows into
+/// GROUPS — the KIND choice, the paint MODE and the outline PLACEMENT — so
+/// the three groups read apart (the same distance-separates-meaning
+/// principle the owner set for the Save dialog's encoding group, V50, and
+/// extended to the Shape panel 2026-11-20: "добавить расстояние, чтобы
+/// разделить кнопки по группам"): the rows' own gap is egui's 3-pt item
+/// spacing, this adds 6 more between the button rows.
 const SHAPE_GROUP_GAP: f32 = 6.0;
 
 /// The tool button's square size in logical points: the 1.5rem icon plus a
@@ -191,18 +193,20 @@ fn icon_button(
     response.on_hover_text(tooltip)
 }
 
-/// The Shape tool's settings rows (owner request 2026-11-20): the KIND row —
-/// two icon buttons, the gray-filled square / circle previews — then, after
-/// a [`SHAPE_GROUP_GAP`], the MODE row — a THREE-way radio (the same day's
-/// follow-up: "не 2 выбора, а 3 и это уже будет radio") over
-/// [`ShapePaint`] — Fill, Outline, Fill + Outline. The radio's icons do NOT
-/// repeat the selected kind (the V51 toggles previewed it): they draw the
-/// Shape TOOL's emblem — the solid / hollow / gray-filled-with-rim emblem
-/// of the Tools window's Shape button ([`tool_icons::ShapeIcon::Fill`] /
-/// [`Outline`] / [`FillOutline`]). The buttons are the Tools window's icon
-/// buttons ([`icon_button`]); the tooltips carry the words the old word
-/// radio / checkboxes showed ([`tool_icons::shape_icon_label`]) — the
-/// third radio names both: "Fill + Outline".
+/// The Shape tool's settings rows (owner requests 2026-11-20): the KIND
+/// row — two icon buttons, the gray-filled square / circle previews — then,
+/// after a [`SHAPE_GROUP_GAP`], the MODE row — a THREE-way radio ("не 2
+/// выбора, а 3 и это уже будет radio") over [`ShapePaint`] — Fill, Outline,
+/// Fill + Outline — then, after another [`SHAPE_GROUP_GAP`], the PLACEMENT
+/// row — a second THREE-way radio over [`ShapeOutline`] (the owner: three
+/// outline modes — outside the two mouse points / exactly as before /
+/// inside them; "делать их в виде угла квадратика вне зависимости от
+/// выбранной фигуры"). The MODE radios' icons draw the Shape TOOL's emblem
+/// ([`tool_icons::ShapeIcon::Fill`] / [`Outline`] / [`FillOutline`]); the
+/// PLACEMENT radios' icons draw the corner composition
+/// ([`ShapeIcon::OutlineOutside`] / [`OutlineCenter`] / [`OutlineInside`]).
+/// The buttons are the Tools window's icon buttons ([`icon_button`]); the
+/// tooltips carry the words ([`tool_icons::shape_icon_label`]).
 ///
 /// Extracted as a free fn over [`ToolState`] so the regression tests run
 /// the exact UI the app runs (headless; the atlas is optional — the buttons
@@ -245,6 +249,28 @@ fn shape_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<to
             // something because EXACTLY one of the three is ever active.
             if response.clicked() {
                 tools.shape_paint = paint;
+            }
+        }
+    });
+    ui.add_space(SHAPE_GROUP_GAP);
+    ui.horizontal(|ui| {
+        for (outline, icon) in [
+            (ShapeOutline::Outside, ShapeIcon::OutlineOutside),
+            (ShapeOutline::Center, ShapeIcon::OutlineCenter),
+            (ShapeOutline::Inside, ShapeIcon::OutlineInside),
+        ] {
+            let response = icon_button(
+                ui,
+                TOOL_BUTTON_PT,
+                tool_icons::shape_texture_id(icons, icon),
+                tool_icons::shape_icon_label(icon),
+                tools.shape_outline == outline,
+            );
+            // The same radio semantics as the paint row above. The choice
+            // stays clickable with the Fill-only paint too: it is remembered
+            // for the moment an outline is painted again.
+            if response.clicked() {
+                tools.shape_outline = outline;
             }
         }
     });

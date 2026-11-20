@@ -1,14 +1,22 @@
 //! The Shape panel's icon tests (owner request 2026-11-20): the KIND
 
-//! buttons' gray previews and the old-word tooltips, plus the MODE trio's
+//! buttons' gray previews, the old-word tooltips, the MODE trio's
 
-//! emblem drawings — the follow-up the same day made the MODE row a
+//! emblem drawings (the follow-up the same day made the MODE row a
 
-//! THREE-way radio over the Shape TOOL's icon ("не повторение выбранной
+//! THREE-way radio over the Shape TOOL's icon — "не повторение выбранной
 
-//! фигуры, а иконка инструмента Shape"): solid = Fill, hollow = Outline
+//! фигуры, а иконка инструмента Shape": solid = Fill, hollow = Outline
 
-//! (pixel-for-pixel the tool button), gray fill under the rim = both.
+//! (pixel-for-pixel the tool button), gray fill under the rim = both) and
+
+//! the OUTLINE-PLACEMENT trio's corner compositions (the third pass the
+
+//! same day: outside / centered / inside — always a SQUARE's corner,
+
+//! whatever the selected kind is, with the gray fill quadrant, the click
+
+//! dot and the outline bands in the mode's position).
 
 use super::super::{SHAPE_ICONS, ShapeIcon, TOOL_INK, rasterize_shape_icon, shape_icon_label};
 use super::*;
@@ -25,6 +33,9 @@ fn shape_panel_icons_rasterize_and_keep_the_old_labels() {
                 ShapeIcon::Fill => "Fill",
                 ShapeIcon::Outline => "Outline",
                 ShapeIcon::FillOutline => "Fill + Outline",
+                ShapeIcon::OutlineOutside => "Outline outside",
+                ShapeIcon::OutlineCenter => "Outline centered",
+                ShapeIcon::OutlineInside => "Outline inside",
             },
             "tooltip of {icon:?} — the words the old widgets showed"
         );
@@ -148,4 +159,135 @@ fn the_three_mode_radios_are_mutually_distinct() {
         !has_color(&fill, (160, 160, 160), 6) && has_color(&both, (160, 160, 160), 6),
         "Fill is solid ink, Fill+Outline is the gray under the rim"
     );
+}
+
+// -----------------------------------------------------------------------
+// The OUTLINE-PLACEMENT trio (owner request 2026-11-20): one corner of a
+// square — whatever the selected kind is — with the gray fill quadrant,
+// the click dot and the outline bands. The three icons differ ONLY in
+// where the bands sit relative to the dot: beyond it (Outside), straddling
+// it (Center), inside the fill (Inside).
+// -----------------------------------------------------------------------
+
+/// The composition's landmarks in the icons' logical space (draw.rs):
+/// the click dot at (10, 10), the outline bands 2.6 thick, the gray fill
+/// quadrant running from the dot to the icon's edges.
+const DOT: (f32, f32) = (10.0, 10.0);
+
+/// The strip INSIDE the outline band's Outside-only position (the left
+/// band x 7.4..10, y 10..21; clear of the dot's ring and of the Center
+/// band's x ≥ 8.7) — inked ONLY by the Outside radio.
+const OUTSIDE_STRIP: (f32, f32, f32, f32) = (7.5, 13.0, 8.4, 19.0);
+
+/// The strip INSIDE the outline band's Inside-only position (the left band
+/// x 10..12.6; clear of the Center band's x ≤ 11.3 and the dot) — inked
+/// ONLY by the Inside radio.
+const INSIDE_STRIP: (f32, f32, f32, f32) = (11.5, 13.0, 12.4, 19.0);
+
+/// A point on the straddling Center band (x 8.7..11.3, below the dot):
+/// inked by Center and Inside, but NOT by Outside (its band ends at 10).
+const CENTER_BOX: (f32, f32, f32, f32) = (9.8, 12.6, 10.6, 13.4);
+
+/// The placement trio: ALWAYS a square corner (no circle anywhere — the
+/// owner: "в виде угла квадратика вне зависимости от выбранной фигуры"),
+/// the gray fill quadrant marks the shape, the click dot sits at the
+/// corner, and the bands' position tells the three modes apart.
+#[test]
+fn the_placement_radios_draw_the_corner_composition() {
+    let outside =
+        rasterize_shape_icon(ShapeIcon::OutlineOutside, 48, TOOL_INK).expect("px is in 1..=256");
+    let center =
+        rasterize_shape_icon(ShapeIcon::OutlineCenter, 48, TOOL_INK).expect("px is in 1..=256");
+    let inside =
+        rasterize_shape_icon(ShapeIcon::OutlineInside, 48, TOOL_INK).expect("px is in 1..=256");
+    // The bands' ink is the same fixed mono ink the whole set draws with.
+    let ink = (TOOL_INK.r(), TOOL_INK.g(), TOOL_INK.b());
+
+    // The gray fill quadrant — the shape itself — in ALL three.
+    for (name, pm) in [
+        ("Outside", &outside),
+        ("Center", &center),
+        ("Inside", &inside),
+    ] {
+        assert!(
+            has_color(pm, (160, 160, 160), 6),
+            "{name}: the gray fill quadrant (the shape) is missing"
+        );
+        // The click dot: a white core over everything at the corner.
+        assert!(
+            has_opaque_near(pm, DOT, 1.5),
+            "{name}: the click dot is missing at the corner"
+        );
+    }
+
+    // The bands' positions tell the modes apart. The probes count the INK
+    // color (not mere opacity): the bands sit over the opaque gray fill,
+    // which would otherwise count as "inked" everywhere. The Outside-only
+    // strip is inked ONLY by Outside; the Inside-only strip ONLY by
+    // Inside; the straddle box by Center (and Inside), never by Outside.
+    assert!(
+        count_color_in_box(&outside, ink, 10, OUTSIDE_STRIP) > 10,
+        "Outside must ink the band beyond the click dot"
+    );
+    assert_eq!(
+        count_color_in_box(&center, ink, 10, OUTSIDE_STRIP),
+        0,
+        "Center must not ink beyond the click dot"
+    );
+    assert_eq!(
+        count_color_in_box(&inside, ink, 10, OUTSIDE_STRIP),
+        0,
+        "Inside must not ink beyond the click dot"
+    );
+    assert!(
+        count_color_in_box(&inside, ink, 10, INSIDE_STRIP) > 10,
+        "Inside must ink the band within the fill"
+    );
+    assert_eq!(
+        count_color_in_box(&outside, ink, 10, INSIDE_STRIP),
+        0,
+        "Outside must not ink within the fill"
+    );
+    assert_eq!(
+        count_color_in_box(&center, ink, 10, INSIDE_STRIP),
+        0,
+        "Center must not ink past its straddle half-width"
+    );
+    assert!(
+        has_color_in_box(&center, ink, 10, CENTER_BOX),
+        "Center must ink the straddle band on the boundary"
+    );
+    assert!(
+        !has_color_in_box(&outside, ink, 10, CENTER_BOX),
+        "Outside must keep the boundary itself unpainted"
+    );
+
+    // And the three bitmaps are pairwise distinct.
+    assert_ne!(outside.data(), center.data());
+    assert_ne!(outside.data(), inside.data());
+    assert_ne!(center.data(), inside.data());
+}
+
+/// The click dot is a CONTRASTING mark (owner: "кружочек правильной
+/// контрастности, размера и формы чтобы видно было"): a white core over
+/// the gray fill AND over the ink bands — the Center radio's dot sits
+/// exactly on the band corner, so its white core must survive there.
+#[test]
+fn the_click_dot_is_a_white_core_that_survives_every_background() {
+    for icon in [
+        ShapeIcon::OutlineOutside,
+        ShapeIcon::OutlineCenter,
+        ShapeIcon::OutlineInside,
+    ] {
+        let pm = rasterize_shape_icon(icon, 48, TOOL_INK).expect("px is in 1..=256");
+        assert!(
+            has_color(&pm, (255, 255, 255), 8),
+            "{icon:?}: the dot's white core is missing"
+        );
+        // The core sits at the dot's center, over fill and bands alike.
+        assert!(
+            has_color_in_box(&pm, (255, 255, 255), 8, (9.2, 9.2, 10.8, 10.8)),
+            "{icon:?}: the dot's white core must sit AT the click corner"
+        );
+    }
 }

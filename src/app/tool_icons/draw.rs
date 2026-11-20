@@ -19,7 +19,7 @@
 //! body or color changed).
 
 use super::{OUTLINE_W, arc_pts, fill, icon_transform, quad_pts, stroke};
-use crate::tools::{ShapeKind, Tool};
+use crate::tools::{ShapeKind, ShapeOutline, Tool};
 use eframe::egui::Color32;
 use tiny_skia::{Pixmap, Transform};
 
@@ -402,16 +402,18 @@ pub(super) fn rasterize_tool_icon(tool: Tool, px: usize, text: Color32) -> Optio
 }
 
 // ---------------------------------------------------------------------------
-// The Shape panel's five icons (owner request 2026-11-20): the word radio
+// The Shape panel's icons (owner request 2026-11-20): the word radio
 // and the Fill/Outline checkboxes became icon buttons in the Tools window's
-// style, and the same day's follow-up made the MODE row a THREE-way radio
+// style, the same day's follow-up made the MODE row a THREE-way radio
 // that draws the Shape TOOL's emblem ("не повторение выбранной фигуры, а
-// иконка инструмента Shape") instead of the current kind. All five are
-// centered in the logical 24×24 space; the KIND pair shares ONE geometry
-// per shape (the gray square / circle previews); the MODE trio shares the
-// TOOL emblem's geometry and differs only in how the emblem paints: solid
-// ink = Fill, the rim only = Outline, the gray fill under the rim =
-// Fill + Outline.
+// иконка инструмента Shape") instead of the current kind, and the third
+// pass the same day added the OUTLINE-PLACEMENT trio. The KIND pair shares
+// ONE geometry per shape (the gray square / circle previews); the MODE trio
+// shares the TOOL emblem's geometry and differs only in how the emblem
+// paints: solid ink = Fill, the rim only = Outline, the gray fill under the
+// rim = Fill + Outline; the PLACEMENT trio shares the corner composition
+// ([`draw_outline_mode`]) and differs only in where the outline bands sit
+// relative to the click dot.
 // ---------------------------------------------------------------------------
 
 /// The kind buttons' preview fill: a mid neutral gray — clearly darker than
@@ -459,6 +461,93 @@ fn draw_paint_mode(pm: &mut Pixmap, ts: Transform, both: bool, solid: bool, mono
     }
 }
 
+/// The OUTLINE-PLACEMENT radios' composition geometry (owner request
+/// 2026-11-20). Each icon shows ONE corner of a square — ALWAYS a square's
+/// corner, whatever kind is selected ("в виде угла квадратика вне
+/// зависимости от выбранной фигуры") — built from the elements the owner
+/// listed: the square's own corner as the gray FILL quadrant ("использовать
+/// Fill… чтобы мозгу было понятнее где сама фигура нарисована"), the click
+/// point as a contrasting dot at that corner ("точечка… кружочек правильной
+/// контрастности, размера и формы"), and two segments — horizontal and
+/// vertical — ALONG the outline's lines ("отрезки по горизонтали и по
+/// вертикали вдоль линий Outline"). The bands' position relative to the
+/// corner IS the mode: fully beyond the dot = [`ShapeOutline::Outside`],
+/// straddling the dot = [`ShapeOutline::Center`] (the old look), fully
+/// inside the fill = [`ShapeOutline::Inside`].
+const OUTLINE_DOT: (f32, f32) = (10.0, 10.0);
+
+/// The outline bands' drawn thickness in the logical space (clearly
+/// heavier than the 1.9 emblem rim: the band IS the outline).
+const OUTLINE_BAND_W: f32 = 2.6;
+
+/// How far each outline segment runs from the corner (a SEGMENT along the
+/// outline line, not the whole edge — the fill quadrant runs past it).
+const OUTLINE_BAND_LEN: f32 = 11.0;
+
+/// The dot's radius (the click point): white core + ink ring — the same
+/// anchor vocabulary the curve preview's vertex handles speak.
+const OUTLINE_DOT_R: f32 = 2.4;
+
+fn draw_outline_mode(pm: &mut Pixmap, ts: Transform, pos: ShapeOutline, mono: Color32) {
+    let (dx, dy) = OUTLINE_DOT;
+    let (w, l) = (OUTLINE_BAND_W, OUTLINE_BAND_LEN);
+    // The shape's corner as the gray fill quadrant: down-right from the
+    // click dot to the icon's edges (a big square's cropped corner).
+    fill(
+        pm,
+        ts,
+        &[(dx, dy), (24.0, dy), (24.0, 24.0), (dx, 24.0)],
+        SHAPE_PREVIEW_FILL,
+    );
+    // The two outline segments (the horizontal top-edge band and the
+    // vertical left-edge band), joined at the corner the way the stroked
+    // shape joins them; their position relative to the dot IS the mode.
+    let (top, left) = match pos {
+        ShapeOutline::Outside => (
+            [
+                (dx - w, dy - w),
+                (dx + l, dy - w),
+                (dx + l, dy),
+                (dx - w, dy),
+            ],
+            [
+                (dx - w, dy - w),
+                (dx, dy - w),
+                (dx, dy + l),
+                (dx - w, dy + l),
+            ],
+        ),
+        ShapeOutline::Center => {
+            let h = w * 0.5;
+            (
+                [
+                    (dx - h, dy - h),
+                    (dx + l, dy - h),
+                    (dx + l, dy + h),
+                    (dx - h, dy + h),
+                ],
+                [
+                    (dx - h, dy - h),
+                    (dx + h, dy - h),
+                    (dx + h, dy + l),
+                    (dx - h, dy + l),
+                ],
+            )
+        }
+        ShapeOutline::Inside => (
+            [(dx, dy), (dx + l, dy), (dx + l, dy + w), (dx, dy + w)],
+            [(dx, dy), (dx + w, dy), (dx + w, dy + l), (dx, dy + l)],
+        ),
+    };
+    fill(pm, ts, &top, mono);
+    fill(pm, ts, &left, mono);
+    // The click dot ON TOP (over fill and bands alike): the white core +
+    // ink ring reads on every background the icon puts under it.
+    let dot = arc_pts(dx, dy, OUTLINE_DOT_R, 0.0, 360.0, 24);
+    fill(pm, ts, &dot, Color32::WHITE);
+    stroke(pm, ts, &dot, true, mono, 1.0);
+}
+
 /// Rasterizes one Shape-panel icon into a `px × px` premultiplied-RGBA
 /// pixmap (kind-INDEPENDENT since owner request 2026-11-20 — the MODE
 /// radios draw the tool's emblem, the KIND buttons preview their own fixed
@@ -477,6 +566,9 @@ pub(super) fn rasterize_shape_icon(
         ShapeIcon::Fill => draw_paint_mode(&mut pm, ts, false, true, text),
         ShapeIcon::Outline => draw_paint_mode(&mut pm, ts, false, false, text),
         ShapeIcon::FillOutline => draw_paint_mode(&mut pm, ts, true, false, text),
+        ShapeIcon::OutlineOutside => draw_outline_mode(&mut pm, ts, ShapeOutline::Outside, text),
+        ShapeIcon::OutlineCenter => draw_outline_mode(&mut pm, ts, ShapeOutline::Center, text),
+        ShapeIcon::OutlineInside => draw_outline_mode(&mut pm, ts, ShapeOutline::Inside, text),
     }
     Some(pm)
 }

@@ -132,6 +132,7 @@ fn rectangle_outline_keeps_center_transparent() {
         2.0,
         Some(Color32::BLACK),
         None,
+        ShapeOutline::Center,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -152,6 +153,7 @@ fn filled_rectangle_paints_the_center() {
         2.0,
         None,
         Some(Color32::BLACK),
+        ShapeOutline::Center,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -169,6 +171,7 @@ fn fill_and_outline_paint_both() {
         2.0,
         Some(Color32::BLACK),
         Some(Color32::WHITE),
+        ShapeOutline::Center,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -190,6 +193,7 @@ fn shape_without_outline_or_fill_draws_nothing() {
             2.0,
             None,
             None,
+            ShapeOutline::Center,
         )
         .is_none()
     );
@@ -207,6 +211,7 @@ fn ellipse_outline_keeps_center_and_corners_transparent() {
         2.0,
         Some(Color32::BLACK),
         None,
+        ShapeOutline::Center,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -228,6 +233,7 @@ fn zero_size_shape_draws_nothing() {
             2.0,
             Some(Color32::BLACK),
             None,
+            ShapeOutline::Center,
         )
         .is_none()
     );
@@ -290,6 +296,146 @@ fn eraser_clears_pixels_to_transparency() {
     // The erased line is fully transparent; pixels off the stroke stay opaque.
     assert_eq!(pixmap.pixel(8, 8).expect("pixel in bounds").alpha(), 0);
     assert_eq!(pixmap.pixel(8, 1).expect("pixel in bounds").alpha(), 255);
+}
+
+/// The outline placement math ([`outline_stroke_bounds`], owner request
+/// 2026-11-20): the stroke straddles its path, so Outside shifts the path
+/// half a width outward, Inside half a width inward — clamped so a shape
+/// thinner than the stroke keeps a valid non-degenerate path — and Center
+/// keeps the boundary itself.
+#[test]
+fn the_outline_placement_shifts_the_stroked_path_by_half_a_width() {
+    assert_eq!(
+        outline_stroke_bounds(10.0, 20.0, 30.0, 40.0, 4.0, ShapeOutline::Center),
+        (10.0, 20.0, 30.0, 40.0),
+        "Center strokes the boundary itself (the old look)"
+    );
+    assert_eq!(
+        outline_stroke_bounds(10.0, 20.0, 30.0, 40.0, 4.0, ShapeOutline::Outside),
+        (8.0, 18.0, 32.0, 42.0),
+        "Outside shifts the path half a width outward: the stroke's inner edge lands on the boundary"
+    );
+    assert_eq!(
+        outline_stroke_bounds(10.0, 20.0, 30.0, 40.0, 4.0, ShapeOutline::Inside),
+        (12.0, 22.0, 28.0, 38.0),
+        "Inside shifts the path half a width inward: the stroke's outer edge lands on the boundary"
+    );
+}
+
+#[test]
+fn the_inside_placement_clamps_thin_shapes_to_a_valid_path() {
+    // A 2-px-wide shape with a 6-px stroke: the raw half-width inset (3)
+    // would invert the bounds; the clamp keeps the 0.1-px non-degenerate
+    // path, so the stroke covers the whole tiny shape instead of vanishing.
+    let (x0, y0, x1, y1) = outline_stroke_bounds(10.0, 10.0, 12.0, 40.0, 6.0, ShapeOutline::Inside);
+    assert_eq!(
+        (x0, x1),
+        (10.95, 11.05),
+        "x inset clamped to the 0.1-px span"
+    );
+    assert_eq!(
+        (y0, y1),
+        (13.0, 37.0),
+        "the 30-px span insets the full half width"
+    );
+}
+
+/// The Outside placement (owner request 2026-11-20): the outline lies
+/// fully BEYOND the two mouse points — its inner edge is the boundary, so
+/// the band paints outside the shape and the interior stays untouched.
+#[test]
+fn the_outside_outline_lies_fully_beyond_the_two_points() {
+    let mut pixmap = Pixmap::new(48, 48).expect("48x48 pixmap");
+    let dirty = rasterize_shape(
+        &mut pixmap,
+        ShapeKind::Rectangle,
+        pos2(12.0, 12.0),
+        pos2(35.0, 35.0),
+        4.0,
+        Some(Color32::BLACK),
+        None,
+        ShapeOutline::Outside,
+    );
+    assert!(dirty.is_some());
+    let dirty = dirty.expect("the outside shape rasterizes");
+    let at = |x: usize, y: usize| pixmap.pixels()[y * 48 + x];
+    // The band spans [8, 12] around the boundary at 12: pixels just
+    // outside are painted, pixels just inside are not (no fill here).
+    assert!(
+        at(9, 20).alpha() > 200,
+        "the band outside the boundary is painted"
+    );
+    assert!(
+        at(20, 9).alpha() > 200,
+        "the top band outside the boundary is painted"
+    );
+    assert_eq!(
+        at(14, 20).alpha(),
+        0,
+        "just inside the boundary stays transparent"
+    );
+    assert_eq!(at(20, 14).alpha(), 0, "the interior stays transparent");
+    // The dirty rect must cover the full outside reach (the band reaches 8;
+    // the shared pad rule adds the reach + 2 around the bounds).
+    assert!(
+        dirty.x <= 6 && dirty.y <= 6,
+        "dirty {:?} covers the outside reach",
+        dirty
+    );
+}
+
+/// The Inside placement (owner request 2026-11-20): the outline lies fully
+/// WITHIN the two mouse points — its outer edge is the boundary, so nothing
+/// is painted outside the shape. With the fill both stay exactly the two
+/// points.
+#[test]
+fn the_inside_outline_lies_fully_within_the_two_points() {
+    let mut pixmap = Pixmap::new(48, 48).expect("48x48 pixmap");
+    let dirty = rasterize_shape(
+        &mut pixmap,
+        ShapeKind::Rectangle,
+        pos2(12.0, 12.0),
+        pos2(35.0, 35.0),
+        4.0,
+        Some(Color32::BLACK),
+        Some(Color32::WHITE),
+        ShapeOutline::Inside,
+    );
+    assert!(dirty.is_some());
+    let at = |x: usize, y: usize| pixmap.pixels()[y * 48 + x];
+    assert!(
+        at(13, 20).alpha() > 200,
+        "the band inside the boundary is painted"
+    );
+    assert!(
+        at(20, 13).alpha() > 200,
+        "the top band inside the boundary is painted"
+    );
+    assert_eq!(at(9, 20).alpha(), 0, "nothing outside the boundary");
+    assert_eq!(at(20, 9).alpha(), 0, "nothing above the boundary");
+    assert!(at(20, 20).alpha() > 200, "the fill reaches the interior");
+}
+
+/// The Center placement keeps the classic look: the band straddles the
+/// boundary, painting BOTH just outside and just inside.
+#[test]
+fn the_center_outline_straddles_the_two_points() {
+    let mut pixmap = Pixmap::new(48, 48).expect("48x48 pixmap");
+    rasterize_shape(
+        &mut pixmap,
+        ShapeKind::Rectangle,
+        pos2(12.0, 12.0),
+        pos2(35.0, 35.0),
+        4.0,
+        Some(Color32::BLACK),
+        None,
+        ShapeOutline::Center,
+    )
+    .expect("the shape rasterizes");
+    let at = |x: usize, y: usize| pixmap.pixels()[y * 48 + x];
+    assert!(at(11, 20).alpha() > 200, "half the band outside");
+    assert!(at(13, 20).alpha() > 200, "half the band inside");
+    assert_eq!(at(8, 20).alpha(), 0, "the outside reach stays half a width");
 }
 
 /// The paint radio's halves (owner request 2026-11-20): exactly one of the

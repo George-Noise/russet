@@ -19,7 +19,7 @@ use eframe::egui::{
 use std::f32::consts::TAU;
 
 use crate::history_tree::ActionKind;
-use crate::tools::{LineMode, ShapeKind, Tool, rasterize_polyline, rasterize_shape};
+use crate::tools::{LineMode, ShapeKind, ShapeOutline, Tool, rasterize_polyline, rasterize_shape};
 
 use super::App;
 
@@ -33,6 +33,10 @@ pub(super) enum PreviewState {
     /// primary-well stroke color, `fill` the secondary-well fill color;
     /// `None` = the paint radio (owner request 2026-11-20) leaves that
     /// well out. A straight line always has `outline` set and `fill = None`.
+    /// `outline_pos` carries the outline placement the shape commits with
+    /// (owner request 2026-11-20; lines never outline, so they store the
+    /// default) — stored like the colors, so a mid-drag panel switch
+    /// cannot change what the release commits.
     Drag {
         kind: DragKind,
         start: Pos2,
@@ -40,6 +44,7 @@ pub(super) enum PreviewState {
         outline: Option<Color32>,
         fill: Option<Color32>,
         width: f32,
+        outline_pos: ShapeOutline,
     },
     /// A curve-mode polyline: `points` are confirmed vertices, the rubber
     /// band follows the pointer; `mode` is remembered so that switching the
@@ -156,6 +161,7 @@ impl App {
                                     outline: Some(color),
                                     fill: None,
                                     width,
+                                    outline_pos: ShapeOutline::Center,
                                 };
                                 // Blocks Space-pan while the drag is in
                                 // progress, same as a freehand stroke.
@@ -195,6 +201,7 @@ impl App {
                             outline,
                             fill,
                             width,
+                            outline_pos: self.tools.shape_outline,
                         };
                         self.is_stroking = true;
                     }
@@ -237,9 +244,10 @@ impl App {
                         outline,
                         fill,
                         width,
+                        outline_pos,
                     } = state
                     {
-                        self.commit_drag(kind, start, current, outline, fill, width);
+                        self.commit_drag(kind, start, current, outline, fill, width, outline_pos);
                     }
                     self.is_stroking = false;
                 }
@@ -296,6 +304,7 @@ impl App {
     /// Commits a finished drag: straight line, rectangle or ellipse. The
     /// committed pixels land on the ACTIVE layer and the post-commit
     /// buffer becomes the node's PNG snapshot (owner request 2026-11-13).
+    #[allow(clippy::too_many_arguments)] // the flat paint list the Drag state carries (same as layers_window.rs)
     fn commit_drag(
         &mut self,
         kind: DragKind,
@@ -304,6 +313,7 @@ impl App {
         outline: Option<Color32>,
         fill: Option<Color32>,
         width: f32,
+        outline_pos: ShapeOutline,
     ) {
         match kind {
             DragKind::Line => {
@@ -338,6 +348,7 @@ impl App {
                     width,
                     outline,
                     fill,
+                    outline_pos,
                 );
                 if let Some(dirty) = dirty {
                     self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -396,6 +407,7 @@ impl App {
                 outline,
                 fill,
                 width,
+                outline_pos,
             } => {
                 let a = to_screen(*start);
                 let b = to_screen(*current);
@@ -422,21 +434,49 @@ impl App {
                                     painter.rect_filled(rect, 0.0, *fill);
                                 }
                                 if stroke.width > 0.0 {
-                                    painter.rect_stroke(rect, 0.0, stroke, StrokeKind::Middle);
+                                    // The stroke KIND carries the outline
+                                    // placement (owner request 2026-11-20):
+                                    // outside = fully beyond the two points,
+                                    // inside = fully within, centered = the
+                                    // classic straddle — the same bands the
+                                    // commit's shifted stroke paths draw.
+                                    let kind = match outline_pos {
+                                        ShapeOutline::Outside => StrokeKind::Outside,
+                                        ShapeOutline::Center => StrokeKind::Middle,
+                                        ShapeOutline::Inside => StrokeKind::Inside,
+                                    };
+                                    painter.rect_stroke(rect, 0.0, stroke, kind);
                                 }
                             }
                             ShapeKind::Ellipse => {
                                 // egui's EllipseShape strokes OUTSIDE the path,
                                 // while the commit (tiny-skia) strokes the oval
-                                // CENTERED — the preview ellipse then shrinks on
-                                // release. A closed PathShape with a plain
+                                // CENTERED — a closed PathShape with a plain
                                 // (Middle-kind) stroke is centered, matching the
-                                // commit (owner request 2026-11-10).
+                                // commit (owner request 2026-11-10). For the
+                                // outline PLACEMENT modes (owner request
+                                // 2026-11-20) the commit shifts the stroked oval
+                                // by half a stroke width (`tools.rs
+                                // ::outline_stroke_bounds`); egui strokes a path
+                                // CENTERED, so the preview shifts the SAMPLED
+                                // radii by the same half width and keeps the
+                                // stroke centered — the band lands where the
+                                // commit's does.
                                 if rect.width() < 0.5 || rect.height() < 0.5 {
                                     return; // degenerate click; commit draws nothing
                                 }
                                 let center = rect.center();
                                 let (rx, ry) = (rect.width() * 0.5, rect.height() * 0.5);
+                                let (rx, ry) = match outline_pos {
+                                    ShapeOutline::Center => (rx, ry),
+                                    ShapeOutline::Outside => {
+                                        (rx + stroke.width * 0.5, ry + stroke.width * 0.5)
+                                    }
+                                    ShapeOutline::Inside => (
+                                        (rx - stroke.width * 0.5).max(0.25),
+                                        (ry - stroke.width * 0.5).max(0.25),
+                                    ),
+                                };
                                 // ~3 pt chords keep the polygon smooth at any zoom.
                                 let n = ((rx.max(ry) * TAU / 3.0) as usize).clamp(24, 256);
                                 let points: Vec<Pos2> = (0..n)

@@ -50,6 +50,61 @@ fn has_opaque_near(pm: &tiny_skia::Pixmap, pt: (f32, f32), tol: f32) -> bool {
     })
 }
 
+/// Whether any pixel of `rgb` (within `tol`) falls INSIDE the logical-space
+/// box `bx` — the placement trio's dot-core probe: the white core must sit
+/// AT the click corner, not merely anywhere on the icon.
+fn has_color_in_box(
+    pm: &tiny_skia::Pixmap,
+    rgb: (u8, u8, u8),
+    tol: u8,
+    bx: (f32, f32, f32, f32),
+) -> bool {
+    let (r, g, b) = rgb;
+    let k = pm.width() as f32 / 24.0;
+    let (x0, y0, x1, y1) = (bx.0 * k, bx.1 * k, bx.2 * k, bx.3 * k);
+    pm.pixels().iter().enumerate().any(|(i, p)| {
+        let (x, y) = (i as f32 % pm.width() as f32, i as f32 / pm.width() as f32);
+        p.alpha() > 200
+            && x >= x0
+            && x < x1
+            && y >= y0
+            && y < y1
+            && p.red().abs_diff(r) <= tol
+            && p.green().abs_diff(g) <= tol
+            && p.blue().abs_diff(b) <= tol
+    })
+}
+
+/// How many pixels of `rgb` (within `tol`) fall INSIDE the logical-space
+/// box `bx` — the placement trio's band probes: the bands sit OVER the gray
+/// fill quadrant, so an OPAQUE count cannot separate them from the fill
+/// (the fill is opaque too) — the probes must count the INK color.
+fn count_color_in_box(
+    pm: &tiny_skia::Pixmap,
+    rgb: (u8, u8, u8),
+    tol: u8,
+    bx: (f32, f32, f32, f32),
+) -> usize {
+    let (r, g, b) = rgb;
+    let k = pm.width() as f32 / 24.0;
+    let (x0, y0, x1, y1) = (bx.0 * k, bx.1 * k, bx.2 * k, bx.3 * k);
+    pm.pixels()
+        .iter()
+        .enumerate()
+        .filter(|(i, p)| {
+            let (x, y) = (*i as f32 % pm.width() as f32, *i as f32 / pm.width() as f32);
+            p.alpha() > 200
+                && x >= x0
+                && x < x1
+                && y >= y0
+                && y < y1
+                && p.red().abs_diff(r) <= tol
+                && p.green().abs_diff(g) <= tol
+                && p.blue().abs_diff(b) <= tol
+        })
+        .count()
+}
+
 /// How many mostly-opaque pixels fall INSIDE the logical-space box `bx`
 /// (the icons' 24×24 language, mapped by the raster's scale) — the crisp
 /// solid-vs-hollow discriminator: the interior box holds no AA fringe.
@@ -70,8 +125,8 @@ fn count_opaque_in_box(pm: &tiny_skia::Pixmap, bx: (f32, f32, f32, f32)) -> usiz
 }
 
 /// The shared smoke pass over EVERY raster the pipeline serves: the seven
-/// tool icons (the pipeline's original contract) and the Shape panel's five
-/// fixed drawings (owner request 2026-11-20 — kind-independent).
+/// tool icons (the pipeline's original contract) and the Shape panel's
+/// eight fixed drawings (owner requests 2026-11-20 — kind-independent).
 #[test]
 fn every_icon_rasterizes_with_a_substantial_mark() {
     for tool in TOOLS {

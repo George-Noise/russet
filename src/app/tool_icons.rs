@@ -17,11 +17,12 @@
 //! `CursorIcon` the frame also requests, which stays `Crosshair` for the
 //! Eyedropper.
 //!
-//! The Shape tool's settings panel reuses the SAME pipeline for its FIVE
-//! button icons ([`ShapeIcon`], owner request 2026-11-20): the atlas builds
-//! them in the same pass — ALL five are fixed drawings (the two kind
-//! previews and the three MODE radios drawing the Shape TOOL's emblem), so
-//! the atlas keys on the scale alone.
+//! The Shape tool's settings panel reuses the SAME pipeline for its EIGHT
+//! button icons ([`ShapeIcon`], owner requests 2026-11-20): the atlas builds
+//! them in the same pass — ALL eight are fixed drawings (the two kind
+//! previews, the three MODE radios drawing the Shape TOOL's emblem, and the
+//! three OUTLINE-PLACEMENT radios drawing the corner composition), so the
+//! atlas keys on the scale alone.
 //!
 //! The pipette (and pencil/brush) are drawn pointing DOWN-LEFT — the tip is
 //! where the pointer acts, so the cursor hotspot is the pipette tip's mapped
@@ -99,8 +100,11 @@ const TOOL_INK: Color32 = Color32::from_gray(64);
 /// square / circle); the three MODE radios draw the Shape TOOL's emblem
 /// (the rectangle + circle of the Tools window's Shape button) — solid for
 /// Fill, hollow for Outline, gray-filled with the ink rim for Fill+Outline
-/// (owner request 2026-11-20: the modes no longer preview the current
-/// kind, they reuse the tool's own icon).
+/// (the modes no longer preview the current kind, they reuse the tool's own
+/// icon); the three OUTLINE-PLACEMENT radios (owner request 2026-11-20,
+/// the second three-way radio) draw ONE corner of a square — whatever the
+/// selected kind is — with the gray fill quadrant, the click dot and the
+/// outline bands in the position the mode draws them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ShapeIcon {
     Rectangle,
@@ -108,23 +112,30 @@ pub(super) enum ShapeIcon {
     Fill,
     Outline,
     FillOutline,
+    OutlineOutside,
+    OutlineCenter,
+    OutlineInside,
 }
 
 /// The Shape-panel icons' canonical order — the atlas and the panel's rows
 /// iterate this array, so the two always agree.
-pub(super) const SHAPE_ICONS: [ShapeIcon; 5] = [
+pub(super) const SHAPE_ICONS: [ShapeIcon; 8] = [
     ShapeIcon::Rectangle,
     ShapeIcon::Ellipse,
     ShapeIcon::Fill,
     ShapeIcon::Outline,
     ShapeIcon::FillOutline,
+    ShapeIcon::OutlineOutside,
+    ShapeIcon::OutlineCenter,
+    ShapeIcon::OutlineInside,
 ];
 
 /// The hover tooltip of a Shape-panel button: EXACTLY the words the old
 /// word radio / checkboxes showed (owner request 2026-11-20: "при наведении
 /// чтобы было написано то что сейчас написано в их надписях"); the third
 /// radio — the explicit Fill+Outline choice the same request added — names
-/// both.
+/// both. The outline-placement radios name their mode (owner request
+/// 2026-11-20: outside the two points / centered as before / inside).
 pub(super) fn shape_icon_label(icon: ShapeIcon) -> &'static str {
     match icon {
         ShapeIcon::Rectangle => "Rectangle",
@@ -132,6 +143,9 @@ pub(super) fn shape_icon_label(icon: ShapeIcon) -> &'static str {
         ShapeIcon::Fill => "Fill",
         ShapeIcon::Outline => "Outline",
         ShapeIcon::FillOutline => "Fill + Outline",
+        ShapeIcon::OutlineOutside => "Outline outside",
+        ShapeIcon::OutlineCenter => "Outline centered",
+        ShapeIcon::OutlineInside => "Outline inside",
     }
 }
 
@@ -150,11 +164,11 @@ pub(super) struct Atlas {
     /// freed `TextureId` was sampled (an atlas that stored bare `TextureId`s
     /// rendered empty buttons; caught by the visual-driver screenshot).
     pub(super) handles: Vec<TextureHandle>,
-    /// The uploaded textures of the Shape panel's five buttons, same order
-    /// as [`SHAPE_ICONS`] (owner request 2026-11-20; the same retain-count
+    /// The uploaded textures of the Shape panel's eight buttons, same order
+    /// as [`SHAPE_ICONS`] (owner requests 2026-11-20; the same retain-count
     /// reason as `handles` above — the panel holds nothing, so the ATLAS is
     /// the only owner of these handles).
-    pub(super) shape_icons: [TextureHandle; 5],
+    pub(super) shape_icons: [TextureHandle; 8],
     /// The pipette's cursor bitmap (STRAIGHT alpha) — set on the canvas
     /// while the Eyedropper is the active tool (owner request 2026-11-18).
     pub(super) pipette_cursor: Option<egui::CustomCursorImage>,
@@ -196,7 +210,7 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
             TextureOptions::LINEAR,
         ));
     }
-    // The Shape panel's five buttons (owner request 2026-11-20): fixed
+    // The Shape panel's eight buttons (owner requests 2026-11-20): fixed
     // drawings, the key carries only the scale.
     let mut shape_icons = Vec::with_capacity(SHAPE_ICONS.len());
     for icon in SHAPE_ICONS {
@@ -214,8 +228,8 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let Some(pipette_cursor) = cursor else {
         return; // unreachable: TOOLS contains the Eyedropper
     };
-    // Unreachable fallthrough: the Vec was built over SHAPE_ICONS (5 items).
-    let Ok(shape_icons) = <[TextureHandle; 5]>::try_from(shape_icons) else {
+    // Unreachable fallthrough: the Vec was built over SHAPE_ICONS (8 items).
+    let Ok(shape_icons) = <[TextureHandle; 8]>::try_from(shape_icons) else {
         return;
     };
     *atlas = Some(Atlas {

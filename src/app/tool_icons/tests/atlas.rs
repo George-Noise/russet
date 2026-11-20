@@ -83,7 +83,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     }
     let mut atlas = None;
     ensure(&mut atlas, &ctx);
-    assert_eq!(pass(&ctx), 13, "7 tool + 5 shape icons + egui's font atlas");
+    assert_eq!(pass(&ctx), 16, "7 tool + 8 shape icons + egui's font atlas");
     let first = atlas.as_ref().expect("the first ensure builds the atlas");
     assert_eq!(first.key, 1.0);
     let cursor0 = first.pipette_cursor.as_ref().expect("the pipette cursor");
@@ -102,7 +102,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     ensure(&mut atlas, &ctx);
     assert_eq!(
         pass(&ctx),
-        12,
+        15,
         "rebuilt after the scale change (the font atlas only uploads once)"
     );
     let scaled = atlas.as_ref().expect("rebuilt after the scale change");
@@ -117,11 +117,11 @@ fn atlas_rebuilds_only_on_scale_change() {
     // the icons theme-independent (owner v4: one drawing reads well in both
     // themes; the old theme re-raster died with its reason). The pass still
     // uploads ONE texture: egui's font atlas follows the theme too. OUR
-    // twelve icons would make it 13 — the count stays the "did the atlas
+    // fifteen icons would make it 16 — the count stays the "did the atlas
     // rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
     ensure(&mut atlas, &ctx);
-    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 12 icons");
+    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 15 icons");
     assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
 }
 
@@ -145,7 +145,7 @@ fn mono_ink_is_fixed_below_the_light_theme_text() {
 }
 
 /// All atlas textures exist and are distinct: one per tool PLUS the Shape
-/// panel's five (owner request 2026-11-20).
+/// panel's eight (owner requests 2026-11-20).
 
 #[test]
 fn atlas_ids_are_one_per_tool() {
@@ -175,8 +175,9 @@ fn atlas_ids_are_one_per_tool() {
 ///
 /// It rasterizes every tool at 256 px (the design view) and at the real
 /// button size 24 px (cleared first), and since owner request 2026-11-20
-/// also the Shape panel's five icons (the kind-independent MODE radios —
-/// owner request 2026-11-20). The raster color is BLACK so the monochrome
+/// also the Shape panel's eight icons (the kind-independent MODE radios and
+/// the OUTLINE-PLACEMENT trio — owner requests 2026-11-20). The raster
+/// color is BLACK so the monochrome
 /// icons
 /// (Line/Shape/Text and the Shape panel take the raster color) stay
 /// legible; the colored icons paint their own palette. The output folder

@@ -68,6 +68,23 @@ impl ShapePaint {
     }
 }
 
+/// Where the [`Tool::Shape`]'s outline lies relative to the two mouse points
+/// of the drag (owner request 2026-11-20): the two points ARE the shape's
+/// boundary, and a `size`-wide outline can lie fully OUTSIDE it, straddle it
+/// (how every earlier version drew — the default) or lie fully INSIDE it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShapeOutline {
+    /// The outline lies outside the two points: its INNER edge is the
+    /// shape's boundary (the drawn footprint grows by the stroke width).
+    Outside,
+    /// The outline straddles the boundary — half in, half out (the former
+    /// and default look).
+    Center,
+    /// The outline lies inside the two points: its OUTER edge is the
+    /// shape's boundary (the footprint stays exactly the two points).
+    Inside,
+}
+
 pub struct ToolState {
     pub tool: Tool,
     pub size: f32,
@@ -80,6 +97,10 @@ pub struct ToolState {
     /// toggle pair became a three-way radio; a shape always paints
     /// something by construction).
     pub shape_paint: ShapePaint,
+    /// Where the shape's outline sits relative to the drag's two mouse
+    /// points (owner request 2026-11-20): outside / straddling (default) /
+    /// inside — the panel's second three-way radio.
+    pub shape_outline: ShapeOutline,
     /// Font size (canvas pixels) used by the Text tool.
     pub font_size: f32,
 }
@@ -94,6 +115,7 @@ impl ToolState {
             line_mode: LineMode::Straight,
             shape_kind: ShapeKind::Rectangle,
             shape_paint: ShapePaint::Outline,
+            shape_outline: ShapeOutline::Center,
             font_size: 24.0,
         }
     }
@@ -354,12 +376,49 @@ pub fn rasterize_polyline(
     Some(dirty)
 }
 
+/// The bounds of the path the shape's outline stroke runs along. The stroke
+/// straddles its path (half the width on each side), so each
+/// [`ShapeOutline`] mode shifts the path accordingly: Outside shifts it half
+/// a width outward (the stroke's inner edge lands exactly on the boundary),
+/// Inside half a width inward (the outer edge lands on the boundary), Center
+/// keeps the boundary itself. The inward shift is CLAMPED so a shape at most
+/// a stroke wide keeps a valid non-degenerate path — the stroke then simply
+/// covers the whole tiny shape. Pure — the panel's three modes and their
+/// tests share this math.
+fn outline_stroke_bounds(
+    min_x: f32,
+    min_y: f32,
+    max_x: f32,
+    max_y: f32,
+    width: f32,
+    pos: ShapeOutline,
+) -> (f32, f32, f32, f32) {
+    match pos {
+        ShapeOutline::Center => (min_x, min_y, max_x, max_y),
+        ShapeOutline::Outside => (
+            min_x - width * 0.5,
+            min_y - width * 0.5,
+            max_x + width * 0.5,
+            max_y + width * 0.5,
+        ),
+        ShapeOutline::Inside => {
+            let ix = (width * 0.5).min((max_x - min_x - 0.1) * 0.5).max(0.0);
+            let iy = (width * 0.5).min((max_y - min_y - 0.1) * 0.5).max(0.0);
+            (min_x + ix, min_y + iy, max_x - ix, max_y - iy)
+        }
+    }
+}
+
 /// Rasterizes a rectangle or an ellipse between two opposite corners
 /// (either orientation). `fill` fills the interior (the secondary color);
 /// `outline` strokes the boundary with a `width`-wide antialiased stroke
 /// (the primary color) — both may be enabled at once, then the fill goes
-/// first and the stroke covers it. The Tools window never lets both be
-/// `None`; if they are, nothing is drawn. Returns the dirty rectangle.
+/// first and the stroke covers it. `outline_pos` decides where that stroke
+/// band lies relative to the two mouse points (see [`ShapeOutline`]); the
+/// fill always covers exactly the two points. The Tools window never lets
+/// both colors be `None`; if they are, nothing is drawn. Returns the dirty
+/// rectangle.
+#[allow(clippy::too_many_arguments)] // the flat paint list the gesture carries (same as layers_window.rs)
 pub fn rasterize_shape(
     pixmap: &mut Pixmap,
     kind: ShapeKind,
@@ -368,6 +427,7 @@ pub fn rasterize_shape(
     width: f32,
     outline: Option<Color32>,
     fill: Option<Color32>,
+    outline_pos: ShapeOutline,
 ) -> Option<DirtyRect> {
     let width = width.clamp(1.0, 100.0);
     let (min_x, max_x) = (from.x.min(to.x), from.x.max(to.x));
@@ -380,15 +440,23 @@ pub fn rasterize_shape(
     }
     let bounds = tiny_skia::Rect::from_xywh(min_x, min_y, max_x - min_x, max_y - min_y)?;
 
-    let mut builder = PathBuilder::new();
-    match kind {
-        ShapeKind::Rectangle => builder.push_rect(bounds),
-        ShapeKind::Ellipse => builder.push_oval(bounds),
-    }
-    let path = builder.finish()?;
-    let dirty = dirty_rect_for(pixmap, min_x, min_y, max_x, max_y, width)?;
+    // An Outside outline reaches a FULL width beyond the two points (the
+    // shared pad rule adds half a width + 2 for it); the other modes stay
+    // within the usual half-width reach.
+    let reach = if outline.is_some() && outline_pos == ShapeOutline::Outside {
+        width * 2.0
+    } else {
+        width
+    };
+    let dirty = dirty_rect_for(pixmap, min_x, min_y, max_x, max_y, reach)?;
 
     if let Some(fill) = fill {
+        let mut builder = PathBuilder::new();
+        match kind {
+            ShapeKind::Rectangle => builder.push_rect(bounds),
+            ShapeKind::Ellipse => builder.push_oval(bounds),
+        }
+        let path = builder.finish()?;
         let mut paint = Paint::default();
         let [r, g, b, a] = fill.to_srgba_unmultiplied();
         paint.set_color_rgba8(r, g, b, a);
@@ -402,6 +470,17 @@ pub fn rasterize_shape(
         );
     }
     if let Some(outline) = outline {
+        let (sx0, sy0, sx1, sy1) =
+            outline_stroke_bounds(min_x, min_y, max_x, max_y, width, outline_pos);
+        // Unreachable None: the bounds were just built from valid extents
+        // and `outline_stroke_bounds` never shrinks a span below 0.1.
+        let stroke_bounds = tiny_skia::Rect::from_xywh(sx0, sy0, sx1 - sx0, sy1 - sy0)?;
+        let mut builder = PathBuilder::new();
+        match kind {
+            ShapeKind::Rectangle => builder.push_rect(stroke_bounds),
+            ShapeKind::Ellipse => builder.push_oval(stroke_bounds),
+        }
+        let path = builder.finish()?;
         let mut paint = Paint::default();
         let [r, g, b, a] = outline.to_srgba_unmultiplied();
         paint.set_color_rgba8(r, g, b, a);
