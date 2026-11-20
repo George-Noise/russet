@@ -34,7 +34,8 @@
 | Extra: PROBLEMS.md (the write-only agent-friction log) + the Shape panel's spacing pass (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | two owner requests in one session: (1) PROBLEMS.md born — every agent problem logged raw at the top, the file is NOT read until the owner says so (the AGENTS.md rule + abstract template + the first entry: the false warm-up verdict); (2) the Shape panel's buttons sit EXACTLY the Tools window's grid gap apart horizontally (`TOOL_GRID_GAP` 6 pt via `item_spacing.x`) and the rows a step further apart vertically (12 pt = 3 + `SHAPE_GROUP_GAP` 9); pixel-measured on the Xvfb screenshots: in-row 6 px == the Tools grid's own 6 px on the SAME shot, rows 12 px apart; V54 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-20 (the panel-spacing +
-PROBLEMS.md round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+PROBLEMS.md rounds; v2 = the pure-log script `scripts/log_problem.sh`, exercised
+on a /tmp copy): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
 (default + mcp), `cargo test --profile gates` 240 green both lanes (+1 ignored;
 +1 net test this round — the gap-measuring panel test), the visual driver ALL
 SCENARIOS GREEN under Xvfb through the dev+mcp binary + the GUI probe (ffmpeg
@@ -71,10 +72,38 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-20) lives in
-> PROGRESS-archive.md; the latest move: the outline-placement entry (during
-> the 2026-11-20 panel-spacing + PROBLEMS.md round's budget; the icon-buttons
-> entry and the pencil + V45/V46 docs snapshot rows went the same edit —
-> their full entries are in the archive).
+> PROGRESS-archive.md; the latest move: the MODE-radio entry (during the
+> 2026-11-20 pure-log-script round's budget; the outline-placement and
+> icon-buttons entries went the round before — all in the archive).
+
+### 2026-11-20 — `Tooling:` PROBLEMS.md becomes a pure log written only by scripts/log_problem.sh — owner request
+
+- **What:** the owner refined the friction-log round: PROBLEMS.md is LITERALLY
+  a log — the agent reads NO line of it, so the rules + entry template moved
+  OUT of the file into the AGENTS.md section that explains the log (compact;
+  the template is guidance, not a form), and entries go in ONLY through the
+  new `scripts/log_problem.sh <entry-file>`: it PREPENDS the entry verbatim at
+  the very top (newest first; the entry's trailing newlines normalize to one
+  blank line) and BYTE-CHECKS after the write that the previous content
+  survived below it — a mismatch restores the backup and fails without
+  touching the log, so an agent cannot delete or rewrite anything in it (the
+  owner's explicit permission is the only door). The two existing entries
+  stayed byte-identical; the file now starts straight with its newest entry.
+  Second owner-approved exception to the "no scripts without asking" rule;
+  entry temp files stay OUT of the repo (the script warns — a worktree file
+  would leak into the delivery artifacts).
+- **Files:** `scripts/log_problem.sh` (new), `PROBLEMS.md` (header/template
+  stripped, entries kept verbatim), `AGENTS.md` (the section now carries the
+  template + the script rule; the Source-of-truth bullet + the layout
+  exception updated), PROGRESS (entry + stamp).
+- **Verified:** the script exercised on a /tmp COPY only — prepend + the tail
+  byte-identical to the real log, blank-only entry refused, entry==log
+  refused, an in-repo path warned, a double prepend keeps newest-first; the
+  real PROBLEMS.md untouched this round; FULL gate ALL GATES GREEN (the
+  stamp).
+- **Owner-checks:** none new (docs + a shell script — nothing to click).
+  Open: V54, V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `PROBLEMS.md: the file becomes a pure log written only by scripts/log_problem.sh (prepend-only, integrity-checked, nothing deletable without the owner); the template moves to AGENTS.md`
 
 ### 2026-11-20 — `Docs:` PROBLEMS.md — the write-only agent-friction log — owner request
 
@@ -131,47 +160,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   groups read further apart vertically; nothing else moved). Open: V54,
   V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
 - **Commit title:** `Shape panel: the buttons sit exactly the Tools window's grid gap apart horizontally, the rows a step further apart vertically`
-
-### 2026-11-20 — `Feat:` the Shape panel's MODE radio over the tool's icon — owner request
-
-- **What:** the owner verified V51 and asked to make the MODE row better: the
-  two toggles should NOT repeat the selected shape — they should use the
-  Shape TOOL's icon — and become THREE choices, "a radio". Done exactly so: a
-  new `tools.rs::ShapePaint` (Fill / Outline / FillOutline — the former
-  `shape_fill`/`shape_outline` bools retired; the hidden "both on" state a
-  second click used to reach is now the explicit third radio choice), the
-  panel's MODE row is three `icon_button` radios over it, and the three MODE
-  icons draw the TOOL EMBLEM (`draw.rs::EMBLEM_RECT` + `emblem_circle()`, one
-  geometry with `draw_shape`): solid ink (Fill), rim only (Outline;
-  pixel-for-pixel the tool's button, test-asserted), the gray
-  `SHAPE_PREVIEW_FILL` under the rim (Fill+Outline). Tooltips carry the old
-  words + "Fill + Outline"; the icons are kind-INDEPENDENT again (the atlas
-  key is pixels-per-point ALONE — `ensure` lost the kind argument); the
-  wells/commit logic needed NO change (`rasterize_shape` always supported
-  fill+stroke; the color rules take the radio's `fills()`/`outlines()`).
-- **Files:** `src/tools.rs` (ShapePaint + ToolState.shape_paint),
-  `src/app/tool_icons.rs` (ShapeIcon::FillOutline, 5 icons, the f32 key),
-  `src/app/tool_icons/draw.rs` (the emblem consts + draw_paint_mode),
-  `src/app/windows.rs` (the radio row; the toggled_* helpers retired),
-  `src/app/preview.rs` + `colors.rs` (the call site + docs), `src/app.rs`
-  (the ensure call), tests: tool_icons/{tests,atlas,shape_panel}.rs +
-  windows/tests/settings_panel.rs + tools/tests.rs + preview/tests.rs
-  (+4 net), SPEC §3.2, AGENTS (the module map + the texture-count quirk),
-  TIMING (4 rows), DEBTS-verification (V51 + V48 closed, V52 born),
-  PROGRESS (snapshot + entry + stamp; the slider-captions entry moved to
-  PROGRESS-archive.md).
-- **Verified:** FULL gate ALL GATES GREEN 12 s hot: fmt clean, rules HARD
-  green (the OVER-GUARD note is the owner-deferred history_tree.rs 569),
-  clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
-  218 default / 231 mcp green (+1 ignored each; +4 tests); NO wasm check
-  (the diff touches no web-facing code — the economy rule); the visual
-  driver ALL SCENARIOS GREEN under Xvfb; PLUS the GUI probe screenshots:
-  the three-radio panel, the "Fill + Outline" tooltip, a Fill+Outline
-  rectangle (red fill + black rim) drawn through the real binary, and the
-  256 px design sheet of all five icons.
-- **Owner-checks:** V52 born (the Windows + Web pass: the three radios on
-  the tool's icon, exactly one active, the tooltips, a Fill+Outline shape
-  painting both wells; the kind switch must NOT touch the MODE row). V51
-  closed verified in chat ("Проверил V51") and V48 too ("V48 проверил").
-  Open: V52, V46; parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `Shape panel: the Fill/Outline toggles become a three-way radio over the Shape tool's icon (solid Fill, hollow Outline, gray-under-the-rim Fill+Outline, the old words as tooltips, the atlas kind-independent again)`

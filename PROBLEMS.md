@@ -1,52 +1,3 @@
-# PROBLEMS — the agent-friction log (WRITE-ONLY for now)
-
-> **Why this file exists** (owner request 2026-11-20): every problem, snag,
-> dead end or wrong assumption the LLM agent runs into — tooling, sandbox,
-> docs, spec wording, egui quirks, process, whatever — is recorded here the
-> moment it happens. Entries ACCUMULATE; when the owner decides enough has
-> piled up, HE reads the file and the review happens: what can be improved
-> (a doc rule, a script, the sandbox, the spec — or nothing, one-off).
->
-> **Rules (AGENTS.md "Agent-friction log — PROBLEMS.md"):**
-> - The agent WRITES here and does NOT read it: not for context, not for
->   decisions, not for dedup ("did I already log this?"), never to fix
->   anything — until the owner EXPLICITLY says the file is to be read. The
->   one mechanical exception: inserting a new entry needs locating the Log
->   heading below (a one-line peek at the structure, not a content read).
-> - Every entry goes at the VERY TOP of the Log section (newest first) —
->   the same convention as the PROGRESS.md Log.
-> - Anything qualifies: a command that lied or hung, a quirk that cost a
->   rebuild, a doc that was missing the needed fact, a wrong assumption,
->   wasted minutes, a silent failure — and also "worked as intended but
->   felt wrong or fragile".
-> - The template below is ABSTRACT on purpose: entries may vary in style
->   from one to the next; what matters is the CONTENT and the conveyed
->   meaning — what went wrong, how it showed up, what it cost, and (when
->   visible) what could improve. One entry = one problem.
-> - Writing an entry is bookkeeping, never a task: nothing is fixed because
->   an entry exists, and no entry is ever deleted or rewritten (the owner
->   reviews the history as-is). A durable fact learned along the way still
->   moves to its canonical home (SPEC §, AGENTS.md, SANDBOX.md, the module
->   docstring) in the same edit — this file stays raw.
-
-## Template (abstract — fields are guidance, not a form)
-
-Each entry carries, in any shape the writer finds natural:
-
-- **When** — the date, plus the task it happened in (a few words).
-- **What happened** — the problem itself: what was expected vs what
-  actually occurred.
-- **How it showed up** — the symptom the agent actually saw (an error, a
-  silent no-op, missing info, a hang, wasted time).
-- **What it cost** — minutes, rebuilds, retries, a wrong turn — or
-  "nothing material, just noting it".
-- **Possible improvement** (optional) — what would have prevented it;
-  "none, one-off" is a valid answer and so is "needs the owner's call".
-
-## Log — newest first. Insert a new entry directly under this heading.
-
----
-
 ### 2026-11-20 — egui `Rect` has no `min_x`/`max_x` fields (a wrong guess that cost one compile)
 
 - **When:** 2026-11-20, the Shape-panel spacing round — writing the new
@@ -67,8 +18,6 @@ Each entry carries, in any shape the writer finds natural:
   AGENTS.md "eframe/egui 0.37 API quirks" list (`Rect` accessors are
   METHODS, the only fields are `min`/`max`), so the guess is not repeated.
   Nothing else needed.
-
----
 
 ### 2026-11-20 — `sandbox_check.sh --warm` reports a warm-up that never ran (the file's first entry, logged by the session that created this file)
 
@@ -96,5 +45,3 @@ Each entry carries, in any shape the writer finds natural:
   cargo/rustup BEFORE starting the warm-up and print
   "[NO] warm-up skipped: no toolchain" instead of a silent zero-work
   exit 0 (or start the warm-up AFTER the toolchain check passes).
-
----

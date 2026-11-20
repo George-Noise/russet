@@ -7,7 +7,7 @@
 - Reading is routed by task type (see "Reading routes" below) — do not read the whole SPEC when a task touches one §. Do not add features from §6 (out of scope).
 - `PERF.md` is a **reference backlog** for memory/build-speed work, not an autonomous queue: the owner picks an item, and the agent executes it only when asked. Its §0 has the task details and the owner gates.
 - `DEBTS-verification.md` and `DEBTS-functional.md` are the live debt lists (see "Debts" below): checks awaiting a HUMAN, and deliberate simplifications / postponed decisions. Read both at session start and at task end — and ASK about them.
-- `PROBLEMS.md` is the agent-friction log (write-only for now): every problem the agent runs into gets an entry PREPENDED there the moment it happens; the agent never reads its content until the owner explicitly says so (see "Agent-friction log — PROBLEMS.md" below).
+- `PROBLEMS.md` is the agent-friction log — literally a PURE entry log: the agent never reads a line of it and never edits it by hand; entries go in only through `scripts/log_problem.sh` (prepended at the very top, newest first). The entry template lives in the "Agent-friction log — PROBLEMS.md" section below, not in the file.
 
 ## Reading routes — task type → what to read
 
@@ -38,7 +38,9 @@ that survive file churn. The durable rules:
 - A new or removed file is reported in the `PROGRESS.md` entry of the same task (what and why);
   no tree or layout list needs updating anywhere.
 - Do not add top-level directories or build tooling (no `xtask`, `just`, scripts) without
-  asking the owner. CI is the single owner-approved exception (2026-11-11, see "Repo facts").
+  asking the owner. The owner-approved exceptions: CI (2026-11-11, see "Repo facts") and
+  the friction-log writer `scripts/log_problem.sh` (owner-requested 2026-11-20, see
+  "Agent-friction log — PROBLEMS.md").
   The build is `cargo` + `scripts/verify.sh` + `trunk` + the flake.
 
 ## Tests — separate files, always
@@ -144,23 +146,33 @@ Hard rules:
    order applies inside the four). The FILES keep every open item; nothing is
    dropped, only the ask stays scannable.
 
-## Agent-friction log — PROBLEMS.md (owner request 2026-11-20)
+## Agent-friction log — PROBLEMS.md (owner request 2026-11-20, pure-log form)
 
-- Every problem the agent runs into — a command that lied or hung, a quirk that
-  cost a rebuild, a doc that missed the needed fact, a wrong assumption, wasted
-  minutes, or "worked as intended but felt fragile" — gets an entry at the VERY
-  TOP of the Log section of `PROBLEMS.md` the moment it happens (newest first,
-  the PROGRESS.md Log convention). One entry = one problem.
-- The file is WRITE-ONLY for now: never read its content, never dedup it, never
-  act on it, never clean it up — the owner reviews it and decides what to
-  improve only when HE explicitly says the file is to be read. The one
-  mechanical exception: inserting an entry needs locating the Log heading.
-- The template at the top of the file is abstract; entries may vary in style —
-  the content carries the meaning (what happened, how it showed up, what it
-  cost, what could improve). Writing an entry is bookkeeping, never a task;
-  a durable fact learned along the way still moves to its canonical home
-  (SPEC §, AGENTS.md, SANDBOX.md, the module docstring) in the same edit, and
-  the PROBLEMS.md entry stays raw. Entries are never deleted or rewritten.
+`PROBLEMS.md` is LITERALLY a log: it holds entries and nothing else — no
+header, no template; it starts straight with its newest entry. The agent
+NEVER reads a single line of it (not for context, not for dedup, not to check
+the format) and never edits it by hand: entries go in ONLY through the
+owner-requested `scripts/log_problem.sh <entry-file>`, which PREPENDS the
+entry's bytes verbatim at the very top (newest first) and BYTE-CHECKS after
+the write that the previous content survived intact below the new entry — a
+mismatch restores the backup and fails without touching the log. Nothing in
+the log can therefore be deleted or rewritten by an agent (the owner's
+explicit permission is the only door). Keep the entry file OUTSIDE the repo
+(e.g. `/tmp/entry.md`) — a file inside the worktree would leak into the
+delivery artifacts.
+
+The ENTRY TEMPLATE (abstract — fields are guidance, not a form; style may
+vary entry to entry, the content carries the meaning): a
+`### <date> — <one-line what>` heading, then a few bullets — what happened
+(expected vs actual), how it showed up, what it cost (minutes / rebuilds /
+retries / "nothing material"), and, when visible, what could improve
+("none, one-off" is a valid answer). Anything qualifies: a command that lied
+or hung, a quirk that cost a rebuild, a doc that missed the needed fact, a
+wrong assumption, "worked as intended but felt fragile". Writing an entry is
+bookkeeping, never a task; a durable fact learned along the way still moves
+to its canonical home (SPEC §, AGENTS.md, SANDBOX.md, the module docstring)
+in the same edit — the log entry stays raw. The owner reads the file and
+reviews what to improve only when HE decides to.
 
 ## Delivery ritual — artifacts sent to the owner
 
