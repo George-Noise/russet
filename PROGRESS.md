@@ -32,6 +32,7 @@
 | Extra: smooth freehand strokes — coalesced pointer moves + midpoint-quadratic pieces (owner 2026-11-19) | done — gates + driver green | NEW `tools/smooth.rs`: every coalesced `Event::PointerMoved` feeds the midpoint-quadratic window (the old one-point-per-frame stream drew the fast-stroke polygon); brush/eraser stroke ONE C1-continuous tiny-skia path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline (quads flattened to ~1 px steps, translucent-safe joint dedupe); `draw_segment` stays for the press dot + MCP paths; SPEC §3.5 rewritten; V44 born — the pencil half FAILED on the owner's pass and was reworked 2026-11-20 (the next row) |
 | Extra: pencil drifting pen — the 1 px staircase made stable (owner 2026-11-20) | done — gates + driver + a real-pointer Xvfb probe green | the owner's ragged-pencil screenshot diagnosed: per-run Bresenham restarts between independently rounded ~1 px endpoints stacked double-covered columns and punched holes on every diagonal, the pattern varying per computer (the pixel pattern followed the per-frame event batching); the pencil now walks a gesture-level DRIFTING PEN (`PencilTrail`: the pen + the dedupe, carried across pieces and frames) — unit steps along the chord-dominant axis, the minor coordinate an EXACT float (the same error accumulation one long Bresenham run performs), each step plotting one pixel; the release pins the raw release point; the subdivision cap 64 → 4096 (fidelity on fast strokes); V44 closed failed → V45 born |
 | Extra: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 (owner 2026-11-20) | done — docs only | DEBTS-verification bookkeeping: V45 closed verified in chat (the owner's Windows AND Web passes), the same smooth-stroke checklist on Linux (X11 AND Wayland backends) born as V46; no code touched |
+| Extra: the docs-only gate exemption into AGENTS.md (owner 2026-11-20) | done — docs only | a `.md`-only diff runs `scripts/rules.sh` + the delivery byte-compares ONLY — no builds, no tests; the full gate stays for anything beyond `.md` (Rust, scripts, Cargo, flake, CI, web); comment-only `.rs` edits keep the `cargo check` quick loop |
 
 **Verification stamp:** FULL gate re-verified 2026-11-20 (the pencil drifting-pen
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
@@ -78,6 +79,24 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > round's budget (2026-11-19); the Save-dialog entry followed during the
 > smooth-strokes round's budget (same day); the flake entry moved during this
 > docs round's budget (2026-11-20).
+
+### 2026-11-20 — Docs: the docs-only gate exemption into AGENTS.md — owner request
+
+- **What:** rules only, zero code: the owner asked to record that a task touching ONLY the
+  documentation (a `.md`-only diff) runs NO tests and NO builds — the full gate repeatedly ran
+  over such diffs. AGENTS.md "Commands": the old "docs/comment-only edits: `cargo check` is
+  enough" bullet is REWRITTEN — a docs-only round's done-gate is `scripts/rules.sh` ALONE
+  (grep-level, no cargo; still validates the PROGRESS.md budgets) plus the delivery
+  byte-compares; NO `verify.sh`, NO `cargo check`/fmt/clippy/test, NO wasm check, NO new
+  tests; anything beyond `.md` (Rust, `scripts/`, `Cargo.toml`/lock, flake, CI, `web/`) runs
+  the full gate as before, and comment-only edits INSIDE `.rs` files keep the `cargo check`
+  quick loop. Pointers added in the Done-gate bullet and Tests rule 4.
+- **Files:** `AGENTS.md` (the docs-only bullet rewritten + 2 pointers), PROGRESS.md
+  (snapshot row + this entry).
+- **Verified:** docs-only per the new rule — `scripts/rules.sh` HARD green (no cargo runs),
+  the deliver.sh byte-compares green.
+- **Owner-checks:** none born. Open: V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `AGENTS.md: docs-only rounds skip the cargo gate (rules.sh + delivery byte-compares suffice; builds/tests stay for any non-.md diff)`
 
 ### 2026-11-20 — Docs: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 — owner request
 
