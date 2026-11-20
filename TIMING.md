@@ -23,21 +23,21 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | bare `cargo test --profile gates --features mcp` (no `< /dev/null` shield) — SANDBOX.md trap 10 recidive in the recycled sandbox: tests themselves green, the cargo↔test-binary teardown hung on the MCP stdin reader until the 600 s tool timeout killed it | **600 s (timeout)** | the tool timeout |
+| 2026-11-20 | `cargo check` (this round's quick loop — COLD dep graph on the dev lane, fresh sandbox: rustup + the pinned toolchain installed first) | **1m 23s** | time'd exactly |
 | 2026-11-20 | the detached gates-lane warm-up (`cargo clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) — COLD dep graph on the FRESH sandbox (recycled: `target/` gone; rustup + the pinned toolchain installed first) | **≈ 2m 50s** (11:31:07 → 11:33:57) | observed ≈ from the warm-up log timestamps |
 | 2026-11-20 | `rustup toolchain install` (the pinned 1.99.1 via rust-toolchain.toml) + `rustup target add wasm32-unknown-unknown` on the fresh sandbox (rustup itself installed first) | **≈ 2 min** | observed ≈ |
-| 2026-11-20 | `cargo check` (the save-dialog layout round's quick loop — COLD dep graph on the dev lane, fresh sandbox recycle: rustup + the pinned toolchain installed first) | **1m 35s** | time'd exactly |
-| 2026-11-20 | `cargo check` (the save-compression round's quick loop, COLD dep graph on a fresh sandbox — rustup installed first, the whole dep graph compiled) | **1m 17s** | time'd exactly |
 | 2026-11-20 | `bash scripts/verify.sh` (the save-compression round's first gate run — the gates lane's dep graph was cold; only the dev lane was warm from cargo check) | **ALL GATES GREEN 186 s** | the gate's own print |
 
 ## Hot
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` (this round's gate — the gates dep graph warm from a first run that the sandbox killed mid-compile) | **12 s** | the gate's own print |
+| 2026-11-20 | `cargo build --profile gates --features mcp` (the GUI-probe binary; hot) | **2 s** | cargo's print |
+| 2026-11-20 | NOTE: DETACHED `setsid` background processes do NOT survive between tool calls in THIS recycled sandbox — both the gates warm-up and a detached verify.sh died silently between commands; heavy commands must run SYNCHRONOUSLY here (the compiled fingerprints persist, so the sync re-run is hot) | — | observed twice |
 | 2026-11-20 | `bash scripts/verify.sh` after the test additions (the save-compression round's second gate run; gates deps hot, the crate recompiled per stage) | **13 s** | the gate's own print |
 | 2026-11-20 | `bash scripts/verify.sh` after the pencil-drifting-pen change (4 src files + 3 test files; hot deps, the crate recompiled per stage) | **74 s** | the gate's own print |
-| 2026-11-19 | `cargo build --features mcp` (dev GUI binary for the visual driver; deps cold after the sandbox recycle, the crate rebuilt after the header change) | **≈ 5 min** (observed 07:44→07:49 from the binary's mtime; the re-run overwrote its log) | the binary's timestamps ≈ |
-| 2026-11-19 | `cargo build` (dev lane, hot deps, `windows.rs` + `windows/tests.rs` changed) | **1m 39s** | time'd exactly |
-| 2026-11-18 | `bash scripts/verify.sh` after a small code change (About window: 2 files + 2 tests, deps hot, gates profile) | **15.1 s** | time'd exactly |
 
 ## Reading the numbers
 

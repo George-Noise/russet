@@ -13,7 +13,6 @@
 //! three topics (children reach them with `use super::*;`).
 
 use super::{SHAPE_ICONS, TOOL_INK, TOOLS, rasterize_shape_icon, rasterize_tool_icon};
-use crate::tools::ShapeKind;
 use eframe::egui::Color32;
 
 mod atlas;
@@ -71,8 +70,8 @@ fn count_opaque_in_box(pm: &tiny_skia::Pixmap, bx: (f32, f32, f32, f32)) -> usiz
 }
 
 /// The shared smoke pass over EVERY raster the pipeline serves: the seven
-/// tool icons (the pipeline's original contract) and the Shape panel's four
-/// for both kinds (owner request 2026-11-20).
+/// tool icons (the pipeline's original contract) and the Shape panel's five
+/// fixed drawings (owner request 2026-11-20 — kind-independent).
 #[test]
 fn every_icon_rasterizes_with_a_substantial_mark() {
     for tool in TOOLS {
@@ -83,12 +82,10 @@ fn every_icon_rasterizes_with_a_substantial_mark() {
         );
     }
     for icon in SHAPE_ICONS {
-        for kind in [ShapeKind::Rectangle, ShapeKind::Ellipse] {
-            let pm = rasterize_shape_icon(icon, kind, 24, TOOL_INK).expect("px is in 1..=256");
-            assert!(
-                count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
-                "{icon:?}/{kind:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"
-            );
-        }
+        let pm = rasterize_shape_icon(icon, 24, TOOL_INK).expect("px is in 1..=256");
+        assert!(
+            count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
+            "{icon:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"
+        );
     }
 }

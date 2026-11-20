@@ -6,12 +6,9 @@
 //! window. Since the owner request 2026-11-19 also the collapse rule: while
 //! the Tools window is collapsed to its title bar the panel hides with it.
 
-use super::super::{
-    settings_panel_shown, shape_settings_ui, toggled_fill, toggled_outline, tool_has_settings,
-    tool_uses_size,
-};
+use super::super::{settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size};
 use super::common::{SCREEN, show_once, show_tools_once};
-use crate::tools::Tool;
+use crate::tools::{ShapePaint, Tool};
 use eframe::egui::{self, Pos2, Rect};
 
 /// Owner request 2026-11-19: while the Tools window is COLLAPSED to its
@@ -120,22 +117,33 @@ fn the_settings_panel_follows_its_fixed_pos_every_frame() {
     );
 }
 
-/// The Shape panel's toggle rule (owner request 2026-11-10, now driven by
-/// the icon toggles — owner request 2026-11-20): flipping a mode OFF
-/// re-checks the OTHER mode, so the tool can never end up drawing nothing;
-/// flipping a mode ON keeps the other as it was. PURE — the exact helpers
-/// the panel's click handlers call.
+/// The Shape panel's MODE radio rule (owner request 2026-11-20: the V51
+/// toggle pair — whose "both on" state was reachable only by a hidden
+/// second click — became a THREE-way radio over [`ShapePaint`]): clicking
+/// a radio selects it (assignment — no helper anymore), so EXACTLY one of
+/// Fill / Outline / Fill+Outline is ever active and a shape always paints
+/// something by construction. The pure halves the radio drives live on the
+/// enum ([`ShapePaint::fills`] / [`ShapePaint::outlines`], tested in
+/// `tools/tests.rs`) and the gesture start consumes them (tested in
+/// `preview/tests.rs`); this test pins the STARTUP pick: the default is
+/// Outline, exactly what the old checkboxes' default state was.
 #[test]
-fn toggling_a_shape_mode_off_re_checks_the_other() {
-    assert_eq!(toggled_fill(true, true), (false, true));
-    assert_eq!(toggled_outline(true, true), (true, false));
-    assert_eq!(toggled_fill(false, true), (true, true));
-    assert_eq!(toggled_outline(true, false), (true, true));
-    for (fill, outline) in [(true, true), (false, true), (true, false)] {
-        let (f, o) = toggled_fill(fill, outline);
-        assert!(f || o, "fill flip from ({fill}, {outline})");
-        let (f, o) = toggled_outline(fill, outline);
-        assert!(f || o, "outline flip from ({fill}, {outline})");
+fn the_shape_paint_radio_starts_on_outline_and_stays_single() {
+    let tools = crate::tools::ToolState::new();
+    assert_eq!(tools.shape_paint, ShapePaint::Outline);
+    assert!(tools.shape_paint.outlines() && !tools.shape_paint.fills());
+    // Selecting any radio keeps EXACTLY one active — the click handler is
+    // a plain assignment, so the invariant "one of three" is the enum's by
+    // construction; assert the handler's exact shape on all three choices.
+    for pick in [
+        ShapePaint::Fill,
+        ShapePaint::Outline,
+        ShapePaint::FillOutline,
+    ] {
+        let mut tools = crate::tools::ToolState::new();
+        tools.shape_paint = pick; // the exact assignment the click runs
+        assert_eq!(tools.shape_paint, pick);
+        assert!(tools.shape_paint.fills() || tools.shape_paint.outlines());
     }
 }
 
@@ -167,9 +175,11 @@ fn the_shape_rows_render_compact_headless() {
         });
         output.textures_delta.clear();
     }
-    // Two 28-pt button rows + the group gap — nothing near a full window.
+    // Two 28-pt button rows + the group gap; the MODE row now carries
+    // THREE buttons (the 2026-11-20 radio) — 3 × 28 + 2 × 8 pt spacing
+    // ≈ 100 pt. Nothing near a full window.
     assert!(rect.height() < 80.0, "shape rows height {}", rect.height());
-    assert!(rect.width() < 100.0, "shape rows width {}", rect.width());
+    assert!(rect.width() < 110.0, "shape rows width {}", rect.width());
 }
 
 #[test]

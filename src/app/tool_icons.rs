@@ -17,10 +17,11 @@
 //! `CursorIcon` the frame also requests, which stays `Crosshair` for the
 //! Eyedropper.
 //!
-//! The Shape tool's settings panel reuses the SAME pipeline for its FOUR
+//! The Shape tool's settings panel reuses the SAME pipeline for its FIVE
 //! button icons ([`ShapeIcon`], owner request 2026-11-20): the atlas builds
-//! them in the same pass, keyed on the scale AND the panel's current kind
-//! (the MODE toggles preview it).
+//! them in the same pass — ALL five are fixed drawings (the two kind
+//! previews and the three MODE radios drawing the Shape TOOL's emblem), so
+//! the atlas keys on the scale alone.
 //!
 //! The pipette (and pencil/brush) are drawn pointing DOWN-LEFT — the tip is
 //! where the pointer acts, so the cursor hotspot is the pipette tip's mapped
@@ -45,7 +46,7 @@ use tiny_skia::{
     FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Point, Stroke, Transform,
 };
 
-use crate::tools::{ShapeKind, Tool};
+use crate::tools::Tool;
 
 mod draw;
 
@@ -95,35 +96,42 @@ const TOOL_INK: Color32 = Color32::from_gray(64);
 /// One icon of the Shape tool's settings panel (owner request 2026-11-20:
 /// the word radio and the checkboxes became icon buttons in the Tools
 /// window's style). The two KIND buttons are fixed previews (gray-filled
-/// square / circle); the two MODE toggles preview the CURRENT kind — a
-/// solid or hollow version of the same shape — so the row reads as "how
-/// will this shape paint".
+/// square / circle); the three MODE radios draw the Shape TOOL's emblem
+/// (the rectangle + circle of the Tools window's Shape button) — solid for
+/// Fill, hollow for Outline, gray-filled with the ink rim for Fill+Outline
+/// (owner request 2026-11-20: the modes no longer preview the current
+/// kind, they reuse the tool's own icon).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ShapeIcon {
     Rectangle,
     Ellipse,
     Fill,
     Outline,
+    FillOutline,
 }
 
 /// The Shape-panel icons' canonical order — the atlas and the panel's rows
 /// iterate this array, so the two always agree.
-pub(super) const SHAPE_ICONS: [ShapeIcon; 4] = [
+pub(super) const SHAPE_ICONS: [ShapeIcon; 5] = [
     ShapeIcon::Rectangle,
     ShapeIcon::Ellipse,
     ShapeIcon::Fill,
     ShapeIcon::Outline,
+    ShapeIcon::FillOutline,
 ];
 
 /// The hover tooltip of a Shape-panel button: EXACTLY the words the old
 /// word radio / checkboxes showed (owner request 2026-11-20: "при наведении
-/// чтобы было написано то что сейчас написано в их надписях").
+/// чтобы было написано то что сейчас написано в их надписях"); the third
+/// radio — the explicit Fill+Outline choice the same request added — names
+/// both.
 pub(super) fn shape_icon_label(icon: ShapeIcon) -> &'static str {
     match icon {
         ShapeIcon::Rectangle => "Rectangle",
         ShapeIcon::Ellipse => "Ellipse",
         ShapeIcon::Fill => "Fill",
         ShapeIcon::Outline => "Outline",
+        ShapeIcon::FillOutline => "Fill + Outline",
     }
 }
 
@@ -131,10 +139,10 @@ pub(super) fn shape_icon_label(icon: ShapeIcon) -> &'static str {
 /// by [`ensure`] whenever the scale changes (theme-independent since the v4
 /// pass — see the module doc).
 pub(super) struct Atlas {
-    /// What the textures were rasterized for: the `pixels_per_point` AND the
-    /// Shape panel's current kind (the MODE toggle icons preview it — a
-    /// kind switch re-rasterizes them, owner request 2026-11-20).
-    key: (f32, ShapeKind),
+    /// What the textures were rasterized for: the `pixels_per_point` (the
+    /// icons are theme-independent AND kind-independent since the owner
+    /// request 2026-11-20 — the MODE radios draw the Shape tool's emblem).
+    key: f32,
     /// The uploaded textures, one per [`Tool`], same order as [`TOOLS`].
     /// The HANDLES are kept on purpose: a `TextureHandle` drop decrements
     /// the texture's retain count (`TextureManager::free`), and a texture
@@ -142,11 +150,11 @@ pub(super) struct Atlas {
     /// freed `TextureId` was sampled (an atlas that stored bare `TextureId`s
     /// rendered empty buttons; caught by the visual-driver screenshot).
     pub(super) handles: Vec<TextureHandle>,
-    /// The uploaded textures of the Shape panel's four buttons, same order
+    /// The uploaded textures of the Shape panel's five buttons, same order
     /// as [`SHAPE_ICONS`] (owner request 2026-11-20; the same retain-count
     /// reason as `handles` above — the panel holds nothing, so the ATLAS is
     /// the only owner of these handles).
-    pub(super) shape_icons: [TextureHandle; 4],
+    pub(super) shape_icons: [TextureHandle; 5],
     /// The pipette's cursor bitmap (STRAIGHT alpha) — set on the canvas
     /// while the Eyedropper is the active tool (owner request 2026-11-18).
     pub(super) pipette_cursor: Option<egui::CustomCursorImage>,
@@ -154,16 +162,16 @@ pub(super) struct Atlas {
 
 /// (Re-)rasterizes the whole icon atlas when needed. Cheap no-op while the
 /// stored key matches the context: the expensive part (tiny-skia drawing +
-/// the texture upload) runs once per scale change (and when the Shape
-/// panel's kind switches — the MODE toggles preview it, owner request
-/// 2026-11-20), exactly the "draw once, reuse" pattern the owner asked for
-/// (theme-independent since the v4 pass — the key's theme half died with
-/// the theme-dependent ink and rims). Total: on any raster failure the OLD
-/// atlas is kept and the call is retried next frame (the pixel size is
-/// clamped to `1..=256`, so this is unreachable in practice).
-pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, shape_kind: ShapeKind) {
+/// the texture upload) runs once per scale change — exactly the "draw once,
+/// reuse" pattern the owner asked for (theme-independent since the v4 pass,
+/// and kind-independent since the owner request 2026-11-20 — the MODE
+/// radios draw the Shape tool's emblem, so the key is the scale alone).
+/// Total: on any raster failure the OLD atlas is kept and the call is
+/// retried next frame (the pixel size is clamped to `1..=256`, so this is
+/// unreachable in practice).
+pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let ppp = ctx.pixels_per_point();
-    if atlas.as_ref().is_some_and(|a| a.key == (ppp, shape_kind)) {
+    if atlas.as_ref().is_some_and(|a| a.key == ppp) {
         return;
     }
     // The monochrome icons take the FIXED ink; the colored ones have their
@@ -188,11 +196,11 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, shape_kind: Shape
             TextureOptions::LINEAR,
         ));
     }
-    // The Shape panel's four buttons (owner request 2026-11-20): the MODE
-    // toggles rasterize for the CURRENT kind, so the key carries it.
+    // The Shape panel's five buttons (owner request 2026-11-20): fixed
+    // drawings, the key carries only the scale.
     let mut shape_icons = Vec::with_capacity(SHAPE_ICONS.len());
     for icon in SHAPE_ICONS {
-        let Some(pm) = rasterize_shape_icon(icon, shape_kind, px, text) else {
+        let Some(pm) = rasterize_shape_icon(icon, px, text) else {
             return; // keep the previous atlas; retried next frame
         };
         let image = egui::ColorImage::from_rgba_premultiplied([px, px], pm.data());
@@ -206,12 +214,12 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, shape_kind: Shape
     let Some(pipette_cursor) = cursor else {
         return; // unreachable: TOOLS contains the Eyedropper
     };
-    // Unreachable fallthrough: the Vec was built over SHAPE_ICONS (4 items).
-    let Ok(shape_icons) = <[TextureHandle; 4]>::try_from(shape_icons) else {
+    // Unreachable fallthrough: the Vec was built over SHAPE_ICONS (5 items).
+    let Ok(shape_icons) = <[TextureHandle; 5]>::try_from(shape_icons) else {
         return;
     };
     *atlas = Some(Atlas {
-        key: (ppp, shape_kind),
+        key: ppp,
         handles,
         shape_icons,
         pipette_cursor: Some(pipette_cursor),

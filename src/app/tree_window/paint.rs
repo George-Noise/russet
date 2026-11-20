@@ -5,7 +5,8 @@
 //! small margin — never the label) asks for a head jump, returned to the
 //! caller as [`NodeId`]. The chip is one fill for a single-color gesture
 //! and splits into outline|fill halves when the gesture used both colors
-//! (a Shape commit with both checkboxes on — owner request 2026-11-16).
+//! (a Shape commit with the Fill+Outline paint on — owner request
+//! 2026-11-16; the explicit third radio choice since 2026-11-20).
 //!
 //! Pure painting + the one hit-test; no state, no scroll logic. The window
 //! chrome, the toolbar, the scroll bookkeeping and the per-window view

@@ -10,7 +10,7 @@ use super::super::{
     PIPETTE_TIP, SHAPE_ICONS, TOOL_ANGLE, TOOL_INK, TOOLS, cursor_bitmap, ensure, icon_transform,
     rasterize_shape_icon, rasterize_tool_icon,
 };
-use crate::tools::{ShapeKind, Tool};
+use crate::tools::Tool;
 use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme, Visuals};
 
 #[test]
@@ -60,10 +60,10 @@ fn the_icon_transform_maps_the_logical_space_onto_the_raster() {
 }
 
 /// The atlas lifecycle: built on the first frame, untouched while the key
-/// matches, rebuilt when the scale — or the Shape panel's KIND (the MODE
-/// toggles preview it, owner request 2026-11-20) — changes.
-/// THEME-INDEPENDENT since the v4 pass (fixed ink + fixed rims): a theme
-/// switch must not rebuild it.
+/// matches, rebuilt when the scale changes. The key is the SCALE ALONE —
+/// theme-independent since the v4 pass, and since owner request 2026-11-20
+/// kind-independent too (the Shape panel's MODE radios draw the Shape
+/// tool's emblem, fixed drawings all).
 
 #[test]
 fn atlas_rebuilds_only_on_scale_change() {
@@ -82,59 +82,47 @@ fn atlas_rebuilds_only_on_scale_change() {
         uploaded
     }
     let mut atlas = None;
-    ensure(&mut atlas, &ctx, ShapeKind::Rectangle);
-    assert_eq!(pass(&ctx), 12, "7 tool + 4 shape icons + egui's font atlas");
+    ensure(&mut atlas, &ctx);
+    assert_eq!(pass(&ctx), 13, "7 tool + 5 shape icons + egui's font atlas");
     let first = atlas.as_ref().expect("the first ensure builds the atlas");
-    assert_eq!(first.key, (1.0, ShapeKind::Rectangle));
+    assert_eq!(first.key, 1.0);
     let cursor0 = first.pipette_cursor.as_ref().expect("the pipette cursor");
     assert_eq!(cursor0.size, [24, 24]);
 
     // Same conditions: a cheap no-op (the key match must keep the atlas).
-    ensure(&mut atlas, &ctx, ShapeKind::Rectangle);
+    ensure(&mut atlas, &ctx);
     assert_eq!(pass(&ctx), 0);
-    assert_eq!(atlas.as_ref().expect("kept").key.0, 1.0);
+    assert_eq!(atlas.as_ref().expect("kept").key, 1.0);
 
     // Scale change: the WHOLE atlas re-rasterizes (24 pt × 2.0 = 48 px).
     // set_pixels_per_point becomes active at the START of the next pass,
     // so a pass runs before ensure() can observe the new scale.
     ctx.set_pixels_per_point(2.0);
     pass(&ctx);
-    ensure(&mut atlas, &ctx, ShapeKind::Rectangle);
+    ensure(&mut atlas, &ctx);
     assert_eq!(
         pass(&ctx),
-        11,
+        12,
         "rebuilt after the scale change (the font atlas only uploads once)"
     );
     let scaled = atlas.as_ref().expect("rebuilt after the scale change");
-    assert_eq!(scaled.key, (2.0, ShapeKind::Rectangle));
+    assert_eq!(scaled.key, 2.0);
     let cursor1 = scaled
         .pipette_cursor
         .as_ref()
         .expect("cursor re-rasterized");
     assert_eq!(cursor1.size, [48, 48]);
 
-    // Shape-kind change (same scale): the MODE toggles preview the new
-    // kind, so the atlas rebuilds — but egui's `load_texture_cached`
-    // dedupes IDENTICAL content: the seven tool icons and the two kind
-    // previews re-raster to the same pixels, only the two kind-dependent
-    // MODE toggles change (owner request 2026-11-20).
-    ensure(&mut atlas, &ctx, ShapeKind::Ellipse);
-    assert_eq!(pass(&ctx), 2, "only the two MODE toggles changed pixels");
-    assert_eq!(
-        atlas.as_ref().expect("rebuilt").key,
-        (2.0, ShapeKind::Ellipse)
-    );
-
     // Theme change: NOT a rebuild — the fixed ink and the fixed rims make
     // the icons theme-independent (owner v4: one drawing reads well in both
     // themes; the old theme re-raster died with its reason). The pass still
     // uploads ONE texture: egui's font atlas follows the theme too. OUR
-    // eleven icons would make it 12 — the count stays the "did the atlas
+    // twelve icons would make it 13 — the count stays the "did the atlas
     // rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
-    ensure(&mut atlas, &ctx, ShapeKind::Ellipse);
-    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 11 icons");
-    assert_eq!(atlas.as_ref().expect("kept").key.0, 2.0);
+    ensure(&mut atlas, &ctx);
+    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 12 icons");
+    assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
 }
 
 /// The monochrome ink is FIXED (owner v4) and sits a bit BELOW the light
@@ -157,13 +145,13 @@ fn mono_ink_is_fixed_below_the_light_theme_text() {
 }
 
 /// All atlas textures exist and are distinct: one per tool PLUS the Shape
-/// panel's four (owner request 2026-11-20).
+/// panel's five (owner request 2026-11-20).
 
 #[test]
 fn atlas_ids_are_one_per_tool() {
     let ctx = Context::default();
     let mut atlas = None;
-    ensure(&mut atlas, &ctx, ShapeKind::Rectangle);
+    ensure(&mut atlas, &ctx);
     let atlas = atlas.expect("built");
     let mut ids: Vec<_> = atlas
         .handles
@@ -187,8 +175,9 @@ fn atlas_ids_are_one_per_tool() {
 ///
 /// It rasterizes every tool at 256 px (the design view) and at the real
 /// button size 24 px (cleared first), and since owner request 2026-11-20
-/// also the Shape panel's four icons (for BOTH kinds — the MODE toggles
-/// preview it). The raster color is BLACK so the monochrome icons
+/// also the Shape panel's five icons (the kind-independent MODE radios —
+/// owner request 2026-11-20). The raster color is BLACK so the monochrome
+/// icons
 /// (Line/Shape/Text and the Shape panel take the raster color) stay
 /// legible; the colored icons paint their own palette. The output folder
 /// is `RUSSET_ICON_DUMP_DIR` (a leading `~/` expands to HOME/USERPROFILE —
@@ -208,15 +197,12 @@ fn icons_dump_when_requested() {
                 .expect("tiny-skia's default features include png");
         }
     }
-    for kind in [ShapeKind::Rectangle, ShapeKind::Ellipse] {
-        for icon in SHAPE_ICONS {
-            for px in [256, 24] {
-                let pm =
-                    rasterize_shape_icon(icon, kind, px, Color32::BLACK).expect("px is in 1..=256");
-                let path = dir.join(format!("{px}px_shape_{kind:?}_{icon:?}.png"));
-                pm.save_png(&path)
-                    .expect("tiny-skia's default features include png");
-            }
+    for icon in SHAPE_ICONS {
+        for px in [256, 24] {
+            let pm = rasterize_shape_icon(icon, px, Color32::BLACK).expect("px is in 1..=256");
+            let path = dir.join(format!("{px}px_shape_{icon:?}.png"));
+            pm.save_png(&path)
+                .expect("tiny-skia's default features include png");
         }
     }
     let n = std::fs::read_dir(&dir)
@@ -224,8 +210,8 @@ fn icons_dump_when_requested() {
         .count();
     assert_eq!(
         n,
-        TOOLS.len() * 2 + SHAPE_ICONS.len() * 2 * 2,
-        "one 256 px + one 24 px PNG per tool and per shape icon/kind"
+        TOOLS.len() * 2 + SHAPE_ICONS.len() * 2,
+        "one 256 px + one 24 px PNG per tool and per shape icon"
     );
 }
 

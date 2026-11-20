@@ -1,12 +1,18 @@
 //! The Shape panel's icon tests (owner request 2026-11-20): the KIND
 
-//! buttons' gray previews, the MODE toggles' solid/hollow current-kind
+//! buttons' gray previews and the old-word tooltips, plus the MODE trio's
 
-//! drawings and the old-word tooltips.
+//! emblem drawings — the follow-up the same day made the MODE row a
+
+//! THREE-way radio over the Shape TOOL's icon ("не повторение выбранной
+
+//! фигуры, а иконка инструмента Shape"): solid = Fill, hollow = Outline
+
+//! (pixel-for-pixel the tool button), gray fill under the rim = both.
 
 use super::super::{SHAPE_ICONS, ShapeIcon, TOOL_INK, rasterize_shape_icon, shape_icon_label};
 use super::*;
-use crate::tools::ShapeKind;
+use crate::tools::Tool;
 
 #[test]
 fn shape_panel_icons_rasterize_and_keep_the_old_labels() {
@@ -18,24 +24,22 @@ fn shape_panel_icons_rasterize_and_keep_the_old_labels() {
                 ShapeIcon::Ellipse => "Ellipse",
                 ShapeIcon::Fill => "Fill",
                 ShapeIcon::Outline => "Outline",
+                ShapeIcon::FillOutline => "Fill + Outline",
             },
             "tooltip of {icon:?} — the words the old widgets showed"
         );
-        for kind in [ShapeKind::Rectangle, ShapeKind::Ellipse] {
-            let pm = rasterize_shape_icon(icon, kind, 24, TOOL_INK).expect("px is in 1..=256");
-            assert!(
-                count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
-                "{icon:?}/{kind:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"
-            );
-        }
+        let pm = rasterize_shape_icon(icon, 24, TOOL_INK).expect("px is in 1..=256");
+        assert!(
+            count_opaque(&pm) >= MIN_OPAQUE_PIXELS,
+            "{icon:?} must draw more than {MIN_OPAQUE_PIXELS} opaque pixels"
+        );
     }
 }
 
 #[test]
 fn kind_buttons_are_gray_filled_previews_with_an_ink_rim() {
     for icon in [ShapeIcon::Rectangle, ShapeIcon::Ellipse] {
-        let pm = rasterize_shape_icon(icon, ShapeKind::Rectangle, 48, TOOL_INK)
-            .expect("px is in 1..=256");
+        let pm = rasterize_shape_icon(icon, 48, TOOL_INK).expect("px is in 1..=256");
         assert!(
             has_color(&pm, (160, 160, 160), 6),
             "{icon:?}: the gray preview fill is missing"
@@ -47,59 +51,101 @@ fn kind_buttons_are_gray_filled_previews_with_an_ink_rim() {
     }
 }
 
+/// The MODE radios are the TOOL emblem (the Tools window's Shape button's
+/// rectangle + circle — owner request 2026-11-20), not a shape preview: the
+/// hollow radio must be PIXEL-FOR-PIXEL the tool's icon, and the trio's
+/// interiors tell the three paints apart — Fill inks the interior, Outline
+/// keeps it empty, Fill + Outline puts the gray under the rim.
 #[test]
-fn mode_toggles_are_the_solid_and_hollow_current_kind() {
-    // The mode icons are INK ONLY (no gray preview fill), and the solid/
-    // hollow pair differs exactly in the interior: the Fill toggle fills it,
-    // the Outline toggle keeps it empty.
-    for kind in [ShapeKind::Rectangle, ShapeKind::Ellipse] {
-        let fill =
-            rasterize_shape_icon(ShapeIcon::Fill, kind, 48, TOOL_INK).expect("px is in 1..=256");
+fn the_outline_radio_is_pixel_identical_to_the_shape_tool_icon() {
+    for px in [24, 48, 256] {
         let outline =
-            rasterize_shape_icon(ShapeIcon::Outline, kind, 48, TOOL_INK).expect("px is in 1..=256");
-        assert!(
-            !has_color(&fill, (160, 160, 160), 6) && !has_color(&outline, (160, 160, 160), 6),
-            "{kind:?}: the mode toggles must carry no preview gray"
-        );
-        assert!(
-            has_opaque_near(&fill, (12.0, 12.0), 2.0),
-            "{kind:?}: the Fill toggle must fill the interior"
-        );
-        assert!(
-            !has_opaque_near(&outline, (12.0, 12.0), 2.0),
-            "{kind:?}: the Outline toggle must keep the interior empty"
-        );
-        // The crisp solid-vs-hollow discriminator over the central box
-        // (7.5..16.5 — the rim's inner edge runs at ≈5.45, so the box holds
-        // no rim ink): the solid icon fills it, the hollow one has ZERO
-        // opaque pixels there.
-        const CENTER: (f32, f32, f32, f32) = (7.5, 7.5, 16.5, 16.5);
-        assert!(
-            count_opaque_in_box(&fill, CENTER) > 200,
-            "{kind:?}: the Fill toggle must ink the central box"
-        );
-        assert!(
-            count_opaque_in_box(&outline, CENTER) == 0,
-            "{kind:?}: the Outline toggle must keep the central box empty"
+            rasterize_shape_icon(ShapeIcon::Outline, px, TOOL_INK).expect("px is in 1..=256");
+        let tool = rasterize_tool_icon(Tool::Shape, px, TOOL_INK).expect("px is in 1..=256");
+        assert_eq!(
+            outline.data(),
+            tool.data(),
+            "{px} px: the Outline radio must BE the Shape tool's icon"
         );
     }
-    // The toggles preview the CURRENT kind: with Ellipse selected they are
-    // ROUND — the bounding-box corner the square fills stays empty, while
-    // the Rectangle kind fills it.
-    for icon in [ShapeIcon::Fill, ShapeIcon::Outline] {
-        let square = rasterize_shape_icon(icon, ShapeKind::Rectangle, 48, TOOL_INK)
-            .expect("px is in 1..=256");
-        let round =
-            rasterize_shape_icon(icon, ShapeKind::Ellipse, 48, TOOL_INK).expect("px is in 1..=256");
-        // (5.5, 5.5) sits inside the 15×15 square (its rim's inner edge runs
-        // at ≈5.45) but 1.7 logical units clear of the circle's outer ink.
+}
+
+#[test]
+fn the_mode_radios_paint_the_emblem_three_ways() {
+    // The emblem's two interiors in the icons' logical space: the
+    // rectangle's body point (clear of the circle: dist from (15.6, 10.6)
+    // is ~11.2 > 5.95 = r + rim half) and the circle's center (clear of the
+    // rectangle: x 15.6 > 13.8 + rim half). The rim's inner edge sits at
+    // ~0.95 from each boundary, so both probe points hold no rim ink.
+    const RECT_BODY: (f32, f32) = (6.0, 16.0);
+    const CIRCLE_BODY: (f32, f32) = (15.6, 10.6);
+    let fill = rasterize_shape_icon(ShapeIcon::Fill, 48, TOOL_INK).expect("px is in 1..=256");
+    let outline = rasterize_shape_icon(ShapeIcon::Outline, 48, TOOL_INK).expect("px is in 1..=256");
+    let both =
+        rasterize_shape_icon(ShapeIcon::FillOutline, 48, TOOL_INK).expect("px is in 1..=256");
+
+    // No gray preview anywhere on Fill/Outline — the gray belongs to the
+    // kind previews and the explicit Fill+Outline choice only.
+    assert!(
+        !has_color(&fill, (160, 160, 160), 6) && !has_color(&outline, (160, 160, 160), 6),
+        "Fill/Outline must carry no preview gray"
+    );
+
+    for pt in [RECT_BODY, CIRCLE_BODY] {
         assert!(
-            has_opaque_near(&square, (5.5, 5.5), 0.5),
-            "{icon:?}: the rectangle kind must ink the corner"
+            has_opaque_near(&fill, pt, 0.5),
+            "{pt:?}: the Fill radio must ink the emblem's interior"
         );
         assert!(
-            !has_opaque_near(&round, (5.5, 5.5), 0.5),
-            "{icon:?}: the ellipse kind must keep the corner empty"
+            !has_opaque_near(&outline, pt, 0.5),
+            "{pt:?}: the Outline radio must keep the interior empty"
+        );
+        assert!(
+            has_color(&both, (160, 160, 160), 6),
+            "{pt:?}: the Fill+Outline radio must gray-fill the interior"
         );
     }
+
+    // The crisp discriminator over a rectangle-body-only box: x/y clear of
+    // the rim's inner edges (4.55/12.85 on x, 10.15/18.45 on y) AND farther
+    // than the circle's outer ink radius (r 5.0 + the 0.95 rim half ≈ 6.2)
+    // from the circle's center (15.6, 10.6) — the emblem's shapes overlap,
+    // so the box must avoid the circle's rim too: solid ink for Fill, ZERO
+    // opaque pixels for Outline, gray for Fill + Outline.
+    const RECT_BOX: (f32, f32, f32, f32) = (4.9, 11.0, 9.0, 18.2);
+    assert!(
+        count_opaque_in_box(&fill, RECT_BOX) > 100,
+        "the Fill radio must ink the rectangle's body"
+    );
+    assert!(
+        count_opaque_in_box(&outline, RECT_BOX) == 0,
+        "the Outline radio must keep the rectangle's body empty"
+    );
+    let gray_in_box = count_opaque_in_box(&both, RECT_BOX);
+    assert!(
+        gray_in_box > 100,
+        "the Fill+Outline radio must gray-fill the rectangle's body"
+    );
+}
+
+/// The three radios are visually DISTINCT — the owner's three choices must
+/// not be confusable: Fill ≠ Fill+Outline even though both fill the
+/// interior (solid ink vs the gray under the rim), and each differs from
+/// Outline by its interior alone.
+#[test]
+fn the_three_mode_radios_are_mutually_distinct() {
+    let fill = rasterize_shape_icon(ShapeIcon::Fill, 48, TOOL_INK).expect("px is in 1..=256");
+    let outline = rasterize_shape_icon(ShapeIcon::Outline, 48, TOOL_INK).expect("px is in 1..=256");
+    let both =
+        rasterize_shape_icon(ShapeIcon::FillOutline, 48, TOOL_INK).expect("px is in 1..=256");
+    assert_ne!(fill.data(), outline.data());
+    assert_ne!(fill.data(), both.data());
+    assert_ne!(outline.data(), both.data());
+    // Fill and Fill+Outline share the FILLED silhouette (the ink rim of
+    // Fill+Outline sits over the same silhouette), but differ INSIDE: Fill
+    // is ink-dark there, Fill+Outline is the lighter gray.
+    assert!(
+        !has_color(&fill, (160, 160, 160), 6) && has_color(&both, (160, 160, 160), 6),
+        "Fill is solid ink, Fill+Outline is the gray under the rim"
+    );
 }

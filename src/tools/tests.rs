@@ -291,3 +291,38 @@ fn eraser_clears_pixels_to_transparency() {
     assert_eq!(pixmap.pixel(8, 8).expect("pixel in bounds").alpha(), 0);
     assert_eq!(pixmap.pixel(8, 1).expect("pixel in bounds").alpha(), 255);
 }
+
+/// The paint radio's halves (owner request 2026-11-20): exactly one of the
+/// three paints is ever active, and each names its wells — Fill fills only,
+/// Outline outlines only, Fill + Outline does both (a shape always paints
+/// something by construction — the invariant the old at-least-one toggle
+/// rule enforced by hand).
+#[test]
+fn the_shape_paint_radio_names_its_wells() {
+    assert_eq!(
+        (ShapePaint::Fill.fills(), ShapePaint::Fill.outlines()),
+        (true, false)
+    );
+    assert_eq!(
+        (ShapePaint::Outline.fills(), ShapePaint::Outline.outlines()),
+        (false, true)
+    );
+    assert_eq!(
+        (
+            ShapePaint::FillOutline.fills(),
+            ShapePaint::FillOutline.outlines()
+        ),
+        (true, true),
+        "the explicit third choice paints BOTH wells"
+    );
+    for paint in [
+        ShapePaint::Fill,
+        ShapePaint::Outline,
+        ShapePaint::FillOutline,
+    ] {
+        assert!(
+            paint.fills() || paint.outlines(),
+            "{paint:?} must paint something"
+        );
+    }
+}

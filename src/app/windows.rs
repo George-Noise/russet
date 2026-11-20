@@ -24,7 +24,7 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense, TextureId};
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use super::tool_icons::{self, ShapeIcon};
-use crate::tools::{LineMode, ShapeKind, Tool, ToolState};
+use crate::tools::{LineMode, ShapeKind, ShapePaint, Tool, ToolState};
 
 mod palette_window;
 
@@ -193,13 +193,16 @@ fn icon_button(
 
 /// The Shape tool's settings rows (owner request 2026-11-20): the KIND row —
 /// two icon buttons, the gray-filled square / circle previews — then, after
-/// a [`SHAPE_GROUP_GAP`], the MODE row — the Fill / Outline toggles drawn as
-/// the solid / hollow version of the CURRENT kind (the atlas re-rasterizes
-/// them when the kind switches). The buttons are the Tools window's icon
-/// buttons ([`icon_button`]); the tooltips carry EXACTLY the words the old
-/// word radio / checkboxes showed ([`tool_icons::shape_icon_label`]). The
-/// toggle RULE is unchanged (owner request 2026-11-10): at least one of
-/// Fill/Outline stays on ([`toggled_fill`] / [`toggled_outline`]).
+/// a [`SHAPE_GROUP_GAP`], the MODE row — a THREE-way radio (the same day's
+/// follow-up: "не 2 выбора, а 3 и это уже будет radio") over
+/// [`ShapePaint`] — Fill, Outline, Fill + Outline. The radio's icons do NOT
+/// repeat the selected kind (the V51 toggles previewed it): they draw the
+/// Shape TOOL's emblem — the solid / hollow / gray-filled-with-rim emblem
+/// of the Tools window's Shape button ([`tool_icons::ShapeIcon::Fill`] /
+/// [`Outline`] / [`FillOutline`]). The buttons are the Tools window's icon
+/// buttons ([`icon_button`]); the tooltips carry the words the old word
+/// radio / checkboxes showed ([`tool_icons::shape_icon_label`]) — the
+/// third radio names both: "Fill + Outline".
 ///
 /// Extracted as a free fn over [`ToolState`] so the regression tests run
 /// the exact UI the app runs (headless; the atlas is optional — the buttons
@@ -225,44 +228,26 @@ fn shape_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<to
     });
     ui.add_space(SHAPE_GROUP_GAP);
     ui.horizontal(|ui| {
-        let fill = icon_button(
-            ui,
-            TOOL_BUTTON_PT,
-            tool_icons::shape_texture_id(icons, ShapeIcon::Fill),
-            tool_icons::shape_icon_label(ShapeIcon::Fill),
-            tools.shape_fill,
-        );
-        if fill.clicked() {
-            let (f, o) = toggled_fill(tools.shape_fill, tools.shape_outline);
-            tools.shape_fill = f;
-            tools.shape_outline = o;
-        }
-        let outline = icon_button(
-            ui,
-            TOOL_BUTTON_PT,
-            tool_icons::shape_texture_id(icons, ShapeIcon::Outline),
-            tool_icons::shape_icon_label(ShapeIcon::Outline),
-            tools.shape_outline,
-        );
-        if outline.clicked() {
-            let (f, o) = toggled_outline(tools.shape_fill, tools.shape_outline);
-            tools.shape_fill = f;
-            tools.shape_outline = o;
+        for (paint, icon) in [
+            (ShapePaint::Fill, ShapeIcon::Fill),
+            (ShapePaint::Outline, ShapeIcon::Outline),
+            (ShapePaint::FillOutline, ShapeIcon::FillOutline),
+        ] {
+            let response = icon_button(
+                ui,
+                TOOL_BUTTON_PT,
+                tool_icons::shape_texture_id(icons, icon),
+                tool_icons::shape_icon_label(icon),
+                tools.shape_paint == paint,
+            );
+            // Radio semantics: clicking a choice selects it — selecting the
+            // already-active one is a no-op, and a shape always paints
+            // something because EXACTLY one of the three is ever active.
+            if response.clicked() {
+                tools.shape_paint = paint;
+            }
         }
     });
-}
-
-/// The Shape panel's toggle rule, PURE (the same invariant the old
-/// checkboxes drove, owner request 2026-11-10 — "the tool can never end up
-/// drawing nothing"): clicking the Fill toggle flips it, and flipping it
-/// OFF re-checks Outline so at least one of the two modes stays on.
-fn toggled_fill(fill: bool, outline: bool) -> (bool, bool) {
-    if fill { (false, true) } else { (true, outline) }
-}
-
-/// The Outline half of the same rule: flipping Outline OFF re-checks Fill.
-fn toggled_outline(fill: bool, outline: bool) -> (bool, bool) {
-    if outline { (true, false) } else { (fill, true) }
 }
 
 /// The builder of the "Tools" window itself (§3.2). Exposed as a function so

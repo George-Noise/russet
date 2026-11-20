@@ -1,7 +1,7 @@
 //! The icon DRAWINGS behind the Tools window's buttons and the Shape
 //! panel's buttons: the per-tool `draw_*` functions, the
 //! [`rasterize_tool_icon`] dispatcher and the Shape-panel set
-//! ([`rasterize_shape_icon`] + its `draw_kind_preview` / `draw_mode`). Every
+//! ([`rasterize_shape_icon`] + its `draw_kind_preview` / `draw_paint_mode`). Every
 //! icon is closed polygons + round-cap strokes through the parent's SHARED
 //! PRIMITIVES ([`super::fill`], [`super::stroke`], [`super::arc_pts`],
 //! [`super::quad_pts`], [`super::icon_transform`], [`super::OUTLINE_W`] —
@@ -345,24 +345,23 @@ fn draw_line(pm: &mut Pixmap, ts: Transform, mono: Color32) {
     stroke(pm, ts, &curve, false, mono, 1.9);
 }
 
+/// The Shape TOOL's emblem, shared by the Tools window's Shape button and
+/// the panel's MODE radios (owner request 2026-11-20: "воспользуемся
+/// иконкой инструмента Shape" — one geometry, so the panel's radios and
+/// the tool button draw the SAME mark): the rectangle + the circle
+/// `draw_shape` strokes.
+const EMBLEM_RECT: [(f32, f32); 4] = [(3.6, 9.2), (13.8, 9.2), (13.8, 19.4), (3.6, 19.4)];
+
+/// The emblem's circle (the CIRCLE the owner replaced the diamond with,
+/// 2026-11-18): center (15.6, 10.6), r 5.0.
+fn emblem_circle() -> Vec<(f32, f32)> {
+    arc_pts(15.6, 10.6, 5.0, 0.0, 360.0, 40)
+}
+
 fn draw_shape(pm: &mut Pixmap, ts: Transform, mono: Color32) {
-    stroke(
-        pm,
-        ts,
-        &[(3.6, 9.2), (13.8, 9.2), (13.8, 19.4), (3.6, 19.4)],
-        true,
-        mono,
-        1.9,
-    );
+    stroke(pm, ts, &EMBLEM_RECT, true, mono, 1.9);
     // A CIRCLE instead of the old diamond (owner request 2026-11-18).
-    stroke(
-        pm,
-        ts,
-        &arc_pts(15.6, 10.6, 5.0, 0.0, 360.0, 40),
-        false,
-        mono,
-        1.9,
-    );
+    stroke(pm, ts, &emblem_circle(), false, mono, 1.9);
 }
 
 /// The Text icon: a big serif-curved T with a SMALL lowercase t beside it
@@ -403,12 +402,16 @@ pub(super) fn rasterize_tool_icon(tool: Tool, px: usize, text: Color32) -> Optio
 }
 
 // ---------------------------------------------------------------------------
-// The Shape panel's four icons (owner request 2026-11-20): the word radio
+// The Shape panel's five icons (owner request 2026-11-20): the word radio
 // and the Fill/Outline checkboxes became icon buttons in the Tools window's
-// style. All four are centered in the logical 24×24 space and share ONE
-// geometry per shape — the same square / circle drawn three ways (the gray
-// kind preview, the solid mode toggle, the hollow mode toggle) — so the
-// panel reads as "which shape" over "how does it paint".
+// style, and the same day's follow-up made the MODE row a THREE-way radio
+// that draws the Shape TOOL's emblem ("не повторение выбранной фигуры, а
+// иконка инструмента Shape") instead of the current kind. All five are
+// centered in the logical 24×24 space; the KIND pair shares ONE geometry
+// per shape (the gray square / circle previews); the MODE trio shares the
+// TOOL emblem's geometry and differs only in how the emblem paints: solid
+// ink = Fill, the rim only = Outline, the gray fill under the rim =
+// Fill + Outline.
 // ---------------------------------------------------------------------------
 
 /// The kind buttons' preview fill: a mid neutral gray — clearly darker than
@@ -436,35 +439,32 @@ fn draw_kind_preview(pm: &mut Pixmap, ts: Transform, kind: ShapeKind, mono: Colo
     }
 }
 
-/// A MODE toggle: the current kind drawn SOLID (the Fill state — the whole
-/// silhouette in ink) or HOLLOW (the Outline state — the rim only).
-fn draw_mode(pm: &mut Pixmap, ts: Transform, kind: ShapeKind, solid: bool, mono: Color32) {
-    match kind {
-        ShapeKind::Rectangle => {
-            if solid {
-                fill(pm, ts, &SQUARE_PTS, mono);
-            } else {
-                stroke(pm, ts, &SQUARE_PTS, true, mono, 1.9);
-            }
-        }
-        ShapeKind::Ellipse => {
-            let circle = arc_pts(12.0, 12.0, 7.5, 0.0, 360.0, 40);
-            if solid {
-                fill(pm, ts, &circle, mono);
-            } else {
-                stroke(pm, ts, &circle, true, mono, 1.9);
-            }
-        }
+/// A MODE radio: the Shape TOOL's emblem ([`EMBLEM_RECT`] +
+/// [`emblem_circle`]) painted three ways — SOLID ink (`solid`, !`both` —
+/// Fill: the whole silhouette in ink, the reading the owner approved in the
+/// V51 toggles), HOLLOW (`!solid`, !`both` — Outline: the rim only,
+/// pixel-for-pixel the Tools window's Shape button), or the gray fill UNDER
+/// the ink rim (`both` — Fill + Outline: both ingredients visible, the
+/// same vocabulary the kind previews speak).
+fn draw_paint_mode(pm: &mut Pixmap, ts: Transform, both: bool, solid: bool, mono: Color32) {
+    let circle = emblem_circle();
+    if solid || both {
+        let paint = if both { SHAPE_PREVIEW_FILL } else { mono };
+        fill(pm, ts, &EMBLEM_RECT, paint);
+        fill(pm, ts, &circle, paint);
+    }
+    if !solid || both {
+        stroke(pm, ts, &EMBLEM_RECT, true, mono, 1.9);
+        stroke(pm, ts, &circle, false, mono, 1.9);
     }
 }
 
-/// Rasterizes one Shape-panel icon for the panel's CURRENT kind into a
-/// `px × px` premultiplied-RGBA pixmap (the MODE toggles preview it; the
-/// KIND buttons ignore the argument — they are fixed previews of their own
+/// Rasterizes one Shape-panel icon into a `px × px` premultiplied-RGBA
+/// pixmap (kind-INDEPENDENT since owner request 2026-11-20 — the MODE
+/// radios draw the tool's emblem, the KIND buttons preview their own fixed
 /// shape). Same failure contract as [`rasterize_tool_icon`].
 pub(super) fn rasterize_shape_icon(
     icon: super::ShapeIcon,
-    kind: ShapeKind,
     px: usize,
     text: Color32,
 ) -> Option<Pixmap> {
@@ -474,8 +474,9 @@ pub(super) fn rasterize_shape_icon(
     match icon {
         ShapeIcon::Rectangle => draw_kind_preview(&mut pm, ts, ShapeKind::Rectangle, text),
         ShapeIcon::Ellipse => draw_kind_preview(&mut pm, ts, ShapeKind::Ellipse, text),
-        ShapeIcon::Fill => draw_mode(&mut pm, ts, kind, true, text),
-        ShapeIcon::Outline => draw_mode(&mut pm, ts, kind, false, text),
+        ShapeIcon::Fill => draw_paint_mode(&mut pm, ts, false, true, text),
+        ShapeIcon::Outline => draw_paint_mode(&mut pm, ts, false, false, text),
+        ShapeIcon::FillOutline => draw_paint_mode(&mut pm, ts, true, false, text),
     }
     Some(pm)
 }

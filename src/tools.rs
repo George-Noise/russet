@@ -17,7 +17,8 @@ pub enum Tool {
     Eyedropper,
     /// Straight lines (drag) and polylines/curves (click points).
     Line,
-    /// Rectangle and ellipse outlines (or fills), dragged as a preview.
+    /// Rectangle and ellipse outlines, fills or fill+outline, dragged as a
+    /// preview.
     Shape,
     /// Places text at the click point through a small input window.
     Text,
@@ -39,6 +40,34 @@ pub enum ShapeKind {
     Ellipse,
 }
 
+/// How the [`Tool::Shape`] paints, a THREE-way radio (owner request
+/// 2026-11-20: the former Fill/Outline toggle pair — whose "both on" state
+/// was reachable only by a hidden double click — became one explicit third
+/// choice, and exactly one of the three is ever active).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShapePaint {
+    /// Fill the interior with the secondary well; no outline.
+    Fill,
+    /// Stroke the boundary with a `size`-wide line in the primary well; no
+    /// fill.
+    Outline,
+    /// Fill first, then stroke the boundary over it — the outline covers
+    /// its half of the stroke width, the fill the interior.
+    FillOutline,
+}
+
+impl ShapePaint {
+    /// Whether this mode paints the fill (the secondary well).
+    pub fn fills(self) -> bool {
+        matches!(self, ShapePaint::Fill | ShapePaint::FillOutline)
+    }
+
+    /// Whether this mode paints the outline (the primary well).
+    pub fn outlines(self) -> bool {
+        matches!(self, ShapePaint::Outline | ShapePaint::FillOutline)
+    }
+}
+
 pub struct ToolState {
     pub tool: Tool,
     pub size: f32,
@@ -46,12 +75,11 @@ pub struct ToolState {
     pub secondary: Color32,
     pub line_mode: LineMode,
     pub shape_kind: ShapeKind,
-    /// Fill shapes with the fill color (the secondary well).
-    pub shape_fill: bool,
-    /// Outline shapes with a `size`-wide stroke (the primary well).
-    /// The Tools window keeps at least one of `shape_fill`/`shape_outline`
-    /// enabled, so a shape always paints something.
-    pub shape_outline: bool,
+    /// How shapes paint — exactly one of Fill / Outline / Fill+Outline
+    /// (owner request 2026-11-20: the former `shape_fill`/`shape_outline`
+    /// toggle pair became a three-way radio; a shape always paints
+    /// something by construction).
+    pub shape_paint: ShapePaint,
     /// Font size (canvas pixels) used by the Text tool.
     pub font_size: f32,
 }
@@ -65,8 +93,7 @@ impl ToolState {
             secondary: Color32::WHITE,
             line_mode: LineMode::Straight,
             shape_kind: ShapeKind::Rectangle,
-            shape_fill: false,
-            shape_outline: true,
+            shape_paint: ShapePaint::Outline,
             font_size: 24.0,
         }
     }

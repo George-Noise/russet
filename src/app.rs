@@ -794,10 +794,11 @@ impl eframe::App for App {
         self.poll_file_task();
         self.handle_hotkeys(&ctx);
         // The icon atlas must exist before the canvas (the Eyedropper's
-        // pipette cursor) and the Tools window (the icon buttons) draw. The
-        // Shape panel's MODE toggles preview the current kind, so the key
-        // carries it (owner request 2026-11-20).
-        tool_icons::ensure(&mut self.tool_icons, &ctx, self.tools.shape_kind);
+        // pipette cursor) and the Tools window (the icon buttons) draw. It
+        // is scale-keyed only — theme-independent since the v4 pass and
+        // kind-independent since the owner request 2026-11-20 (the Shape
+        // panel's MODE radios draw the Shape tool's emblem).
+        tool_icons::ensure(&mut self.tool_icons, &ctx);
         self.top_menu(ui);
 
         // no_frame: zero margin, the gray canvas background reaches the

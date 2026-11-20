@@ -1,14 +1,44 @@
 //! Unit tests of the Shape-tool gesture wells ([`super::shape_gesture_wells`]):
 //! the right-button inverted-wells rule (owner request 2026-11-15: the
 //! colors are used the other way around WITHOUT swapping the wells), the
-//! Fill/Outline checkbox gating (owner request 2026-11-10), the
-//! recorded-color mapping ([`super::shape_record_colors`] — owner request
-//! 2026-11-16: a two-color gesture carries BOTH colors on its history
-//! node), and the Shift-proportional drag rule
-//! ([`super::proportional_current`] — owner request 2026-11-16, Paint.NET
-//! style).
+//! Fill/Outline gating (owner request 2026-11-10; the two checkboxes became
+//! the THREE-way paint radio 2026-11-20), the recorded-color mapping
+//! ([`super::shape_record_colors`] — owner request 2026-11-16: a two-color
+//! gesture carries BOTH colors on its history node), and the
+//! Shift-proportional drag rule ([`super::proportional_current`] — owner
+//! request 2026-11-16, Paint.NET style).
 
 use super::*;
+use crate::tools::ShapePaint;
+
+/// The EXACT well-decoding the gesture start runs (preview.rs): the radio's
+/// `outlines()`/`fills()` halves feed [`shape_gesture_wells`], so each of
+/// the three paints lands the right wells — Fill = the secondary well only,
+/// Outline = the primary only, Fill + Outline = both (owner request
+/// 2026-11-20).
+#[test]
+fn the_paint_radio_feeds_the_gesture_the_right_wells() {
+    for (paint, want_outline, want_fill) in [
+        (ShapePaint::Fill, None, Some(Color32::BLUE)),
+        (ShapePaint::Outline, Some(Color32::RED), None),
+        (
+            ShapePaint::FillOutline,
+            Some(Color32::RED),
+            Some(Color32::BLUE),
+        ),
+    ] {
+        let (outline, fill) = shape_gesture_wells(
+            PointerButton::Primary,
+            paint.outlines(),
+            paint.fills(),
+            Color32::RED,
+            Color32::BLUE,
+        );
+
+        assert_eq!(outline, want_outline, "{paint:?}: outline well");
+        assert_eq!(fill, want_fill, "{paint:?}: fill well");
+    }
+}
 
 #[test]
 fn left_button_draws_outline_from_primary_and_fill_from_secondary() {

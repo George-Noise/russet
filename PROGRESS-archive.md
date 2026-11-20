@@ -1,5 +1,35 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Feat:` the Save dialog's slider meaning captions — owner request
+
+- **What:** the owner looked at the V48 dialog and asked to tell the user what
+  the slider's numbers MEAN ("even I wasn't quite sure"). Under EACH knob the
+  dialog now shows a live caption + a fixed trade-off line: PNG —
+  "<level> — stored raw / light packing / balanced packing / tight packing: …"
+  + "The picture is identical at every level — the slider only trades file
+  size against save speed."; JPEG — "<quality> — near-perfect picture / high
+  quality / medium quality / low quality: …" + "Lower = a smaller file, but
+  the picture loses more detail." The captions are pure bucket helpers
+  (`png_compression_hint` / `jpeg_quality_hint`), loop-tested over EVERY stop
+  (each of 0..=9 / 1..=100 names its own number); the two headless render
+  tests over the REAL dialog assert the default captions + tails. No encoding
+  change — pixels and bytes are exactly what V48 saved.
+- **Files:** `src/app/save_dialog.rs` (the two helpers + the two tails + the
+  caption rows), `src/app/save_dialog/tests.rs` (+2 tests, 2 extended),
+  SPEC §3.7, DEBTS-verification (V49 born), PROGRESS (snapshot + entry +
+  stamp; the docs-only + V45/V46 entries moved to PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 16 s hot: fmt clean, rules HARD
+  green, clippy `-D warnings` green (default + mcp), `cargo test --profile
+  gates` 220 default / 220 mcp green (+1 ignored each; +2 tests); `cargo
+  check --target wasm32-unknown-unknown` green (the dialog compiles into the
+  web build); the visual driver ALL SCENARIOS GREEN under Xvfb (the gates+mcp
+  binary). No TIMING rows — every command ran under a minute.
+- **Owner-checks:** V49 born (the Windows + Web pass: drag each slider — the
+  caption tracks the number and names its effect; the wording must be clear
+  to a fresh user). Open: V49, V48, V46; parked: V30, V8. Debts open: F17,
+  F16, F15.
+- **Commit title:** `Save dialog: a live caption under each slider explains the current number (PNG level = packing effort: file size vs save speed, pixels identical at every level; JPEG quality = look vs file size) + the fixed trade-off tails`
+
 ### 2026-11-20 — `Feat:` the Save dialog's Compression slider + the Lossless row — owner request
 
 - **What:** the owner asked for a save-time compression slider and THE most

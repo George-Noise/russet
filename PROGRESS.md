@@ -39,15 +39,20 @@
 | Extra: the Save-dialog compression slider + the Lossless row (owner 2026-11-20) | done — gates + wasm check + driver green | the PNG row gains the "Compression" slider 0..=9 — the encoder's REAL stops (`CompressionType::Level`: 0 stores raw, 1..=9 the exact deflate effort; default 6 = flate2's balanced middle; file size + encode time trade, pixels NEVER, the round-trip test proves it) — and both formats gain the owner's "Lossless" row: a per-format LOCKED DISPLAY of the guarantee (PNG on — lossless by design; JPEG off — no lossless mode the pinned encoder could write nor browsers decode); JPEG keeps Quality; the dialog's choices ride a new `SaveOptions` through the native save AND the web download; V48 born |
 
 | Extra: the Shape panel's icon buttons (owner 2026-11-20) | done — gates + driver + GUI probes green | the owner reviewed the V50 Save-dialog layout ("сейчас гораздо лучше") and reshaped the Shape tool's settings panel: the word radio and the Fill/Outline checkboxes became Tools-window-style ICON buttons — the KIND row (gray square / circle previews; tooltips carry the old words) and the MODE row after a group gap (Fill = the current kind SOLID, Outline = HOLLOW — the toggles re-render for the kind switch); the shared `icon_button` now draws both windows' buttons; the toggle invariant extracted into pure `toggled_fill`/`toggled_outline`; +7 tests (5 icons + 2 panel) over the split topics; V50 closed verified in chat, V51 born |
+| Extra: the Shape panel's MODE radio over the tool's icon (owner 2026-11-20) | done — gates + driver + GUI probes green | the owner verified V51 and reshaped the MODE row: the two toggles (whose "both on" state hid behind a second click) became a THREE-way radio `ShapePaint` — Fill / Outline / the explicit Fill+Outline — whose three icons draw the Shape TOOL's emblem (solid / hollow / gray-under-the-rim), no longer the selected kind (the atlas key is pixels-per-point ALONE again); the old words stay as tooltips, the third reads "Fill + Outline"; wells/commit logic untouched (`rasterize_shape` always supported both); +4 net tests; V51 + V48 closed verified in chat, V52 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the Shape-panel icon
-round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
-mcp), `cargo test --profile gates` 227 default / 227 mcp green (+1 ignored each
-— the permanent #[ignore] icon dump; +5 net tests this round), the visual
-driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp binary + the GUI
-click-through screenshots (xdotool, ffmpeg) — Rust 1.99.1 pinned via
-rust-toolchain.toml, Linux. NO wasm check this round (the diff touches no
-web-facing code — the economy rule).
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the Shape-panel
+MODE-radio round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+(default + mcp), `cargo test --profile gates` 218 default / 231 mcp green (+1
+ignored each; +4 net tests this round), the visual driver ALL SCENARIOS GREEN
+under Xvfb through the gates+mcp binary + the GUI click-through screenshots
+(xdotool, ffmpeg: the three-radio panel, the "Fill + Outline" tooltip, a
+red-filled black-rimmed rectangle drawn in Fill+Outline) — Rust 1.99.1 pinned
+via rust-toolchain.toml, Linux. NO wasm check this round (the diff touches no
+web-facing code — the economy rule). NOTE 2026-11-20: RECYCLED sandbox —
+rustup/toolchain/GUI .debs reinstalled, the repo restored from the delivered
+russet.zip; DETACHED background processes do NOT survive between tool calls
+here — heavy commands ran synchronously (see TIMING).
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
 `cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
@@ -72,26 +77,55 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > Commit title); durable facts move to their canonical home in the same edit (AGENTS.md
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
-> ever pinned in place by a pending check. Compacted 2026-11-18: the panels-split and
-> docs rounds moved to PROGRESS-archive.md; later the same day the F14 + quotes rounds
-> followed them (the verify.sh round needed the budget back), the tool-icons entry
-> joined them in the evening (the icon-redraw round), the About entry followed
-> it (V33's closure freed it — the tooling round's budget), the unoptimized-dev
-> entry followed that (the dump round's budget), the verify.sh-hardening entry
-> completed the day's compactions (the icons-v2 round's budget); on 2026-11-18/19 the
-> icon-redraw, v5, Tooling, icon-dump, icons-v2, icons-v3, language-rule and
-> icons-v4 entries each moved under their following rounds' budgets, and the
-> collapse entry moved during the 2026-11-19 lenient-hex round's budget. The
-> header-strip (variant A2) entry moved to the archive during the Save-dialog
-> round's budget (2026-11-19); the Save-dialog entry followed during the
-> smooth-strokes round's budget (same day); the flake entry moved during this
-> docs round's budget (2026-11-20); the smooth-strokes entry followed during
-> this round's budget (2026-11-20); the pencil-drifting-pen entry followed
-> during the save-compression round's budget (2026-11-20); the docs-only +
-> V45/V46 bookkeeping entries moved to PROGRESS-archive.md during this
-> round's budget (2026-11-20); the web-download entry followed during the
-> layout round's budget (2026-11-20); the save-compression entry followed
-> during this round's budget (2026-11-20).
+> ever pinned in place by a pending check. Compaction history (which entry moved
+> under which round's budget, 2026-11-18 → 2026-11-20) lives in
+> PROGRESS-archive.md; the latest moves: the save-compression entry (during the
+> layout round's budget), the slider-captions entry (during the 2026-11-20
+> MODE-radio round's budget), both to PROGRESS-archive.md.
+
+### 2026-11-20 — `Feat:` the Shape panel's MODE radio over the tool's icon — owner request
+
+- **What:** the owner verified V51 and asked to make the MODE row better: the
+  two toggles should NOT repeat the selected shape — they should use the
+  Shape TOOL's icon — and become THREE choices, "a radio". Done exactly so: a
+  new `tools.rs::ShapePaint` (Fill / Outline / FillOutline — the former
+  `shape_fill`/`shape_outline` bools retired; the hidden "both on" state a
+  second click used to reach is now the explicit third radio choice), the
+  panel's MODE row is three `icon_button` radios over it, and the three MODE
+  icons draw the TOOL EMBLEM (`draw.rs::EMBLEM_RECT` + `emblem_circle()`, one
+  geometry with `draw_shape`): solid ink (Fill), rim only (Outline;
+  pixel-for-pixel the tool's button, test-asserted), the gray
+  `SHAPE_PREVIEW_FILL` under the rim (Fill+Outline). Tooltips carry the old
+  words + "Fill + Outline"; the icons are kind-INDEPENDENT again (the atlas
+  key is pixels-per-point ALONE — `ensure` lost the kind argument); the
+  wells/commit logic needed NO change (`rasterize_shape` always supported
+  fill+stroke; the color rules take the radio's `fills()`/`outlines()`).
+- **Files:** `src/tools.rs` (ShapePaint + ToolState.shape_paint),
+  `src/app/tool_icons.rs` (ShapeIcon::FillOutline, 5 icons, the f32 key),
+  `src/app/tool_icons/draw.rs` (the emblem consts + draw_paint_mode),
+  `src/app/windows.rs` (the radio row; the toggled_* helpers retired),
+  `src/app/preview.rs` + `colors.rs` (the call site + docs), `src/app.rs`
+  (the ensure call), tests: tool_icons/{tests,atlas,shape_panel}.rs +
+  windows/tests/settings_panel.rs + tools/tests.rs + preview/tests.rs
+  (+4 net), SPEC §3.2, AGENTS (the module map + the texture-count quirk),
+  TIMING (4 rows), DEBTS-verification (V51 + V48 closed, V52 born),
+  PROGRESS (snapshot + entry + stamp; the slider-captions entry moved to
+  PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 12 s hot: fmt clean, rules HARD
+  green (the OVER-GUARD note is the owner-deferred history_tree.rs 569),
+  clippy `-D warnings` green (default + mcp), `cargo test --profile gates`
+  218 default / 231 mcp green (+1 ignored each; +4 tests); NO wasm check
+  (the diff touches no web-facing code — the economy rule); the visual
+  driver ALL SCENARIOS GREEN under Xvfb; PLUS the GUI probe screenshots:
+  the three-radio panel, the "Fill + Outline" tooltip, a Fill+Outline
+  rectangle (red fill + black rim) drawn through the real binary, and the
+  256 px design sheet of all five icons.
+- **Owner-checks:** V52 born (the Windows + Web pass: the three radios on
+  the tool's icon, exactly one active, the tooltips, a Fill+Outline shape
+  painting both wells; the kind switch must NOT touch the MODE row). V51
+  closed verified in chat ("Проверил V51") and V48 too ("V48 проверил").
+  Open: V52, V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `Shape panel: the Fill/Outline toggles become a three-way radio over the Shape tool's icon (solid Fill, hollow Outline, gray-under-the-rim Fill+Outline, the old words as tooltips, the atlas kind-independent again)`
 
 ### 2026-11-20 — `Feat:` the Shape panel's icon buttons — owner request
 
@@ -164,33 +198,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   (+ the re-run-on-V50-build note), V46; parked: V30, V8. Debts open: F17, F16,
   F15.
 - **Commit title:** `Save dialog layout: the Saving-as preview above the file name, the folder row under it, the format dropdown instead of the radio, and the encoding group (Lossless above the knob) separated by distance`
-
-### 2026-11-20 — `Feat:` the Save dialog's slider meaning captions — owner request
-
-- **What:** the owner looked at the V48 dialog and asked to tell the user what
-  the slider's numbers MEAN ("even I wasn't quite sure"). Under EACH knob the
-  dialog now shows a live caption + a fixed trade-off line: PNG —
-  "<level> — stored raw / light packing / balanced packing / tight packing: …"
-  + "The picture is identical at every level — the slider only trades file
-  size against save speed."; JPEG — "<quality> — near-perfect picture / high
-  quality / medium quality / low quality: …" + "Lower = a smaller file, but
-  the picture loses more detail." The captions are pure bucket helpers
-  (`png_compression_hint` / `jpeg_quality_hint`), loop-tested over EVERY stop
-  (each of 0..=9 / 1..=100 names its own number); the two headless render
-  tests over the REAL dialog assert the default captions + tails. No encoding
-  change — pixels and bytes are exactly what V48 saved.
-- **Files:** `src/app/save_dialog.rs` (the two helpers + the two tails + the
-  caption rows), `src/app/save_dialog/tests.rs` (+2 tests, 2 extended),
-  SPEC §3.7, DEBTS-verification (V49 born), PROGRESS (snapshot + entry +
-  stamp; the docs-only + V45/V46 entries moved to PROGRESS-archive.md).
-- **Verified:** FULL gate ALL GATES GREEN 16 s hot: fmt clean, rules HARD
-  green, clippy `-D warnings` green (default + mcp), `cargo test --profile
-  gates` 220 default / 220 mcp green (+1 ignored each; +2 tests); `cargo
-  check --target wasm32-unknown-unknown` green (the dialog compiles into the
-  web build); the visual driver ALL SCENARIOS GREEN under Xvfb (the gates+mcp
-  binary). No TIMING rows — every command ran under a minute.
-- **Owner-checks:** V49 born (the Windows + Web pass: drag each slider — the
-  caption tracks the number and names its effect; the wording must be clear
-  to a fresh user). Open: V49, V48, V46; parked: V30, V8. Debts open: F17,
-  F16, F15.
-- **Commit title:** `Save dialog: a live caption under each slider explains the current number (PNG level = packing effort: file size vs save speed, pixels identical at every level; JPEG quality = look vs file size) + the fixed trade-off tails`

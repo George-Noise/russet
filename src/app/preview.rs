@@ -31,8 +31,8 @@ pub(super) enum PreviewState {
     /// A straight line or a shape dragged from `start` to `current`.
     /// A shape stores the colors it will commit with: `outline` is the
     /// primary-well stroke color, `fill` the secondary-well fill color;
-    /// `None` = the corresponding Tools-window checkbox is off. A straight
-    /// line always has `outline` set and `fill = None`.
+    /// `None` = the paint radio (owner request 2026-11-20) leaves that
+    /// well out. A straight line always has `outline` set and `fill = None`.
     Drag {
         kind: DragKind,
         start: Pos2,
@@ -176,15 +176,15 @@ impl App {
                         // Primary paints the outline, secondary the fill
                         // (owner request 2026-11-10); a RIGHT-button gesture
                         // uses the two wells INVERTED without swapping them
-                        // (owner request 2026-11-15: no persistent swap — the
-                        // Palette wells stay as they are). The Tools window
-                        // guarantees at least one of the two checkboxes is
-                        // on. The rule lives in the pure
-                        // [`shape_gesture_wells`] so it stays unit-testable.
+                        // (owner request 2026-11-15). Exactly one paint is
+                        // ever active (the panel's radio), so a color always
+                        // reaches the gesture — the pure
+                        // [`shape_gesture_wells`].
+                        let paint = self.tools.shape_paint;
                         let (outline, fill) = shape_gesture_wells(
                             button,
-                            self.tools.shape_outline,
-                            self.tools.shape_fill,
+                            paint.outlines(),
+                            paint.fills(),
                             self.tools.primary,
                             self.tools.secondary,
                         );
