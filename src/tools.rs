@@ -33,7 +33,7 @@ pub enum LineMode {
 }
 
 /// Sub-mode of the [`Tool::Shape`] tool (owner request 2026-11-10).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShapeKind {
     Rectangle,
     Ellipse,

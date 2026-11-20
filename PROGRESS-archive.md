@@ -1,5 +1,44 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Feat:` the Save dialog's Compression slider + the Lossless row — owner request
+
+- **What:** the owner asked for a save-time compression slider and THE most
+  important checkbox — the lossless guarantee (PNG first; JPEG "if possible").
+  The pinned image 0.25.10 PNG encoder exposes the REAL deflate scale
+  (`CompressionType::Level`: 0 = store, 1..=9 = exact effort) — the PNG row's
+  "Compression" slider 0..=9 (default 6 = flate2's balanced middle) has NO
+  placebo stops: every stop is a distinct setting, file size + encode time
+  trade, pixels never (the round-trip test decodes 0/6/9 byte-identical; the
+  pre-slider fdeflate "Fast" settings live on only in the MCP/path export).
+  The "Lossless" checkbox is the owner's guarantee — deliberately a per-format
+  LOCKED DISPLAY, not a toggle (a toggle would be a placebo on both formats):
+  PNG locks it ON ("always — PNG is lossless"), JPEG locks it OFF ("never —
+  JPEG is always lossy" — the standard's lossless mode is neither writable by
+  the pinned encoder nor decodable by mainstream browsers); JPEG keeps its
+  Quality slider. A new `SaveOptions` (format + jpeg_quality + png_compression,
+  both clamped in `commit_save_dialog`) carries the choices through the native
+  save AND the web download unchanged.
+- **Files:** `src/file_io.rs` (SaveOptions + DEFAULT_PNG_COMPRESSION +
+  png_compression_type + encode_png_with_compression; encode_png keeps the
+  legacy settings), `src/file_io/tests.rs` (+4), `src/app/save_dialog.rs` (the
+  per-format knob match + the Lossless row), `src/app/save_dialog/tests.rs`
+  (+2 headless render tests over the REAL `App::save_dialog`), `src/app.rs`
+  (save_png_compression field), `src/app/document.rs` (the SaveOptions glue),
+  SPEC §3.7, TIMING (3 rows), DEBTS-verification (V47 closed verified, V48
+  born), PROGRESS (snapshot + entry + stamp; the pencil entry moved to
+  PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 186 s cold (the fresh sandbox — the
+  gates lane's dep graph compiled inside it), then 13 s hot after the test
+  additions: fmt clean, rules HARD green, clippy `-D warnings` green (default
+  + mcp), `cargo test --profile gates` 218 default / 218 mcp green (+1 ignored
+  each; +6 tests); `cargo check --target wasm32-unknown-unknown` green
+  (web-facing); the visual driver ALL SCENARIOS GREEN under Xvfb.
+- **Owner-checks:** V48 born (the Windows + Web pass: the slider changes the
+  file size but not the pixels; the Lossless row's two locked states; both
+  formats land with the composed names). V47 closed verified in chat (the
+  direct-download pass). Open: V48, V46; parked: V30, V8. Debts open: F17,
+  F16, F15.
+- **Commit title:** `Save dialog: a PNG Compression slider 0..=9 (the encoder's real deflate stops, pixels never change) + the per-format Lossless row (locked on for PNG, locked off for JPEG) carried by SaveOptions through native and web`
 ### 2026-11-20 — Docs: the docs-only gate exemption into AGENTS.md — owner request
 
 - **What:** rules only, zero code: the owner asked to record that a task touching ONLY the

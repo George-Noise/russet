@@ -19,9 +19,10 @@
 //!                   MCP server (compiled out without the feature)
 //!   [`menu`]      — owner request 2026-11-13: the top menu bar (§3.1)
 //!   [`tool_icons`] — owner request 2026-11-18: the Tools window's ICON
-//!                   buttons — the tiny-skia atlas + the Eyedropper's
-//!                   pipette cursor; the icon drawings live in the child
-//!                   `tool_icons/draw` (the 2026-11-19 file-guard split)
+//!                   buttons + the Shape panel's four button icons (owner
+//!                   request 2026-11-20) — the tiny-skia atlas + the
+//!                   Eyedropper's pipette cursor; the icon drawings live in
+//!                   the child `tool_icons/draw` (the 2026-11-19 split)
 //!   [`tool_log`]  — owner request 2026-11-10: the "Tool Log" window (the
 //!                   read-only action log, named "History" until 2026-11-13)
 //!                   — both were `app/panels.rs` until the 2026-11-17 split
@@ -793,8 +794,10 @@ impl eframe::App for App {
         self.poll_file_task();
         self.handle_hotkeys(&ctx);
         // The icon atlas must exist before the canvas (the Eyedropper's
-        // pipette cursor) and the Tools window (the icon buttons) draw.
-        tool_icons::ensure(&mut self.tool_icons, &ctx);
+        // pipette cursor) and the Tools window (the icon buttons) draw. The
+        // Shape panel's MODE toggles preview the current kind, so the key
+        // carries it (owner request 2026-11-20).
+        tool_icons::ensure(&mut self.tool_icons, &ctx, self.tools.shape_kind);
         self.top_menu(ui);
 
         // no_frame: zero margin, the gray canvas background reaches the

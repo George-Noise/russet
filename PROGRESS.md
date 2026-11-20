@@ -38,13 +38,16 @@
 | Extra: the Save-dialog layout pass — preview above the name, the dropdown, the distance-separated encoding group (owner 2026-11-20) | done — gates + wasm check + driver + dialog screenshots green | the owner reviewed the V49 captions and reshaped the dialog: "Saving as" ABOVE the File name field (the result reads first), the Folder row (native) DIRECTLY under it — the "what + where" cluster; the Format radios → a `egui::ComboBox` dropdown ("PNG image" / "JPEG image" — the knob and the preview re-compose on the pick); the encoding group [Lossless ABOVE the knob + the captions] separated by a 12 pt `GROUP_GAP` (vs the 3 pt row gap) so related controls read as one block; +2 layout-order tests over the REAL dialog; no encoding change — pixels/bytes as V48 saved; V50 born |
 | Extra: the Save-dialog compression slider + the Lossless row (owner 2026-11-20) | done — gates + wasm check + driver green | the PNG row gains the "Compression" slider 0..=9 — the encoder's REAL stops (`CompressionType::Level`: 0 stores raw, 1..=9 the exact deflate effort; default 6 = flate2's balanced middle; file size + encode time trade, pixels NEVER, the round-trip test proves it) — and both formats gain the owner's "Lossless" row: a per-format LOCKED DISPLAY of the guarantee (PNG on — lossless by design; JPEG off — no lossless mode the pinned encoder could write nor browsers decode); JPEG keeps Quality; the dialog's choices ride a new `SaveOptions` through the native save AND the web download; V48 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the save-dialog layout
+| Extra: the Shape panel's icon buttons (owner 2026-11-20) | done — gates + driver + GUI probes green | the owner reviewed the V50 Save-dialog layout ("сейчас гораздо лучше") and reshaped the Shape tool's settings panel: the word radio and the Fill/Outline checkboxes became Tools-window-style ICON buttons — the KIND row (gray square / circle previews; tooltips carry the old words) and the MODE row after a group gap (Fill = the current kind SOLID, Outline = HOLLOW — the toggles re-render for the kind switch); the shared `icon_button` now draws both windows' buttons; the toggle invariant extracted into pure `toggled_fill`/`toggled_outline`; +7 tests (5 icons + 2 panel) over the split topics; V50 closed verified in chat, V51 born |
+
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the Shape-panel icon
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
-mcp), `cargo test --profile gates` 222 default / 222 mcp green (+1 ignored each
-— the permanent #[ignore] icon dump; +2 tests this round), the wasm
-`cargo check --target wasm32-unknown-unknown` green (the dialog compiles into
-the web build), the visual driver ALL SCENARIOS GREEN under Xvfb through the
-gates+mcp binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+mcp), `cargo test --profile gates` 227 default / 227 mcp green (+1 ignored each
+— the permanent #[ignore] icon dump; +5 net tests this round), the visual
+driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp binary + the GUI
+click-through screenshots (xdotool, ffmpeg) — Rust 1.99.1 pinned via
+rust-toolchain.toml, Linux. NO wasm check this round (the diff touches no
+web-facing code — the economy rule).
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
 `cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
@@ -52,7 +55,8 @@ the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`)
 lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only owner-deferred `history_tree.rs` 569 (the
 owner-approved 2026-11-19 palette split brought `app/windows.rs` back under the guard:
-571 → 351 + the child `windows/palette_window.rs` 287).
+571 → 351 + the child `windows/palette_window.rs` 287); the tool_icons tests topic-split
+(Tests rule 7) kept every test file under 300.
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -86,7 +90,45 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > during the save-compression round's budget (2026-11-20); the docs-only +
 > V45/V46 bookkeeping entries moved to PROGRESS-archive.md during this
 > round's budget (2026-11-20); the web-download entry followed during the
-> layout round's budget (2026-11-20).
+> layout round's budget (2026-11-20); the save-compression entry followed
+> during this round's budget (2026-11-20).
+
+### 2026-11-20 — `Feat:` the Shape panel's icon buttons — owner request
+
+- **What:** the owner reviewed V50 ("сейчас гораздо лучше") and reshaped the Shape
+  tool's settings panel: the word radio and the Fill/Outline checkboxes became ICON
+  BUTTONS in the Tools-window button style. The KIND row = two buttons — square /
+  circle drawn as neutral previews (mid-gray fill + the fixed ink rim) selecting
+  Rectangle / Ellipse; after a group gap (`SHAPE_GROUP_GAP`, the
+  distance-separates-meaning principle) the MODE row = two toggles — Fill (the
+  current kind SOLID in the fixed ink) and Outline (HOLLOW) — whose icons preview
+  the CURRENT kind: the atlas key is (pixels-per-point, kind) and a kind switch
+  re-rasterizes (egui's `load_texture_cached` dedupes identical content — only the
+  two toggles' pixels re-upload). Hovering shows EXACTLY the old words; the
+  at-least-one-mode invariant lives in pure `toggled_fill`/`toggled_outline`; the
+  shared `icon_button` fn now draws the Tools grid's buttons AND the panel's.
+- **Files:** `src/app/tool_icons.rs` (ShapeIcon + shape_icon_label +
+  shape_texture_id; the Atlas key + `shape_icons`), `src/app/tool_icons/draw.rs`
+  (rasterize_shape_icon + the two drawings + SHAPE_PREVIEW_FILL),
+  `src/app/windows.rs` (icon_button extracted; shape_settings_ui + the toggles),
+  `src/app.rs` (the ensure call passes the kind), `src/tools.rs` (ShapeKind +Debug),
+  `src/app/tool_icons/tests.rs` split by topic per Tests rule 7 (94 + drawings 199
+  + atlas 244 + shape_panel 104; +5 tests), `src/app/windows/tests/settings_panel.rs`
+  (+2), SPEC §3.2 (the panel bullets), TIMING (2 rows), DEBTS-verification (V50
+  closed verified, V51 born), PROGRESS (snapshot + entry + stamp).
+- **Verified:** FULL gate ALL GATES GREEN 16 s hot: fmt clean, rules HARD green
+  (the OVER-GUARD note is the owner-deferred history_tree.rs 569 again), clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 227 / 227 green
+  (+1 ignored each; +5 tests); NO wasm check (the diff touches no web-facing code —
+  the economy rule); the visual driver ALL SCENARIOS GREEN under Xvfb + the GUI
+  click-through with screenshots: the rectangle state, the Ellipse click turning
+  the toggles round, the "Rectangle" tooltip, an ellipse drawn on canvas.
+- **Owner-checks:** V51 born (the Windows + Web pass: the four buttons, the
+  tooltips, the kind switch re-rounding the toggles, drawing from the panel state).
+  V50 closed verified in chat (the owner: "Проверил как выглядит окошко Save,
+  сейчас гораздо лучше"). Open: V51, V48, V46; parked: V30, V8. Debts open: F17,
+  F16, F15.
+- **Commit title:** `Shape panel: the Kind radio and the Fill/Outline checkboxes become Tools-style icon buttons (gray square/circle previews, solid/hollow toggles previewing the current kind, the old words as tooltips)`
 
 ### 2026-11-20 — `Feat:` the Save-dialog layout pass — owner request
 
@@ -152,44 +194,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   to a fresh user). Open: V49, V48, V46; parked: V30, V8. Debts open: F17,
   F16, F15.
 - **Commit title:** `Save dialog: a live caption under each slider explains the current number (PNG level = packing effort: file size vs save speed, pixels identical at every level; JPEG quality = look vs file size) + the fixed trade-off tails`
-
-### 2026-11-20 — `Feat:` the Save dialog's Compression slider + the Lossless row — owner request
-
-- **What:** the owner asked for a save-time compression slider and THE most
-  important checkbox — the lossless guarantee (PNG first; JPEG "if possible").
-  The pinned image 0.25.10 PNG encoder exposes the REAL deflate scale
-  (`CompressionType::Level`: 0 = store, 1..=9 = exact effort) — the PNG row's
-  "Compression" slider 0..=9 (default 6 = flate2's balanced middle) has NO
-  placebo stops: every stop is a distinct setting, file size + encode time
-  trade, pixels never (the round-trip test decodes 0/6/9 byte-identical; the
-  pre-slider fdeflate "Fast" settings live on only in the MCP/path export).
-  The "Lossless" checkbox is the owner's guarantee — deliberately a per-format
-  LOCKED DISPLAY, not a toggle (a toggle would be a placebo on both formats):
-  PNG locks it ON ("always — PNG is lossless"), JPEG locks it OFF ("never —
-  JPEG is always lossy" — the standard's lossless mode is neither writable by
-  the pinned encoder nor decodable by mainstream browsers); JPEG keeps its
-  Quality slider. A new `SaveOptions` (format + jpeg_quality + png_compression,
-  both clamped in `commit_save_dialog`) carries the choices through the native
-  save AND the web download unchanged.
-- **Files:** `src/file_io.rs` (SaveOptions + DEFAULT_PNG_COMPRESSION +
-  png_compression_type + encode_png_with_compression; encode_png keeps the
-  legacy settings), `src/file_io/tests.rs` (+4), `src/app/save_dialog.rs` (the
-  per-format knob match + the Lossless row), `src/app/save_dialog/tests.rs`
-  (+2 headless render tests over the REAL `App::save_dialog`), `src/app.rs`
-  (save_png_compression field), `src/app/document.rs` (the SaveOptions glue),
-  SPEC §3.7, TIMING (3 rows), DEBTS-verification (V47 closed verified, V48
-  born), PROGRESS (snapshot + entry + stamp; the pencil entry moved to
-  PROGRESS-archive.md).
-- **Verified:** FULL gate ALL GATES GREEN 186 s cold (the fresh sandbox — the
-  gates lane's dep graph compiled inside it), then 13 s hot after the test
-  additions: fmt clean, rules HARD green, clippy `-D warnings` green (default
-  + mcp), `cargo test --profile gates` 218 default / 218 mcp green (+1 ignored
-  each; +6 tests); `cargo check --target wasm32-unknown-unknown` green
-  (web-facing); the visual driver ALL SCENARIOS GREEN under Xvfb.
-- **Owner-checks:** V48 born (the Windows + Web pass: the slider changes the
-  file size but not the pixels; the Lossless row's two locked states; both
-  formats land with the composed names). V47 closed verified in chat (the
-  direct-download pass). Open: V48, V46; parked: V30, V8. Debts open: F17,
-  F16, F15.
-- **Commit title:** `Save dialog: a PNG Compression slider 0..=9 (the encoder's real deflate stops, pixels never change) + the per-format Lossless row (locked on for PNG, locked off for JPEG) carried by SaveOptions through native and web`
-

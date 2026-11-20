@@ -19,12 +19,12 @@
 //! the shared placement plumbing, and the `App` method call sites
 //! (`app.rs`) are unchanged.
 
-use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
+use eframe::egui::{self, Color32, Context, Id, Rect, Sense, TextureId};
 
 use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
-use super::tool_icons;
-use crate::tools::{LineMode, ShapeKind, Tool};
+use super::tool_icons::{self, ShapeIcon};
+use crate::tools::{LineMode, ShapeKind, Tool, ToolState};
 
 mod palette_window;
 
@@ -36,6 +36,13 @@ const TOOL_COLUMNS: usize = 2;
 /// The gap between the tool-grid columns and rows (owner request 2026-11-18:
 /// equal gaps both ways).
 const TOOL_GRID_GAP: f32 = 6.0;
+
+/// The vertical gap that separates the Shape panel's two rows — the KIND
+/// choice and the paint MODE — so the two groups read apart (the same
+/// distance-separates-meaning principle the owner set for the Save dialog's
+/// encoding group, V50): the rows' own gap is egui's 3-pt item spacing, this
+/// adds 6 more between the two button rows.
+const SHAPE_GROUP_GAP: f32 = 6.0;
 
 /// The tool button's square size in logical points: the 1.5rem icon plus a
 /// small padding on every side.
@@ -119,6 +126,143 @@ fn tools_title_frame(ctx: &Context) -> egui::Frame {
 /// back the frame the window is expanded again.
 fn settings_panel_shown(tools_body_shown: bool, tool: Tool) -> bool {
     tools_body_shown && tool_has_settings(tool)
+}
+
+/// One ICON BUTTON — the shared look of the Tools window's tool buttons and
+/// the Shape panel's kind/mode buttons (owner request 2026-11-20: the
+/// panel's word radio and checkboxes became "the same buttons as in the
+/// Tools window"). A square of `size` pt, the cached icon texture centered
+/// inside, the LIGHT-theme visual states in BOTH themes (selected = the
+/// selection fill + stroke, hover = the hovered fill), rounded 3.0 corners,
+/// and the tooltip the caller passes. Returns the response; the caller
+/// wires the click (what the button SETS is the caller's state, not this
+/// fn's).
+fn icon_button(
+    ui: &mut egui::Ui,
+    size: f32,
+    icon: Option<TextureId>,
+    tooltip: &'static str,
+    selected: bool,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), Sense::click());
+    // Owner request 2026-11-18 (after the V36 pass): the tool buttons
+    // keep the LIGHT-theme look in BOTH themes — one background lets the
+    // single icon set (its dark rim) read well everywhere, instead of
+    // drawing for two backgrounds. The states (selected/hover/rest) come
+    // from the light widget visuals, so the button is theme-independent.
+    // Owner v4 (same day): the resting/hover fills dim A STEP (−14 per
+    // channel) — the full gray(230) light-theme button contrasted hard
+    // against BOTH themes' window background; the selection fill keeps
+    // the bright selection blue so the active tool still pops.
+    const DIM: u8 = 14;
+    let dim = |c: Color32| {
+        Color32::from_rgb(
+            c.r().saturating_sub(DIM),
+            c.g().saturating_sub(DIM),
+            c.b().saturating_sub(DIM),
+        )
+    };
+    let light = egui::Visuals::light();
+    let (fill, stroke) = if selected {
+        (light.selection.bg_fill, light.selection.stroke)
+    } else if response.hovered() {
+        (
+            dim(light.widgets.hovered.bg_fill),
+            light.widgets.hovered.bg_stroke,
+        )
+    } else {
+        (
+            dim(light.widgets.inactive.bg_fill),
+            light.widgets.inactive.bg_stroke,
+        )
+    };
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 3.0, fill);
+    painter.rect_stroke(rect, 3.0, stroke, egui::StrokeKind::Inside);
+    if let Some(id) = icon {
+        let uv = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1.0, 1.0));
+        // The icon is square; center it inside the padded button.
+        let icon_rect = egui::Rect::from_center_size(
+            rect.center(),
+            egui::vec2(tool_icons::ICON_PT, tool_icons::ICON_PT),
+        );
+        painter.image(id, icon_rect, uv, Color32::WHITE);
+    }
+    response.on_hover_text(tooltip)
+}
+
+/// The Shape tool's settings rows (owner request 2026-11-20): the KIND row —
+/// two icon buttons, the gray-filled square / circle previews — then, after
+/// a [`SHAPE_GROUP_GAP`], the MODE row — the Fill / Outline toggles drawn as
+/// the solid / hollow version of the CURRENT kind (the atlas re-rasterizes
+/// them when the kind switches). The buttons are the Tools window's icon
+/// buttons ([`icon_button`]); the tooltips carry EXACTLY the words the old
+/// word radio / checkboxes showed ([`tool_icons::shape_icon_label`]). The
+/// toggle RULE is unchanged (owner request 2026-11-10): at least one of
+/// Fill/Outline stays on ([`toggled_fill`] / [`toggled_outline`]).
+///
+/// Extracted as a free fn over [`ToolState`] so the regression tests run
+/// the exact UI the app runs (headless; the atlas is optional — the buttons
+/// render without icons the same way the Tools window does before the atlas
+/// lands).
+fn shape_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<tool_icons::Atlas>) {
+    ui.horizontal(|ui| {
+        for (kind, icon) in [
+            (ShapeKind::Rectangle, ShapeIcon::Rectangle),
+            (ShapeKind::Ellipse, ShapeIcon::Ellipse),
+        ] {
+            let response = icon_button(
+                ui,
+                TOOL_BUTTON_PT,
+                tool_icons::shape_texture_id(icons, icon),
+                tool_icons::shape_icon_label(icon),
+                tools.shape_kind == kind,
+            );
+            if response.clicked() {
+                tools.shape_kind = kind;
+            }
+        }
+    });
+    ui.add_space(SHAPE_GROUP_GAP);
+    ui.horizontal(|ui| {
+        let fill = icon_button(
+            ui,
+            TOOL_BUTTON_PT,
+            tool_icons::shape_texture_id(icons, ShapeIcon::Fill),
+            tool_icons::shape_icon_label(ShapeIcon::Fill),
+            tools.shape_fill,
+        );
+        if fill.clicked() {
+            let (f, o) = toggled_fill(tools.shape_fill, tools.shape_outline);
+            tools.shape_fill = f;
+            tools.shape_outline = o;
+        }
+        let outline = icon_button(
+            ui,
+            TOOL_BUTTON_PT,
+            tool_icons::shape_texture_id(icons, ShapeIcon::Outline),
+            tool_icons::shape_icon_label(ShapeIcon::Outline),
+            tools.shape_outline,
+        );
+        if outline.clicked() {
+            let (f, o) = toggled_outline(tools.shape_fill, tools.shape_outline);
+            tools.shape_fill = f;
+            tools.shape_outline = o;
+        }
+    });
+}
+
+/// The Shape panel's toggle rule, PURE (the same invariant the old
+/// checkboxes drove, owner request 2026-11-10 — "the tool can never end up
+/// drawing nothing"): clicking the Fill toggle flips it, and flipping it
+/// OFF re-checks Outline so at least one of the two modes stays on.
+fn toggled_fill(fill: bool, outline: bool) -> (bool, bool) {
+    if fill { (false, true) } else { (true, outline) }
+}
+
+/// The Outline half of the same rule: flipping Outline OFF re-checks Fill.
+fn toggled_outline(fill: bool, outline: bool) -> (bool, bool) {
+    if outline { (true, false) } else { (fill, true) }
 }
 
 /// The builder of the "Tools" window itself (§3.2). Exposed as a function so
@@ -216,55 +360,16 @@ impl App {
     /// text `selectable_label` list drove.
     fn tool_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
         let selected = self.tools.tool == tool;
-        let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(TOOL_BUTTON_PT, TOOL_BUTTON_PT), Sense::click());
-        // Owner request 2026-11-18 (after the V36 pass): the tool buttons
-        // keep the LIGHT-theme look in BOTH themes — one background lets the
-        // single icon set (its dark rim) read well everywhere, instead of
-        // drawing for two backgrounds. The states (selected/hover/rest) come
-        // from the light widget visuals, so the button is theme-independent.
-        // Owner v4 (same day): the resting/hover fills dim A STEP (−14 per
-        // channel) — the full gray(230) light-theme button contrasted hard
-        // against BOTH themes' window background; the selection fill keeps
-        // the bright selection blue so the active tool still pops.
-        const DIM: u8 = 14;
-        let dim = |c: Color32| {
-            Color32::from_rgb(
-                c.r().saturating_sub(DIM),
-                c.g().saturating_sub(DIM),
-                c.b().saturating_sub(DIM),
-            )
-        };
-        let light = egui::Visuals::light();
-        let (fill, stroke) = if selected {
-            (light.selection.bg_fill, light.selection.stroke)
-        } else if response.hovered() {
-            (
-                dim(light.widgets.hovered.bg_fill),
-                light.widgets.hovered.bg_stroke,
-            )
-        } else {
-            (
-                dim(light.widgets.inactive.bg_fill),
-                light.widgets.inactive.bg_stroke,
-            )
-        };
-        let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 3.0, fill);
-        painter.rect_stroke(rect, 3.0, stroke, egui::StrokeKind::Inside);
-        if let Some(id) = tool_icons::texture_id(&self.tool_icons, tool) {
-            let uv = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1.0, 1.0));
-            // The icon is square; center it inside the padded button.
-            let icon = egui::Rect::from_center_size(
-                rect.center(),
-                egui::vec2(tool_icons::ICON_PT, tool_icons::ICON_PT),
-            );
-            painter.image(id, icon, uv, Color32::WHITE);
-        }
+        let response = icon_button(
+            ui,
+            TOOL_BUTTON_PT,
+            tool_icons::texture_id(&self.tool_icons, tool),
+            tool_icons::label(tool),
+            selected,
+        );
         if response.clicked() {
             self.tools.tool = tool;
         }
-        response.on_hover_text(tool_icons::label(tool));
     }
 
     /// The magnetized settings panel of the "Tools" window (owner request
@@ -305,32 +410,7 @@ impl App {
                     }
                 }
                 Tool::Shape => {
-                    ui.horizontal(|ui| {
-                        ui.label("Kind");
-                        ui.radio_value(
-                            &mut self.tools.shape_kind,
-                            ShapeKind::Rectangle,
-                            "Rectangle",
-                        );
-                        ui.radio_value(&mut self.tools.shape_kind, ShapeKind::Ellipse, "Ellipse");
-                    });
-                    // The primary color paints the outline, the secondary
-                    // color the fill. At least one of the two must stay on:
-                    // unchecking Fill re-checks Outline and unchecking
-                    // Outline re-checks Fill, so the tool can never end up
-                    // drawing nothing (owner request 2026-11-10).
-                    if ui.checkbox(&mut self.tools.shape_fill, "Fill").changed()
-                        && !self.tools.shape_fill
-                    {
-                        self.tools.shape_outline = true;
-                    }
-                    if ui
-                        .checkbox(&mut self.tools.shape_outline, "Outline")
-                        .changed()
-                        && !self.tools.shape_outline
-                    {
-                        self.tools.shape_fill = true;
-                    }
+                    shape_settings_ui(ui, &mut self.tools, &self.tool_icons);
                 }
                 Tool::Text => {
                     // Two short lines: the single long hint would make the

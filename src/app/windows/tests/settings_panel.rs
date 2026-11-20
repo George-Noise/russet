@@ -6,7 +6,10 @@
 //! window. Since the owner request 2026-11-19 also the collapse rule: while
 //! the Tools window is collapsed to its title bar the panel hides with it.
 
-use super::super::{settings_panel_shown, tool_has_settings, tool_uses_size};
+use super::super::{
+    settings_panel_shown, shape_settings_ui, toggled_fill, toggled_outline, tool_has_settings,
+    tool_uses_size,
+};
 use super::common::{SCREEN, show_once, show_tools_once};
 use crate::tools::Tool;
 use eframe::egui::{self, Pos2, Rect};
@@ -115,6 +118,58 @@ fn the_settings_panel_follows_its_fixed_pos_every_frame() {
         settled.size(),
         "the panel size must not change with the position"
     );
+}
+
+/// The Shape panel's toggle rule (owner request 2026-11-10, now driven by
+/// the icon toggles — owner request 2026-11-20): flipping a mode OFF
+/// re-checks the OTHER mode, so the tool can never end up drawing nothing;
+/// flipping a mode ON keeps the other as it was. PURE — the exact helpers
+/// the panel's click handlers call.
+#[test]
+fn toggling_a_shape_mode_off_re_checks_the_other() {
+    assert_eq!(toggled_fill(true, true), (false, true));
+    assert_eq!(toggled_outline(true, true), (true, false));
+    assert_eq!(toggled_fill(false, true), (true, true));
+    assert_eq!(toggled_outline(true, false), (true, true));
+    for (fill, outline) in [(true, true), (false, true), (true, false)] {
+        let (f, o) = toggled_fill(fill, outline);
+        assert!(f || o, "fill flip from ({fill}, {outline})");
+        let (f, o) = toggled_outline(fill, outline);
+        assert!(f || o, "outline flip from ({fill}, {outline})");
+    }
+}
+
+/// The Shape panel's two icon rows (owner request 2026-11-20) render
+/// COMPACT headless — the exact `shape_settings_ui` the app runs, atlas
+/// omitted (the buttons draw without icons the same way the Tools window
+/// does before the atlas lands). A leaked width/height (egui's 340-pt
+/// default window width, the 800-pt screen) fails here.
+#[test]
+fn the_shape_rows_render_compact_headless() {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        ..egui::RawInput::default()
+    };
+    let mut rect = Rect::NOTHING;
+    // Two passes: egui settles an area's geometry on the second one.
+    for _ in 0..2 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            let mut tools = crate::tools::ToolState::new();
+            tools.tool = Tool::Shape;
+            egui::Area::new(egui::Id::unique("shape_rows_probe"))
+                .fixed_pos(Pos2::ZERO)
+                .show(ctx, |ui| {
+                    let min = ui.cursor().min;
+                    shape_settings_ui(ui, &mut tools, &None);
+                    rect = Rect::from_min_size(min, ui.min_size());
+                });
+        });
+        output.textures_delta.clear();
+    }
+    // Two 28-pt button rows + the group gap — nothing near a full window.
+    assert!(rect.height() < 80.0, "shape rows height {}", rect.height());
+    assert!(rect.width() < 100.0, "shape rows width {}", rect.width());
 }
 
 #[test]

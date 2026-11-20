@@ -1,6 +1,8 @@
-//! The SEVEN ICON DRAWINGS behind the Tools window's buttons: the per-tool
-//! `draw_*` functions and the [`rasterize_tool_icon`] dispatcher. Every icon
-//! is closed polygons + round-cap strokes through the parent's SHARED
+//! The icon DRAWINGS behind the Tools window's buttons and the Shape
+//! panel's buttons: the per-tool `draw_*` functions, the
+//! [`rasterize_tool_icon`] dispatcher and the Shape-panel set
+//! ([`rasterize_shape_icon`] + its `draw_kind_preview` / `draw_mode`). Every
+//! icon is closed polygons + round-cap strokes through the parent's SHARED
 //! PRIMITIVES ([`super::fill`], [`super::stroke`], [`super::arc_pts`],
 //! [`super::quad_pts`], [`super::icon_transform`], [`super::OUTLINE_W`] —
 //! imported below), laid out in the logical 24×24 space. The pipeline and
@@ -8,15 +10,16 @@
 //! cursor conversion and the texture upload; the monochrome icons take the
 //! fixed [`super::TOOL_INK`] passed in as the `text` argument, the colored
 //! ones carry their own fixed palettes inline. The drawing facts owned HERE
-//! are the hand-held tools' angle ([`TOOL_ANGLE`]) and the pipette tip
-//! ([`PIPETTE_TIP`] — the cursor hotspot's source).
+//! are the hand-held tools' angle ([`TOOL_ANGLE`]), the pipette tip
+//! ([`PIPETTE_TIP`] — the cursor hotspot's source) and the Shape panel's
+//! preview fill ([`SHAPE_PREVIEW_FILL`]).
 //!
 //! File layout: the owner-approved 2026-11-19 file-guard split (pure code
 //! motion — the parent was 673 lines; the drawings moved over VERBATIM, no
 //! body or color changed).
 
 use super::{OUTLINE_W, arc_pts, fill, icon_transform, quad_pts, stroke};
-use crate::tools::Tool;
+use crate::tools::{ShapeKind, Tool};
 use eframe::egui::Color32;
 use tiny_skia::{Pixmap, Transform};
 
@@ -395,6 +398,84 @@ pub(super) fn rasterize_tool_icon(tool: Tool, px: usize, text: Color32) -> Optio
         Tool::Line => draw_line(&mut pm, icon_transform(px, 0.0), text),
         Tool::Shape => draw_shape(&mut pm, icon_transform(px, 0.0), text),
         Tool::Text => draw_text(&mut pm, icon_transform(px, 0.0), text),
+    }
+    Some(pm)
+}
+
+// ---------------------------------------------------------------------------
+// The Shape panel's four icons (owner request 2026-11-20): the word radio
+// and the Fill/Outline checkboxes became icon buttons in the Tools window's
+// style. All four are centered in the logical 24×24 space and share ONE
+// geometry per shape — the same square / circle drawn three ways (the gray
+// kind preview, the solid mode toggle, the hollow mode toggle) — so the
+// panel reads as "which shape" over "how does it paint".
+// ---------------------------------------------------------------------------
+
+/// The kind buttons' preview fill: a mid neutral gray — clearly darker than
+/// the buttons' light resting fill (so the interior reads as FILLED) and
+/// clearly lighter than the ink rim (so the rim still draws the shape's
+/// edge). Fixed constant: the icons are theme-independent like the set.
+const SHAPE_PREVIEW_FILL: Color32 = Color32::from_gray(160);
+
+/// The shared 15×15 square, centered (4.5..19.5 on both axes).
+const SQUARE_PTS: [(f32, f32); 4] = [(4.5, 4.5), (19.5, 4.5), (19.5, 19.5), (4.5, 19.5)];
+
+/// The kind button: the shape as a NEUTRAL PREVIEW — the mid-gray fill plus
+/// the ink rim (the same 1.9 stroke the monochrome tool icons draw).
+fn draw_kind_preview(pm: &mut Pixmap, ts: Transform, kind: ShapeKind, mono: Color32) {
+    match kind {
+        ShapeKind::Rectangle => {
+            fill(pm, ts, &SQUARE_PTS, SHAPE_PREVIEW_FILL);
+            stroke(pm, ts, &SQUARE_PTS, true, mono, 1.9);
+        }
+        ShapeKind::Ellipse => {
+            let circle = arc_pts(12.0, 12.0, 7.5, 0.0, 360.0, 40);
+            fill(pm, ts, &circle, SHAPE_PREVIEW_FILL);
+            stroke(pm, ts, &circle, true, mono, 1.9);
+        }
+    }
+}
+
+/// A MODE toggle: the current kind drawn SOLID (the Fill state — the whole
+/// silhouette in ink) or HOLLOW (the Outline state — the rim only).
+fn draw_mode(pm: &mut Pixmap, ts: Transform, kind: ShapeKind, solid: bool, mono: Color32) {
+    match kind {
+        ShapeKind::Rectangle => {
+            if solid {
+                fill(pm, ts, &SQUARE_PTS, mono);
+            } else {
+                stroke(pm, ts, &SQUARE_PTS, true, mono, 1.9);
+            }
+        }
+        ShapeKind::Ellipse => {
+            let circle = arc_pts(12.0, 12.0, 7.5, 0.0, 360.0, 40);
+            if solid {
+                fill(pm, ts, &circle, mono);
+            } else {
+                stroke(pm, ts, &circle, true, mono, 1.9);
+            }
+        }
+    }
+}
+
+/// Rasterizes one Shape-panel icon for the panel's CURRENT kind into a
+/// `px × px` premultiplied-RGBA pixmap (the MODE toggles preview it; the
+/// KIND buttons ignore the argument — they are fixed previews of their own
+/// shape). Same failure contract as [`rasterize_tool_icon`].
+pub(super) fn rasterize_shape_icon(
+    icon: super::ShapeIcon,
+    kind: ShapeKind,
+    px: usize,
+    text: Color32,
+) -> Option<Pixmap> {
+    use super::ShapeIcon;
+    let mut pm = Pixmap::new(px as u32, px as u32)?;
+    let ts = icon_transform(px, 0.0);
+    match icon {
+        ShapeIcon::Rectangle => draw_kind_preview(&mut pm, ts, ShapeKind::Rectangle, text),
+        ShapeIcon::Ellipse => draw_kind_preview(&mut pm, ts, ShapeKind::Ellipse, text),
+        ShapeIcon::Fill => draw_mode(&mut pm, ts, kind, true, text),
+        ShapeIcon::Outline => draw_mode(&mut pm, ts, kind, false, text),
     }
     Some(pm)
 }
