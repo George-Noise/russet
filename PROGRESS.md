@@ -34,11 +34,12 @@
 | Extra: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46 (owner 2026-11-20) | done — docs only | DEBTS-verification bookkeeping: V45 closed verified in chat (the owner's Windows AND Web passes), the same smooth-stroke checklist on Linux (X11 AND Wayland backends) born as V46; no code touched |
 | Extra: the docs-only gate exemption into AGENTS.md (owner 2026-11-20) | done — docs only | a `.md`-only diff runs `scripts/rules.sh` + the delivery byte-compares ONLY — no builds, no tests; the full gate stays for anything beyond `.md` (Rust, scripts, Cargo, flake, CI, web); comment-only `.rs` edits keep the `cargo check` quick loop |
 | Extra: the web save downloads directly — rfd's fallback window gone (owner 2026-11-20) | done — gates + wasm check + driver green | the web Save dialog's confirm no longer routes through `rfd::AsyncFileDialog::save_file()` (its wasm backend pops the "click here to download your file" Ok/Cancel window): `file_io.rs::web::download_image` encodes → Blob (the format's MIME type, new `SaveFormat::mime_type`) → object URL → one synthetic click on a detached `<a download>` with the composed name → the URL revoked on a 10 s grace timer; js-sys/wasm-bindgen ride wasm-bindgen-futures' public re-exports (zero manifest additions; the web-sys line gains 8 feature gates); rfd stays only on the Open path; V47 born |
+| Extra: the Save-dialog compression slider + the Lossless row (owner 2026-11-20) | done — gates + wasm check + driver green | the PNG row gains the "Compression" slider 0..=9 — the encoder's REAL stops (`CompressionType::Level`: 0 stores raw, 1..=9 the exact deflate effort; default 6 = flate2's balanced middle; file size + encode time trade, pixels NEVER, the round-trip test proves it) — and both formats gain the owner's "Lossless" row: a per-format LOCKED DISPLAY of the guarantee (PNG on — lossless by design; JPEG off — no lossless mode the pinned encoder could write nor browsers decode); JPEG keeps Quality; the dialog's choices ride a new `SaveOptions` through the native save AND the web download; V48 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the web direct-download
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the save-compression
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
-mcp), `cargo test --profile gates` 212 default / 212 mcp green (+1 ignored each
-— the permanent #[ignore] icon dump; +1 MIME-mapping test this round), the wasm
+mcp), `cargo test --profile gates` 218 default / 218 mcp green (+1 ignored each
+— the permanent #[ignore] icon dump; +6 tests this round), the wasm
 `cargo check --target wasm32-unknown-unknown` green (the web-facing change), the
 visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp binary
 — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
@@ -79,7 +80,48 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > round's budget (2026-11-19); the Save-dialog entry followed during the
 > smooth-strokes round's budget (same day); the flake entry moved during this
 > docs round's budget (2026-11-20); the smooth-strokes entry followed during
-> this round's budget (2026-11-20).
+> this round's budget (2026-11-20); the pencil-drifting-pen entry followed
+> during the save-compression round's budget (2026-11-20).
+
+### 2026-11-20 — `Feat:` the Save dialog's Compression slider + the Lossless row — owner request
+
+- **What:** the owner asked for a save-time compression slider and THE most
+  important checkbox — the lossless guarantee (PNG first; JPEG "if possible").
+  The pinned image 0.25.10 PNG encoder exposes the REAL deflate scale
+  (`CompressionType::Level`: 0 = store, 1..=9 = exact effort) — the PNG row's
+  "Compression" slider 0..=9 (default 6 = flate2's balanced middle) has NO
+  placebo stops: every stop is a distinct setting, file size + encode time
+  trade, pixels never (the round-trip test decodes 0/6/9 byte-identical; the
+  pre-slider fdeflate "Fast" settings live on only in the MCP/path export).
+  The "Lossless" checkbox is the owner's guarantee — deliberately a per-format
+  LOCKED DISPLAY, not a toggle (a toggle would be a placebo on both formats):
+  PNG locks it ON ("always — PNG is lossless"), JPEG locks it OFF ("never —
+  JPEG is always lossy" — the standard's lossless mode is neither writable by
+  the pinned encoder nor decodable by mainstream browsers); JPEG keeps its
+  Quality slider. A new `SaveOptions` (format + jpeg_quality + png_compression,
+  both clamped in `commit_save_dialog`) carries the choices through the native
+  save AND the web download unchanged.
+- **Files:** `src/file_io.rs` (SaveOptions + DEFAULT_PNG_COMPRESSION +
+  png_compression_type + encode_png_with_compression; encode_png keeps the
+  legacy settings), `src/file_io/tests.rs` (+4), `src/app/save_dialog.rs` (the
+  per-format knob match + the Lossless row), `src/app/save_dialog/tests.rs`
+  (+2 headless render tests over the REAL `App::save_dialog`), `src/app.rs`
+  (save_png_compression field), `src/app/document.rs` (the SaveOptions glue),
+  SPEC §3.7, TIMING (3 rows), DEBTS-verification (V47 closed verified, V48
+  born), PROGRESS (snapshot + entry + stamp; the pencil entry moved to
+  PROGRESS-archive.md).
+- **Verified:** FULL gate ALL GATES GREEN 186 s cold (the fresh sandbox — the
+  gates lane's dep graph compiled inside it), then 13 s hot after the test
+  additions: fmt clean, rules HARD green, clippy `-D warnings` green (default
+  + mcp), `cargo test --profile gates` 218 default / 218 mcp green (+1 ignored
+  each; +6 tests); `cargo check --target wasm32-unknown-unknown` green
+  (web-facing); the visual driver ALL SCENARIOS GREEN under Xvfb.
+- **Owner-checks:** V48 born (the Windows + Web pass: the slider changes the
+  file size but not the pixels; the Lossless row's two locked states; both
+  formats land with the composed names). V47 closed verified in chat (the
+  direct-download pass). Open: V48, V46; parked: V30, V8. Debts open: F17,
+  F16, F15.
+- **Commit title:** `Save dialog: a PNG Compression slider 0..=9 (the encoder's real deflate stops, pixels never change) + the per-format Lossless row (locked on for PNG, locked off for JPEG) carried by SaveOptions through native and web`
 
 ### 2026-11-20 — `Fix:` the web save's rfd fallback window — the direct Blob download — owner request
 
@@ -152,47 +194,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** V45 verified in chat (Windows + Web). Open: V46; parked: V30, V8.
   Debts open: F17, F16, F15.
 - **Commit title:** `Debts: V45 verified (Windows + Web); the smooth-stroke X11/Wayland pass opens V46`
-
-### 2026-11-20 — `Fix:` the pencil's ragged 1 px trail — the drifting pen — owner request
-
-- **What:** the owner's screenshot (a 51x44 canvas crop) showed the smoothed pencil drawing
-  EXTRA pixels: double-covered columns and holes on every diagonal, the pattern differing
-  between computers. Diagnosed (a Python f32 replica of the pipeline + an angle scan): the
-  pencil re-ran integer Bresenham between independently rounded ~1 px endpoints of the
-  flattened quads — each ~1 px sub-run restarted the line algorithm, so two consecutive
-  rounded endpoints 2 columns apart plotted an extra pixel and the next run compensated with
-  a hole; the subdivision step count came from the control-polygon length (over-dense on
-  bent pieces) with a 64 cap (sparse on fast strokes), and the pattern followed the per-frame
-  event batching (different machines coalesce differently). Replaced by the DRIFTING PEN:
-  `PencilTrail` (the exact float pen + the last plotted pixel) carried across pieces AND
-  frames on the gesture; the pen walks UNIT steps of the chord-dominant axis, the minor
-  coordinate advances proportionally and is carried EXACTLY (never rounded into the state) —
-  the same error accumulation one long Bresenham run performs, restarts impossible; one
-  pixel per step, 8-connected by construction; the release pins the raw release point
-  (`rasterize_smooth_pieces` gained `pin`); the subdivision cap 64 → 4096. The smoothed
-  path of integer-rounded pointer events still wobbles locally past 45 degrees, so an
-  isolated stacked pixel remains (honest staircase, ~2 per 32 px on the ragged input,
-  was 5 + a broken look). Brush/eraser untouched; `draw_segment` unchanged (the press dot
-  + MCP paths).
-- **Files:** `src/tools/smooth.rs` (PencilTrail + walk_pen; plot_pencil_run removed),
-  `src/tools.rs` (the PencilTrail re-export), `src/app.rs` (stroke_last_pixel → stroke_trail),
-  `src/app/input.rs` (the trail plumbing + the release pin), NEW `tools/smooth/tests/trail.rs`
-  (2 regression tests: the integer-event staircase + the byte-identical frame-batch
-  invariance), `tools/smooth/tests/raster.rs` (the trail/pin signatures; the parity test
-  rewritten to the new invariants), SPEC §3.5 + §7.2, TIMING (2 rows), DEBTS-verification
-  (V44 closed failed, V45 born), PROGRESS (snapshot + entry + stamp; the pyc entry moved
-  to the archive).
-- **Verified:** FULL gate ALL GATES GREEN 74 s — fmt clean, rules HARD green, clippy
-  `-D warnings` green (default + mcp), `cargo test --profile gates` 211 default / 211 mcp
-  green (+1 ignored each; +2 tests); the visual driver ALL SCENARIOS GREEN under Xvfb;
-  a real-pointer Xvfb probe (xdotool press-drag-release through the gates+mcp binary):
-  the fast diagonal 379 px / 379 columns (0 double-covered, 0 holes, 8-connected), the
-  slow diagonal 401/401, the steep curve 1 px per row — pixel-perfect staircases in the
-  real app.
-- **Owner-checks:** V45 born (the Windows pass: slow + fast diagonals and curves — an even
-  staircase, the same pattern at any speed/machine; translucent joints; the click pixel;
-  the release end; undo). V44 closed failed (the pencil half; the brush/eraser smoothing
-  held up). Open: V45, V40 is the newest verified; ask = V45, V30 (parked), V8 (parked);
-  debts F17, F16, F15.
-- **Commit title:** `Pencil drifting pen: the 1 px staircase stops depending on the frame batching (exact-float minor phase carried across the gesture, one pixel per unit step, the release pins the raw release point; the per-run Bresenham restarts drew double-covered columns and holes, differently per machine)`
-

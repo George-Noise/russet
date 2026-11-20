@@ -82,3 +82,89 @@ fn the_prefill_strips_a_known_extension_only() {
     // ASCII-only lowercasing keeps every UTF-8 boundary intact.
     assert_eq!(base_name_of("grüße.png"), "grüße");
 }
+
+// ---- the dialog's rendered rows (owner request 2026-11-20: the PNG
+// Compression slider + the per-format Lossless row) ----
+
+use crate::app::App;
+use eframe::egui::{self, Pos2, Rect};
+
+/// Renders the REAL save dialog through the REAL `App::save_dialog` method
+/// for the given format and joins every painted text run — the same trick
+/// `dialogs/tests.rs` uses on the shared plumbing. THREE passes: egui sizes
+/// a fresh window on the frame after its first layout, so the first pass
+/// paints nothing (every shape culled to `Noop`).
+fn rendered_save_texts(format: SaveFormat) -> String {
+    let mut app = App::new_headless();
+    app.show_save_dialog = true;
+    app.save_format = format;
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(
+            Pos2::ZERO,
+            egui::Vec2::new(1280.0, 800.0),
+        )),
+        ..egui::RawInput::default()
+    };
+    let mut rendered = String::new();
+    for _ in 0..3 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            app.save_dialog(ctx);
+        });
+        // No renderer here: the font-atlas deltas each pass hands back must
+        // be explicitly discarded (see dialogs/tests.rs show_once).
+        output.textures_delta.clear();
+        // egui nests paint commands (`Shape::Vec`) — collect recursively.
+        fn texts<'a>(shape: &'a egui::Shape, out: &mut Vec<&'a str>) {
+            match shape {
+                egui::Shape::Text(text) => out.push(text.galley.job.text.as_str()),
+                egui::Shape::Vec(children) => children.iter().for_each(|c| texts(c, out)),
+                _ => {}
+            }
+        }
+        let mut runs = Vec::new();
+        for clipped in &output.shapes {
+            texts(&clipped.shape, &mut runs);
+        }
+        rendered = runs.join("\n");
+    }
+    rendered
+}
+
+#[test]
+fn the_png_rows_show_the_compression_slider_and_the_locked_lossless_promise() {
+    let rendered = rendered_save_texts(SaveFormat::Png);
+    // The per-format knob and the guarantee row, both PNG-flavored...
+    assert!(rendered.contains("Compression"), "rows: {rendered}");
+    assert!(rendered.contains("Lossless"), "rows: {rendered}");
+    assert!(
+        rendered.contains("(always — PNG is lossless)"),
+        "rows: {rendered}"
+    );
+    // ...and nothing of the JPEG-only rows.
+    assert!(!rendered.contains("Quality"), "rows: {rendered}");
+    assert!(
+        !rendered.contains("(never — JPEG is always lossy)"),
+        "rows: {rendered}"
+    );
+}
+
+#[test]
+fn the_jpeg_rows_show_quality_and_no_lossless_promise() {
+    let rendered = rendered_save_texts(SaveFormat::Jpeg);
+    // JPEG keeps its Quality knob; the Lossless row flips to the locked-OFF
+    // display (a lossless JPEG is neither writable by the pinned encoder
+    // nor decodable by browsers).
+    assert!(rendered.contains("Quality"), "rows: {rendered}");
+    assert!(rendered.contains("Lossless"), "rows: {rendered}");
+    assert!(
+        rendered.contains("(never — JPEG is always lossy)"),
+        "rows: {rendered}"
+    );
+    // ...and nothing of the PNG-only rows.
+    assert!(!rendered.contains("Compression"), "rows: {rendered}");
+    assert!(
+        !rendered.contains("(always — PNG is lossless)"),
+        "rows: {rendered}"
+    );
+}

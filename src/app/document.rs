@@ -196,6 +196,8 @@ impl App {
 
     /// The dialog's Save click (the glue behind
     /// [`super::save_dialog::save_dialog`]): composes the final name,
+    /// gathers the dialog's encoding choices into a [`file_io::SaveOptions`]
+    /// (both knobs clamped — the slider bounds are not the only writers),
     /// resolves the native folder — the dialog's pick, else the document's
     /// own folder, else the folder picker opens right from the click (a
     /// cancelled pick keeps the dialog open) — and writes. Returns whether
@@ -204,7 +206,13 @@ impl App {
     /// dialog STAYS OPEN so the name can be fixed.
     pub(super) fn commit_save_dialog(&mut self) -> bool {
         self.save_quality = self.save_quality.clamp(1, 100);
+        self.save_png_compression = self.save_png_compression.min(9);
         let name = compose_file_name(&self.save_file_name, self.save_format);
+        let options = file_io::SaveOptions {
+            format: self.save_format,
+            jpeg_quality: self.save_quality,
+            png_compression: self.save_png_compression,
+        };
         #[cfg(not(target_arch = "wasm32"))]
         {
             let dir = match self.save_dir.clone() {
@@ -227,13 +235,7 @@ impl App {
                     }
                 }
             };
-            match file_io::save_image_as(
-                self.canvas.pixmap(),
-                &dir,
-                &name,
-                self.save_format,
-                self.save_quality,
-            ) {
+            match file_io::save_image_as(self.canvas.pixmap(), &dir, &name, options) {
                 Ok(saved) => {
                     self.apply_saved(saved);
                     true
@@ -250,8 +252,7 @@ impl App {
                 &self.ctx,
                 self.canvas.pixmap().clone(),
                 name,
-                self.save_format,
-                self.save_quality,
+                options,
             ));
             true
         }

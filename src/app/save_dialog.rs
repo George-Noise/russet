@@ -2,7 +2,9 @@
 //! File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) open it — an
 //! in-app dialog replacing the OS save dialog, with everything the save
 //! needs collected IN THE DIALOG: the format radio (PNG / JPEG), the file
-//! name, the JPEG quality and — native only — the destination folder.
+//! name, the per-format encoding knob (the PNG compression slider, the
+//! JPEG quality), the Lossless row (owner request 2026-11-20) and —
+//! native only — the destination folder.
 //!
 //! This module owns the dialog UI, its `App` state prefill and the pure
 //! name helpers; the platform save glue lives in [`super::document`]
@@ -87,12 +89,15 @@ impl App {
     }
 
     /// The dialog itself: the file name field, the format radio (THE format
-    /// choice — owner request 2026-11-19), the JPEG quality (JPEG only; the
-    /// value is kept across opens), the native folder row and the
-    /// resulting-name preview. Save (rightmost per §3.7) hands over to
-    /// [`super::document::commit_save_dialog`] — the dialog closes only on
-    /// success (or, on web, once the download task is spawned); Cancel and
-    /// the ✕ close without writing.
+    /// choice — owner request 2026-11-19), the per-format encoding knob —
+    /// the PNG Compression slider or the JPEG Quality slider (the values
+    /// are kept across opens) — the Lossless row (owner request
+    /// 2026-11-20: THE guarantee, displayed per format — PNG locks it ON,
+    /// JPEG locks it OFF; neither format can do otherwise), the native
+    /// folder row and the resulting-name preview. Save (rightmost per
+    /// §3.7) hands over to [`super::document::commit_save_dialog`] — the
+    /// dialog closes only on success (or, on web, once the download task
+    /// is spawned); Cancel and the ✕ close without writing.
     pub(super) fn save_dialog(&mut self, ctx: &Context) {
         if !self.show_save_dialog {
             return;
@@ -123,11 +128,37 @@ impl App {
                         SaveFormat::Jpeg.label(),
                     );
                 });
-                if self.save_format == SaveFormat::Jpeg {
-                    ui.horizontal(|ui| {
-                        ui.label("Quality");
-                        ui.add(egui::Slider::new(&mut self.save_quality, 1..=100));
-                    });
+                match self.save_format {
+                    SaveFormat::Png => {
+                        ui.horizontal(|ui| {
+                            ui.label("Compression");
+                            ui.add(egui::Slider::new(&mut self.save_png_compression, 0..=9));
+                        });
+                        // PNG cannot be lossy, so the owner-requested
+                        // Lossless row is a locked-ON display of the
+                        // guarantee, not a toggle (a toggle would be a
+                        // placebo — unchecking could not change anything).
+                        let mut lossless = true;
+                        ui.horizontal(|ui| {
+                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
+                            ui.weak("(always — PNG is lossless)");
+                        });
+                    }
+                    SaveFormat::Jpeg => {
+                        ui.horizontal(|ui| {
+                            ui.label("Quality");
+                            ui.add(egui::Slider::new(&mut self.save_quality, 1..=100));
+                        });
+                        // JPEG is always lossy — the pinned encoder cannot
+                        // write a lossless JPEG and browsers cannot decode
+                        // one — so the row displays the absence of the
+                        // guarantee (locked OFF, like the PNG row's ON).
+                        let mut lossless = false;
+                        ui.horizontal(|ui| {
+                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
+                            ui.weak("(never — JPEG is always lossy)");
+                        });
+                    }
                 }
                 if file_io::FOLDER_PICKING_SUPPORTED {
                     ui.horizontal(|ui| {

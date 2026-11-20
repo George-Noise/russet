@@ -23,24 +23,21 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `cargo check` (the save-compression round's quick loop, COLD dep graph on a fresh sandbox — rustup installed first, the whole dep graph compiled) | **1m 17s** | time'd exactly |
+| 2026-11-20 | `bash scripts/verify.sh` (the save-compression round's first gate run — the gates lane's dep graph was cold; only the dev lane was warm from cargo check) | **ALL GATES GREEN 186 s** | the gate's own print |
 | 2026-11-20 | `bash scripts/verify.sh` (the web direct-download round) on a COLD clone — the sandbox was recycled: rustup + the pinned toolchain installed first, the whole dep graph + the crate per stage | **ALL GATES GREEN 114 s** (the gate's own print; the first attempt failed fast on the dead-code lint, fixed, re-run) | the gate's own print |
 | 2026-11-20 | `cargo check --target wasm32-unknown-unknown` (the web-facing round's wasm economy check) — COLD dep graph on the fresh wasm triple | **≈ a few minutes** (inside one bounded call; the exact seconds were not captured — the HOT re-run finishes in 0.3 s) | observed ≈, not precisely timed |
 | 2026-11-20 | `bash scripts/verify.sh` on a COLD clone (fresh sandbox: rustup missing, installed first; the whole dep graph + the crate per stage) | **≈ 2m 05s total** (the first run failed on fmt at ~2m; the re-run after `cargo fmt`: ALL GATES GREEN 74 s — copied from the gate's own print) | the gate's per-stage seconds + the wall clock ≈ |
-| 2026-11-20 | `cargo build --profile gates --features mcp` (the GUI binary for the visual driver + the pencil GUI probe; gates deps hot after verify.sh) | **2 s** | time'd exactly |
-| 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING (installed first; the first warm-up attempt died on `cargo: command not found`, re-started with the PATH set) | **≈ 3m 15s both stages** (20:46:47→20:50:02; clippy "Finished in 1m 32s", test --no-run "1m 42s") | the background log's timestamps ≈ |
 
 ## Hot
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` after the test additions (the save-compression round's second gate run; gates deps hot, the crate recompiled per stage) | **13 s** | the gate's own print |
 | 2026-11-20 | `bash scripts/verify.sh` after the pencil-drifting-pen change (4 src files + 3 test files; hot deps, the crate recompiled per stage) | **74 s** | the gate's own print |
 | 2026-11-19 | `cargo build --features mcp` (dev GUI binary for the visual driver; deps cold after the sandbox recycle, the crate rebuilt after the header change) | **≈ 5 min** (observed 07:44→07:49 from the binary's mtime; the re-run overwrote its log) | the binary's timestamps ≈ |
 | 2026-11-19 | `cargo build` (dev lane, hot deps, `windows.rs` + `windows/tests.rs` changed) | **1m 39s** | time'd exactly |
 | 2026-11-18 | `bash scripts/verify.sh` after a small code change (About window: 2 files + 2 tests, deps hot, gates profile) | **15.1 s** | time'd exactly |
-| 2026-11-17 | `bash scripts/verify.sh` after docs/script-only changes (no src/ touched — no rebuild; same after a bare `touch` of an unchanged file: cargo detects identical content) | **9 s** | time'd exactly |
-| 2026-11-17 | `cargo clippy --profile gates --all-targets` after real code changes (the magnet round) | 59 s | cargo's own "Finished in" |
-| 2026-11-17 | `cargo test --profile gates` after real code changes (the magnet round) | ≈ 3–4 min | ≈ (background poll) |
-| 2026-11-17 | `cargo build --features mcp` (dev GUI binary, nothing changed) | **2 s** | time'd exactly |
 
 ## Reading the numbers
 

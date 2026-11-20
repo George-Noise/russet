@@ -242,15 +242,17 @@ pub struct App {
     /// "Save Image" dialog state (owner request 2026-11-19; dialog in
     /// [`save_dialog`], glue in [`document`]): the raw file name (the
     /// extension comes from the chosen format), the format radio — the
-    /// PNG/JPEG choice lives IN the dialog — the JPEG quality (kept across
-    /// opens) and the folder picked with the dialog's Browse… button (the
-    /// document's own folder prefills it; the row is HIDDEN on web — the
-    /// browser owns the download location — but the field stays on both
-    /// platforms so the shared dialog code compiles unchanged).
+    /// PNG/JPEG choice lives IN the dialog — the per-format encoding knob
+    /// (the PNG compression 0..=9, the JPEG quality 1..=100; both kept
+    /// across opens) and the folder picked with the dialog's Browse…
+    /// button (the document's own folder prefills it; the row is HIDDEN on
+    /// web — the browser owns the download location — but the field stays
+    /// on both platforms so the shared dialog code compiles unchanged).
     show_save_dialog: bool,
     save_file_name: String,
     save_format: SaveFormat,
     save_quality: u8,
+    save_png_compression: u8,
     save_dir: Option<PathBuf>,
     /// Pending base choice after deleting the BOTTOM layer whose successor
     /// has a DIFFERENT size (owner request 2026-11-17): the user picks
@@ -430,6 +432,7 @@ impl App {
             save_file_name: "Untitled".to_string(),
             save_format: SaveFormat::Png,
             save_quality: crate::file_io::DEFAULT_JPEG_QUALITY,
+            save_png_compression: crate::file_io::DEFAULT_PNG_COMPRESSION,
             layer_base_choice: false,
             pending_action: None,
             error_popup: None,

@@ -2146,3 +2146,46 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 | Extra: wheel-pan parity F12-B + resize-jitter fix F13-A + diag feature (owner 2026-11-16) | done — gates green | owner picked F12 variant B (INTERIM, not final; F11 folded into the math) and F13 variant A, approved the diagnostic patch behind a build flag; `wheel_notches` (unit → notches) + fixed `WHEEL_NOTCH_PAN` 15 pt/notch on every platform; `resize_step` pins the pre-resize rects and recomputes from the pin; temporary `diag` cargo feature ([diag] wheel/resize/reposition logs, compiled out of the default build); SPEC §3.4 + §7 rewritten; V23/V24 born |
 | Extra: web-Line notch retune + `diag` → `diagnostics` rename (owner 2026-11-16) | done — gates green | Firefox scroll-pan ~3× overshoot fixed inside F12-B: Firefox emits `DOM_DELTA_LINE` ×3 lines/notch, so web `Line` deltas now divide by `WEB_LINE_UNIT_LINES_PER_NOTCH` 3.0 (native pass-through); the approved Windows/Chrome feel UNCHANGED (15 pt/notch); the temporary feature renamed `diag` → `diagnostics` (owner: the abbreviation was unclear) — feature, cfg sites, fn, `[diagnostics]` prefix; trunk-serve how-to: `trunk serve --features diagnostics` (logs → browser console); V23/V24 narrowed, not closed |
 | Extra: Resize modes + per-layer resize nodes (owner 2026-11-17) | done — gates + headless driver green | the dialog's Canvas mode (3×3 anchor) / Image mode (nearest/bilinear/bicubic/Lanczos3 + aspect lock); ONE `resize` node per layer with the full `ResizeInfo`; the bottom layer owns the canvas size; the delete-bottom "Canvas Size Source" choice; native-size restores (F9 updated); V28 born |
+
+### 2026-11-20 — `Fix:` the pencil's ragged 1 px trail — the drifting pen — owner request
+
+- **What:** the owner's screenshot (a 51x44 canvas crop) showed the smoothed pencil drawing
+  EXTRA pixels: double-covered columns and holes on every diagonal, the pattern differing
+  between computers. Diagnosed (a Python f32 replica of the pipeline + an angle scan): the
+  pencil re-ran integer Bresenham between independently rounded ~1 px endpoints of the
+  flattened quads — each ~1 px sub-run restarted the line algorithm, so two consecutive
+  rounded endpoints 2 columns apart plotted an extra pixel and the next run compensated with
+  a hole; the subdivision step count came from the control-polygon length (over-dense on
+  bent pieces) with a 64 cap (sparse on fast strokes), and the pattern followed the per-frame
+  event batching (different machines coalesce differently). Replaced by the DRIFTING PEN:
+  `PencilTrail` (the exact float pen + the last plotted pixel) carried across pieces AND
+  frames on the gesture; the pen walks UNIT steps of the chord-dominant axis, the minor
+  coordinate advances proportionally and is carried EXACTLY (never rounded into the state) —
+  the same error accumulation one long Bresenham run performs, restarts impossible; one
+  pixel per step, 8-connected by construction; the release pins the raw release point
+  (`rasterize_smooth_pieces` gained `pin`); the subdivision cap 64 → 4096. The smoothed
+  path of integer-rounded pointer events still wobbles locally past 45 degrees, so an
+  isolated stacked pixel remains (honest staircase, ~2 per 32 px on the ragged input,
+  was 5 + a broken look). Brush/eraser untouched; `draw_segment` unchanged (the press dot
+  + MCP paths).
+- **Files:** `src/tools/smooth.rs` (PencilTrail + walk_pen; plot_pencil_run removed),
+  `src/tools.rs` (the PencilTrail re-export), `src/app.rs` (stroke_last_pixel → stroke_trail),
+  `src/app/input.rs` (the trail plumbing + the release pin), NEW `tools/smooth/tests/trail.rs`
+  (2 regression tests: the integer-event staircase + the byte-identical frame-batch
+  invariance), `tools/smooth/tests/raster.rs` (the trail/pin signatures; the parity test
+  rewritten to the new invariants), SPEC §3.5 + §7.2, TIMING (2 rows), DEBTS-verification
+  (V44 closed failed, V45 born), PROGRESS (snapshot + entry + stamp; the pyc entry moved
+  to the archive).
+- **Verified:** FULL gate ALL GATES GREEN 74 s — fmt clean, rules HARD green, clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 211 default / 211 mcp
+  green (+1 ignored each; +2 tests); the visual driver ALL SCENARIOS GREEN under Xvfb;
+  a real-pointer Xvfb probe (xdotool press-drag-release through the gates+mcp binary):
+  the fast diagonal 379 px / 379 columns (0 double-covered, 0 holes, 8-connected), the
+  slow diagonal 401/401, the steep curve 1 px per row — pixel-perfect staircases in the
+  real app.
+- **Owner-checks:** V45 born (the Windows pass: slow + fast diagonals and curves — an even
+  staircase, the same pattern at any speed/machine; translucent joints; the click pixel;
+  the release end; undo). V44 closed failed (the pencil half; the brush/eraser smoothing
+  held up). Open: V45, V40 is the newest verified; ask = V45, V30 (parked), V8 (parked);
+  debts F17, F16, F15.
+- **Commit title:** `Pencil drifting pen: the 1 px staircase stops depending on the frame batching (exact-float minor phase carried across the gesture, one pixel per unit step, the release pins the raw release point; the per-run Bresenham restarts drew double-covered columns and holes, differently per machine)`
