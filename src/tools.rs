@@ -22,6 +22,46 @@ pub enum Tool {
     Shape,
     /// Places text at the click point through a small input window.
     Text,
+    /// Region selection (owner request 2026-11-20): rectangle or lasso
+    /// regions, addable/subtractable, with copy/cut/paste/move/crop. One
+    /// Tools-window button (left-click cycles the sub-mode forward when the
+    /// tool is already active, right-click cycles it backward); the
+    /// sub-mode buttons and the ops live in the magnetized panel.
+    Select,
+}
+
+/// Sub-mode of the [`Tool::Select`] tool (owner request 2026-11-20).
+/// MORE selection kinds are planned ("типов выделений потом будет больше
+/// чем 2"), so every consumer iterates [`SelectMode::ALL`] and cycles with
+/// [`SelectMode::next`] / [`SelectMode::prev`] — a new variant lands in the
+/// array and every cycle and panel row picks it up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectMode {
+    /// A rectangle dragged between two corners (the default).
+    Rect,
+    /// A freeform lasso: the drag's pointer path, auto-closed on release.
+    Lasso,
+}
+
+impl SelectMode {
+    /// The canonical order — the cycle, the panel rows and the icon set
+    /// iterate this array, so the three always agree.
+    pub const ALL: [SelectMode; 2] = [SelectMode::Rect, SelectMode::Lasso];
+
+    /// The NEXT mode in the cycle — the Tools button's left-click (owner
+    /// request 2026-11-20: "по левой кнопке ... переключался выбор какой
+    /// конкретно это инструмент выделения").
+    pub fn next(self) -> Self {
+        let i = Self::ALL.iter().position(|m| m == &self).unwrap_or(0);
+        Self::ALL[(i + 1) % Self::ALL.len()]
+    }
+
+    /// The PREVIOUS mode in the cycle — the Tools button's right-click
+    /// ("по правой то же самое но в обратную сторону").
+    pub fn prev(self) -> Self {
+        let i = Self::ALL.iter().position(|m| m == &self).unwrap_or(0);
+        Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()]
+    }
 }
 
 /// Sub-mode of the [`Tool::Line`] tool (owner request 2026-11-10).
@@ -101,6 +141,10 @@ pub struct ToolState {
     /// points (owner request 2026-11-20): outside / straddling (default) /
     /// inside — the panel's second three-way radio.
     pub shape_outline: ShapeOutline,
+    /// Which kind of region the Select tool drags (owner request
+    /// 2026-11-20): rectangle (the default) or lasso. The Tools button
+    /// cycles it; the magnetized panel's mode row sets it explicitly.
+    pub select_mode: SelectMode,
     /// Font size (canvas pixels) used by the Text tool.
     pub font_size: f32,
 }
@@ -116,6 +160,7 @@ impl ToolState {
             shape_kind: ShapeKind::Rectangle,
             shape_paint: ShapePaint::Outline,
             shape_outline: ShapeOutline::Center,
+            select_mode: SelectMode::Rect,
             font_size: 24.0,
         }
     }
@@ -152,8 +197,8 @@ pub fn draw_segment(
         Tool::Pencil => 1.0,
         Tool::Brush | Tool::Eraser => size.clamp(1.0, MAX_STROKE_SIZE),
         // Unreachable: the preview tools commit through `rasterize_polyline`
-        // / `rasterize_shape`, not through this freehand path.
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => {
+        // / `rasterize_shape`, and Select never strokes.
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
             size.clamp(1.0, MAX_STROKE_SIZE)
         }
     };
@@ -232,7 +277,9 @@ pub fn draw_segment(
     let [r, g, b, a] = match tool {
         Tool::Eraser => [0, 0, 0, 255],
         Tool::Pencil | Tool::Brush => color.to_srgba_unmultiplied(),
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => color.to_srgba_unmultiplied(),
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
+            color.to_srgba_unmultiplied()
+        }
     };
     paint.set_color_rgba8(r, g, b, a);
     paint.anti_alias = !matches!(tool, Tool::Pencil);

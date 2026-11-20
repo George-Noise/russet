@@ -298,6 +298,7 @@ pub(crate) fn parse_tool(value: &str) -> Option<Tool> {
         "pencil" => Some(Tool::Pencil),
         "brush" => Some(Tool::Brush),
         "eraser" => Some(Tool::Eraser),
+        "select" => Some(Tool::Select),
         "eyedropper" => Some(Tool::Eyedropper),
         "line" => Some(Tool::Line),
         "shape" => Some(Tool::Shape),

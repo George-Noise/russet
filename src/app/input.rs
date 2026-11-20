@@ -61,6 +61,26 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::T)) {
             self.tools.tool = Tool::Text;
         }
+        // The selection ops (owner request 2026-11-20): Ctrl+C/X/V mirror
+        // the Edit menu and the Select panel's buttons. The keys are
+        // consumed even when the selection or the clipboard is empty — a
+        // no-op, never a fall-through (the redo-keys convention). They run
+        // BEFORE the plain tool keys: consume_key matches modifiers
+        // logically (extra Ctrl is ignored), so Ctrl+V must be consumed
+        // first or the plain `V` (Select) would also fire — the same
+        // ordering the redo/undo pair uses below.
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::C)) {
+            self.copy_selection();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::X)) {
+            self.cut_selection();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::V)) {
+            self.paste_clipboard();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::V)) {
+            self.tools.tool = Tool::Select;
+        }
         // The bracket keys step the size by one — the ceiling is the entry
         // box's sanity bound ([`MAX_STROKE_SIZE`]), NOT the slider's 100: a
         // manually entered 200 must survive a nudge (owner bug report
@@ -101,8 +121,9 @@ impl App {
             }
             // Unreachable in practice: the Line/Shape/Text tools freeze
             // their color when the gesture starts (see preview.rs /
-            // text_tool.rs); the Eyedropper never paints.
-            Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => {
+            // text_tool.rs); the Eyedropper never paints; Select never
+            // strokes.
+            Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
                 if self.stroke_button == Some(PointerButton::Secondary) {
                     self.tools.secondary
                 } else {
@@ -271,7 +292,10 @@ impl App {
                         Tool::Eraser => Some(ActionKind::Eraser),
                         // A mid-gesture tool switch to a preview tool abandons
                         // the record; the pixels join the next node's snapshot.
-                        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => None,
+                        // Select never freehand-strokes.
+                        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
+                            None
+                        }
                     };
                     if let Some(kind) = kind {
                         self.record_active_action(kind, color, None);
@@ -279,7 +303,11 @@ impl App {
                             Tool::Pencil => "Pencil stroke",
                             Tool::Brush => "Brush stroke",
                             Tool::Eraser => "Eraser stroke",
-                            Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => "Stroke",
+                            Tool::Eyedropper
+                            | Tool::Line
+                            | Tool::Shape
+                            | Tool::Text
+                            | Tool::Select => "Stroke",
                         };
                         self.action_log.push(label);
                     }
@@ -338,8 +366,9 @@ impl App {
 
 /// The frame's raw pointer stream: every `Event::PointerMoved` in event
 /// order. egui coalesces the OS pointer stream per frame — `latest_pos`
-/// alone would keep only the last one.
-fn pointer_move_positions(events: &[egui::Event]) -> Vec<Pos2> {
+/// alone would keep only the last one. Shared with the Select tool's
+/// lasso drag ([`super::selection`]).
+pub(super) fn pointer_move_positions(events: &[egui::Event]) -> Vec<Pos2> {
     events
         .iter()
         .filter_map(|event| match event {

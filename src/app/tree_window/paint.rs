@@ -104,16 +104,22 @@ pub(super) fn paint_graph(
     // up front so the row width can fit the widest row. The label text is
     // `kind id` from the node itself ("pencil 7", "start 1"); a resize
     // node appends the dialog's choices (owner request 2026-11-17:
-    // "canvas 800×600→1000×800 (TL)" / "image … (bicubic)") — jumping a
-    // layer back beyond the resize shows what it did.
+    // "canvas 800×600→1000×800 (TL)" / "image … (bicubic)"), a crop node
+    // the selection's rect (owner request 2026-11-20: "crop 800×600→300×200
+    // @(100,50)") — jumping a layer back beyond the node shows what it did.
     let labels: Vec<(String, f32)> = rows
         .iter()
         .map(|row| {
             let text = app.layers.node(row.id).map_or_else(
                 || "action".to_string(),
-                |node| match node.resize {
-                    Some(info) => format!("{} {} {}", node.kind.label(), node.id, info.summary()),
-                    None => format!("{} {}", node.kind.label(), node.id),
+                |node| match (node.resize, node.crop) {
+                    (Some(info), _) => {
+                        format!("{} {} {}", node.kind.label(), node.id, info.summary())
+                    }
+                    (None, Some(info)) => {
+                        format!("{} {} {}", node.kind.label(), node.id, info.summary())
+                    }
+                    (None, None) => format!("{} {}", node.kind.label(), node.id),
                 },
             );
             let width = ui
@@ -282,16 +288,17 @@ pub(super) fn paint_graph(
             ui.ctx().request_repaint();
         }
         let node = app.layers.node(row.id);
-        // The hover text is node-aware: a resize node explains what that
-        // resize did to THIS layer (mode, sizes, anchor/filter).
-        let hover = node.and_then(|node| node.resize).map_or_else(
+        // The hover text is node-aware: a resize or crop node explains what
+        // that commit did to THIS layer (mode/sizes/anchor/filter, or the
+        // crop rect).
+        let detail = node.and_then(|node| {
+            node.resize
+                .map(|i| i.summary())
+                .or(node.crop.map(|i| i.summary()))
+        });
+        let hover = detail.map_or_else(
             || "Left-click: switch the canvas to this node".to_string(),
-            |info| {
-                format!(
-                    "Left-click: switch the canvas to this node\n{}",
-                    info.summary()
-                )
-            },
+            |summary| format!("Left-click: switch the canvas to this node\n{summary}"),
         );
         dot.on_hover_text(hover);
 

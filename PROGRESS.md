@@ -34,19 +34,24 @@
 | Extra: the Size block — label above, the narrowed slider, manual entry above 100 (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | the owner verified V55 («Отлично») with three follow-ups: the Shape AND Line panels (Brush/Eraser share the block, no gap — nothing below) get the "Size" label ABOVE the slider; the slider narrowed to the button grid's row width (`SIZE_SLIDER_W` 96 pt — egui's `Slider` takes its width ONLY from `spacing.slider_width` (`SliderCore::desired_size`; a container's max width cannot narrow it — the first `add_sized` attempt measured 100), so the block's scope pins it); right of the slider a click-to-type `DragValue` (1..=10 000 — a sanity guard, the owner set no ceiling) accepts sizes ABOVE 100 while the slider stays 1..=100, binding to a clamp COPY and writing back only when dragged (egui's default `SliderClamping::Always` clamps the bound value EVERY frame — a typed 250 would snap back; with the copy the thumb just pins at the right end); after the block a `SHAPE_GROUP_GAP` — the SAME 12-pt step as between the Shape panel's own rows («такой же высоты что и между кнопками в Shape»); the probe measures the real screen: rail 96 px, the number box right of it (w 40, gap 6), rail center 22.5 px above the buttons, the label above; +3 tests (the new `windows/tests/size_block.rs` topic); V55 closed verified in chat, V56 born |
 | Extra: the hand-over lists only the newest commit title (owner 2026-11-20) | done — docs only | the owner traced the AGENTS.md delivery ritual's "list every round's title" clause to a ONE-TIME request the agent mis-recorded as a standing rule ("это была единичная просьба и агент решил записать это как правило") and had it fixed: the reply lists ONLY the newest delivery's title — one per reply (he records the older ones himself — "я и так их записываю"); the title mechanism (the PROGRESS entry's `Commit title:` field + the reply's last line, backticks, rules.sh rule 6) unchanged; docs-only round (rules.sh + byte-compares only) |
 | Extra: the manual-entry size reaches the drawing — bug fix (owner 2026-11-20) | done — gates + driver + probe green | the owner's report ("задаю вручную size 200 всё ещё рисуется с радиусом 100") landed in the DRAW paths: all FOUR rasterizers (draw_segment, smooth, polyline, shape) still clamped the stroke width to the slider-era 1..=100, and the [ / ] hotkeys clamped tools.size itself — the UI accepted 200, every path drew 100; the ceiling is now `tools::MAX_STROKE_SIZE` = 10 000 (the entry box's own sanity bound, "not a design limit"), all clamps + the DragValue range use it, a typed 200 survives the bracket keys (→ 199); +5 pixel probes (`tools/tests/stroke_size.rs`) proving a 200-wide stroke covers what a 100-clamped one cannot; sizes ≤ 100 draw pixel-identical; V57 born |
+| Extra: the Select tool — regions, copy/cut/paste/move, crop (owner 2026-11-20) | done — gates + driver + GUI probes green | ONE "Select (V)" button (the grid is 8 tools), the icon = the mode's mark (dashed square/blob), while active L-click cycles the mode forward / R-click backward (over `SelectMode::ALL` — ready for more kinds); the panel: the MODE row (Rect/Lasso) + the OPS row (Copy/Cut/Paste/Crop, grayed without a selection/clipboard; the Edit menu + Ctrl+C/X/V run the same ops); a plain drag replaces, Shift-drag adds, Alt-drag subtracts (rect AND lasso — the mask derives from the op list, so subtract cuts true holes); the ants = the crack-boundary loops of the mask (the true contour, holes, checkerboard corners) drawn under every tool; move = press inside the selection lifts the pixels (a full-layer backup) + the drag re-draws at the integer offset + ONE `move` node, Esc/pan/tool-switch restores; crop = `layers::crop_all` reusing the resize machinery's `fit_copy_at` (one `crop` node per layer, `CropInfo` in the tree rows) — the owner's "связать с resize"; the pure domain in `selection.rs`, the gestures/ops in `app/selection.rs`, the panel in `app/windows/select_panel.rs`; the clipboard is in-app and paste stamps immediately (F18); V58 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the manual-entry
-bug-fix round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 241 default / 254 mcp green
-(+1 ignored; +5 net tests this round — the NEW stroke_size topic: a size
-above 100 reaches EVERY rasterizer — smooth brush, draw_segment, polyline,
-shape outline — each proven by a pixel probe a 100-clamped stroke cannot
-cover, plus the 10 000 ceiling's dirty-rect saturation), the visual driver
-ALL SCENARIOS GREEN under Xvfb through the dev+mcp binary + the GUI probe
-`scripts/gui_line_panel_check.sh` PASS (the Size block's layout untouched:
-the rail 96 px, the "Size" label above, the number box w 40 gap 6, the
-rail center 22.5 px above the first button row; the Line/Shape rows and
-gaps as before) — Rust 1.99.1
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the Select-tool
+round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+(default + mcp), `cargo test --profile gates` 262 default / 275 mcp green
+(+1 ignored; +21 net tests this round — the NEW topics: `selection/tests.rs`
+(the pixel semantics, the add/subtract algebra, the crack-boundary loops —
+rect corners merged, holes, checkerboard splits — and the extract/erase/
+restore/stamp helpers), `app/selection/tests.rs` (the copy→cut→paste round
+trip, the crop × layers, the move commit and its cancel restore, through
+`new_headless`), `windows/tests/select_panel.rs` (the rows' 12-pt step, the
+grayed ops, an INJECTED click writing the mode), the atlas counts (8 tool +
+8 shape + 2 line + 6 select + 1 font = 25 first pass), the launch/mcp names),
+the visual driver ALL SCENARIOS GREEN under Xvfb through the dev+mcp binary
++ the GUI probes PASS (the NEW `scripts/gui_select_check.sh`: the 2/2/2/2
+grid, the Select panel 2 mode + 4 ops buttons, the 6-px in-row gaps, the
+12-px rows step; the updated `gui_line_panel_check.sh`: the Size block and
+the Line/Shape rows untouched) — Rust 1.99.1
 pinned via rust-toolchain.toml, Linux. NO wasm check this round (the diff
 touches no web-facing code — the economy rule). NOTE 2026-11-20 (still true):
 RECYCLED sandbox — rustup/toolchain/GUI .debs reinstalled, the repo RE-CLONED
@@ -57,11 +62,13 @@ here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: t
 the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`); the manual trunk
 lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only over-guard set — the owner-deferred
-`history_tree.rs` 569 PLUS the rounds' growth: `app/preview.rs` 538,
-`app/tool_icons/draw.rs` 616, `tools.rs` 551 (this round's MAX_STROKE_SIZE
-const), and NOW `app/windows.rs` 552 over the guard (warn + propose splits at
-task end; no split mid-task — the proposed split: the settings-panel half →
-an `app/windows/settings_panel.rs` child, the palette-split pattern); the
+`history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 538,
+`app/tool_icons/draw.rs` 761, `app/tool_icons.rs` 602, `selection.rs` 649,
+`tools.rs` 598, `app/selection.rs` 558, and NOW `app/windows.rs` 652 over
+the guard (warn + propose splits at task end; no split mid-task — the
+proposed splits: the settings-panel half → an `app/windows/settings_panel.rs`
+child, the select icons → an `app/tool_icons/select.rs` child, both the
+palette-split pattern); the
 tool_icons + tools tests topic-splits (Tests rule 7) kept the topic files
 small (tools/tests.rs itself rides at 476 — the root's shared helpers + the
 topic mod decls).
@@ -82,9 +89,56 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-20) lives in
-> PROGRESS-archive.md; the latest move: the Line-panel entry (during the
-> 2026-11-20 manual-entry bug-fix round's budget — the total passed ~200; the
-> PROBLEMS-v2 tooling entry went the round before — all in the archive).
+> PROGRESS-archive.md; the latest move: the Size-block entry (during the
+> 2026-11-20 Select-tool round's budget — the total passed ~200; the
+> Line-panel entry went the round before — all in the archive).
+
+### 2026-11-20 — `Feat:` the Select tool — rect/lasso regions, Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery — owner request
+
+- **What:** one "Select (V)" button in the Tools grid (after the paint
+  trio — 8 tools now): a click activates it, and WHILE ACTIVE the left
+  click cycles the sub-mode FORWARD, the right click BACKWARD (over
+  `SelectMode::ALL` — "типов выделений потом будет больше чем 2"). The
+  magnetized panel: the MODE row (Rect/Lasso — the dashed outline says
+  "selection", the shape says the kind) + the OPS row (Copy/Cut/Paste/
+  Crop, grayed without a selection/clipboard; the Edit menu gains
+  Copy/Cut/Paste). A plain drag REPLACES, Shift-drag ADDS, Alt-drag
+  SUBTRACTS (frozen at press; the lasso auto-closes, a plain click
+  deselects). The ants = the TRUE mask contour (crack-boundary loops,
+  holes included) drawn under EVERY tool; Esc cancels/deselects. Move =
+  press INSIDE the selection lifts the pixels (a full-layer backup) and
+  the drag re-draws them at the integer offset; release = ONE `move`
+  node. Copy (no node) / Cut (one `cut` node, the selection stays) /
+  Paste (centered in the viewport, selects the pasted rect, one `paste`
+  node; the in-app clipboard survives document switches — F18). Crop =
+  the resize machinery's per-layer top-left crop (`fit_copy_at`, one
+  `crop` node per layer — the owner's "связать с resize"), the buffer
+  rebuilds, the gestures drop, the selection clears.
+- **Files:** NEW `selection.rs` + tests, `app/selection.rs` + tests,
+  `app/windows/select_panel.rs` + `windows/tests/select_panel.rs`,
+  `scripts/gui_select_check.sh`; `tools.rs`, `history_tree.rs`
+  (Crop/Cut/Paste/Move + CropInfo + record_crop), `layers.rs`
+  (`crop_all`), `app.rs`, `app/input.rs` (V, Ctrl+C/X/V consumed BEFORE
+  the plain V), `app/menu.rs`, `app/windows.rs`, `app/tool_icons.rs` +
+  `draw.rs` (SelectIcon ×6, TOOLS 8), `app/document.rs`, `app/launch.rs`
+  + `main.rs`, `app/mcp/tools/queries.rs`, `app/tree_window/paint.rs`,
+  SPEC (§3.13 + §3.1 + §3.9 + §3.12), AGENTS.md (the module map + the
+  atlas-count quirk), `gui_line_panel_check.sh` (the 2/2/2/2 grid).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp): fmt, rules
+  HARD green, clippy `-D warnings` both lanes, `cargo test --profile
+  gates` 262 default / 275 mcp (+21 net: the selection topics), the
+  visual driver ALL SCENARIOS GREEN, the pixel probes PASS (the NEW
+  select probe: the 2/2/2/2 grid, the panel 2+4 buttons, the 6-px gaps,
+  the 12-px rows step; the line/shape probe: the Size block untouched).
+  No wasm check — the diff touches no web-facing code (the economy rule).
+- **Owner-checks:** V58 born (Windows + web: the full loop). Open: V58,
+  V57, V56, V53; parked: V30, V8. Debts open: F18 (born this round),
+  F17, F16, F15. Over-guard growth (warn only, no split without the
+  owner's OK): `windows.rs` 652, `tool_icons.rs` 602, `draw.rs` 761,
+  `tools.rs` 598, `selection.rs` 649, `app/selection.rs` 558 — the
+  proposed splits at task end: the select panel out of `windows.rs`
+  (the palette-split pattern), the select icons out of `draw.rs`.
+- **Commit title:** `Select tool: rect/lasso regions with Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery (the dashed true-contour ants, the mode-cycling Tools button, the panel's mode+ops rows)`
 
 ### 2026-11-20 — `Fix:` a manually entered size above 100 reaches the drawing — owner bug report
 
@@ -140,39 +194,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 - **Owner-checks:** none born (a pure docs edit). Open: V56 (the Size block),
   V53, V46; parked: V30, V8; debts: F17, F16, F15.
 - **Commit title:** `Docs: the hand-over lists only the newest commit title (the multi-title clause was a one-time request)`
-
-### 2026-11-20 — `Feat:` the Size block — label above, narrowed slider, manual entry above 100 — owner request
-
-- **What:** the owner verified V55 («Отлично») with three follow-ups the same
-  message: (1) "в Shape и в Line сделать gap между слайдером size и кнопками,
-  такой же высоты что и между кнопками в Shape"; (2) "элемент size слишком
-  широкий, нужно саму надпись Size разместить над слайдером"; (3) "дать
-  возможность пользователю вручную ввести Size больше 100, а сам слайдер пусть
-  и дальше будет ограничен 100". Done: the shared Size block extracted as
-  `size_block_ui` (the `shape_settings_ui`/`line_settings_ui` sibling): the
-  label ABOVE, the slider pinned to `SIZE_SLIDER_W` = 3 × 28 + 2 × 6 = 96 pt
-  via `spacing.slider_width` (egui's `Slider` reads its width from the spacing
-  ALONE — the first `add_sized` attempt measured 100), a click-to-type
-  `DragValue` (1..=10 000, a sanity guard — the owner set no ceiling) right of
-  it; the slider binds to a CLAMP COPY and writes back only when dragged
-  (egui's default `SliderClamping::Always` clamps the bound value EVERY frame
-  — a typed 250 would snap back to 100; with the copy the thumb just pins);
-  for Line/Shape the block ends with `SHAPE_GROUP_GAP` → the SAME 12-pt rows
-  step; Brush/Eraser get the block without the gap.
-- **Files:** `src/app/windows.rs` (the block + `SIZE_SLIDER_W`/`SIZE_ENTRY_MAX`
-  + the caller), `src/app/windows/tests.rs` + NEW
-  `src/app/windows/tests/size_block.rs` (3 tests: the label above + the 96-pt
-  rail + the narrow block; the 12-pt gap arithmetic for BOTH panels; the
-  above-100 persistence), `scripts/gui_line_panel_check.sh` (the size-block
-  scan: the rail/label/number box/gap on the real screenshots), SPEC §3.2,
-  DEBTS-verification (V55 closed verified in chat, V56 born), PROGRESS
-  (snapshot + entry + stamp), tests +3.
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp): fmt, rules HARD
-  green, clippy `-D warnings` both lanes, `cargo test --profile gates` 236
-  default / 249 mcp (+3: the size_block topic); the visual driver ALL
-  SCENARIOS GREEN; the pixel probe PASS: rail 96 px, label above, the number
-  box right (w 40, gap 6), rail-center→buttons 22.5 px on BOTH panels' shots.
-- **Owner-checks:** V56 born (the Windows `cargo run` AND the web build pass
-  of the Size block in the Shape AND Line panels). Open: V56, V53, V46;
-  parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `Size block: the label above the slider, the slider narrowed to the button-grid row width, a click-to-type entry for sizes above 100 (the slider stays 1..=100), the same 12-pt rows gap in the Shape and Line panels`

@@ -25,10 +25,11 @@ use super::App;
 use super::placement::{FIRST_OPEN_GAP, place_floating_window};
 use super::tool_icons::{self, LineIcon, ShapeIcon};
 use crate::tools::{
-    LineMode, MAX_STROKE_SIZE, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState,
+    LineMode, MAX_STROKE_SIZE, SelectMode, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState,
 };
 
 mod palette_window;
+mod select_panel;
 
 /// INTERIM layout (owner request 2026-11-18: "two columns for now — it will
 /// be reworked later, I have a better idea"): the tool buttons sit in a
@@ -151,7 +152,30 @@ fn icon_button(
     tooltip: &'static str,
     selected: bool,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), Sense::click());
+    icon_button_state(ui, size, icon, tooltip, selected, true)
+}
+
+/// The disabled-capable body of [`icon_button`] (owner request 2026-11-20:
+/// the Select panel's copy/cut/crop buttons gray out while no selection
+/// exists and paste while the clipboard is empty — the same affordance the
+/// Edit menu's `add_enabled` rows give). Disabled = hover-only sense + a
+/// gray icon tint; the tooltip still reads.
+fn icon_button_state(
+    ui: &mut egui::Ui,
+    size: f32,
+    icon: Option<TextureId>,
+    tooltip: &'static str,
+    selected: bool,
+    enabled: bool,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(size, size),
+        if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        },
+    );
     // Owner request 2026-11-18 (after the V36 pass): the tool buttons
     // keep the LIGHT-theme look in BOTH themes — one background lets the
     // single icon set (its dark rim) read well everywhere, instead of
@@ -193,7 +217,18 @@ fn icon_button(
             rect.center(),
             egui::vec2(tool_icons::ICON_PT, tool_icons::ICON_PT),
         );
-        painter.image(id, icon_rect, uv, Color32::WHITE);
+        // A disabled button grays its icon (the tint multiplies the
+        // texture — the selection blue and the ink both dim).
+        painter.image(
+            id,
+            icon_rect,
+            uv,
+            if enabled {
+                Color32::WHITE
+            } else {
+                Color32::GRAY
+            },
+        );
     }
     response.on_hover_text(tooltip)
 }
@@ -489,8 +524,17 @@ impl App {
     /// selectable_label visual states (selected = the selection fill, hover
     /// = the hovered fill) and the name+key tooltip (owner request
     /// 2026-11-18). Clicking selects the tool — the same state the old
-    /// text `selectable_label` list drove.
+    /// text `selectable_label` list drove. The SELECT button (owner
+    /// request 2026-11-20) is mode-aware: its icon draws the CURRENT
+    /// sub-mode's mark, and while the tool is ALREADY active a left-click
+    /// cycles the sub-mode forward and a right-click cycles it backward
+    /// ("типов выделений потом будет больше чем 2" — the cycle runs over
+    /// [`SelectMode::ALL`]).
     fn tool_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
+        if tool == Tool::Select {
+            self.select_tool_button(ui);
+            return;
+        }
         let selected = self.tools.tool == tool;
         let response = icon_button(
             ui,
@@ -501,6 +545,35 @@ impl App {
         );
         if response.clicked() {
             self.tools.tool = tool;
+        }
+    }
+
+    /// The Select tool's mode-aware button (owner request 2026-11-20): the
+    /// icon = the current sub-mode's selection mark; an INACTIVE button's
+    /// left-click activates the tool, an ACTIVE one's left-click cycles the
+    /// sub-mode FORWARD, the right-click cycles BACKWARD.
+    fn select_tool_button(&mut self, ui: &mut egui::Ui) {
+        let selected = self.tools.tool == Tool::Select;
+        let icon = match self.tools.select_mode {
+            SelectMode::Rect => tool_icons::SelectIcon::Rect,
+            SelectMode::Lasso => tool_icons::SelectIcon::Lasso,
+        };
+        let response = icon_button(
+            ui,
+            TOOL_BUTTON_PT,
+            tool_icons::select_texture_id(&self.tool_icons, icon),
+            tool_icons::select_icon_label(icon),
+            selected,
+        );
+        if response.clicked() {
+            if selected {
+                self.tools.select_mode = self.tools.select_mode.next();
+            } else {
+                self.tools.tool = Tool::Select;
+            }
+        }
+        if response.secondary_clicked() && selected {
+            self.tools.select_mode = self.tools.select_mode.prev();
         }
     }
 
@@ -532,6 +605,33 @@ impl App {
                 }
                 Tool::Shape => {
                     shape_settings_ui(ui, &mut self.tools, &self.tool_icons);
+                }
+                Tool::Select => {
+                    // The mode row + the ops row (owner request 2026-11-20);
+                    // the ops act on the WHOLE app state, so the free UI fn
+                    // returns the clicks and the dispatch happens here.
+                    let avail = select_panel::SelectAvail {
+                        has_selection: self.selection.bounds().is_some(),
+                        has_clipboard: self.clipboard.is_some(),
+                    };
+                    let ops = select_panel::select_settings_ui(
+                        ui,
+                        &mut self.tools,
+                        &self.tool_icons,
+                        &avail,
+                    );
+                    if ops.copy {
+                        self.copy_selection();
+                    }
+                    if ops.cut {
+                        self.cut_selection();
+                    }
+                    if ops.paste {
+                        self.paste_clipboard();
+                    }
+                    if ops.crop {
+                        self.crop_to_selection();
+                    }
                 }
                 Tool::Text => {
                     // Two short lines: the single long hint would make the

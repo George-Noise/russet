@@ -66,6 +66,20 @@ pub enum ActionKind {
     /// LAYER, each carrying the layer's post-resize canvas and the full
     /// [`ResizeInfo`] of what was chosen in the dialog.
     Resize,
+    /// A crop-to-selection commit (owner request 2026-11-20): one node PER
+    /// LAYER (the same per-layer shape as a Canvas-mode resize — every
+    /// layer crops to the SAME canvas-space rect, [`CropInfo`] carries
+    /// where this layer's canvas came from and went).
+    Crop,
+    /// A cut-to-clipboard commit (owner request 2026-11-20): the selected
+    /// pixels erased from the active layer.
+    Cut,
+    /// A paste-from-clipboard commit (owner request 2026-11-20): the
+    /// clipboard stamped into the active layer.
+    Paste,
+    /// A move-selection commit (owner request 2026-11-20): the selected
+    /// pixels lifted and stamped at the drag's integer offset.
+    Move,
 }
 
 impl ActionKind {
@@ -81,6 +95,10 @@ impl ActionKind {
             ActionKind::Shape => "shape",
             ActionKind::Text => "text",
             ActionKind::Resize => "resize",
+            ActionKind::Crop => "crop",
+            ActionKind::Cut => "cut",
+            ActionKind::Paste => "paste",
+            ActionKind::Move => "move",
         }
     }
 }
@@ -230,6 +248,31 @@ impl ResizeInfo {
     }
 }
 
+/// The crop-to-selection geometry of ONE layer's node (owner request
+/// 2026-11-20): the CANVAS-SPACE rect every layer cropped to (the
+/// selection's pixel bounds) plus the layer's before/after sizes — jumping
+/// a layer back beyond the crop explains what it did to THIS layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CropInfo {
+    pub x: i64,
+    pub y: i64,
+    pub from_w: u32,
+    pub from_h: u32,
+    pub to_w: u32,
+    pub to_h: u32,
+}
+
+impl CropInfo {
+    /// Compact one-line summary for the tree row
+    /// ("crop 800×600→300×200 @(100,50)").
+    pub fn summary(&self) -> String {
+        format!(
+            "crop {}×{}→{}×{} @({},{})",
+            self.from_w, self.from_h, self.to_w, self.to_h, self.x, self.y
+        )
+    }
+}
+
 /// One node of the history tree: what was done, with which color(s), and
 /// the full PNG snapshot of the layer's canvas AFTER the action.
 #[derive(Clone, Debug)]
@@ -258,6 +301,9 @@ pub struct TreeNode {
     /// The Resize-dialog choices, `Some` ONLY on [`ActionKind::Resize`]
     /// nodes (owner request 2026-11-17). Everything else carries `None`.
     pub resize: Option<ResizeInfo>,
+    /// The crop-to-selection geometry, `Some` ONLY on [`ActionKind::Crop`]
+    /// nodes (owner request 2026-11-20). Everything else carries `None`.
+    pub crop: Option<CropInfo>,
 }
 
 /// What mutated a layer since the previous generation. The windows use it
@@ -317,6 +363,7 @@ impl LayerTree {
                 color: Color32::WHITE,
                 color2: None,
                 resize: None,
+                crop: None,
                 snapshot: root_snapshot,
             }],
             index: HashMap::from([(root_id, 0)]),
@@ -406,6 +453,7 @@ impl LayerTree {
             color,
             color2,
             resize: None,
+            crop: None,
             snapshot,
         });
         self.index.insert(id, self.nodes.len() - 1);
@@ -429,6 +477,31 @@ impl LayerTree {
             color: Color32::WHITE,
             color2: None,
             resize: Some(info),
+            crop: None,
+            snapshot,
+        });
+        self.index.insert(id, self.nodes.len() - 1);
+        self.head = Some(id);
+        self.redo_hint = None;
+        self.generation += 1;
+        self.last_change = Change::Added;
+    }
+
+    /// One crop-to-selection commit (owner request 2026-11-20): like
+    /// [`LayerTree::record_resize`], but the node is an
+    /// [`ActionKind::Crop`] carrying the [`CropInfo`] of the canvas-space
+    /// rect every layer cropped to. No gesture color exists — the node
+    /// stays colorless like the resize row. Appends at the head.
+    pub fn record_crop(&mut self, id: NodeId, info: CropInfo, snapshot: Vec<u8>) {
+        let parent = self.head;
+        self.nodes.push(TreeNode {
+            id,
+            parent,
+            kind: ActionKind::Crop,
+            color: Color32::WHITE,
+            color2: None,
+            resize: None,
+            crop: Some(info),
             snapshot,
         });
         self.index.insert(id, self.nodes.len() - 1);

@@ -80,6 +80,7 @@ mod placement;
 mod preview;
 mod save_dialog;
 mod scenarios;
+mod selection;
 mod text_tool;
 mod tool_icons;
 mod tool_log;
@@ -92,6 +93,7 @@ use self::placement::{
     AxisAnchor, TOOLS_FIRST_OPEN_RATIO, ToolSettingsPlacement, WindowAnchor, WindowPlacement,
 };
 use self::preview::PreviewState;
+use self::selection::SelectGesture;
 use self::text_tool::TextEditState;
 use self::tree_window::TreeView;
 
@@ -210,6 +212,18 @@ pub struct App {
     /// Pending gesture of the Line/Shape preview tools (owner request
     /// 2026-11-10); interaction and commits live in [`preview`].
     preview: PreviewState,
+    /// The selection (owner request 2026-11-20): regions + the derived
+    /// pixel truth and boundary loops. The pure domain is
+    /// [`crate::selection`], the gestures and the ops in [`selection`].
+    /// DOCUMENT state, not history: cleared on New/Open/resize/crop.
+    selection: crate::selection::Selection,
+    /// The in-app clipboard (owner request 2026-11-20): the last copied or
+    /// cut pixels of the ACTIVE layer, mask-shaped. Not the OS image
+    /// clipboard; survives document switches.
+    clipboard: Option<tiny_skia::Pixmap>,
+    /// Pending gesture of the Select tool (owner request 2026-11-20); the
+    /// region drags, the move lift/restore and the ops live in [`selection`].
+    select_gesture: SelectGesture,
     /// Pending text entry of the Text tool (owner request 2026-11-10);
     /// the input window and commit live in [`text_tool`].
     text_edit: Option<TextEditState>,
@@ -408,6 +422,9 @@ impl App {
                 y: AxisAnchor::Max,
             }),
             preview: PreviewState::None,
+            selection: crate::selection::Selection::default(),
+            clipboard: None,
+            select_gesture: SelectGesture::None,
             text_edit: None,
             action_log: ActionLog::new(),
             last_panel_rect: ctx.content_rect(),
@@ -567,6 +584,11 @@ impl App {
         self.layers.resize_all(mode, width, height, anchor, filter);
         self.cancel_preview();
         self.cancel_text_edit();
+        // The selection's bounds shift off-canvas (owner request
+        // 2026-11-20): the pending Select gesture restores a lifted move,
+        // the selection clears — the same reset the crop applies.
+        self.cancel_select_gesture();
+        self.selection.clear();
         self.canvas.resize_canvas(width, height);
         self.refresh_composite();
         self.dirty = true;
@@ -666,11 +688,13 @@ impl App {
 
         self.handle_scroll(ui, panel_rect, response.hovered());
         // A tool switch (hotkey, Tools window, menu) cancels any pending
-        // preview gesture or text entry — they are tool-bound states.
+        // preview gesture or text entry — they are tool-bound states. The
+        // Select gesture restores a lifted move before dropping.
         if self.last_tool != self.tools.tool {
             self.last_tool = self.tools.tool;
             self.cancel_preview();
             self.cancel_text_edit();
+            self.cancel_select_gesture();
             // A mid-gesture tool switch abandons the pending visual node.
             self.stroke_paint = None;
         }
@@ -683,6 +707,7 @@ impl App {
             Tool::Eyedropper => self.handle_pick(ui, rect, &response, panning),
             Tool::Line | Tool::Shape => self.handle_preview_input(ui, rect, &response, panning),
             Tool::Text => self.handle_text_input(ui, rect, &response, panning),
+            Tool::Select => self.handle_select_input(ui, rect, &response, panning),
         }
 
         let painter = ui.painter_at(panel_rect);
@@ -703,6 +728,10 @@ impl App {
         // canvas texture; they never touch the Pixmap.
         self.draw_preview_overlay(&painter, rect);
         self.draw_text_preview(&painter, rect);
+        // The selection's boundary loops (owner request 2026-11-20) draw
+        // under EVERY tool — the selection is document state — plus the
+        // pending Select gesture's outline. Overlay shapes only.
+        self.draw_selection_overlay(&painter, rect);
 
         let zoom_label = format!("{}%", (self.zoom * 100.0).round() as i32);
         painter.text(
@@ -720,6 +749,20 @@ impl App {
                 Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text
             ) {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            // The Select tool's cursor (owner request 2026-11-20): a
+            // crosshair over empty canvas, the MOVE arrow over the selection
+            // (the press there starts the move drag).
+            if tool == Tool::Select
+                && let Some(hover) = ui.input(|i| i.pointer.hover_pos())
+                && rect.contains(hover)
+            {
+                let inside = self.selection.contains(self.canvas_pos(rect, hover));
+                ui.ctx().set_cursor_icon(if inside {
+                    egui::CursorIcon::Move
+                } else {
+                    egui::CursorIcon::Crosshair
+                });
             }
             // The Eyedropper's cursor is the pipette icon itself (owner
             // request 2026-11-18): the bitmap cursor sits where the icon

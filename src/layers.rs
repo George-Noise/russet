@@ -50,8 +50,8 @@ use eframe::egui::Color32;
 use tiny_skia::Pixmap;
 
 use crate::history_tree::{
-    ActionKind, Change, LayerTree, NodeId, Removal, ResizeAnchor, ResizeFilter, ResizeInfo,
-    ResizeMode, TreeLayout, TreeNode,
+    ActionKind, Change, CropInfo, LayerTree, NodeId, Removal, ResizeAnchor, ResizeFilter,
+    ResizeInfo, ResizeMode, TreeLayout, TreeNode,
 };
 
 /// One layer: a pixel buffer plus its own history. The BOTTOM layer's
@@ -427,6 +427,35 @@ impl LayerStack {
             let id = self.next_node_id;
             self.next_node_id += 1;
             layer.tree.record_resize(id, info, snapshot);
+            layer.pixmap = next;
+        }
+    }
+
+    /// One crop-to-selection commit (owner request 2026-11-20): EVERY layer
+    /// crops to the same CANVAS-SPACE rect (the selection's pixel bounds) —
+    /// the generalized top-left crop/pad of the Resize machinery
+    /// (`fit_copy_at`, negative offsets = crop from the left/top) reused
+    /// with no dialog: the anchor is the rect's own top-left corner. ONE
+    /// `crop` node per layer carries the geometry, exactly like a resize
+    /// commit records its choices. The caller rebuilds the display buffer,
+    /// resizes the canvas to the rect and clears the selection (its bounds
+    /// shift off-canvas).
+    pub fn crop_all(&mut self, x: i64, y: i64, width: u32, height: u32) {
+        for layer in &mut self.layers {
+            let from = (layer.pixmap.width(), layer.pixmap.height());
+            let next = fit_copy_at(&layer.pixmap, width, height, -x, -y);
+            let info = CropInfo {
+                x,
+                y,
+                from_w: from.0,
+                from_h: from.1,
+                to_w: next.width(),
+                to_h: next.height(),
+            };
+            let snapshot = encode_snapshot(&next);
+            let id = self.next_node_id;
+            self.next_node_id += 1;
+            layer.tree.record_crop(id, info, snapshot);
             layer.pixmap = next;
         }
     }

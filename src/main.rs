@@ -8,6 +8,7 @@ mod history;
 mod history_tree;
 mod layers;
 mod palette;
+mod selection;
 mod text;
 mod tools;
 
@@ -32,8 +33,8 @@ Launch arguments:
   --primary <hex>      the primary (stroke) color well: hex RRGGBB, also
                        #RGB, RRGGBB or RRGGBBAA, e.g. FF0000 or #00FF00
   --secondary <hex>    the secondary color well, the same formats
-  --tool <name>        the startup tool: pencil, brush, eraser, eyedropper,
-                       line, shape, text
+  --tool <name>        the startup tool: pencil, brush, eraser, select,
+                       eyedropper, line, shape, text
   --canvas-size <WxH>  the startup canvas in pixels, e.g. 1024x768
                        (1..=4096 per side)
   -h, --help           print this help and exit

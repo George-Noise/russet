@@ -41,6 +41,7 @@ fn tool_name(tool: Tool) -> &'static str {
         Tool::Pencil => "pencil",
         Tool::Brush => "brush",
         Tool::Eraser => "eraser",
+        Tool::Select => "select",
         Tool::Eyedropper => "eyedropper",
         Tool::Line => "line",
         Tool::Shape => "shape",

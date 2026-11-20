@@ -400,6 +400,11 @@ pub(super) fn rasterize_tool_icon(tool: Tool, px: usize, text: Color32) -> Optio
         Tool::Pencil => draw_pencil(&mut pm, icon_transform(px, TOOL_ANGLE)),
         Tool::Brush => draw_brush(&mut pm, icon_transform(px, TOOL_ANGLE)),
         Tool::Eraser => draw_eraser(&mut pm, icon_transform(px, 0.0)),
+        // The TOOLS array's placeholder slot: the live Select button draws
+        // its MODE-AWARE mark through `rasterize_select_icon`
+        // (`select_texture_id`) — this keeps the atlas's per-tool indices
+        // aligned and gives the dashed-rect mark as the static fallback.
+        Tool::Select => draw_select_rect(&mut pm, icon_transform(px, 0.0), text),
         Tool::Eyedropper => draw_pipette(&mut pm, icon_transform(px, TOOL_ANGLE)),
         Tool::Line => draw_line(&mut pm, icon_transform(px, 0.0), text),
         Tool::Shape => draw_shape(&mut pm, icon_transform(px, 0.0), text),
@@ -611,6 +616,146 @@ pub(super) fn rasterize_line_icon(
     match icon {
         LineIcon::Straight => draw_line_straight(&mut pm, ts, text),
         LineIcon::Curve => draw_line(&mut pm, ts, text),
+    }
+    Some(pm)
+}
+
+/// The dashed RECTANGLE selection mark (owner request 2026-11-20): the
+/// dashed outline says "this is a selection", the square says the kind —
+/// the same mark the Tools window's Select button draws in Rect mode and
+/// the panel's mode row shows.
+fn draw_select_rect(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    let square = [(4.0, 4.0), (20.0, 4.0), (20.0, 20.0), (4.0, 20.0)];
+    for run in super::dash_polyline(&square, true, 4.5, 3.5) {
+        stroke(pm, ts, &run, false, mono, 1.9);
+    }
+}
+
+/// The dashed LASSO selection mark: the same dashes around an irregular
+/// closed blob — "selection" (the dashes) + the freeform kind.
+fn draw_select_lasso(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    let mut blob = quad_pts((5.0, 12.0), (6.0, 5.5), (12.0, 5.0), 10);
+    blob.extend(quad_pts((12.0, 5.0), (18.5, 4.5), (19.5, 11.0), 10));
+    blob.extend(quad_pts((19.5, 11.0), (20.5, 17.0), (13.5, 19.0), 10));
+    blob.extend(quad_pts((13.5, 19.0), (7.0, 20.5), (5.0, 12.0), 10));
+    for run in super::dash_polyline(&blob, true, 3.2, 2.6) {
+        stroke(pm, ts, &run, false, mono, 1.9);
+    }
+}
+
+/// The Copy op's glyph: two overlapping hollow rectangles.
+fn draw_copy(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    stroke(
+        pm,
+        ts,
+        &[(3.5, 3.5), (13.5, 3.5), (13.5, 13.5), (3.5, 13.5)],
+        true,
+        mono,
+        1.9,
+    );
+    stroke(
+        pm,
+        ts,
+        &[(9.5, 9.5), (20.5, 9.5), (20.5, 20.5), (9.5, 20.5)],
+        true,
+        mono,
+        1.9,
+    );
+}
+
+/// The Cut op's glyph: scissors — two crossing blades with round finger
+/// holes.
+fn draw_cut(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    stroke(
+        pm,
+        ts,
+        &[(4.5, 3.5), (12.0, 12.5), (8.0, 17.5)],
+        false,
+        mono,
+        1.9,
+    );
+    stroke(
+        pm,
+        ts,
+        &[(19.5, 3.5), (12.0, 12.5), (16.0, 17.5)],
+        false,
+        mono,
+        1.9,
+    );
+    stroke(
+        pm,
+        ts,
+        &arc_pts(6.5, 18.5, 2.2, 0.0, 360.0, 24),
+        false,
+        mono,
+        1.9,
+    );
+    stroke(
+        pm,
+        ts,
+        &arc_pts(17.5, 18.5, 2.2, 0.0, 360.0, 24),
+        false,
+        mono,
+        1.9,
+    );
+}
+
+/// The Paste op's glyph: a clipboard — the board with the filled clip tab.
+fn draw_paste(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    stroke(
+        pm,
+        ts,
+        &[(4.5, 4.5), (19.5, 4.5), (19.5, 21.0), (4.5, 21.0)],
+        true,
+        mono,
+        1.9,
+    );
+    fill(
+        pm,
+        ts,
+        &[(9.0, 2.5), (15.0, 2.5), (15.0, 6.5), (9.0, 6.5)],
+        mono,
+    );
+}
+
+/// The Crop op's glyph: the classic two mirrored L-shapes.
+fn draw_crop(pm: &mut Pixmap, ts: Transform, mono: Color32) {
+    stroke(
+        pm,
+        ts,
+        &[(6.5, 2.5), (6.5, 17.5), (21.5, 17.5)],
+        false,
+        mono,
+        1.9,
+    );
+    stroke(
+        pm,
+        ts,
+        &[(2.5, 6.5), (17.5, 6.5), (17.5, 21.5)],
+        false,
+        mono,
+        1.9,
+    );
+}
+
+/// Rasterizes one Select-family icon into a `px × px` premultiplied-RGBA
+/// pixmap (owner request 2026-11-20). Same failure contract as
+/// [`rasterize_tool_icon`].
+pub(super) fn rasterize_select_icon(
+    icon: super::SelectIcon,
+    px: usize,
+    text: Color32,
+) -> Option<Pixmap> {
+    use super::SelectIcon;
+    let mut pm = Pixmap::new(px as u32, px as u32)?;
+    let ts = icon_transform(px, 0.0);
+    match icon {
+        SelectIcon::Rect => draw_select_rect(&mut pm, ts, text),
+        SelectIcon::Lasso => draw_select_lasso(&mut pm, ts, text),
+        SelectIcon::Copy => draw_copy(&mut pm, ts, text),
+        SelectIcon::Cut => draw_cut(&mut pm, ts, text),
+        SelectIcon::Paste => draw_paste(&mut pm, ts, text),
+        SelectIcon::Crop => draw_crop(&mut pm, ts, text),
     }
     Some(pm)
 }

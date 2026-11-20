@@ -52,7 +52,8 @@ use crate::tools::Tool;
 mod draw;
 
 use self::draw::{
-    PIPETTE_TIP, TOOL_ANGLE, rasterize_line_icon, rasterize_shape_icon, rasterize_tool_icon,
+    PIPETTE_TIP, TOOL_ANGLE, rasterize_line_icon, rasterize_select_icon, rasterize_shape_icon,
+    rasterize_tool_icon,
 };
 
 /// The button/icon size in logical points: 1.5rem = 24 pt (1rem = 16 pt;
@@ -64,11 +65,13 @@ pub(super) const ICON_PT: f32 = 1.5 * 16.0;
 const SIZE: f32 = 24.0;
 
 /// The tools' canonical order — the icon atlas and the Tools window grid
-/// iterate this array, so the two always agree.
-pub(super) const TOOLS: [Tool; 7] = [
+/// iterate this array, so the two always agree. Select sits right after
+/// the paint trio (owner request 2026-11-20).
+pub(super) const TOOLS: [Tool; 8] = [
     Tool::Pencil,
     Tool::Brush,
     Tool::Eraser,
+    Tool::Select,
     Tool::Eyedropper,
     Tool::Line,
     Tool::Shape,
@@ -82,6 +85,7 @@ pub(super) fn label(tool: Tool) -> &'static str {
         Tool::Pencil => "Pencil (P)",
         Tool::Brush => "Brush (B)",
         Tool::Eraser => "Eraser (E)",
+        Tool::Select => "Select (V)",
         Tool::Eyedropper => "Eyedropper (I)",
         Tool::Line => "Line (L)",
         Tool::Shape => "Shape (U)",
@@ -175,6 +179,10 @@ pub(super) struct Atlas {
     /// as [`LINE_ICONS`] (owner request 2026-11-20; the same retain-count
     /// reason as `shape_icons` above).
     pub(super) line_icons: [TextureHandle; 2],
+    /// The uploaded textures of the Select family's six buttons (the two
+    /// mode marks + the four ops), same order as [`SELECT_ICONS`] (owner
+    /// request 2026-11-20; the same retain-count reason as `line_icons`).
+    pub(super) select_icons: [TextureHandle; 6],
     /// The pipette's cursor bitmap (STRAIGHT alpha) — set on the canvas
     /// while the Eyedropper is the active tool (owner request 2026-11-18).
     pub(super) pipette_cursor: Option<egui::CustomCursorImage>,
@@ -257,11 +265,30 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let Ok(line_icons) = <[TextureHandle; 2]>::try_from(line_icons) else {
         return;
     };
+    // The Select family's six buttons (owner request 2026-11-20): the two
+    // mode marks + the four ops — the same fixed-drawing pipeline.
+    let mut select_icons = Vec::with_capacity(SELECT_ICONS.len());
+    for icon in SELECT_ICONS {
+        let Some(pm) = rasterize_select_icon(icon, px, text) else {
+            return; // keep the previous atlas; retried next frame
+        };
+        let image = egui::ColorImage::from_rgba_premultiplied([px, px], pm.data());
+        select_icons.push(ctx.load_texture_cached(
+            format!("russet_select_icon_{icon:?}"),
+            Id::unique(format!("russet_select_icon_{icon:?}")),
+            image,
+            TextureOptions::LINEAR,
+        ));
+    }
+    let Ok(select_icons) = <[TextureHandle; 6]>::try_from(select_icons) else {
+        return;
+    };
     *atlas = Some(Atlas {
         key: ppp,
         handles,
         shape_icons,
         line_icons,
+        select_icons,
         pipette_cursor: Some(pipette_cursor),
     });
 }
@@ -295,6 +322,16 @@ pub(super) fn line_texture_id(atlas: &Option<Atlas>, icon: LineIcon) -> Option<T
         .map(TextureHandle::id)
 }
 
+/// A Select-family icon's TextureId, if the atlas is ready (owner request
+/// 2026-11-20).
+pub(super) fn select_texture_id(atlas: &Option<Atlas>, icon: SelectIcon) -> Option<TextureId> {
+    let i = SELECT_ICONS.iter().position(|s| s == &icon)?;
+    atlas
+        .as_ref()
+        .and_then(|a| a.select_icons.get(i))
+        .map(TextureHandle::id)
+}
+
 /// One icon of the Line tool's settings panel (owner request 2026-11-20:
 /// the word "Mode" radio became icon buttons in the Tools window's style —
 /// the same pass that reshaped the Shape panel, "такие же по стилю и
@@ -319,6 +356,48 @@ pub(super) fn line_icon_label(icon: LineIcon) -> &'static str {
     match icon {
         LineIcon::Straight => "Straight",
         LineIcon::Curve => "Curve",
+    }
+}
+
+/// One icon of the Select tool's family (owner request 2026-11-20). The
+/// two MODE marks double as the TOOLS WINDOW's Select button icon — the
+/// dashed outline says "this is a selection", the shape says WHICH kind
+/// (the dashed square = the rectangle, the dashed blob = the lasso) — and
+/// reappear in the magnetized panel's mode row; the four OPS marks are the
+/// panel's copy/cut/paste/crop buttons. ALL six are fixed drawings, so the
+/// atlas key stays the scale alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SelectIcon {
+    Rect,
+    Lasso,
+    Copy,
+    Cut,
+    Paste,
+    Crop,
+}
+
+/// The Select icons' canonical order — the atlas and the panel's rows
+/// iterate this array, so the two always agree.
+pub(super) const SELECT_ICONS: [SelectIcon; 6] = [
+    SelectIcon::Rect,
+    SelectIcon::Lasso,
+    SelectIcon::Copy,
+    SelectIcon::Cut,
+    SelectIcon::Paste,
+    SelectIcon::Crop,
+];
+
+/// The hover tooltip of a Select-family button: the mode marks carry the
+/// gesture contract (drag replaces, Shift adds, Alt subtracts), the ops
+/// name the Edit-menu hotkeys.
+pub(super) fn select_icon_label(icon: SelectIcon) -> &'static str {
+    match icon {
+        SelectIcon::Rect => "Rectangle selection — drag replaces, Shift adds, Alt subtracts",
+        SelectIcon::Lasso => "Lasso selection — drag replaces, Shift adds, Alt subtracts",
+        SelectIcon::Copy => "Copy (Ctrl+C)",
+        SelectIcon::Cut => "Cut (Ctrl+X)",
+        SelectIcon::Paste => "Paste (Ctrl+V)",
+        SelectIcon::Crop => "Crop to selection",
     }
 }
 // ---------------------------------------------------------------------------
@@ -355,6 +434,58 @@ fn stroke(
         };
         pm.stroke_path(&path, &paint, &s, ts, None);
     }
+}
+
+/// Walks a polyline (closed = the last point connects back to the first)
+/// and emits DASH segments of `dash` separated by `gap` — the marching-ants
+/// marks the Select family draws (owner request 2026-11-20: the dashed
+/// outline says "selection", the shape says the kind). A dash crossing a
+/// corner keeps going as one run, so every emitted run strokes cleanly
+/// through `stroke(.., closed=false, ..)`.
+fn dash_polyline(points: &[(f32, f32)], closed: bool, dash: f32, gap: f32) -> Vec<Vec<(f32, f32)>> {
+    let mut path: Vec<(f32, f32)> = points.to_vec();
+    if closed
+        && let (Some(&first), Some(&last)) = (path.first(), path.last())
+        && first != last
+    {
+        path.push(first);
+    }
+    let mut dashes: Vec<Vec<(f32, f32)>> = Vec::new();
+    let mut current: Vec<(f32, f32)> = Vec::new();
+    let mut want_dash = true;
+    let mut remaining = dash;
+    for window in path.windows(2) {
+        let (a, b) = (window[0], window[1]);
+        let len = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+        if len <= 0.0 {
+            continue;
+        }
+        let mut t = 0.0;
+        while t < len - 1e-6 {
+            let step = remaining.min(len - t);
+            let u0 = t / len;
+            let u1 = (t + step) / len;
+            if want_dash {
+                if current.is_empty() {
+                    current.push((a.0 + (b.0 - a.0) * u0, a.1 + (b.1 - a.1) * u0));
+                }
+                current.push((a.0 + (b.0 - a.0) * u1, a.1 + (b.1 - a.1) * u1));
+            }
+            t += step;
+            remaining -= step;
+            if remaining <= 1e-6 {
+                if want_dash && !current.is_empty() {
+                    dashes.push(std::mem::take(&mut current));
+                }
+                want_dash = !want_dash;
+                remaining = if want_dash { dash } else { gap };
+            }
+        }
+    }
+    if want_dash && !current.is_empty() {
+        dashes.push(current);
+    }
+    dashes
 }
 
 /// A diagonal icon (pencil/brush/pipette) is drawn horizontally in the

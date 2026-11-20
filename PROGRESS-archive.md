@@ -2613,8 +2613,45 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   open: F17, F16, F15.
 - **Commit title:** `Line panel: the word Mode radio becomes two icon buttons in the Shape panel's style (the tool's emblem per mode — Curve pixel-for-pixel the tool icon, Straight unbent; the same grid-gap row)`
 
+### 2026-11-20 — `Feat:` the Size block — label above, narrowed slider, manual entry above 100 — owner request
+
+- **What:** the owner verified V55 («Отлично») with three follow-ups the same
+  message: (1) "в Shape и в Line сделать gap между слайдером size и кнопками,
+  такой же высоты что и между кнопками в Shape"; (2) "элемент size слишком
+  широкий, нужно саму надпись Size разместить над слайдером"; (3) "дать
+  возможность пользователю вручную ввести Size больше 100, а сам слайдер пусть
+  и дальше будет ограничен 100". Done: the shared Size block extracted as
+  `size_block_ui` (the `shape_settings_ui`/`line_settings_ui` sibling): the
+  label ABOVE, the slider pinned to `SIZE_SLIDER_W` = 3 × 28 + 2 × 6 = 96 pt
+  via `spacing.slider_width` (egui's `Slider` reads its width from the spacing
+  ALONE — the first `add_sized` attempt measured 100), a click-to-type
+  `DragValue` (1..=10 000, a sanity guard — the owner set no ceiling) right of
+  it; the slider binds to a CLAMP COPY and writes back only when dragged
+  (egui's default `SliderClamping::Always` clamps the bound value EVERY frame
+  — a typed 250 would snap back to 100; with the copy the thumb just pins);
+  for Line/Shape the block ends with `SHAPE_GROUP_GAP` → the SAME 12-pt rows
+  step; Brush/Eraser get the block without the gap.
+- **Files:** `src/app/windows.rs` (the block + `SIZE_SLIDER_W`/`SIZE_ENTRY_MAX`
+  + the caller), `src/app/windows/tests.rs` + NEW
+  `src/app/windows/tests/size_block.rs` (3 tests: the label above + the 96-pt
+  rail + the narrow block; the 12-pt gap arithmetic for BOTH panels; the
+  above-100 persistence), `scripts/gui_line_panel_check.sh` (the size-block
+  scan: the rail/label/number box/gap on the real screenshots), SPEC §3.2,
+  DEBTS-verification (V55 closed verified in chat, V56 born), PROGRESS
+  (snapshot + entry + stamp), tests +3.
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp): fmt, rules HARD
+  green, clippy `-D warnings` both lanes, `cargo test --profile gates` 236
+  default / 249 mcp (+3: the size_block topic); the visual driver ALL
+  SCENARIOS GREEN; the pixel probe PASS: rail 96 px, label above, the number
+  box right (w 40, gap 6), rail-center→buttons 22.5 px on BOTH panels' shots.
+- **Owner-checks:** V56 born (the Windows `cargo run` AND the web build pass
+  of the Size block in the Shape AND Line panels). Open: V56, V53, V46;
+  parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `Size block: the label above the slider, the slider narrowed to the button-grid row width, a click-to-type entry for sizes above 100 (the slider stays 1..=100), the same 12-pt rows gap in the Shape and Line panels`
+
 ## Compaction history
 
+- Compaction history (newest first): 2026-11-20 (Select-tool round) — the Size-block entry moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (manual-entry bug-fix round) — the Line-panel entry moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (docs round) — the PROBLEMS-v2 tooling entry moved under the docs-round budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (outline-placement round) — the save-dialog-layout entry moved under the new round's budget (the Log would have passed ~150 lines).

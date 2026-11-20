@@ -67,9 +67,14 @@ impl App {
         }
         self.display_name = "Untitled".to_string();
         self.dirty = false;
-        // A new document: drop pending gestures and restart the log.
+        // A new document: drop pending gestures and restart the log. The
+        // selection clears (its bounds belonged to the old canvas); the
+        // in-app clipboard survives — the owner may paste into the new
+        // document (owner request 2026-11-20).
         self.cancel_preview();
         self.cancel_text_edit();
+        self.cancel_select_gesture();
+        self.selection.clear();
         self.action_log.clear();
         self.action_log.push(format!("New canvas {width}×{height}"));
         self.set_zoom(1.0, None, self.last_panel_rect);
@@ -119,9 +124,13 @@ impl App {
         }
         self.display_name = loaded.name;
         self.dirty = false;
-        // A new document: drop pending gestures and restart the log.
+        // A new document: drop pending gestures and restart the log. The
+        // selection clears; the in-app clipboard survives (owner request
+        // 2026-11-20, the same rule the New path applies).
         self.cancel_preview();
         self.cancel_text_edit();
+        self.cancel_select_gesture();
+        self.selection.clear();
         self.action_log.clear();
         let name = self.display_name.clone();
         self.action_log.push(format!("Opened {name}"));

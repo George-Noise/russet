@@ -72,6 +72,35 @@ impl App {
                         self.redo();
                         ui.close();
                     }
+                    // The selection ops (owner request 2026-11-20): the
+                    // same actions the Select panel's buttons and the
+                    // Ctrl+C/X/V hotkeys run. Copy/Cut need a selection,
+                    // Paste needs the clipboard — the disabled rows gray
+                    // out like `add_enabled` does everywhere.
+                    let has_selection = self.selection.bounds().is_some();
+                    let has_clipboard = self.clipboard.is_some();
+                    ui.separator();
+                    if ui
+                        .add_enabled(has_selection, egui::Button::new("Copy (Ctrl+C)"))
+                        .clicked()
+                    {
+                        self.copy_selection();
+                        ui.close();
+                    }
+                    if ui
+                        .add_enabled(has_selection, egui::Button::new("Cut (Ctrl+X)"))
+                        .clicked()
+                    {
+                        self.cut_selection();
+                        ui.close();
+                    }
+                    if ui
+                        .add_enabled(has_clipboard, egui::Button::new("Paste (Ctrl+V)"))
+                        .clicked()
+                    {
+                        self.paste_clipboard();
+                        ui.close();
+                    }
                 });
 
                 ui.menu_button("Canvas", |ui| {

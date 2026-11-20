@@ -215,13 +215,14 @@ for name, panel_rows in (("1_line_panel.png", [2]), ("2_shape_panel.png", [2, 3,
     print(f"== {name}: {total} cells in {len(all_rows)} rows")
     for i, r in enumerate(all_rows):
         print(f"   row {i}: {len(r)} cells at y={r[0][1]} gaps={gaps(r)}")
-    # The Tools window's grid is the FIRST FOUR rows (2/2/2/1 — two
-    # columns, seven tools). Everything within 140 px below its bottom row
+    # The Tools window's grid is the FIRST FOUR rows (2/2/2/2 — two
+    # columns, eight tools; the owner request 2026-11-20 added Select).
+    # Everything within 140 px below its bottom row
     # is the magnetized panel (the window-to-panel gap ~40 px, the three
     # panel rows add 80; farther bright UI — the bottom-left log window —
     # is excluded).
-    if len(all_rows) < 5 or [len(r) for r in all_rows[:4]] != [2, 2, 2, 1]:
-        print("   FAIL: the first four rows must be the 2/2/2/1 Tools grid")
+    if len(all_rows) < 5 or [len(r) for r in all_rows[:4]] != [2, 2, 2, 2]:
+        print("   FAIL: the first four rows must be the 2/2/2/2 Tools grid (8 tools)")
         ok = False
         continue
     grid = all_rows[:4]

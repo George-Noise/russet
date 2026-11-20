@@ -238,8 +238,8 @@ pub fn rasterize_smooth_pieces(
         Tool::Pencil => 1.0,
         Tool::Brush | Tool::Eraser => size.clamp(1.0, MAX_STROKE_SIZE),
         // Unreachable: the preview tools commit through `rasterize_polyline`
-        // / `rasterize_shape`, not through this freehand path.
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text => {
+        // / `rasterize_shape`, and Select never strokes.
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
             size.clamp(1.0, MAX_STROKE_SIZE)
         }
     };
