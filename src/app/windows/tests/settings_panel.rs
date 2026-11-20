@@ -201,10 +201,111 @@ fn the_shape_rows_render_compact_headless() {
     }
     // Three 28-pt button rows + the two group gaps (the KIND pair, the
     // three-button MODE radio and the three-button PLACEMENT radio —
-    // owner requests 2026-11-20): 3 × 28 + 2 × (6 gap + 3 spacing) ≈ 102.
+    // owner requests 2026-11-20): 3 × 28 + 2 × (9 gap + 3 spacing) = 108.
     // Nothing near a full window.
     assert!(rect.height() < 120.0, "shape rows height {}", rect.height());
     assert!(rect.width() < 110.0, "shape rows width {}", rect.width());
+}
+
+/// The Shape panel's SPACING rule (owner request 2026-11-20): within a row
+/// the buttons sit EXACTLY the Tools window's element gap apart
+/// horizontally, and the rows sit FURTHER apart vertically so the three
+/// groups read as groups. Measured on the REAL rects `shape_settings_ui`
+/// lays out — the 28×28 button squares the panel itself paints (headless,
+/// no atlas: geometry only, and egui paints nothing on an area's first
+/// pass, so the settled LAST pass is read).
+#[test]
+fn the_shape_panel_buttons_sit_a_tools_grid_gap_apart_horizontally_and_further_apart_vertically() {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        ..egui::RawInput::default()
+    };
+    let mut rects: Vec<Rect> = Vec::new();
+    for _ in 0..3 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            let mut tools = crate::tools::ToolState::new();
+            tools.tool = Tool::Shape;
+            egui::Area::new(egui::Id::unique("shape_gaps_probe"))
+                .fixed_pos(Pos2::ZERO)
+                .show(ctx, |ui| {
+                    shape_settings_ui(ui, &mut tools, &None);
+                });
+        });
+        output.textures_delta.clear();
+        // The buttons are the only 28×28 squares the panel paints (each
+        // button adds a fill AND a stroke rect over the same rect — the
+        // exact-equality dedupe keeps one). egui nests paint commands
+        // (`Shape::Vec`) — collect recursively.
+        fn button_rects(shape: &egui::Shape, out: &mut Vec<Rect>) {
+            match shape {
+                egui::Shape::Rect(rect_shape) => {
+                    let r = rect_shape.rect;
+                    if r.width() == super::super::TOOL_BUTTON_PT
+                        && r.height() == super::super::TOOL_BUTTON_PT
+                        && !out.contains(&r)
+                    {
+                        out.push(r);
+                    }
+                }
+                egui::Shape::Vec(children) => {
+                    children.iter().for_each(|c| button_rects(c, out));
+                }
+                _ => {}
+            }
+        }
+        rects.clear();
+        for clipped in &output.shapes {
+            button_rects(&clipped.shape, &mut rects);
+        }
+    }
+    // 2 KIND + 3 MODE + 3 PLACEMENT buttons.
+    assert_eq!(rects.len(), 8, "the panel's button squares: {rects:?}");
+
+    // Group the rects into ROWS (a row shares its top edge).
+    let mut rows: Vec<Vec<Rect>> = Vec::new();
+    for r in rects {
+        match rows.last_mut() {
+            Some(row) if (row[0].top() - r.top()).abs() < 0.5 => row.push(r),
+            _ => rows.push(vec![r]),
+        }
+    }
+    assert_eq!(rows.len(), 3, "KIND, MODE and PLACEMENT rows: {rows:?}");
+
+    // Horizontally: every in-row gap is EXACTLY the Tools window's grid
+    // gap (the owner: "ровно такой же, как gap между элементами в окошке
+    // Tools") — the 28-pt buttons and the shared TOOL_GRID_GAP.
+    for row in &rows {
+        assert!(
+            row.len() == 2 || row.len() == 3,
+            "the KIND row has 2 buttons, the others 3: {row:?}"
+        );
+        for pair in row.windows(2) {
+            let gap = pair[1].left() - pair[0].right();
+            assert!(
+                (gap - super::super::TOOL_GRID_GAP).abs() < 0.5,
+                "in-row horizontal gap {gap} must be the Tools grid gap {}",
+                super::super::TOOL_GRID_GAP
+            );
+        }
+    }
+
+    // Vertically: the rows sit FURTHER apart than the buttons do within a
+    // row — the item spacing's y half plus SHAPE_GROUP_GAP, a step above
+    // the 6-pt horizontal gap so the groups read apart.
+    for pair in rows.windows(2) {
+        let gap = pair[1][0].top() - pair[0][0].bottom();
+        assert!(
+            (gap - (3.0 + super::super::SHAPE_GROUP_GAP)).abs() < 0.5,
+            "the row gap {gap} must be 3-pt item spacing + SHAPE_GROUP_GAP {}",
+            super::super::SHAPE_GROUP_GAP
+        );
+        assert!(
+            gap > super::super::TOOL_GRID_GAP,
+            "the vertical gap {gap} must read further apart than the {}-pt horizontal one",
+            super::super::TOOL_GRID_GAP
+        );
+    }
 }
 
 #[test]

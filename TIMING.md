@@ -23,21 +23,21 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | targeted `cargo test app::windows --profile gates` (the panel-spacing round: the gates test graph COLD in the fresh sandbox — first compile died on a fmt-broken signature, the hot re-run was instant) | **1m 59s** | time'd exactly |
+| 2026-11-20 | `cargo check` (this round's quick loop — COLD dep graph on the fresh clone; rustup + the pinned toolchain installed first) | **1m 25s** | time'd exactly |
 | 2026-11-20 | bare `cargo test --profile gates --features mcp` AGAIN (trap 10 recidive No. 2: no stdin shield → the MCP stdin-reader teardown hung; two 300 s tool timeouts died mid-run) AND the mcp-feature switch rebuilt the gates dep graph (~4 min); with the shield (`> /tmp/log`, no pipe) and the cache the suite ran in 4 s | **≈ 10 min wasted across 2 retries; 4 s final** | the tool timeouts + the log |
 | 2026-11-20 | bare `cargo test --profile gates --features mcp` (no `< /dev/null` shield) — SANDBOX.md trap 10 recidive in the recycled sandbox: tests themselves green, the cargo↔test-binary teardown hung on the MCP stdin reader until the 600 s tool timeout killed it | **600 s (timeout)** | the tool timeout |
 | 2026-11-20 | `cargo check` (this round's quick loop — COLD dep graph on the dev lane, fresh sandbox: rustup + the pinned toolchain installed first) | **1m 23s** | time'd exactly |
-| 2026-11-20 | the detached gates-lane warm-up (`cargo clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) — COLD dep graph on the FRESH sandbox (recycled: `target/` gone; rustup + the pinned toolchain installed first) | **≈ 2m 50s** (11:31:07 → 11:33:57) | observed ≈ from the warm-up log timestamps |
-| 2026-11-20 | `rustup toolchain install` (the pinned 1.99.1 via rust-toolchain.toml) + `rustup target add wasm32-unknown-unknown` on the fresh sandbox (rustup itself installed first) | **≈ 2 min** | observed ≈ |
 
 ## Hot
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` (the panel-spacing round's gate; the dev `cargo build` for the GUI probe ran just before — 1m 43s, the dev-lane codegen cold from a check-only session) | **73 s** | the gate's own print |
+| 2026-11-20 | `cargo build` (the dev GUI-probe binary; check-artifacts existed but codegen was cold) | **1m 43s** | cargo's print |
 | 2026-11-20 | `cargo build` (the dev GUI-probe binary; deps hot from this round's cargo check) | **1m 40s** | cargo's print |
 | 2026-11-20 | `bash scripts/verify.sh` (this round's gate — the gates dep graph warm from a first run that the sandbox killed mid-compile) | **12 s** | the gate's own print |
-| 2026-11-20 | `cargo build --profile gates --features mcp` (the GUI-probe binary; hot) | **2 s** | cargo's print |
 | 2026-11-20 | NOTE: DETACHED `setsid` background processes do NOT survive between tool calls in THIS recycled sandbox — both the gates warm-up and a detached verify.sh died silently between commands; heavy commands must run SYNCHRONOUSLY here (the compiled fingerprints persist, so the sync re-run is hot) | — | observed twice |
-| 2026-11-20 | `bash scripts/verify.sh` after the test additions (the save-compression round's second gate run; gates deps hot, the crate recompiled per stage) | **13 s** | the gate's own print |
 
 ## Reading the numbers
 

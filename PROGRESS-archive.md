@@ -1,5 +1,85 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Feat:` the Shape tool's outline placement radio (outside / centered / inside) — owner request
+
+- **What:** the owner approved V52 and ordered a THIRD Shape-panel group: three
+  outline placements over the drag's two mouse points — OUTSIDE (the outline
+  fully beyond them: its inner edge = the shape's boundary), CENTERED (the
+  classic straddle — the old look, the startup default) and INSIDE (fully
+  within them: its outer edge = the boundary). New `tools.rs::ShapeOutline` +
+  `ToolState.shape_outline` (default Center); `rasterize_shape` strokes a path
+  SHIFTED half a stroke width outward/inward (the pure `outline_stroke_bounds`,
+  the inward shift clamped for thinner-than-stroke shapes), the dirty rect
+  covers the Outside reach, the fill always stays exactly the two points; the
+  gesture CARRIES the placement like its colors (a mid-drag switch cannot
+  change the release); the preview matches every mode (the rect: egui's
+  Outside/Middle/Inside stroke kind; the ellipse: radii shifted by the same
+  half screen-stroke width). The panel's THIRD row (after another group gap):
+  three icon radios whose icons ALWAYS draw a SQUARE's corner — the gray fill
+  quadrant (where the shape is), the click dot (white core + ink ring) and two
+  ink segments along the outline's lines in the mode's position
+  (`draw.rs::draw_outline_mode`); tooltips "Outline outside" / "Outline
+  centered" / "Outline inside". The Shape-panel icon set is EIGHT now.
+- **Files:** `tools.rs`, `app/preview.rs`, `app/windows.rs`,
+  `app/tool_icons.rs` (8 icons), `app/tool_icons/draw.rs` (+draw_outline_mode);
+  tests: tools/tests.rs (+5), tool_icons/{tests,shape_panel,atlas}.rs,
+  windows/tests/settings_panel.rs (+1 + bounds); SPEC §3.2, TIMING (+2 rows),
+  DEBTS-verification (V52 closed, V53 born), PROGRESS (stamp + entry + the
+  save-dialog-layout entry and the 2026-11-19 snapshot extras moved to the
+  archive).
+- **Verified:** FULL gate ALL GATES GREEN 18 s hot: fmt clean, rules HARD
+  green, clippy `-D warnings` green (default + mcp), `cargo test --profile
+  gates` 239 green BOTH lanes (+1 ignored; +5 net tests); NO wasm check (the
+  diff touches no web-facing code — the economy rule); the visual driver ALL
+  SCENARIOS GREEN under Xvfb; PLUS the GUI probe through the real binary
+  (xdotool + ffmpeg): the three-group panel, all three tooltips, three
+  rectangles one per mode — PIXEL-MEASURED on the screenshots: Inside's outer
+  edge == the drag bounds (350..550), Outside's band = the bounds ± 8
+  (642..858), Center straddles ± 4 (346..554); the 256 px + 24 px icon sheets.
+- **Owner-checks:** V53 born (the Windows + Web pass: the third row's three
+  corner radios — always a square's corner, the gray fill, the click dot, the
+  bands; the startup default Centered; a shape drawn in each mode — Outside
+  grows the footprint, Inside stays within the drag; the kind switch must not
+  affect the row). Open: V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `Shape tool: the outline placement becomes a second three-way radio (outside the two points / straddling them as before / inside them), the corner icons show the click dot and the outline bands against the gray fill, the panel's groups separated by distance`
+
+### 2026-11-20 — `Feat:` the Shape panel's icon buttons — owner request
+
+- **What:** the owner reviewed V50 ("сейчас гораздо лучше") and reshaped the Shape
+  tool's settings panel: the word radio and the Fill/Outline checkboxes became ICON
+  BUTTONS in the Tools-window button style. The KIND row = two buttons — square /
+  circle drawn as neutral previews (mid-gray fill + the fixed ink rim) selecting
+  Rectangle / Ellipse; after a group gap (`SHAPE_GROUP_GAP`, the
+  distance-separates-meaning principle) the MODE row = two toggles — Fill (the
+  current kind SOLID in the fixed ink) and Outline (HOLLOW) — whose icons preview
+  the CURRENT kind: the atlas key is (pixels-per-point, kind) and a kind switch
+  re-rasterizes (egui's `load_texture_cached` dedupes identical content — only the
+  two toggles' pixels re-upload). Hovering shows EXACTLY the old words; the
+  at-least-one-mode invariant lives in pure `toggled_fill`/`toggled_outline`; the
+  shared `icon_button` fn now draws the Tools grid's buttons AND the panel's.
+- **Files:** `src/app/tool_icons.rs` (ShapeIcon + shape_icon_label +
+  shape_texture_id; the Atlas key + `shape_icons`), `src/app/tool_icons/draw.rs`
+  (rasterize_shape_icon + the two drawings + SHAPE_PREVIEW_FILL),
+  `src/app/windows.rs` (icon_button extracted; shape_settings_ui + the toggles),
+  `src/app.rs` (the ensure call passes the kind), `src/tools.rs` (ShapeKind +Debug),
+  `src/app/tool_icons/tests.rs` split by topic per Tests rule 7 (94 + drawings 199
+  + atlas 244 + shape_panel 104; +5 tests), `src/app/windows/tests/settings_panel.rs`
+  (+2), SPEC §3.2 (the panel bullets), TIMING (2 rows), DEBTS-verification (V50
+  closed verified, V51 born), PROGRESS (snapshot + entry + stamp).
+- **Verified:** FULL gate ALL GATES GREEN 16 s hot: fmt clean, rules HARD green
+  (the OVER-GUARD note is the owner-deferred history_tree.rs 569 again), clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 227 / 227 green
+  (+1 ignored each; +5 tests); NO wasm check (the diff touches no web-facing code —
+  the economy rule); the visual driver ALL SCENARIOS GREEN under Xvfb + the GUI
+  click-through with screenshots: the rectangle state, the Ellipse click turning
+  the toggles round, the "Rectangle" tooltip, an ellipse drawn on canvas.
+- **Owner-checks:** V51 born (the Windows + Web pass: the four buttons, the
+  tooltips, the kind switch re-rounding the toggles, drawing from the panel state).
+  V50 closed verified in chat (the owner: "Проверил как выглядит окошко Save,
+  сейчас гораздо лучше"). Open: V51, V48, V46; parked: V30, V8. Debts open: F17,
+  F16, F15.
+- **Commit title:** `Shape panel: the Kind radio and the Fill/Outline checkboxes become Tools-style icon buttons (gray square/circle previews, solid/hollow toggles previewing the current kind, the old words as tooltips)`
+
 ### 2026-11-20 — `Feat:` the Save dialog's slider meaning captions — owner request
 
 - **What:** the owner looked at the V48 dialog and asked to tell the user what

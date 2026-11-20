@@ -41,10 +41,13 @@ const TOOL_GRID_GAP: f32 = 6.0;
 /// GROUPS — the KIND choice, the paint MODE and the outline PLACEMENT — so
 /// the three groups read apart (the same distance-separates-meaning
 /// principle the owner set for the Save dialog's encoding group, V50, and
-/// extended to the Shape panel 2026-11-20: "добавить расстояние, чтобы
-/// разделить кнопки по группам"): the rows' own gap is egui's 3-pt item
-/// spacing, this adds 6 more between the button rows.
-const SHAPE_GROUP_GAP: f32 = 6.0;
+/// extended to the Shape panel 2026-11-20): the rows' own gap is egui's 3-pt
+/// item spacing, this adds 9 more between the button rows — 12 pt total.
+/// Owner request 2026-11-20 (the spacing pass): WITHIN a row the buttons sit
+/// EXACTLY the Tools window's element gap apart ([`TOOL_GRID_GAP`], set via
+/// `item_spacing.x` in [`shape_settings_ui`]), and VERTICALLY the rows sit
+/// "чуть дальше" — a step further apart than that 6-pt horizontal gap.
+const SHAPE_GROUP_GAP: f32 = 9.0;
 
 /// The tool button's square size in logical points: the 1.5rem icon plus a
 /// small padding on every side.
@@ -206,13 +209,24 @@ fn icon_button(
 /// PLACEMENT radios' icons draw the corner composition
 /// ([`ShapeIcon::OutlineOutside`] / [`OutlineCenter`] / [`OutlineInside`]).
 /// The buttons are the Tools window's icon buttons ([`icon_button`]); the
-/// tooltips carry the words ([`tool_icons::shape_icon_label`]).
+/// tooltips carry the words ([`tool_icons::shape_icon_label`]). The SPACING
+/// is the owner's 2026-11-20 pass: WITHIN a row the buttons sit EXACTLY the
+/// Tools window's element gap apart ([`TOOL_GRID_GAP`] — "ровно такой же,
+/// как в окошке Tools"; the row is laid out by egui's `item_spacing.x`, so
+/// it is set here once and the three rows inherit it), and the rows sit
+/// further apart vertically ([`SHAPE_GROUP_GAP`] above).
 ///
 /// Extracted as a free fn over [`ToolState`] so the regression tests run
 /// the exact UI the app runs (headless; the atlas is optional — the buttons
 /// render without icons the same way the Tools window does before the atlas
 /// lands).
 fn shape_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<tool_icons::Atlas>) {
+    // The horizontal gap between the buttons of every row below: EXACTLY
+    // the Tools window's grid gap (owner request 2026-11-20). egui's
+    // default `item_spacing.x` (8 pt) applied here instead; the vertical
+    // stacking is untouched (the rows separate through the item spacing's
+    // y half + `SHAPE_GROUP_GAP`).
+    ui.spacing_mut().item_spacing.x = TOOL_GRID_GAP;
     ui.horizontal(|ui| {
         for (kind, icon) in [
             (ShapeKind::Rectangle, ShapeIcon::Rectangle),
