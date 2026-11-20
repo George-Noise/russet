@@ -2548,8 +2548,38 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   F15.
 - **Commit title:** `Save dialog layout: the Saving-as preview above the file name, the folder row under it, the format dropdown instead of the radio, and the encoding group (Lossless above the knob) separated by distance`
 
+### 2026-11-20 — `Tooling:` PROBLEMS.md becomes a pure log written only by scripts/log_problem.sh — owner request
+
+- **What:** the owner refined the friction-log round: PROBLEMS.md is LITERALLY
+  a log — the agent reads NO line of it, so the rules + entry template moved
+  OUT of the file into the AGENTS.md section that explains the log (compact;
+  the template is guidance, not a form), and entries go in ONLY through the
+  new `scripts/log_problem.sh <entry-file>`: it PREPENDS the entry verbatim at
+  the very top (newest first; the entry's trailing newlines normalize to one
+  blank line) and BYTE-CHECKS after the write that the previous content
+  survived below it — a mismatch restores the backup and fails without
+  touching the log, so an agent cannot delete or rewrite anything in it (the
+  owner's explicit permission is the only door). The two existing entries
+  stayed byte-identical; the file now starts straight with its newest entry.
+  Second owner-approved exception to the "no scripts without asking" rule;
+  entry temp files stay OUT of the repo (the script warns — a worktree file
+  would leak into the delivery artifacts).
+- **Files:** `scripts/log_problem.sh` (new), `PROBLEMS.md` (header/template
+  stripped, entries kept verbatim), `AGENTS.md` (the section now carries the
+  template + the script rule; the Source-of-truth bullet + the layout
+  exception updated), PROGRESS (entry + stamp).
+- **Verified:** the script exercised on a /tmp COPY only — prepend + the tail
+  byte-identical to the real log, blank-only entry refused, entry==log
+  refused, an in-repo path warned, a double prepend keeps newest-first; the
+  real PROBLEMS.md untouched this round; FULL gate ALL GATES GREEN (the
+  stamp).
+- **Owner-checks:** none new (docs + a shell script — nothing to click).
+  Open: V54, V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `PROBLEMS.md: the file becomes a pure log written only by scripts/log_problem.sh (prepend-only, integrity-checked, nothing deletable without the owner); the template moves to AGENTS.md`
+
 ## Compaction history
 
+- Compaction history (newest first): 2026-11-20 (docs round) — the PROBLEMS-v2 tooling entry moved under the docs-round budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (outline-placement round) — the save-dialog-layout entry moved under the new round's budget (the Log would have passed ~150 lines).
 
 ## Status-snapshot extras (compacted 2026-11-20, outline-placement round)

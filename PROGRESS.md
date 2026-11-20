@@ -32,6 +32,7 @@
 | Extra: PROBLEMS.md (the write-only agent-friction log) + the Shape panel's spacing pass (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | two owner requests in one session: (1) PROBLEMS.md born — every agent problem logged raw at the top, the file is NOT read until the owner says so (the AGENTS.md rule + abstract template + the first entry: the false warm-up verdict); (2) the Shape panel's buttons sit EXACTLY the Tools window's grid gap apart horizontally (`TOOL_GRID_GAP` 6 pt via `item_spacing.x`) and the rows a step further apart vertically (12 pt = 3 + `SHAPE_GROUP_GAP` 9); pixel-measured on the Xvfb screenshots: in-row 6 px == the Tools grid's own 6 px on the SAME shot, rows 12 px apart; V54 born |
 | Extra: PROBLEMS.md v2 (the pure log written only by scripts/log_problem.sh) + the Line panel's icon-button pass (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | two owner requests in one session: (1) PROBLEMS.md v2 — the file is LITERALLY a log (no header/template — they moved into the AGENTS.md section), entries go in ONLY through the new prepend-only `scripts/log_problem.sh` (byte-checks the old content survives; nothing deletable without the owner); (2) the owner verified V54 and reshaped the LINE panel the same way («кнопочки как в Shape, такие же по стилю и отступам, вместо радио Mode»): ONE row of TWO icon buttons — Straight / Curve — drawing the Line TOOL's emblem (Curve pixel-for-pixel the tool's icon, Straight the same stroke unbent), the row exactly the grid gap apart (the pixel probe: the same 7-px-on-screen gap as the Tools grid and every Shape row on the SAME binary); the Curve hints stay; V54 closed verified in chat, V55 born |
 | Extra: the Size block — label above, the narrowed slider, manual entry above 100 (owner 2026-11-20) | done — gates + driver + GUI pixel probe green | the owner verified V55 («Отлично») with three follow-ups: the Shape AND Line panels (Brush/Eraser share the block, no gap — nothing below) get the "Size" label ABOVE the slider; the slider narrowed to the button grid's row width (`SIZE_SLIDER_W` 96 pt — egui's `Slider` takes its width ONLY from `spacing.slider_width` (`SliderCore::desired_size`; a container's max width cannot narrow it — the first `add_sized` attempt measured 100), so the block's scope pins it); right of the slider a click-to-type `DragValue` (1..=10 000 — a sanity guard, the owner set no ceiling) accepts sizes ABOVE 100 while the slider stays 1..=100, binding to a clamp COPY and writing back only when dragged (egui's default `SliderClamping::Always` clamps the bound value EVERY frame — a typed 250 would snap back; with the copy the thumb just pins at the right end); after the block a `SHAPE_GROUP_GAP` — the SAME 12-pt step as between the Shape panel's own rows («такой же высоты что и между кнопками в Shape»); the probe measures the real screen: rail 96 px, the number box right of it (w 40, gap 6), rail center 22.5 px above the buttons, the label above; +3 tests (the new `windows/tests/size_block.rs` topic); V55 closed verified in chat, V56 born |
+| Extra: the hand-over lists only the newest commit title (owner 2026-11-20) | done — docs only | the owner traced the AGENTS.md delivery ritual's "list every round's title" clause to a ONE-TIME request the agent mis-recorded as a standing rule ("это была единичная просьба и агент решил записать это как правило") and had it fixed: the reply lists ONLY the newest delivery's title — one per reply (he records the older ones himself — "я и так их записываю"); the title mechanism (the PROGRESS entry's `Commit title:` field + the reply's last line, backticks, rules.sh rule 6) unchanged; docs-only round (rules.sh + byte-compares only) |
 
 **Verification stamp:** FULL gate re-verified 2026-11-20 (the Size-block round):
 fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default + mcp),
@@ -77,9 +78,32 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-20) lives in
-> PROGRESS-archive.md; the latest move: the PROBLEMS.md docs entry + the
-> panel-spacing entry (during the 2026-11-20 Line-panel round's budget; the
-> MODE-radio entry went the round before — all in the archive).
+> PROGRESS-archive.md; the latest move: the PROBLEMS-v2 tooling entry (during
+> the 2026-11-20 docs round's budget — the total passed ~200; the PROBLEMS-docs
+> + panel-spacing entries went during the Line-panel round — all in the archive).
+
+### 2026-11-20 — `Docs:` the hand-over lists only the newest commit title — owner request
+
+- **What:** the owner re-read the AGENTS.md hand-over rule and traced its
+  history: the "if the delivery covers several rounds, list every round's
+  title" clause grew out of a ONE-TIME request that the agent mis-recorded as
+  a standing rule ("это была единичная просьба и агент решил записать это как
+  правило"). The rule now says the reply lists ONLY the newest delivery's
+  title — one title per reply, backtick-wrapped as the last line (the owner
+  keeps the older titles' list himself — "я и так их записываю"); the
+  mechanism is unchanged (the `Commit title:` field in the PROGRESS entry +
+  the reply's last line + rules.sh's rule-6 REMINDER). One sentence replaced
+  in the Delivery ritual section — the only place the multi-title listing was
+  written (grepped "several rounds|every round|round's title").
+- **Files:** `AGENTS.md` (the hand-over rule), `PROGRESS.md` (this entry + the
+  snapshot row). DOCS-ONLY round: the gate is `scripts/rules.sh` + the
+  delivery byte-compares ONLY — no cargo, no tests (the owner's 2026-11-20
+  exemption), stated here per that rule.
+- **Verified:** rules.sh HARD GREEN (the PROGRESS budgets within limits); the
+  delivery byte-compares MATCH (patched base <-> worktree <-> unpacked zip).
+- **Owner-checks:** none born (a pure docs edit). Open: V56 (the Size block),
+  V53, V46; parked: V30, V8; debts: F17, F16, F15.
+- **Commit title:** `Docs: the hand-over lists only the newest commit title (the multi-title clause was a one-time request)`
 
 ### 2026-11-20 — `Feat:` the Size block — label above, narrowed slider, manual entry above 100 — owner request
 
@@ -152,32 +176,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   V54 closed verified in chat. Open: V55, V53, V46; parked: V30, V8. Debts
   open: F17, F16, F15.
 - **Commit title:** `Line panel: the word Mode radio becomes two icon buttons in the Shape panel's style (the tool's emblem per mode — Curve pixel-for-pixel the tool icon, Straight unbent; the same grid-gap row)`
-
-### 2026-11-20 — `Tooling:` PROBLEMS.md becomes a pure log written only by scripts/log_problem.sh — owner request
-
-- **What:** the owner refined the friction-log round: PROBLEMS.md is LITERALLY
-  a log — the agent reads NO line of it, so the rules + entry template moved
-  OUT of the file into the AGENTS.md section that explains the log (compact;
-  the template is guidance, not a form), and entries go in ONLY through the
-  new `scripts/log_problem.sh <entry-file>`: it PREPENDS the entry verbatim at
-  the very top (newest first; the entry's trailing newlines normalize to one
-  blank line) and BYTE-CHECKS after the write that the previous content
-  survived below it — a mismatch restores the backup and fails without
-  touching the log, so an agent cannot delete or rewrite anything in it (the
-  owner's explicit permission is the only door). The two existing entries
-  stayed byte-identical; the file now starts straight with its newest entry.
-  Second owner-approved exception to the "no scripts without asking" rule;
-  entry temp files stay OUT of the repo (the script warns — a worktree file
-  would leak into the delivery artifacts).
-- **Files:** `scripts/log_problem.sh` (new), `PROBLEMS.md` (header/template
-  stripped, entries kept verbatim), `AGENTS.md` (the section now carries the
-  template + the script rule; the Source-of-truth bullet + the layout
-  exception updated), PROGRESS (entry + stamp).
-- **Verified:** the script exercised on a /tmp COPY only — prepend + the tail
-  byte-identical to the real log, blank-only entry refused, entry==log
-  refused, an in-repo path warned, a double prepend keeps newest-first; the
-  real PROBLEMS.md untouched this round; FULL gate ALL GATES GREEN (the
-  stamp).
-- **Owner-checks:** none new (docs + a shell script — nothing to click).
-  Open: V54, V53, V46; parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `PROBLEMS.md: the file becomes a pure log written only by scripts/log_problem.sh (prepend-only, integrity-checked, nothing deletable without the owner); the template moves to AGENTS.md`
