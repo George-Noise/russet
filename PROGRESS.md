@@ -35,23 +35,29 @@
 | Extra: the hand-over lists only the newest commit title (owner 2026-11-20) | done — docs only | the owner traced the AGENTS.md delivery ritual's "list every round's title" clause to a ONE-TIME request the agent mis-recorded as a standing rule ("это была единичная просьба и агент решил записать это как правило") and had it fixed: the reply lists ONLY the newest delivery's title — one per reply (he records the older ones himself — "я и так их записываю"); the title mechanism (the PROGRESS entry's `Commit title:` field + the reply's last line, backticks, rules.sh rule 6) unchanged; docs-only round (rules.sh + byte-compares only) |
 | Extra: the manual-entry size reaches the drawing — bug fix (owner 2026-11-20) | done — gates + driver + probe green | the owner's report ("задаю вручную size 200 всё ещё рисуется с радиусом 100") landed in the DRAW paths: all FOUR rasterizers (draw_segment, smooth, polyline, shape) still clamped the stroke width to the slider-era 1..=100, and the [ / ] hotkeys clamped tools.size itself — the UI accepted 200, every path drew 100; the ceiling is now `tools::MAX_STROKE_SIZE` = 10 000 (the entry box's own sanity bound, "not a design limit"), all clamps + the DragValue range use it, a typed 200 survives the bracket keys (→ 199); +5 pixel probes (`tools/tests/stroke_size.rs`) proving a 200-wide stroke covers what a 100-clamped one cannot; sizes ≤ 100 draw pixel-identical; V57 born |
 | Extra: the Select tool — regions, copy/cut/paste/move, crop (owner 2026-11-20) | done — gates + driver + GUI probes green | ONE "Select (V)" button (the grid is 8 tools), the icon = the mode's mark (dashed square/blob), while active L-click cycles the mode forward / R-click backward (over `SelectMode::ALL` — ready for more kinds); the panel: the MODE row (Rect/Lasso) + the OPS row (Copy/Cut/Paste/Crop, grayed without a selection/clipboard; the Edit menu + Ctrl+C/X/V run the same ops); a plain drag replaces, Shift-drag adds, Alt-drag subtracts (rect AND lasso — the mask derives from the op list, so subtract cuts true holes); the ants = the crack-boundary loops of the mask (the true contour, holes, checkerboard corners) drawn under every tool; move = press inside the selection lifts the pixels (a full-layer backup) + the drag re-draws at the integer offset + ONE `move` node, Esc/pan/tool-switch restores; crop = `layers::crop_all` reusing the resize machinery's `fit_copy_at` (one `crop` node per layer, `CropInfo` in the tree rows) — the owner's "связать с resize"; the pure domain in `selection.rs`, the gestures/ops in `app/selection.rs`, the panel in `app/windows/select_panel.rs`; the clipboard is in-app and paste stamps immediately (F18); V58 born |
+| Extra: the V58 fixes — the move ghost, the dead combos, the blot (owner 2026-11-20) | done — gates + driver + probes green | the owner's three findings fixed: (1) the move drag printed a GHOST every frame (the restore covered only the origin — the previous frame's stamp survived); now the restore covers origin ∪ last frame ∪ new position + the regression test (two redraws, the intermediate stamp vanishes); (2) Ctrl+C/X/V never fired — egui-winit's `clipboard_shortcuts` (ON by default) converts the combos into DEDICATED `Event::Copy/Cut/Paste` and swallows the Key events (issue #3653; matches PHYSICAL keys — non-Latin layouts work too); the handler consumes the dedicated events, the wants-keyboard guard keeps the Text-tool field its OS-text semantics + 2 tests (the events drive the ops; a bare Key event does not); (3) the lasso icon was circle-like — redrawn as an irregular round blot (6 anchors, varying radii, C1 midpoints, the same dashes); V59 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the Select-tool
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the V58-fixes
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 262 default / 275 mcp green
-(+1 ignored; +21 net tests this round — the NEW topics: `selection/tests.rs`
-(the pixel semantics, the add/subtract algebra, the crack-boundary loops —
-rect corners merged, holes, checkerboard splits — and the extract/erase/
-restore/stamp helpers), `app/selection/tests.rs` (the copy→cut→paste round
-trip, the crop × layers, the move commit and its cancel restore, through
-`new_headless`), `windows/tests/select_panel.rs` (the rows' 12-pt step, the
-grayed ops, an INJECTED click writing the mode), the atlas counts (8 tool +
-8 shape + 2 line + 6 select + 1 font = 25 first pass), the launch/mcp names),
+(default + mcp), `cargo test --profile gates` 265 default / 278 mcp green
+(+1 ignored; +24 net tests since b54a7fd — the Select-tool topics AND this
+round's: the move-drag ghost regression (two redraws — the intermediate
+stamp must vanish), the dedicated-event path (Event::Copy/Cut/Paste drive
+the ops through a headless pass; a bare Key event does NOT), plus the
+Select round's `selection/tests.rs` (the pixel semantics, the add/subtract
+algebra, the crack-boundary loops — rect corners merged, holes,
+checkerboard splits — and the extract/erase/restore/stamp helpers),
+`app/selection/tests.rs` (the copy→cut→paste round trip, the crop ×
+layers, the move commit and its cancel restore, through `new_headless`),
+`windows/tests/select_panel.rs` (the rows' 12-pt step, the grayed ops, an
+INJECTED click writing the mode), the atlas counts (8 tool + 8 shape +
+2 line + 6 select + 1 font = 25 first pass), the launch/mcp names),
 the visual driver ALL SCENARIOS GREEN under Xvfb through the dev+mcp binary
 + the GUI probes PASS (the NEW `scripts/gui_select_check.sh`: the 2/2/2/2
 grid, the Select panel 2 mode + 4 ops buttons, the 6-px in-row gaps, the
 12-px rows step; the updated `gui_line_panel_check.sh`: the Size block and
-the Line/Shape rows untouched) — Rust 1.99.1
+the Line/Shape rows untouched; the blot icon verified on the cropped
+screenshot) — Rust 1.99.1
 pinned via rust-toolchain.toml, Linux. NO wasm check this round (the diff
 touches no web-facing code — the economy rule). NOTE 2026-11-20 (still true):
 RECYCLED sandbox — rustup/toolchain/GUI .debs reinstalled, the repo RE-CLONED
@@ -89,9 +95,36 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-20) lives in
-> PROGRESS-archive.md; the latest move: the Size-block entry (during the
-> 2026-11-20 Select-tool round's budget — the total passed ~200; the
-> Line-panel entry went the round before — all in the archive).
+> PROGRESS-archive.md; the latest move: the manual-entry bug-fix entry
+> (the V58-fixes round's second cut — the total still passed ~200 after
+> the Docs entry went; the Size-block entry went the round before — all
+> in the archive).
+
+### 2026-11-20 — `Fix:` the V58 pass — the move-drag ghost, the dead Ctrl+C/X/V combos, the lasso blot — owner bug report
+
+- **What:** the owner's V58 findings: (1) dragging a selection PRINTED A
+  GHOST every frame — `redraw_moved` restored only the ORIGIN rect, so the
+  previous frame's stamp survived; the restore now covers origin ∪ last
+  frame ∪ new position (the full-layer backup covers all three) + a
+  regression test (two redraws — the intermediate stamp must vanish);
+  (2) Ctrl+C/X/V did NOTHING — egui-winit's `clipboard_shortcuts` (ON by
+  default) converts the combos into DEDICATED `Event::Copy/Cut/Paste` and
+  swallows the Key events, so `consume_key` could never match (issue
+  #3653; the conversion matches the PHYSICAL keys — the combos now also
+  work on non-Latin layouts); the handler consumes the dedicated events
+  (the wants-keyboard guard keeps a focused Text-tool field its OS-text
+  semantics) + 2 headless tests (the events drive the ops; a bare Key
+  event does NOT); (3) the lasso icon read as a CIRCLE — redrawn as an
+  irregular round blot (six anchors with varying radii, C1-smoothed
+  through the midpoints, the same dashes).
+- **Files:** `app/input.rs` (+ tests), `app/selection.rs` (+ tests),
+  `app/tool_icons/draw.rs`, SPEC §3.9 (the combo-mechanism row).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp). No wasm check —
+  no web-facing code (the economy rule).
+- **Owner-checks:** V59 born (Windows + web: a clean drag-move, working
+  combos, the blot mark). Open: V59, V58, V57, V56; parked: V30, V8.
+  Debts open: F18, F17, F16, F15.
+- **Commit title:** `Fix: the move drag leaves no per-frame ghosts (the restore covers the last stamp), Ctrl+C/X/V consume egui-winit's dedicated Copy/Cut/Paste events (consume_key never sees the combos), the lasso icon is an irregular blot`
 
 ### 2026-11-20 — `Feat:` the Select tool — rect/lasso regions, Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery — owner request
 
@@ -140,57 +173,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   (the palette-split pattern), the select icons out of `draw.rs`.
 - **Commit title:** `Select tool: rect/lasso regions with Shift-add/Alt-subtract, copy/cut/paste/move, crop via the resize machinery (the dashed true-contour ants, the mode-cycling Tools button, the panel's mode+ops rows)`
 
-### 2026-11-20 — `Fix:` a manually entered size above 100 reaches the drawing — owner bug report
-
-- **What:** the owner's report: "я задаю вручную size 200 всё ещё рисуется с
-  радиусом 100". The UI was innocent (the DragValue writes `tools.size`
-  directly; the size_block test proves no clamp-back) — the DRAW paths were
-  the slider-era legacy: ALL FOUR rasterizers clamped the stroke width to
-  1..=100 (`draw_segment`, `rasterize_smooth_pieces`, `rasterize_polyline`,
-  `rasterize_shape` — the UI once offered no sizes above 100), and the
-  `[`/`]` hotkeys clamped `tools.size` itself. A typed 200 therefore drew at
-  100 everywhere. Fix: the ceiling moved to the tool layer —
-  `tools::MAX_STROKE_SIZE` = 10 000 (the entry box's own sanity bound, "not
-  a design limit"); every clamp goes to it, the hotkeys step within
-  1..=MAX (a typed 200 survives a nudge → 199), the DragValue's range uses
-  the constant (the local `SIZE_ENTRY_MAX` is gone).
-- **Files:** `src/tools.rs` (the constant + draw_segment/polyline/shape
-  clamps), `src/tools/smooth.rs`, `src/app/input.rs` (the hotkeys),
-  `src/app/windows.rs` (the DragValue range + the doc), NEW
-  `src/tools/tests/stroke_size.rs` (5 pixel probes: a point a 200-wide
-  stroke covers but a 100-clamped one cannot, per rasterizer + the ceiling's
-  dirty-rect saturation), `src/tools/tests.rs` (+`mod stroke_size;`),
-  DEBTS-verification (V57 born), PROGRESS (snapshot + entry + stamp), tests
-  +5.
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp): fmt, rules HARD
-  green, clippy `-D warnings` both lanes, `cargo test --profile gates` 241
-  default / 254 mcp (+5: the stroke_size topic); the visual driver ALL
-  SCENARIOS GREEN; the pixel probe PASS (the Size block's layout untouched).
-  No wasm check — the diff touches no web-facing code (the economy rule).
-- **Owner-checks:** V57 born (the drawn stroke/outline follows a typed 200;
-  the bracket keys step 199/201 from 200). Open: V57, V56, V53, V46;
-  parked: V30, V8. Debts open: F17, F16, F15.
-- **Commit title:** `Fix: a manually entered size above 100 reaches the drawing (the rasterizers and the bracket hotkeys clamp to MAX_STROKE_SIZE, 10 000, instead of the slider-era 100)`
-
-### 2026-11-20 — `Docs:` the hand-over lists only the newest commit title — owner request
-
-- **What:** the owner re-read the AGENTS.md hand-over rule and traced its
-  history: the "if the delivery covers several rounds, list every round's
-  title" clause grew out of a ONE-TIME request that the agent mis-recorded as
-  a standing rule ("это была единичная просьба и агент решил записать это как
-  правило"). The rule now says the reply lists ONLY the newest delivery's
-  title — one title per reply, backtick-wrapped as the last line (the owner
-  keeps the older titles' list himself — "я и так их записываю"); the
-  mechanism is unchanged (the `Commit title:` field in the PROGRESS entry +
-  the reply's last line + rules.sh's rule-6 REMINDER). One sentence replaced
-  in the Delivery ritual section — the only place the multi-title listing was
-  written (grepped "several rounds|every round|round's title").
-- **Files:** `AGENTS.md` (the hand-over rule), `PROGRESS.md` (this entry + the
-  snapshot row). DOCS-ONLY round: the gate is `scripts/rules.sh` + the
-  delivery byte-compares ONLY — no cargo, no tests (the owner's 2026-11-20
-  exemption), stated here per that rule.
-- **Verified:** rules.sh HARD GREEN (the PROGRESS budgets within limits); the
-  delivery byte-compares MATCH (patched base <-> worktree <-> unpacked zip).
-- **Owner-checks:** none born (a pure docs edit). Open: V56 (the Size block),
-  V53, V46; parked: V30, V8; debts: F17, F16, F15.
-- **Commit title:** `Docs: the hand-over lists only the newest commit title (the multi-title clause was a one-time request)`

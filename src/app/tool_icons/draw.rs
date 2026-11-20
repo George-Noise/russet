@@ -632,12 +632,31 @@ fn draw_select_rect(pm: &mut Pixmap, ts: Transform, mono: Color32) {
 }
 
 /// The dashed LASSO selection mark: the same dashes around an irregular
-/// closed blob — "selection" (the dashes) + the freeform kind.
+/// round BLOT (owner request 2026-11-20: "не кружочком, а в виде круглой
+/// кляксы" — the first blob was too regular and read as a circle). Six
+/// anchors with strongly varying radii around the center, smoothed C1
+/// through the anchors' midpoints (each anchor is its segment's quadratic
+/// control) — lobes and waists make it unmistakably a freeform blot —
+/// then dashed like the rect mark.
 fn draw_select_lasso(pm: &mut Pixmap, ts: Transform, mono: Color32) {
-    let mut blob = quad_pts((5.0, 12.0), (6.0, 5.5), (12.0, 5.0), 10);
-    blob.extend(quad_pts((12.0, 5.0), (18.5, 4.5), (19.5, 11.0), 10));
-    blob.extend(quad_pts((19.5, 11.0), (20.5, 17.0), (13.5, 19.0), 10));
-    blob.extend(quad_pts((13.5, 19.0), (7.0, 20.5), (5.0, 12.0), 10));
+    // (angle°, radius) around (12, 12): 8.5, 6.0, 9.0, 5.5, 8.0, 9.5.
+    const ANCHORS: [(f32, f32); 6] = [
+        (20.5, 12.0), // 0°
+        (15.9, 16.6), // 50°
+        (8.9, 20.5),  // 110°
+        (6.6, 13.0),  // 170°
+        (6.3, 6.3),   // 225°
+        (15.2, 3.1),  // 290°
+    ];
+    let n = ANCHORS.len();
+    let mut blob = Vec::new();
+    for (i, &anchor) in ANCHORS.iter().enumerate() {
+        let prev = ANCHORS[(i + n - 1) % n];
+        let next = ANCHORS[(i + 1) % n];
+        let mid0 = ((prev.0 + anchor.0) / 2.0, (prev.1 + anchor.1) / 2.0);
+        let mid1 = ((anchor.0 + next.0) / 2.0, (anchor.1 + next.1) / 2.0);
+        blob.extend(quad_pts(mid0, anchor, mid1, 8));
+    }
     for run in super::dash_polyline(&blob, true, 3.2, 2.6) {
         stroke(pm, ts, &run, false, mono, 1.9);
     }

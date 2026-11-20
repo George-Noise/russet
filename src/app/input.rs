@@ -20,6 +20,16 @@ use crate::tools::{
     pick_color, rasterize_smooth_pieces,
 };
 
+/// Which platform clipboard combo egui-winit delivered as a dedicated
+/// event this frame ([`App::handle_hotkeys`] consumes it and runs the
+/// matching selection op).
+#[derive(Clone, Copy, PartialEq)]
+enum ClipboardOp {
+    Copy,
+    Cut,
+    Paste,
+}
+
 impl App {
     pub(super) fn handle_hotkeys(&mut self, ctx: &egui::Context) {
         if ctx.egui_wants_keyboard_input() {
@@ -62,21 +72,42 @@ impl App {
             self.tools.tool = Tool::Text;
         }
         // The selection ops (owner request 2026-11-20): Ctrl+C/X/V mirror
-        // the Edit menu and the Select panel's buttons. The keys are
-        // consumed even when the selection or the clipboard is empty — a
-        // no-op, never a fall-through (the redo-keys convention). They run
-        // BEFORE the plain tool keys: consume_key matches modifiers
-        // logically (extra Ctrl is ignored), so Ctrl+V must be consumed
-        // first or the plain `V` (Select) would also fire — the same
-        // ordering the redo/undo pair uses below.
-        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::C)) {
-            self.copy_selection();
-        }
-        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::X)) {
-            self.cut_selection();
-        }
-        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::V)) {
-            self.paste_clipboard();
+        // the Edit menu and the Select panel's buttons. The combos NEVER
+        // arrive as Key events: egui-winit converts them into DEDICATED
+        // `Event::Copy` / `Event::Cut` / `Event::Paste` events (its
+        // `clipboard_shortcuts` feature, ON by default — egui-winit issue
+        // #3653; the conversion also matches the PHYSICAL keys, so the
+        // combos work on non-Latin keyboard layouts) and RETURNS before
+        // pushing the Key event — `consume_key(Modifiers::COMMAND, …)`
+        // can never match. Consume the dedicated events instead; the
+        // plain `V` below is untouched (no Ctrl, no conversion). The
+        // `egui_wants_keyboard_input` guard above keeps a focused text
+        // field (the Text tool window) receiving its own OS-text
+        // copy/cut/paste semantics.
+        let clipboard_op = ctx.input_mut(|i| {
+            let mut op = None;
+            i.events.retain(|event| match event {
+                egui::Event::Copy => {
+                    op = Some(ClipboardOp::Copy);
+                    false
+                }
+                egui::Event::Cut => {
+                    op = Some(ClipboardOp::Cut);
+                    false
+                }
+                egui::Event::Paste(_) => {
+                    op = Some(ClipboardOp::Paste);
+                    false
+                }
+                _ => true,
+            });
+            op
+        });
+        match clipboard_op {
+            Some(ClipboardOp::Copy) => self.copy_selection(),
+            Some(ClipboardOp::Cut) => self.cut_selection(),
+            Some(ClipboardOp::Paste) => self.paste_clipboard(),
+            None => {}
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::V)) {
             self.tools.tool = Tool::Select;

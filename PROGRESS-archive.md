@@ -2649,8 +2649,66 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   parked: V30, V8. Debts open: F17, F16, F15.
 - **Commit title:** `Size block: the label above the slider, the slider narrowed to the button-grid row width, a click-to-type entry for sizes above 100 (the slider stays 1..=100), the same 12-pt rows gap in the Shape and Line panels`
 
+### 2026-11-20 — `Docs:` the hand-over lists only the newest commit title — owner request
+
+- **What:** the owner re-read the AGENTS.md hand-over rule and traced its
+  history: the "if the delivery covers several rounds, list every round's
+  title" clause grew out of a ONE-TIME request that the agent mis-recorded as
+  a standing rule ("это была единичная просьба и агент решил записать это как
+  правило"). The rule now says the reply lists ONLY the newest delivery's
+  title — one title per reply, backtick-wrapped as the last line (the owner
+  keeps the older titles' list himself — "я и так их записываю"); the
+  mechanism is unchanged (the `Commit title:` field in the PROGRESS entry +
+  the reply's last line + rules.sh's rule-6 REMINDER). One sentence replaced
+  in the Delivery ritual section — the only place the multi-title listing was
+  written (grepped "several rounds|every round|round's title").
+- **Files:** `AGENTS.md` (the hand-over rule), `PROGRESS.md` (this entry + the
+  snapshot row). DOCS-ONLY round: the gate is `scripts/rules.sh` + the
+  delivery byte-compares ONLY — no cargo, no tests (the owner's 2026-11-20
+  exemption), stated here per that rule.
+- **Verified:** rules.sh HARD GREEN (the PROGRESS budgets within limits); the
+  delivery byte-compares MATCH (patched base <-> worktree <-> unpacked zip).
+- **Owner-checks:** none born (a pure docs edit). Open: V56 (the Size block),
+  V53, V46; parked: V30, V8; debts: F17, F16, F15.
+- **Commit title:** `Docs: the hand-over lists only the newest commit title (the multi-title clause was a one-time request)`
+
+### 2026-11-20 — `Fix:` a manually entered size above 100 reaches the drawing — owner bug report
+
+- **What:** the owner's report: "я задаю вручную size 200 всё ещё рисуется с
+  радиусом 100". The UI was innocent (the DragValue writes `tools.size`
+  directly; the size_block test proves no clamp-back) — the DRAW paths were
+  the slider-era legacy: ALL FOUR rasterizers clamped the stroke width to
+  1..=100 (`draw_segment`, `rasterize_smooth_pieces`, `rasterize_polyline`,
+  `rasterize_shape` — the UI once offered no sizes above 100), and the
+  `[`/`]` hotkeys clamped `tools.size` itself. A typed 200 therefore drew at
+  100 everywhere. Fix: the ceiling moved to the tool layer —
+  `tools::MAX_STROKE_SIZE` = 10 000 (the entry box's own sanity bound, "not
+  a design limit"); every clamp goes to it, the hotkeys step within
+  1..=MAX (a typed 200 survives a nudge → 199), the DragValue's range uses
+  the constant (the local `SIZE_ENTRY_MAX` is gone).
+- **Files:** `src/tools.rs` (the constant + draw_segment/polyline/shape
+  clamps), `src/tools/smooth.rs`, `src/app/input.rs` (the hotkeys),
+  `src/app/windows.rs` (the DragValue range + the doc), NEW
+  `src/tools/tests/stroke_size.rs` (5 pixel probes: a point a 200-wide
+  stroke covers but a 100-clamped one cannot, per rasterizer + the ceiling's
+  dirty-rect saturation), `src/tools/tests.rs` (+`mod stroke_size;`),
+  DEBTS-verification (V57 born), PROGRESS (snapshot + entry + stamp), tests
+  +5.
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp): fmt, rules HARD
+  green, clippy `-D warnings` both lanes, `cargo test --profile gates` 241
+  default / 254 mcp (+5: the stroke_size topic); the visual driver ALL
+  SCENARIOS GREEN; the pixel probe PASS (the Size block's layout untouched).
+  No wasm check — the diff touches no web-facing code (the economy rule).
+- **Owner-checks:** V57 born (the drawn stroke/outline follows a typed 200;
+  the bracket keys step 199/201 from 200). Open: V57, V56, V53, V46;
+  parked: V30, V8. Debts open: F17, F16, F15.
+- **Commit title:** `Fix: a manually entered size above 100 reaches the drawing (the rasterizers and the bracket hotkeys clamp to MAX_STROKE_SIZE, 10 000, instead of the slider-era 100)`
+
+
 ## Compaction history
 
+- Compaction history (newest first): 2026-11-20 (V58-fixes round, second cut) — the manual-entry bug-fix entry moved (the total still passed ~200 after the Docs entry).
+- Compaction history (newest first): 2026-11-20 (V58-fixes round) — the Docs entry (the hand-over rule) moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (Select-tool round) — the Size-block entry moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (manual-entry bug-fix round) — the Line-panel entry moved under the new round's budget (the PROGRESS total passed ~200 lines).
 - Compaction history (newest first): 2026-11-20 (docs round) — the PROBLEMS-v2 tooling entry moved under the docs-round budget (the PROGRESS total passed ~200 lines).

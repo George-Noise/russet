@@ -307,8 +307,11 @@ impl App {
 
     /// One frame of a moved selection: restore the pre-drag bytes, erase
     /// the lifted pixels, stamp the floating at the new offset — all over
-    /// the union rect of the old and new positions. The gesture is taken
-    /// out and put back (the pixel work borrows the layer).
+    /// the union rect of the origin, the PREVIOUS frame's stamp and the
+    /// new position (owner bug report 2026-11-20: restoring the origin
+    /// alone left the previous frame's stamp on the canvas — the drag
+    /// printed a ghost every frame). The gesture is taken out and put
+    /// back (the pixel work borrows the layer).
     fn redraw_moved(&mut self, offset: (i64, i64)) {
         let state = std::mem::replace(&mut self.select_gesture, SelectGesture::None);
         let SelectGesture::MoveDrag {
@@ -317,19 +320,24 @@ impl App {
             mask,
             origin,
             grab,
-            offset: _,
+            offset: last,
         } = state
         else {
             self.select_gesture = state;
             return;
         };
-        let moved = IRect {
-            x: origin.x + offset.0,
-            y: origin.y + offset.1,
+        let at = |dx: i64, dy: i64| IRect {
+            x: origin.x + dx,
+            y: origin.y + dy,
             w: origin.w,
             h: origin.h,
         };
-        selection::restore_region(self.layers.active_mut().pixmap_mut(), &backup, origin);
+        let moved = at(offset.0, offset.1);
+        selection::restore_region(
+            self.layers.active_mut().pixmap_mut(),
+            &backup,
+            origin.union(at(last.0, last.1)).union(moved),
+        );
         selection::erase_masked(self.layers.active_mut().pixmap_mut(), &mask);
         selection::stamp(
             self.layers.active_mut().pixmap_mut(),
@@ -338,6 +346,7 @@ impl App {
             moved.y,
         );
         if let Some(dirty) = origin
+            .union(at(last.0, last.1))
             .union(moved)
             .clamped(self.canvas.width, self.canvas.height)
         {

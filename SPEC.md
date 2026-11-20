@@ -443,7 +443,7 @@ happened and the size model needs a decision.
 | `V` | Select (owner request 2026-11-20, §3.13) |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y`, `Ctrl+Shift+Z` | Redo (both keys) |
-| `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | Copy / Cut / Paste (the selection ops §3.13, owner request 2026-11-20) — consumed even without a selection or clipboard (a no-op, never a fall-through; the redo-keys convention). Tested/consumed BEFORE the plain `V`: consume_key matches modifiers logically, so an unconsumed Ctrl+V would also fire the Select tool key |
+| `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | Copy / Cut / Paste (the selection ops §3.13, owner request 2026-11-20) — these combos NEVER arrive as Key events: egui-winit converts them into dedicated `Event::Copy` / `Event::Cut` / `Event::Paste` (its `clipboard_shortcuts` feature, ON by default; issue #3653 — the conversion matches the PHYSICAL keys, so the combos also work on non-Latin layouts) and swallows the Key event, so `consume_key` can never match; the handler consumes the dedicated events instead (owner bug report 2026-11-20). The `egui_wants_keyboard_input` guard keeps a focused text field (the Text tool window) its own OS-text copy/cut/paste semantics. A no-op when the selection or the clipboard is empty (never a fall-through; the redo-keys convention) |
 | `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S` | New / Open / Save / Save As |
 | `Ctrl+0` | Zoom 100% |
 | `[` / `]` | Brush/Eraser size −1 / +1 (clamped 1..=100) |

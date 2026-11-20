@@ -212,3 +212,27 @@ fn a_translucent_paste_blends_with_its_alpha() {
     );
     assert_eq!(pixel.red(), 127, "the black half-alpha halves the white");
 }
+
+#[test]
+fn redrawing_the_move_cleans_the_previous_stamp() {
+    let mut app = app_with_square();
+
+    app.start_move(pos2(15.0, 15.0));
+    app.redraw_moved((5, 3)); // the square at (15..35, 13..33)
+    app.redraw_moved((10, 0)); // the square at (20..40, 10..30)
+
+    assert_eq!(
+        alpha_at(&app, 16, 14),
+        0,
+        "the first frame's stamp must be gone (owner bug report 2026-11-20: every drag frame printed a ghost)"
+    );
+    assert_eq!(
+        alpha_at(&app, 25, 20),
+        255,
+        "the current position is stamped"
+    );
+    assert_eq!(alpha_at(&app, 12, 12), 0, "the lift stays erased");
+
+    app.commit_move((10, 0));
+    assert_eq!(head_kind(&app), ActionKind::Move, "ONE move node");
+}
