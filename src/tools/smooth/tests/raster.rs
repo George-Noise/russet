@@ -1,9 +1,9 @@
-//! Tests of [`rasterize_smooth_pieces`]: the pencil's 1 px Bresenham
-//! chain along the flattened centerline (parity with the classic run,
-//! gap-freedom, the translucent-safe joint dedupe), the brush/eraser
-//! single-path stroke and the union dirty rectangle.
+//! Tests of [`rasterize_smooth_pieces`]: the pencil's 1 px drifting-pen
+//! trail along the flattened centerline (the even staircase, gap-freedom,
+//! the translucent-safe joint dedupe), the brush/eraser single-path stroke
+//! and the union dirty rectangle.
 
-use super::super::{SmoothPiece, Tool, bresenham_line, pencil_pixel, rasterize_smooth_pieces};
+use super::super::{PencilTrail, SmoothPiece, Tool, pencil_pixel, rasterize_smooth_pieces};
 use eframe::egui::{Color32, pos2};
 use tiny_skia::Pixmap;
 
@@ -18,28 +18,50 @@ fn plotted_black(pixmap: &Pixmap) -> Vec<(usize, usize)> {
 }
 
 #[test]
-fn pencil_line_piece_plots_the_bresenham_pixels() {
+fn pencil_line_piece_plots_one_pixel_per_column_between_its_endpoints() {
     let mut pixmap = Pixmap::new(32, 32).expect("32x32 pixmap");
     let piece = SmoothPiece::Line {
         from: pos2(2.4, 3.6),
         to: pos2(20.7, 11.3),
     };
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     rasterize_smooth_pieces(
         &mut pixmap,
         Tool::Pencil,
         1.0,
         Color32::BLACK,
         &[piece],
-        &mut last_pixel,
+        &mut trail,
+        Some(pos2(20.7, 11.3)),
     )
     .expect("piece rasterizes");
-    let mut expected = Vec::new();
-    bresenham_line(2, 4, 21, 11, |x, y| expected.push((x as usize, y as usize)));
     let mut got = plotted_black(&pixmap);
     got.sort();
-    expected.sort();
-    assert_eq!(got, expected, "the piece plots exactly the Bresenham run");
+    // The same pixel COUNT as the classic Bresenham run between the rounded
+    // endpoints (one per dominant-axis step: |dx| = 19 from column 2 to 21),
+    // the same endpoints — the drifting pen's staircase hugs the same chord
+    // (individual pixels may sit one row away from Bresenham's tie-breaking,
+    // both are valid staircases of the same line).
+    let expected_count = ((21i64 - 2).abs().max(11i64 - 4) + 1) as usize;
+    assert_eq!(got.len(), expected_count, "one pixel per dominant step");
+    assert!(
+        got.contains(&(2, 4)),
+        "the trail starts at the rounded from"
+    );
+    assert!(
+        got.contains(&(21, 11)),
+        "the pinned trail ends at the rounded to"
+    );
+    let per_column = got
+        .iter()
+        .fold(std::collections::BTreeMap::new(), |mut map, (x, y)| {
+            map.entry(*x).or_insert_with(Vec::new).push(*y);
+            map
+        });
+    assert_eq!(per_column.len(), expected_count, "every column is covered");
+    for (x, ys) in &per_column {
+        assert_eq!(ys.len(), 1, "column {x} carries exactly one pixel");
+    }
 }
 
 #[test]
@@ -50,14 +72,15 @@ fn pencil_quad_centerline_is_a_gap_free_pixel_chain() {
         control: pos2(30.0, 5.0),
         to: pos2(55.0, 45.0),
     };
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     rasterize_smooth_pieces(
         &mut pixmap,
         Tool::Pencil,
         1.0,
         Color32::BLACK,
         &[piece],
-        &mut last_pixel,
+        &mut trail,
+        Some(pos2(55.0, 45.0)),
     )
     .expect("piece rasterizes");
     let black = plotted_black(&pixmap);
@@ -103,14 +126,15 @@ fn pencil_joint_pixels_blend_once_for_translucent_colors() {
             to: pos2(16.0, 16.0),
         },
     ];
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     rasterize_smooth_pieces(
         &mut pixmap,
         Tool::Pencil,
         1.0,
         color,
         &pieces,
-        &mut last_pixel,
+        &mut trail,
+        None,
     )
     .expect("pieces rasterize");
     let alpha_at = |x: u32, y: u32| pixmap.pixel(x, y).expect("in bounds").alpha();
@@ -136,14 +160,15 @@ fn brush_pieces_stroke_one_continuous_path() {
             to: pos2(32.0, 32.0),
         },
     ];
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     let dirty = rasterize_smooth_pieces(
         &mut pixmap,
         Tool::Brush,
         10.0,
         Color32::BLACK,
         &pieces,
-        &mut last_pixel,
+        &mut trail,
+        None,
     )
     .expect("pieces rasterize");
     assert!(
@@ -173,14 +198,15 @@ fn eraser_pieces_erase_to_transparency() {
         from: pos2(4.0, 16.0),
         to: pos2(12.0, 16.0),
     }];
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     rasterize_smooth_pieces(
         &mut pixmap,
         Tool::Eraser,
         6.0,
         Color32::BLACK,
         &pieces,
-        &mut last_pixel,
+        &mut trail,
+        None,
     )
     .expect("pieces rasterize");
     assert_eq!(pixmap.pixel(8, 16).expect("in bounds").alpha(), 0);
@@ -195,14 +221,15 @@ fn dirty_rect_covers_the_quad_control_point() {
         control: pos2(40.0, 10.0),
         to: pos2(50.0, 50.0),
     };
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     let dirty = rasterize_smooth_pieces(
         &mut pixmap,
         Tool::Brush,
         2.0,
         Color32::BLACK,
         &[piece],
-        &mut last_pixel,
+        &mut trail,
+        None,
     )
     .expect("piece rasterizes");
     assert!(
@@ -217,7 +244,7 @@ fn dirty_rect_covers_the_quad_control_point() {
 #[test]
 fn no_pieces_rasterize_nothing() {
     let mut pixmap = Pixmap::new(8, 8).expect("8x8 pixmap");
-    let mut last_pixel = None;
+    let mut trail = PencilTrail::default();
     assert!(
         rasterize_smooth_pieces(
             &mut pixmap,
@@ -225,7 +252,8 @@ fn no_pieces_rasterize_nothing() {
             4.0,
             Color32::BLACK,
             &[],
-            &mut last_pixel
+            &mut trail,
+            None
         )
         .is_none()
     );

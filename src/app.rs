@@ -64,7 +64,7 @@ use crate::file_io::WebTask;
 use crate::history::ActionLog;
 use crate::history_tree::{ActionKind, NodeId, ResizeAnchor, ResizeFilter, ResizeMode};
 use crate::layers::LayerStack;
-use crate::tools::{SmoothStroke, Tool, ToolState};
+use crate::tools::{PencilTrail, SmoothStroke, Tool, ToolState};
 
 mod camera;
 mod dialogs;
@@ -161,10 +161,13 @@ pub struct App {
     /// frame feeds; the frame's pieces rasterize in one batch. Model in
     /// `tools::smooth`, gesture in [`input`].
     stroke_smooth: SmoothStroke,
-    /// The pencil's last plotted integer pixel — the dedupe state carried
-    /// across pieces and frames so a translucent color does not
-    /// double-blend at the subdivision/frame joints.
-    stroke_last_pixel: Option<(i64, i64)>,
+    /// The pencil's drifting pen (owner request 2026-11-20): the exact
+    /// float pen position + the last plotted pixel, carried across pieces
+    /// and frames. The carried fractional phase keeps the 1 px staircase
+    /// even and identical no matter how the pointer stream is batched per
+    /// frame; the dedupe keeps translucent colors single-blended at the
+    /// joints. State in `tools::smooth`, gesture in [`input`].
+    stroke_trail: PencilTrail,
     stroke_button: Option<PointerButton>,
     /// The rasterized tool-icon atlas ([`tool_icons`]; owner request
     /// 2026-11-18): built once per scale/theme change, otherwise the Tools
@@ -361,7 +364,7 @@ impl App {
             pan: Vec2::ZERO,
             is_stroking: false,
             stroke_smooth: SmoothStroke::new(Pos2::ZERO),
-            stroke_last_pixel: None,
+            stroke_trail: PencilTrail::default(),
             stroke_button: None,
             tool_icons: None,
             tools_window_open: true,

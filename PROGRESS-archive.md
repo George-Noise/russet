@@ -1,5 +1,32 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-19 — `Fix:` the bytecode-cache leak into the delivery artifacts — owner request
+
+- **What:** the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside the
+  delivered russet.zip — the SECOND time (2026-11-18 was the first, and that round's
+  snapshot row CLAIMS ".gitignore keeps `__pycache__`/`*.pyc` out of the artifacts" while
+  HEAD's .gitignore carried only /target /dist /result — the entries never landed in the
+  owner's tree, deliver.sh's comment drifted from reality, and the leak reopened on the
+  first new import). Fixed at all three layers: (1) `.gitignore` NOW really carries
+  `__pycache__/` + `*.pyc` — deliver.sh's stage mirrors the ignore rules, so this alone
+  cleans both artifacts; (2) `scripts/visual_driver.py` sets `sys.dont_write_bytecode = True`
+  before `from mcp_smoke import Russet` — the owner's own driver runs stop writing the cache
+  into the worktree (the source of every stray pyc); (3) `scripts/deliver.sh` gains TWO hard
+  guards — the staged tree (find for `__pycache__`/`*.pyc`) and the patch (a
+  `^diff --git a/…(__pycache__|\.pyc)` header grep, immune to source-comment mentions) — any
+  bytecode cache FAILS the delivery with EXIT=1. The workspace probe that re-triggered the
+  leak this round got the same `dont_write_bytecode` line.
+- **Files:** `.gitignore`, `scripts/deliver.sh`, `scripts/visual_driver.py`, PROGRESS
+  (snapshot + entry + stamp).
+- **Verified:** the guard tested BOTH ways — a stray pyc with the ignore entries
+  temporarily removed → `deliver.sh: Python bytecode cache in the stage` EXIT=1; the
+  entries restored → the delivery runs clean and the guard stays silent; `unzip -l` and a
+  patch grep = ZERO pycache entries in the final artifacts; FULL hot gate ALL GATES GREEN
+  8 s (179 default / 192 mcp, +1 ignored each) — no Rust touched, the counts unchanged.
+- **Owner-checks:** none born. Open: V42, V41, V30 (parked), V8 (parked); debt F17 (the
+  format-set decision).
+- **Commit title:** `Delivery hygiene: close the pyc leak for good (.gitignore entries finally land; the driver stops writing bytecode; deliver.sh hard-fails on any cache)`
+
 ### 2026-11-19 — `Feat:` the "Save Image" dialog — Save and Save As converge — owner request
 
 - **What:** BOTH File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) now open ONE in-app
@@ -1996,7 +2023,21 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   born. Open: V37, V36 (new), V30 (parked), V8 (parked).
 - **Commit title:** `Icons v2: theme-aware rims, pipette collar, S-curve, circle, T+t; theme switcher in menu + MCP; dump dir param`
 
-## Status-snapshot rows — compacted from PROGRESS.md 2026-11-19 (the ~200-line file budget; milestone rows stay in the snapshot)
+## Status-snapshot rows — compacted from PROGRESS.md 2026-11-19/20 (the ~200-line file budget; milestone rows stay in the snapshot)
+| Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
+| Extra: repo-wide English-only owner quotes (owner 2026-11-18) | done — docs only | every verbatim Russian owner quote across docs/scripts/comments translated to English (meaning kept); PROGRESS Log compacted — 2 entries moved to PROGRESS-archive.md |
+| Extra: debt F14 — in-house windows later (owner 2026-11-18) | done — docs only | egui::Window → an in-house `egui::Area` frame recorded in DEBTS-functional.md from the owner's pros/cons chat review; owner-gated, no code touched |
+| Extra: tool icon buttons + two-column grid (owner 2026-11-18) | done — gates green + visual driver | 1.5rem icon buttons via a cached tiny-skia atlas (`app/tool_icons.rs`), colored pencil/brush/eraser/pipette + mono line/shape/text through ONE pipeline, name+key hover tooltips, the pipette as the Eyedropper's canvas cursor; the two-column grid is debt F15; the driver screenshot caught the dead-texture trap (handles kept in the Atlas now — AGENTS.md quirks) |
+| Extra: fully unoptimized dev profile (owner 2026-11-18) | done — cargo check green on the new lane | `[profile.dev]` opt-level 0 + no debuginfo, the `[profile.dev.package."*"] opt-level 2` dep override REMOVED (the "deps optimized once for responsive `cargo run`" policy retired — development is sandbox-only now, UI lag accepted); flake `russet-dev` already ran the unoptimized gates lane (untouched); SPEC §1 + AGENTS.md synced; owner visual pass = V34 |
+| Extra: verify.sh hardening (owner 2026-11-18) | done — FULL gate green on a cold lane (191 s) | `exec </dev/null` closes stdin for the whole run (SANDBOX.md trap 10 fixed AT THE SOURCE — the mcp test stage exits in seconds instead of hanging); per-stage seconds + total printed (TIMING.md rows are copied now, not re-measured); cold-lane hint when `target/gates` is absent; the mcp pair stays UNCONDITIONAL (hot gate ≈ 15 s, zip sandboxes have no git, the gate never guesses) |
+| Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
+| Extra: --warm warm-up + session rules; debts ask = 4 newest; V33 closed (owner 2026-11-18) | done — live cold-lane test + hot gate | `sandbox_check.sh --warm` = probe + detached gates-lane compile (clippy + test --no-run, nothing executed — the mcp stdin trap impossible) with a double-start pid guard; session start = `sandbox_check.sh --warm` FIRST; wasm ad-hoc checks only for web-facing changes; the batched debts ask lists only the 4 newest open items (AGENTS.md Debts rule 7) |
+| Extra: permanent #[ignore] icon-dump + F16 rust-cache debt (owner 2026-11-18) | done — dump live-tested, gate skips it | `cargo test --profile gates -- --ignored icons_dump` = 14 PNGs (7 tools × 256/24 px) into /tmp/icon_dump, BLACK raster keeps the monochrome icons legible; plain gate = 156/168 passed + 1 ignored; rust-cache (`Swatinem/rust-cache@v2` after checkout) recorded as postponed F16 with the mechanism + limits written out, ci.yml untouched |
+| Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged |
+| Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
+| Extra: Tools window v5 — the bar back, only the label hidden (owner pass 2026-11-18) | done — gate + driver + magnet check | `Window::new("")` + the explicit `tools_window_id()` renders the title bar WITHOUT the text (egui derives the Id from the title even when empty); `.open` plumbing restored (the ✕ is back); AGENTS quirk rewritten (the empty-title recipe); .gitignore keeps `__pycache__`/`*.pyc` out of the artifacts; V36 → v5 re-check pending |
+| Extra: language rule → English-only whitelist (owner request 2026-11-18) | done — gate + deliver | the stamp's "Zero Cyrillic repo-wide" reworded: a language WHITELIST (English is the only written language), not a script blacklist — friendlier to readers of any writing system |
+
 
 | Extra: About window + Nix | code written | Help → "About Russet" with Platform/Renderer lines; 2026-11-18: + "written in Rust" description + GitHub repo hyperlink; `flake.nix` for Linux (Wayland/X11) — `nix build` itself must be verified by the owner on a Nix machine |
 | Extra: `tests.rs` layout + `PERF.md` (PR) | done (2026-11-10) | every module's tests live in `<module>/tests.rs`; `PERF.md` is a reference RAM/build-speed backlog, not an autonomous queue |

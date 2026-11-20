@@ -21,19 +21,6 @@
 | M7 Resize Canvas + New | done | |
 | M8 Web (WASM) | built + headless Firefox check (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` + Firefox: UI renders, canvas draws, WebGL2 — a headless smoke test, not a human pass. Owner must click through drawing/zoom/pan/Open/Save with a real mouse |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
-| Extra: CLI launch args + owner-unconfirmed scenario markers (owner 2026-11-17) | done — gates green | native `--primary/--secondary/--tool/--canvas-size/--help` (`app/launch.rs`, parsed before the window opens; invalid values warn, defaults stay; wasm takes none); the 8 suite scenarios carry "NOT YET CONFIRMED" markers + a header ledger (the owner approves one by one); V29/V30 born |
-| Extra: repo-wide English-only owner quotes (owner 2026-11-18) | done — docs only | every verbatim Russian owner quote across docs/scripts/comments translated to English (meaning kept); PROGRESS Log compacted — 2 entries moved to PROGRESS-archive.md |
-| Extra: debt F14 — in-house windows later (owner 2026-11-18) | done — docs only | egui::Window → an in-house `egui::Area` frame recorded in DEBTS-functional.md from the owner's pros/cons chat review; owner-gated, no code touched |
-| Extra: tool icon buttons + two-column grid (owner 2026-11-18) | done — gates green + visual driver | 1.5rem icon buttons via a cached tiny-skia atlas (`app/tool_icons.rs`), colored pencil/brush/eraser/pipette + mono line/shape/text through ONE pipeline, name+key hover tooltips, the pipette as the Eyedropper's canvas cursor; the two-column grid is debt F15; the driver screenshot caught the dead-texture trap (handles kept in the Atlas now — AGENTS.md quirks) |
-| Extra: fully unoptimized dev profile (owner 2026-11-18) | done — cargo check green on the new lane | `[profile.dev]` opt-level 0 + no debuginfo, the `[profile.dev.package."*"] opt-level 2` dep override REMOVED (the "deps optimized once for responsive `cargo run`" policy retired — development is sandbox-only now, UI lag accepted); flake `russet-dev` already ran the unoptimized gates lane (untouched); SPEC §1 + AGENTS.md synced; owner visual pass = V34 |
-| Extra: verify.sh hardening (owner 2026-11-18) | done — FULL gate green on a cold lane (191 s) | `exec </dev/null` closes stdin for the whole run (SANDBOX.md trap 10 fixed AT THE SOURCE — the mcp test stage exits in seconds instead of hanging); per-stage seconds + total printed (TIMING.md rows are copied now, not re-measured); cold-lane hint when `target/gates` is absent; the mcp pair stays UNCONDITIONAL (hot gate ≈ 15 s, zip sandboxes have no git, the gate never guesses) |
-| Extra: brush + pipette icons redrawn + equal grid gaps (owner 2026-11-18) | done — hot gate 14 s + driver green | round volumetric bristle belly + crimped ferrule (the wedge read as a second pencil); tapering glass cone + round rubber bulb via a new `arc_pts` helper (the rectangle stick read as a pen); Tools-grid H-gap 18 pt → 6 pt = V-gap (egui Grid floors columns at `interact_size.x` 40 pt — `.min_col_width` fix, AGENTS.md quirk); tool_icons.rs 610 lines — the draw/atlas split proposed (owner-gated) |
-| Extra: --warm warm-up + session rules; debts ask = 4 newest; V33 closed (owner 2026-11-18) | done — live cold-lane test + hot gate | `sandbox_check.sh --warm` = probe + detached gates-lane compile (clippy + test --no-run, nothing executed — the mcp stdin trap impossible) with a double-start pid guard; session start = `sandbox_check.sh --warm` FIRST; wasm ad-hoc checks only for web-facing changes; the batched debts ask lists only the 4 newest open items (AGENTS.md Debts rule 7) |
-| Extra: permanent #[ignore] icon-dump + F16 rust-cache debt (owner 2026-11-18) | done — dump live-tested, gate skips it | `cargo test --profile gates -- --ignored icons_dump` = 14 PNGs (7 tools × 256/24 px) into /tmp/icon_dump, BLACK raster keeps the monochrome icons legible; plain gate = 156/168 passed + 1 ignored; rust-cache (`Swatinem/rust-cache@v2` after checkout) recorded as postponed F16 with the mechanism + limits written out, ci.yml untouched |
-| Extra: icons v3 + Theme-button v2 (owner pass 2026-11-18) | done — contact sheet + FULL gate + driver | tool buttons keep the LIGHT-theme fills in both themes (`egui::Visuals::light()` in `windows.rs::tool_button`) → the outline is the ONE dark rim everywhere (v2 light rim reverted, tested); pipette glass = cylinder + cone only at the tip, wider collar ring; menu-bar button just "Theme" before Help (Help always last), System radio plain; MCP `set_theme` unchanged |
-| Extra: icons v4 polish + title-bar-less Tools (owner pass 2026-11-18) | done — contact sheet + FULL gate | eraser rim dark plum (in the set's style); buttons' rest/hover fills dimmed −14/channel (selection stays bright); mono ink FIXED `TOOL_INK` gray 64 → icons fully theme-independent → atlas key = ppp only (the theme re-raster gone; the atlas test reworked: a theme switch uploads only egui's font atlas); Tools window `title_bar(false)` — id kept via `tools_window_id()`, drag falls back to Anywhere, close via View ▸ Tools; V37 verified, V36 → v4 re-check pending |
-| Extra: Tools window v5 — the bar back, only the label hidden (owner pass 2026-11-18) | done — gate + driver + magnet check | `Window::new("")` + the explicit `tools_window_id()` renders the title bar WITHOUT the text (egui derives the Id from the title even when empty); `.open` plumbing restored (the ✕ is back); AGENTS quirk rewritten (the empty-title recipe); .gitignore keeps `__pycache__`/`*.pyc` out of the artifacts; V36 → v5 re-check pending |
-| Extra: language rule → English-only whitelist (owner request 2026-11-18) | done — gate + deliver | the stamp's "Zero Cyrillic repo-wide" reworded: a language WHITELIST (English is the only written language), not a script blacklist — friendlier to readers of any writing system |
 | Extra: Tools strip fits the window — variant A2 (owner 2026-11-19) | done — gates + probes green | the title strip's HORIZONTAL padding zeroed via `Window::title_frame` (`windows.rs::tools_title_frame` = egui's default window frame with `inner_margin.left/right = 0`): the strip paints EXACTLY the window's width instead of ~11 pt past it, the ✕ no longer hangs half outside, BOTH buttons kept, the strip's height/fill/corners unchanged (variant A `Margin::ZERO` shrank the strip vertically — not picked); +1 regression test on the `__title_click` geometry; `gui_collapse_check.sh` locate fixed (the idle crosshair cursor fooled it); V38 + V36 verified in chat, V39 born |
 | Extra: Tools panel hides while collapsed (owner 2026-11-19) | done — gates + click probe green | the magnetized settings panel hides while the Tools window is collapsed to its title bar and returns on expand (`windows.rs::settings_panel_shown` on `Window::show`'s `inner.is_some()`); the header-width PROPOSAL delivered (measured options, no header code change — the owner picks); V38 born |
 | Extra: tool_icons.rs file-guard split — the drawings to the child `draw` (owner 2026-11-19) | done — gates green, suite unchanged | 673 → 308 + 400, both under the 500 guard: the SEVEN icon drawings (`draw_*` fns, `TOOL_ANGLE`, `PIPETTE_TIP`, the `rasterize_tool_icon` dispatcher) moved VERBATIM to the child `app/tool_icons/draw.rs`; the parent keeps the atlas/cursor pipeline + the shared primitives and imports the dispatcher — zero external path changes (app.rs/windows.rs untouched, the tests' `super::` imports byte-identical); rules.sh's second OVER-GUARD note retired (only the owner-deferred history_tree.rs 569 remains) |
@@ -42,14 +29,17 @@
 | Extra: the flake drives the trunk lanes — web-serve / web-build / web-build-release (owner 2026-11-19) | done — hashes verified from the real downloads, gates green; a dup-`russet` app defect (the owner's first `.#web-serve` probe) is fixed, as is the zstd-sys build (nixpkgs' hook forces the system libzstd → pkg-config + zstd inputs — probe 2 confirmed: trunk builds and serves); probe 3 added stdenv.cc to the wrappers' PATH (host build-script linker); probe 4 added pkgs.lld (the final wasm link asks for a PATH `lld` from the owner's cargo env — honored, not overridden) | the pinned trunk 0.22.1 is BUILT by the flake from the crates.io source (nixpkgs' trunk is 0.21.14 — the pin honored by construction; both fetchurl hashes computed from the real bytes, the shipped Cargo.lock byte-identical to the v0.22.1 tag, vendored hash-free via `cargoLock.lockFile`); `nix run .#web-serve` → trunk serve, `.#web-build` → trunk build, `.#web-build-release` → trunk build --release — apps run OUTSIDE the sandbox so trunk self-manages wasm-bindgen 0.2.130 + wasm-opt (~/.cache/trunk); `nix run` KEEPS the native app (owner decision same day: the default stays native, easier on the brain — the web apps are always explicit); `nix develop` gains the pinned trunk; README / SPEC §8 / AGENTS synced; a sandboxed `nix build` of the site deliberately NOT provided (no network; a FOD dist/ would pin a hash per commit) |
 | Extra: the delivery-pyc fix — .gitignore landed + deliver.sh guards (owner 2026-11-19) | done — guard tested both ways, gates green | the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside russet.zip (AND the patch): the v5 round CLAIMED the .gitignore entries but they never landed — HEAD carried only /target /dist /result, so the leak reopened on the first new import; `.gitignore` now really carries `__pycache__/` + `*.pyc`; `visual_driver.py` sets `sys.dont_write_bytecode` before the mcp_smoke import (the cache is no longer written at the source); `deliver.sh` gains TWO hard guards (the staged tree + the patch's ^diff headers) that FAIL the delivery on any bytecode cache |
 | Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
-| Extra: smooth freehand strokes — coalesced pointer moves + midpoint-quadratic pieces (owner 2026-11-19) | done — gates + driver green | NEW `tools/smooth.rs`: every coalesced `Event::PointerMoved` feeds the midpoint-quadratic window (the old one-point-per-frame stream drew the fast-stroke polygon); brush/eraser stroke ONE C1-continuous tiny-skia path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline (quads flattened to ~1 px steps, translucent-safe joint dedupe); `draw_segment` stays for the press dot + MCP paths; SPEC §3.5 rewritten; V44 born |
+| Extra: smooth freehand strokes — coalesced pointer moves + midpoint-quadratic pieces (owner 2026-11-19) | done — gates + driver green | NEW `tools/smooth.rs`: every coalesced `Event::PointerMoved` feeds the midpoint-quadratic window (the old one-point-per-frame stream drew the fast-stroke polygon); brush/eraser stroke ONE C1-continuous tiny-skia path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline (quads flattened to ~1 px steps, translucent-safe joint dedupe); `draw_segment` stays for the press dot + MCP paths; SPEC §3.5 rewritten; V44 born — the pencil half FAILED on the owner's pass and was reworked 2026-11-20 (the next row) |
+| Extra: pencil drifting pen — the 1 px staircase made stable (owner 2026-11-20) | done — gates + driver + a real-pointer Xvfb probe green | the owner's ragged-pencil screenshot diagnosed: per-run Bresenham restarts between independently rounded ~1 px endpoints stacked double-covered columns and punched holes on every diagonal, the pattern varying per computer (the pixel pattern followed the per-frame event batching); the pencil now walks a gesture-level DRIFTING PEN (`PencilTrail`: the pen + the dedupe, carried across pieces and frames) — unit steps along the chord-dominant axis, the minor coordinate an EXACT float (the same error accumulation one long Bresenham run performs), each step plotting one pixel; the release pins the raw release point; the subdivision cap 64 → 4096 (fidelity on fast strokes); V44 closed failed → V45 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-19 (hot lane, 14 s — the
-smooth-strokes round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 209 default / 209 mcp green (+1
-ignored each — the permanent #[ignore] icon dump; +17 smooth-stroke tests this
-round) and the visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp
-binary — Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the pencil drifting-pen
+round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green (default +
+mcp), `cargo test --profile gates` 211 default / 211 mcp green (+1 ignored each
+— the permanent #[ignore] icon dump; +2 drifting-pen regression tests this
+round), the visual driver ALL SCENARIOS GREEN under Xvfb through the gates+mcp
+binary, and a real-pointer Xvfb probe (xdotool drags) drew pixel-perfect
+diagonals through the real app: 0 double-covered columns, 0 holes, 8-connected
+— Rust 1.99.1 pinned via rust-toolchain.toml, Linux.
 English-only repo-wide — a language WHITELIST (English is simply the only written language
 here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
 `cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
@@ -86,6 +76,50 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > header-strip (variant A2) entry moved to the archive during the Save-dialog
 > round's budget (2026-11-19); the Save-dialog entry followed during the
 > smooth-strokes round's budget (same day).
+
+### 2026-11-20 — `Fix:` the pencil's ragged 1 px trail — the drifting pen — owner request
+
+- **What:** the owner's screenshot (a 51x44 canvas crop) showed the smoothed pencil drawing
+  EXTRA pixels: double-covered columns and holes on every diagonal, the pattern differing
+  between computers. Diagnosed (a Python f32 replica of the pipeline + an angle scan): the
+  pencil re-ran integer Bresenham between independently rounded ~1 px endpoints of the
+  flattened quads — each ~1 px sub-run restarted the line algorithm, so two consecutive
+  rounded endpoints 2 columns apart plotted an extra pixel and the next run compensated with
+  a hole; the subdivision step count came from the control-polygon length (over-dense on
+  bent pieces) with a 64 cap (sparse on fast strokes), and the pattern followed the per-frame
+  event batching (different machines coalesce differently). Replaced by the DRIFTING PEN:
+  `PencilTrail` (the exact float pen + the last plotted pixel) carried across pieces AND
+  frames on the gesture; the pen walks UNIT steps of the chord-dominant axis, the minor
+  coordinate advances proportionally and is carried EXACTLY (never rounded into the state) —
+  the same error accumulation one long Bresenham run performs, restarts impossible; one
+  pixel per step, 8-connected by construction; the release pins the raw release point
+  (`rasterize_smooth_pieces` gained `pin`); the subdivision cap 64 → 4096. The smoothed
+  path of integer-rounded pointer events still wobbles locally past 45 degrees, so an
+  isolated stacked pixel remains (honest staircase, ~2 per 32 px on the ragged input,
+  was 5 + a broken look). Brush/eraser untouched; `draw_segment` unchanged (the press dot
+  + MCP paths).
+- **Files:** `src/tools/smooth.rs` (PencilTrail + walk_pen; plot_pencil_run removed),
+  `src/tools.rs` (the PencilTrail re-export), `src/app.rs` (stroke_last_pixel → stroke_trail),
+  `src/app/input.rs` (the trail plumbing + the release pin), NEW `tools/smooth/tests/trail.rs`
+  (2 regression tests: the integer-event staircase + the byte-identical frame-batch
+  invariance), `tools/smooth/tests/raster.rs` (the trail/pin signatures; the parity test
+  rewritten to the new invariants), SPEC §3.5 + §7.2, TIMING (2 rows), DEBTS-verification
+  (V44 closed failed, V45 born), PROGRESS (snapshot + entry + stamp; the pyc entry moved
+  to the archive).
+- **Verified:** FULL gate ALL GATES GREEN 74 s — fmt clean, rules HARD green, clippy
+  `-D warnings` green (default + mcp), `cargo test --profile gates` 211 default / 211 mcp
+  green (+1 ignored each; +2 tests); the visual driver ALL SCENARIOS GREEN under Xvfb;
+  a real-pointer Xvfb probe (xdotool press-drag-release through the gates+mcp binary):
+  the fast diagonal 379 px / 379 columns (0 double-covered, 0 holes, 8-connected), the
+  slow diagonal 401/401, the steep curve 1 px per row — pixel-perfect staircases in the
+  real app.
+- **Owner-checks:** V45 born (the Windows pass: slow + fast diagonals and curves — an even
+  staircase, the same pattern at any speed/machine; translucent joints; the click pixel;
+  the release end; undo). V44 closed failed (the pencil half; the brush/eraser smoothing
+  held up). Open: V45, V40 is the newest verified; ask = V45, V30 (parked), V8 (parked);
+  debts F17, F16, F15.
+- **Commit title:** `Pencil drifting pen: the 1 px staircase stops depending on the frame batching (exact-float minor phase carried across the gesture, one pixel per unit step, the release pins the raw release point; the per-run Bresenham restarts drew double-covered columns and holes, differently per machine)`
+
 
 ### 2026-11-19 — `Feat:` smooth freehand strokes — owner request
 
@@ -170,30 +204,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   notice advertised trunk 0.22.2 — the SPEC §8 pin stands).
   Open: V43, V42, V41, V30 (parked), V8 (parked); debt F17 (the format-set decision).
 - **Commit title:** `Flake: the trunk lanes as nix apps (pinned trunk 0.22.1 built from the crates.io source; nix run .#web-serve / web-build / web-build-release; nix run keeps the native app)`
-
-### 2026-11-19 — `Fix:` the bytecode-cache leak into the delivery artifacts — owner request
-
-- **What:** the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside the
-  delivered russet.zip — the SECOND time (2026-11-18 was the first, and that round's
-  snapshot row CLAIMS ".gitignore keeps `__pycache__`/`*.pyc` out of the artifacts" while
-  HEAD's .gitignore carried only /target /dist /result — the entries never landed in the
-  owner's tree, deliver.sh's comment drifted from reality, and the leak reopened on the
-  first new import). Fixed at all three layers: (1) `.gitignore` NOW really carries
-  `__pycache__/` + `*.pyc` — deliver.sh's stage mirrors the ignore rules, so this alone
-  cleans both artifacts; (2) `scripts/visual_driver.py` sets `sys.dont_write_bytecode = True`
-  before `from mcp_smoke import Russet` — the owner's own driver runs stop writing the cache
-  into the worktree (the source of every stray pyc); (3) `scripts/deliver.sh` gains TWO hard
-  guards — the staged tree (find for `__pycache__`/`*.pyc`) and the patch (a
-  `^diff --git a/…(__pycache__|\.pyc)` header grep, immune to source-comment mentions) — any
-  bytecode cache FAILS the delivery with EXIT=1. The workspace probe that re-triggered the
-  leak this round got the same `dont_write_bytecode` line.
-- **Files:** `.gitignore`, `scripts/deliver.sh`, `scripts/visual_driver.py`, PROGRESS
-  (snapshot + entry + stamp).
-- **Verified:** the guard tested BOTH ways — a stray pyc with the ignore entries
-  temporarily removed → `deliver.sh: Python bytecode cache in the stage` EXIT=1; the
-  entries restored → the delivery runs clean and the guard stays silent; `unzip -l` and a
-  patch grep = ZERO pycache entries in the final artifacts; FULL hot gate ALL GATES GREEN
-  8 s (179 default / 192 mcp, +1 ignored each) — no Rust touched, the counts unchanged.
-- **Owner-checks:** none born. Open: V42, V41, V30 (parked), V8 (parked); debt F17 (the
-  format-set decision).
-- **Commit title:** `Delivery hygiene: close the pyc leak for good (.gitignore entries finally land; the driver stops writing bytecode; deliver.sh hard-fails on any cache)`

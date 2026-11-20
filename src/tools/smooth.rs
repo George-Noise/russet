@@ -7,24 +7,90 @@
 //! quadratic stays inside its control triangle). [`rasterize_smooth_pieces`]
 //! paints one frame's pieces in ONE tiny-skia stroke (brush/eraser — the
 //! pieces join at their shared midpoints, so no per-segment cap seams) or
-//! as the pencil's classic 1 px Bresenham chain along the flattened
-//! centerline (the same hard 1-pixel trail as before, just following the
-//! smoothed path instead of the raw polyline — the fast-stroke polygon
-//! look is gone). The freehand gesture lives in [`crate::app::input`];
-//! [`super::draw_segment`] remains for the press-time touch dot and the
-//! MCP paths.
+//! as the pencil's classic hard 1 px trail following the flattened
+//! centerline. The pencil walks a drifting pen ([`PencilTrail`], owner
+//! request 2026-11-20): unit steps along the chord-dominant axis, the
+//! minor coordinate carried as an EXACT float across the whole gesture —
+//! the same fractional phase a single long Bresenham run carries — so a
+//! straight stroke renders the same even staircase no matter how the
+//! pointer stream is batched per frame (the old per-run Bresenham restarts
+//! re-rounded every ~1 px endpoint and left double-covered columns and
+//! holes on every diagonal, differently on each computer). The freehand
+//! gesture lives in [`crate::app::input`]; [`super::draw_segment`] remains
+//! for the press-time touch dot and the MCP paths.
 
 use eframe::egui::{Color32, Pos2};
-use tiny_skia::{
-    BlendMode, LineCap, Paint, PathBuilder, Pixmap, PremultipliedColorU8, Stroke, Transform,
-};
+use tiny_skia::{BlendMode, LineCap, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
-use super::{DirtyRect, Tool, blend_pixel, bresenham_line, dirty_rect_for};
+use super::{DirtyRect, Tool, blend_pixel, dirty_rect_for};
 
-/// Subdivision cap for the pencil's flattened quadratic centerline: one
-/// Bresenham run per ~1 px of control-polygon length, never more than
-/// this many per piece.
-const PENCIL_MAX_SUBSTEPS: usize = 64;
+/// Subdivision cap for the pencil's flattened quadratic centerline: the
+/// quads are cut into ~1 px chords so the drifting pen follows the curve's
+/// shape, not its control polygon. The cap is a sanity bound for a
+/// pathological pointer jump; real pieces are a few pixels long.
+const PENCIL_MAX_SUBSTEPS: usize = 4096;
+
+/// Walk-step guard: a canvas-sized jump takes a few thousand unit steps;
+/// anything beyond this is a bug and the walk bails out.
+const WALK_STEP_GUARD: usize = 8192;
+
+/// The pencil's drifting pen (owner request 2026-11-20): the gesture-level
+/// rasterization state carried across pieces AND frames. The pen holds an
+/// EXACT float position — its dominant-axis coordinate rides the integer
+/// pixel grid, its minor coordinate keeps the fractional phase of the
+/// smoothed centerline (never rounded into the state), which is what makes
+/// the 1 px staircase even and frame-batch-independent. `last_pixel` is
+/// the dedupe state: premultiplied source-over is not idempotent, so a
+/// translucent color must not blend into the same pixel twice at the
+/// subdivision/frame joints.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct PencilTrail {
+    pen: Option<Pos2>,
+    last_pixel: Option<(i64, i64)>,
+}
+
+impl PencilTrail {
+    /// The gesture-start state: the press dot's pixel seeds the dedupe so
+    /// the first piece does not re-blend over the touch point.
+    pub fn starting_from(press_pixel: (i64, i64)) -> Self {
+        Self {
+            pen: None,
+            last_pixel: Some(press_pixel),
+        }
+    }
+}
+
+/// Walks the pen toward `target` in unit steps of the chord-dominant axis,
+/// plotting one pixel per step (the pen's rounded position). The minor
+/// coordinate advances proportionally and is carried EXACTLY — the same
+/// error accumulation a single long Bresenham run performs, with no
+/// per-run restarts. A `None` pen initializes on the target (the gesture's
+/// first sample; the press dot already covers its pixel).
+fn walk_pen(pen: &mut Option<Pos2>, target: Pos2, plot: &mut impl FnMut(i64, i64)) {
+    let Some(p) = pen.as_mut() else {
+        *pen = Some(target);
+        let (x, y) = pencil_pixel(target);
+        plot(x, y);
+        return;
+    };
+    for _ in 0..WALK_STEP_GUARD {
+        let dx = target.x - p.x;
+        let dy = target.y - p.y;
+        let (adx, ady) = (dx.abs(), dy.abs());
+        if adx < 1.0 && ady < 1.0 {
+            return;
+        }
+        if adx >= ady {
+            p.x += if dx > 0.0 { 1.0 } else { -1.0 };
+            // adx >= 1 here (the dominant axis carries the remaining step).
+            p.y += dy / adx;
+        } else {
+            p.y += if dy > 0.0 { 1.0 } else { -1.0 };
+            p.x += dx / ady;
+        }
+        plot(p.x.round() as i64, p.y.round() as i64);
+    }
+}
 
 /// One smoothed piece of a freehand stroke. Pieces chain: a piece's
 /// `from` is the previous piece's `to` (a shared midpoint).
@@ -148,45 +214,25 @@ pub fn pencil_pixel(p: Pos2) -> (i64, i64) {
     (p.x.round() as i64, p.y.round() as i64)
 }
 
-/// Plots one straight Bresenham run between the rounded endpoints,
-/// skipping the pixel plotted immediately before: premultiplied
-/// source-over is not idempotent (re-blending the same translucent pixel
-/// darkens it), and consecutive runs share their joint pixel — at the
-/// subdivision joints, at the frame joints and against the press dot.
-fn plot_pencil_run(
-    pixels: &mut [PremultipliedColorU8],
-    width: i64,
-    height: i64,
-    src: [u32; 4],
-    last_pixel: &mut Option<(i64, i64)>,
-    a: Pos2,
-    b: Pos2,
-) {
-    let (x0, y0) = pencil_pixel(a);
-    let (x1, y1) = pencil_pixel(b);
-    bresenham_line(x0, y0, x1, y1, |x, y| {
-        if *last_pixel == Some((x, y)) {
-            return;
-        }
-        blend_pixel(pixels, width, height, x, y, src);
-        *last_pixel = Some((x, y));
-    });
-}
-
 /// Rasterizes one frame's smoothed pieces into the pixmap in a single
 /// pass and returns their UNION dirty rectangle. Brush/eraser: one
 /// continuous tiny-skia stroke (round caps, AA; the eraser
-/// `DestinationOut`). Pencil: the 1 px Bresenham chain along the
-/// flattened centerline — quads subdivide into ~1 px steps, consecutive
-/// duplicate pixels are skipped through `last_pixel`, the dedupe state
-/// carried across the whole gesture (ignored by brush/eraser).
+/// `DestinationOut`) — `trail` and `pin` are ignored. Pencil: the 1 px
+/// drifting-pen trail along the flattened centerline — quads subdivide
+/// into ~1 px steps, the pen walks unit grid steps with its exact minor
+/// phase carried across the whole gesture, consecutive duplicate pixels
+/// are skipped (the dedupe in [`PencilTrail`]). `pin` is the RELEASE
+/// hook: the closing call passes the raw release point so the trail ends
+/// exactly on its pixel (the walk itself stops within one pixel of its
+/// target and catches up on the next sample).
 pub fn rasterize_smooth_pieces(
     pixmap: &mut Pixmap,
     tool: Tool,
     size: f32,
     color: Color32,
     pieces: &[SmoothPiece],
-    last_pixel: &mut Option<(i64, i64)>,
+    trail: &mut PencilTrail,
+    pin: Option<Pos2>,
 ) -> Option<DirtyRect> {
     let width = match tool {
         Tool::Pencil => 1.0,
@@ -219,24 +265,47 @@ pub fn rasterize_smooth_pieces(
         ];
         let (pw, ph) = (pixmap.width() as i64, pixmap.height() as i64);
         let pixels = pixmap.pixels_mut();
-        for piece in pieces {
-            match *piece {
-                SmoothPiece::Line { from, to } => {
-                    plot_pencil_run(pixels, pw, ph, src, last_pixel, from, to);
+        let mut pen = trail.pen;
+        let mut last_pixel = trail.last_pixel;
+        {
+            let mut plot = |x: i64, y: i64| {
+                if last_pixel == Some((x, y)) {
+                    return;
                 }
-                SmoothPiece::Quad { from, control, to } => {
-                    let steps = ((from.distance(control) + control.distance(to)).ceil() as usize)
-                        .clamp(1, PENCIL_MAX_SUBSTEPS);
-                    let mut prev = from;
-                    for step in 1..=steps {
-                        let t = step as f32 / steps as f32;
-                        let p = SmoothPiece::quad_at(from, control, to, t);
-                        plot_pencil_run(pixels, pw, ph, src, last_pixel, prev, p);
-                        prev = p;
+                blend_pixel(pixels, pw, ph, x, y, src);
+                last_pixel = Some((x, y));
+            };
+            for piece in pieces {
+                match *piece {
+                    SmoothPiece::Line { from, to } => {
+                        walk_pen(&mut pen, from, &mut plot);
+                        walk_pen(&mut pen, to, &mut plot);
+                    }
+                    SmoothPiece::Quad { from, control, to } => {
+                        walk_pen(&mut pen, from, &mut plot);
+                        let steps = ((from.distance(control) + control.distance(to)).ceil()
+                            as usize)
+                            .clamp(1, PENCIL_MAX_SUBSTEPS);
+                        for step in 1..=steps {
+                            let t = step as f32 / steps as f32;
+                            let p = SmoothPiece::quad_at(from, control, to, t);
+                            walk_pen(&mut pen, p, &mut plot);
+                        }
                     }
                 }
             }
+            if let Some(final_point) = pin {
+                walk_pen(&mut pen, final_point, &mut plot);
+                // The walk stops within one pixel of the target: plot the
+                // release pixel itself so the stroke ends exactly where the
+                // pointer released (the classic Bresenham end behavior).
+                let (x, y) = pencil_pixel(final_point);
+                plot(x, y);
+                pen = Some(final_point);
+            }
         }
+        trail.pen = pen;
+        trail.last_pixel = last_pixel;
         return Some(dirty);
     }
 

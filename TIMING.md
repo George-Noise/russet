@@ -23,6 +23,8 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` on a COLD clone (fresh sandbox: rustup missing, installed first; the whole dep graph + the crate per stage) | **≈ 2m 05s total** (the first run failed on fmt at ~2m; the re-run after `cargo fmt`: ALL GATES GREEN 74 s — copied from the gate's own print) | the gate's per-stage seconds + the wall clock ≈ |
+| 2026-11-20 | `cargo build --profile gates --features mcp` (the GUI binary for the visual driver + the pencil GUI probe; gates deps hot after verify.sh) | **2 s** | time'd exactly |
 | 2026-11-19 | the session-start warm-up (`clippy --profile gates --all-targets` + `cargo test --profile gates --no-run`) on a COLD clone — rustup was MISSING (installed first; the first warm-up attempt died on `cargo: command not found`, re-started with the PATH set) | **≈ 3m 15s both stages** (20:46:47→20:50:02; clippy "Finished in 1m 32s", test --no-run "1m 42s") | the background log's timestamps ≈ |
 | 2026-11-19 | `cargo check` (dev lane, smooth-strokes round: deps cold on the fresh clone — the quick loop after the rasterizer/input edits) | **1m 23s** | cargo's own "Finished in" |
 | 2026-11-19 | `cargo check` (dev lane, save-dialog round: deps cold on the fresh clone — the quick loop after the dialog edits) | **1m 20s** | time'd exactly |
@@ -33,6 +35,7 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-20 | `bash scripts/verify.sh` after the pencil-drifting-pen change (4 src files + 3 test files; hot deps, the crate recompiled per stage) | **74 s** | the gate's own print |
 | 2026-11-19 | `cargo build --features mcp` (dev GUI binary for the visual driver; deps cold after the sandbox recycle, the crate rebuilt after the header change) | **≈ 5 min** (observed 07:44→07:49 from the binary's mtime; the re-run overwrote its log) | the binary's timestamps ≈ |
 | 2026-11-19 | `cargo build` (dev lane, hot deps, `windows.rs` + `windows/tests.rs` changed) | **1m 39s** | time'd exactly |
 | 2026-11-18 | `bash scripts/verify.sh` after a small code change (About window: 2 files + 2 tests, deps hot, gates profile) | **15.1 s** | time'd exactly |

@@ -16,7 +16,7 @@ use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect};
 use super::App;
 use crate::history_tree::ActionKind;
 use crate::tools::{
-    SmoothPiece, SmoothStroke, Tool, draw_segment, pencil_pixel, pick_color,
+    PencilTrail, SmoothPiece, SmoothStroke, Tool, draw_segment, pencil_pixel, pick_color,
     rasterize_smooth_pieces,
 };
 
@@ -185,8 +185,9 @@ impl App {
     /// the whole frame, however many pointer events it carried) and
     /// paints with the color captured at stroke START — the gesture's
     /// single history-node color. A mid-gesture tool switch abandons the
-    /// paint (the pixels join the next node's snapshot, as before).
-    fn paint_smooth_pieces(&mut self, pieces: &[SmoothPiece]) {
+    /// paint (the pixels join the next node's snapshot, as before). `pin`
+    /// is the release hook (see [`tools::smooth::rasterize_smooth_pieces`]).
+    fn paint_smooth_pieces(&mut self, pieces: &[SmoothPiece], pin: Option<Pos2>) {
         let Some(color) = self.stroke_paint else {
             return;
         };
@@ -198,7 +199,8 @@ impl App {
             size,
             color,
             pieces,
-            &mut self.stroke_last_pixel,
+            &mut self.stroke_trail,
+            pin,
         );
         if let Some(dirty) = dirty {
             self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -209,9 +211,14 @@ impl App {
 
     /// Rasterizes the smoothing window's closing piece (the last midpoint
     /// → the final raw point) so a released stroke carries its full path.
+    /// The pencil's trail pins on the raw release point: the stroke ends
+    /// exactly on the released pixel, like the classic Bresenham run.
     fn flush_stroke_close(&mut self) {
         if let Some(piece) = self.stroke_smooth.close() {
-            self.paint_smooth_pieces(std::slice::from_ref(&piece));
+            let pin = match piece {
+                SmoothPiece::Line { to, .. } | SmoothPiece::Quad { to, .. } => Some(to),
+            };
+            self.paint_smooth_pieces(std::slice::from_ref(&piece), pin);
         }
     }
 
@@ -225,7 +232,7 @@ impl App {
         if panning {
             self.is_stroking = false;
             self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
-            self.stroke_last_pixel = None;
+            self.stroke_trail = PencilTrail::default();
             self.stroke_button = None;
             self.stroke_paint = None;
             return;
@@ -277,7 +284,7 @@ impl App {
             self.stroke_paint = None;
             self.is_stroking = false;
             self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
-            self.stroke_last_pixel = None;
+            self.stroke_trail = PencilTrail::default();
             self.stroke_button = None;
         }
 
@@ -295,9 +302,9 @@ impl App {
                 self.stroke_paint = Some(self.stroke_color());
                 let pos = self.canvas_pos(rect, cursor);
                 self.stroke_smooth = SmoothStroke::new(pos);
-                // The press dot's pixel seeds the pencil dedupe so the
-                // first piece does not re-blend over the dot.
-                self.stroke_last_pixel = Some(pencil_pixel(pos));
+                // The press dot's pixel seeds the pencil trail's dedupe so
+                // the first piece does not re-blend over the dot.
+                self.stroke_trail = PencilTrail::starting_from(pencil_pixel(pos));
                 self.paint_segment(pos, pos);
                 ui.ctx().request_repaint();
                 // The press frame's own coalesced moves are dropped: the
@@ -318,7 +325,7 @@ impl App {
                 }
             }
             if !pieces.is_empty() {
-                self.paint_smooth_pieces(&pieces);
+                self.paint_smooth_pieces(&pieces, None);
                 ui.ctx().request_repaint();
             }
         }

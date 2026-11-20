@@ -29,7 +29,7 @@
 
 | # | Opened | What the human must check | Source (PROGRESS.md log) | Status |
 |---|---|---|---|---|
-| V44 | 2026-11-19 | The smooth-strokes pass (Windows `cargo run`): fast mouse strokes are SMOOTH on all three freehand tools — no polygon of long straight runs with sharp corners (every coalesced pointer move now feeds a midpoint-quadratic smoothing window; the old code kept one point per frame); the PENCIL keeps its classic hard 1 px trail (staircase diagonals, a single click = one pixel), just following the smoothed path; the brush and eraser strokes show no seams or corner kinks at speed; translucent colors do not darken at the stroke's joints; undo/redo still records ONE node per gesture. | 2026-11-19 smooth-strokes entry | open |
+| V45 | 2026-11-20 | The pencil-stability pass (Windows `cargo run`): draw SLOW and FAST diagonals and curves with the pencil — the 1 px trail is an EVEN staircase (no double-covered columns, no holes, no clusters — the owner's ragged-diagonal screenshot is the defect this fixes); the pattern is the SAME for the same gesture regardless of drawing speed or machine (the old trail varied between computers because the pixel pattern followed the per-frame event batching); the trail still follows the smoothed path (fast strokes stay smooth, no polygon runs); translucent colors do not darken at the joints; a single click sets exactly one pixel; the stroke ends exactly on the release pixel; undo still records one node per gesture. | 2026-11-20 pencil drifting-pen entry | open |
 | V40 | 2026-11-19 | The palette alpha + hex pass (Windows `cargo run`): clicking a color well opens the picker with an ALPHA slider under the hue slider and an A DragValue in the top R/G/B/A row; dragging the alpha paints TRANSLUCENT strokes on the canvas; a "Hex" row sits under the picker showing `#RRGGBBAA` — typing `#FF7F00` (or `ff7f00`, or `#f70`) keeps the current alpha, typing 8 digits (`#FF7F0032`) sets it, invalid text applies nothing and reverts on Enter; the field re-formats on Enter; the preset grid and Swap still work, and both wells keep independent fields. | 2026-11-19 palette alpha + hex entry | **verified 2026-11-19 via chat** (owner checked the pass; his hex-input leniency follow-up became V41) |
 | V37 | 2026-11-18 | The theme-switcher pass (Windows `cargo run`): the menu-bar button sits BETWEEN View and Help (Help always LAST), reads just "Theme" (no ": Dark" suffix), the radio options are plainly Dark / Light / System; picking one re-styles the WHOLE UI immediately; System follows the OS preference and is the startup default; the Tool Log records "Theme: …"; the MCP tool `set_theme` (dark/light/system) switches the theme the same way. | 2026-11-18 theme-switcher entry | **verified 2026-11-18 via chat** (owner approved the look; no further asks) |
 | V35 | 2026-11-18 | The redrawn-icons look pass (Windows `cargo run`, Tools window): the BRUSH reads at a glance as a classic round brush (round volumetric bristle belly, crimped metal ferrule, wooden handle, dark paint-loaded tip — no longer "a second pencil") and the EYEDROPPER as a classic pipette (round red rubber bulb, wider metal collar, tapering glass with the blue liquid — no longer "a pen"); the two-column grid gaps are EQUAL horizontally and vertically; hover tooltips still name each tool. | 2026-11-18 icon-redraw entry | **verified 2026-11-18 via chat** (owner checked the icons; his improvement list became V36) |
@@ -45,6 +45,12 @@
 
 Resolved (kept until the next compaction, then dropped):
 
+- V44 — **failed 2026-11-20** (the owner's ragged-pencil report with a screenshot:
+  the smoothed pencil drew extra pixels — double-covered columns and holes — and
+  the pattern differed between computers): the brush/eraser smoothing itself held
+  up; the pencil's per-run Bresenham restarts were the defect, replaced by the
+  drifting pen the same day. Superseded by V45 (which re-covers the whole
+  smooth-stroke surface on the fixed pencil).
 - V43 — verified 2026-11-19 via chat (owner: "checked V43, V42, V41"): the flake's
   trunk lanes re-passed on NixOS after the four same-day fixes. NOTE: V43's row had
   never landed in the open table (the flake round's bookkeeping gap — its log entry
