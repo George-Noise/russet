@@ -10,7 +10,6 @@ rust-version = "1.95"
 # only renderer in egui 0.37 that supports TextureOptions::mipmap_mode.
 eframe = { version = "0.37", default-features = false, features = [
     "glow",
-    "accesskit",
     "clipboard",
     "default_fonts",
     "links",
