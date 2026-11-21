@@ -7,8 +7,9 @@
 //! diagnostic.
 
 use super::super::{
-    LINE_ICONS, PIPETTE_TIP, SHAPE_ICONS, TOOL_ANGLE, TOOL_INK, TOOLS, cursor_bitmap, ensure,
-    icon_transform, rasterize_line_icon, rasterize_shape_icon, rasterize_tool_icon,
+    LINE_ICONS, PIPETTE_TIP, SHAPE_ICONS, TOOL_ANGLE, TOOL_INK, TOOLS, TREE_ICON_PT, cursor_bitmap,
+    ensure, icon_transform, rasterize_line_icon, rasterize_shape_icon, rasterize_tool_icon,
+    tree_texture_id,
 };
 use crate::tools::Tool;
 use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme, Visuals};
@@ -85,8 +86,8 @@ fn atlas_rebuilds_only_on_scale_change() {
     ensure(&mut atlas, &ctx);
     assert_eq!(
         pass(&ctx),
-        25,
-        "8 tool + 8 shape + 2 line + 6 select icons + egui's font atlas"
+        33,
+        "8 tool + 8 shape + 2 line + 6 select + 8 tree icons + egui's font atlas"
     );
     let first = atlas.as_ref().expect("the first ensure builds the atlas");
     assert_eq!(first.key, 1.0);
@@ -106,7 +107,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     ensure(&mut atlas, &ctx);
     assert_eq!(
         pass(&ctx),
-        24,
+        32,
         "rebuilt after the scale change (the font atlas only uploads once)"
     );
     let scaled = atlas.as_ref().expect("rebuilt after the scale change");
@@ -121,12 +122,45 @@ fn atlas_rebuilds_only_on_scale_change() {
     // the icons theme-independent (owner v4: one drawing reads well in both
     // themes; the old theme re-raster died with its reason). The pass still
     // uploads ONE texture: egui's font atlas follows the theme too. OUR
-    // twenty-four icons would make it 25 — the count stays the "did the
+    // thirty-two icons would make it 33 — the count stays the "did the
     // atlas rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
     ensure(&mut atlas, &ctx);
-    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 24 icons");
+    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 32 icons");
     assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
+}
+
+/// The SECOND atlas (owner request 2026-11-21): the History Tree row icons
+/// rasterize at [`TREE_ICON_PT`] — one per tool, at the ROW size (12 px at
+/// ppp 1), not a downscaled 24 pt texture (the thin strokes would blur).
+#[test]
+fn the_tree_atlas_rasterizes_one_row_icon_per_tool() {
+    let ctx = Context::default();
+    let mut atlas = None;
+    ensure(&mut atlas, &ctx);
+    let built = atlas.as_ref().expect("built");
+    assert_eq!(
+        built.tree_icons.len(),
+        TOOLS.len(),
+        "one row-size icon per tool"
+    );
+    for (i, tool) in TOOLS.iter().enumerate() {
+        let id = tree_texture_id(&atlas, *tool).expect("the small texture");
+        assert_eq!(id, built.tree_icons[i].id());
+        assert_eq!(
+            built.tree_icons[i].size(),
+            [TREE_ICON_PT as usize; 2],
+            "the row size at ppp 1, not the 24 pt button raster"
+        );
+    }
+    // The 12 px pencil still carries ink — the emblem does not vanish at
+    // the row size (its legibility is the owner's V-check).
+    let pm = rasterize_tool_icon(Tool::Pencil, TREE_ICON_PT as usize, TOOL_INK)
+        .expect("px is in 1..=256");
+    assert!(
+        pm.pixels().iter().filter(|p| p.alpha() > 0).count() > 8,
+        "the small pencil raster is not empty"
+    );
 }
 
 /// The monochrome ink is FIXED (owner v4) and sits a bit BELOW the light
@@ -149,7 +183,8 @@ fn mono_ink_is_fixed_below_the_light_theme_text() {
 }
 
 /// All atlas textures exist and are distinct: one per tool PLUS the Shape
-/// panel's eight (owner requests 2026-11-20).
+/// panel's eight, the Line panel's two AND the tree atlas's row-size set
+/// (owner requests 2026-11-20, 2026-11-21).
 
 #[test]
 fn atlas_ids_are_one_per_tool() {
@@ -162,6 +197,7 @@ fn atlas_ids_are_one_per_tool() {
         .iter()
         .chain(atlas.shape_icons.iter())
         .chain(atlas.line_icons.iter())
+        .chain(atlas.tree_icons.iter())
         .map(TextureHandle::id)
         .collect();
     let n = ids.len();
@@ -170,8 +206,8 @@ fn atlas_ids_are_one_per_tool() {
     assert_eq!(ids.len(), n, "every icon owns its own texture");
     assert_eq!(
         n,
-        TOOLS.len() + SHAPE_ICONS.len() + LINE_ICONS.len(),
-        "one texture per tool, per Shape-panel icon and per Line-panel icon"
+        TOOLS.len() * 2 + SHAPE_ICONS.len() + LINE_ICONS.len(),
+        "one texture per tool + its row-size twin, per Shape-panel icon and per Line-panel icon"
     );
 }
 
@@ -202,7 +238,9 @@ fn icons_dump_when_requested() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("the dump folder must be creatable");
     for tool in TOOLS {
-        for px in [256, 24] {
+        // 256 = the design view, 24 = the real button, 12 = the History
+        // Tree row size (owner request 2026-11-21).
+        for px in [256, 24, 12] {
             let pm = rasterize_tool_icon(tool, px, Color32::BLACK).expect("px is in 1..=256");
             let path = dir.join(format!("{px}px_{tool:?}.png"));
             pm.save_png(&path)
@@ -230,8 +268,9 @@ fn icons_dump_when_requested() {
         .count();
     assert_eq!(
         n,
-        TOOLS.len() * 2 + SHAPE_ICONS.len() * 2 + LINE_ICONS.len() * 2,
-        "one 256 px + one 24 px PNG per tool, shape icon and line icon"
+        TOOLS.len() * 3 + SHAPE_ICONS.len() * 2 + LINE_ICONS.len() * 2,
+        "one 256 px + one 24 px + one 12 px PNG per tool (the tree row size), \
+         256 px + 24 px for the shape and line icons"
     );
 }
 

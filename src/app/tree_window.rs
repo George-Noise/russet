@@ -32,8 +32,11 @@
 //!   straight connectors (owner request 2026-11-13), and every connector
 //!   leaving one node exits at the SAME height — the parent dot's center
 //!   line — even when the horizontal runs overlap (owner request
-//!   2026-11-13). Labels hug EACH row's own node (kind + node id, e.g.
-//!   "pencil 7", on an opaque backdrop) instead of sitting in one global
+//!   open (owner request 2026-11-13). Labels hug EACH row's own node (the
+//!   kind word, e.g. "pencil" — the node id is gone from every row since
+//!   owner request 2026-11-21, and the PENCIL row draws the tool's icon
+//!   from the small second atlas instead of the word; an opaque backdrop)
+//!   instead of sitting in one global
 //!   column right of the whole gutter (owner request 2026-11-13), and
 //!   trees wider than the window scroll horizontally.
 //! - Scroll: while the view sits at the graph's end (where the canvas

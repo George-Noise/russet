@@ -355,6 +355,17 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
 - LEFT-clicking a node's DOT in a History Tree window (the label is never a click
   target) jumps the head there and shows that node's canvas; drawing right after forks
   the tree git-style — the abandoned tail stays and stays reachable.
+- **Row format (owner request 2026-11-21): every row prints ONLY the kind word — the
+  node id is gone from every row** ("pencil 7" became "pencil"; the reading order is
+  the id's context and the dot's hover carries the node). The PENCIL row draws the
+  tool's ICON instead of the word — the same emblem the Tools button shows, from a
+  SECOND, row-sized atlas (`app/tool_icons.rs::TREE_ICON_PT` = 12 pt, "по размеру
+  заглавной буквы или чуть больше" — the row text's capital letter is ~9 pt),
+  rasterized in the same `ensure` pass and key as the button icons — a native small
+  raster, NOT a downscaled 24 pt texture. New tools join the icon rows one at a time
+  (pencil first, the owner's «пока что сделаем только для pencil»). The color chip and
+  the crop row's summary (which already opens with its own kind word — "crop
+  800×600→300×200 @(100,50)" — so no second one is prepended) are unchanged.
 - No node-count limit at this stage (owner decision 2026-11-13): the PNG compression
   keeps memory small; eviction-by-memory arrives together with the action model.
 - **Sizes (owner request 2026-11-17): the BOTTOM layer owns the canvas size** — its buffer
@@ -365,8 +376,8 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   each layer's history-tree node all the choices made in the resize window"):
   the new `ActionKind::Resize` carries a full `ResizeInfo` — the mode (canvas/image), the
   layer's before/after sizes and the mode parameter (the 3×3 anchor or the resampling
-  filter). The History Tree row prints the summary ("resize 12 canvas 800×600→1000×800
-  (TL)"), the dot hover explains it, the MCP `get_history_tree` dumps the whole struct —
+  filter). The History Tree row prints the summary ("resize canvas 800×600→1000×800
+  (TL)" — no node id since owner request 2026-11-21), the dot hover explains it, the MCP `get_history_tree` dumps the whole struct —
   jumping a layer back beyond the resize tells the user what that resize did to THIS
   layer. Canvas mode adapts every layer by the SAME anchor geometry (pixels keep their
   positions relative to the anchor corner); Image mode rescales every layer

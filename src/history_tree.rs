@@ -83,8 +83,10 @@ pub enum ActionKind {
 }
 
 impl ActionKind {
-    /// Lowercase label shown in the graph row ("pencil 7") and dumped by
-    /// the MCP tools.
+    /// Lowercase word of the graph row and the MCP dump. The row itself
+    /// stopped appending the node id (owner request 2026-11-21: "pencil 7"
+    /// became "pencil", a pencil row drawing the tool's icon instead of
+    /// the word); the resize/crop rows append their summary in the painter.
     pub fn label(self) -> &'static str {
         match self {
             ActionKind::Start => "start",

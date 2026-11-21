@@ -16,13 +16,15 @@
 //! needs the shared layer stack).
 
 use eframe::egui::{
-    self, Align, Align2, Color32, CursorIcon, FontId, Id, PointerButton, Rect, Sense, Shape,
+    self, Align, Align2, Color32, CursorIcon, FontId, Id, PointerButton, Pos2, Rect, Sense, Shape,
     Stroke, Vec2,
 };
 
 use super::{Direction, Pin};
 use crate::app::App;
-use crate::history_tree::{NodeId, Row};
+use crate::app::tool_icons;
+use crate::history_tree::{ActionKind, NodeId, Row, TreeNode};
+use crate::tools::Tool;
 
 /// Graph geometry (VS Code-graph-like lanes).
 const GRAPH_PAD_X: f32 = 12.0;
@@ -72,9 +74,39 @@ pub(super) struct GraphMetrics<'a> {
     pub(super) text_color: Color32,
 }
 
+/// The word the row prints next to its dot. Owner request 2026-11-21: the
+/// node id is GONE from every row — the reading order IS the id's context
+/// and the dot's hover already carries the node. A resize row appends the
+/// dialog's choices (owner request 2026-11-17: "canvas 800×600→1000×800
+/// (TL)"), a crop row the selection's rect (owner request 2026-11-20).
+fn row_label(node: &TreeNode) -> String {
+    match (node.resize, node.crop) {
+        (Some(info), _) => format!("{} {}", node.kind.label(), info.summary()),
+        // CropInfo::summary already OPENS with the kind word ("crop …") —
+        // with the label prepended the row read "crop crop …" once the
+        // node id (which used to separate the two) left every row (owner
+        // request 2026-11-21) — the summary alone carries both words.
+        (None, Some(info)) => info.summary(),
+        (None, None) => node.kind.label().to_string(),
+    }
+}
+
+/// The tool whose ICON the row draws instead of the word (owner request
+/// 2026-11-21: the pencil row shows the tool's emblem from the small
+/// second atlas at [`tool_icons::TREE_ICON_PT`] — "по размеру заглавной
+/// буквы или чуть больше"). `None` = print [`row_label`]. New tools join
+/// one row at a time — the owner's «пока что сделаем только для pencil».
+fn row_icon(node: &TreeNode) -> Option<Tool> {
+    match node.kind {
+        ActionKind::Pencil => Some(Tool::Pencil),
+        _ => None,
+    }
+}
+
 /// The graph itself: one row per action, exactly one text line tall —
 /// branch rails, fork connectors, the commit circle (LEFT-click = jump
-/// there), the "pencil" label and the single color swatch. Returns the id
+/// there), the label (the pencil row draws the TOOL'S icon, owner request
+/// 2026-11-21) and the single color swatch. Returns the id
 /// of the node whose dot was clicked this frame, if any.
 ///
 /// Geometry (owner request 2026-11-13): all rails and dots live inside a
@@ -100,33 +132,29 @@ pub(super) fn paint_graph(
 
     let row_height = metrics.row_height;
     let text_color = metrics.text_color;
-    // Per-row labels (owner request 2026-11-13): kind + node id, measured
-    // up front so the row width can fit the widest row. The label text is
-    // `kind id` from the node itself ("pencil 7", "start 1"); a resize
-    // node appends the dialog's choices (owner request 2026-11-17:
-    // "canvas 800×600→1000×800 (TL)" / "image … (bicubic)"), a crop node
-    // the selection's rect (owner request 2026-11-20: "crop 800×600→300×200
-    // @(100,50)") — jumping a layer back beyond the node shows what it did.
+    // Per-row labels (owner request 2026-11-13, simplified 2026-11-21):
+    // the kind word — the node id is gone from EVERY row; a PENCIL row
+    // reserves the small icon's width instead of a word (the icon replaces
+    // it). A resize node appends the dialog's choices (owner request
+    // 2026-11-17: "canvas 800×600→1000×800 (TL)" / "image … (bicubic)"), a
+    // crop node the selection's rect (owner request 2026-11-20: "crop
+    // 800×600→300×200 @(100,50)") — jumping a layer back beyond the node
+    // shows what it did. Measured up front so the row width can fit the
+    // widest row.
     let labels: Vec<(String, f32)> = rows
         .iter()
         .map(|row| {
-            let text = app.layers.node(row.id).map_or_else(
-                || "action".to_string(),
-                |node| match (node.resize, node.crop) {
-                    (Some(info), _) => {
-                        format!("{} {} {}", node.kind.label(), node.id, info.summary())
-                    }
-                    (None, Some(info)) => {
-                        format!("{} {} {}", node.kind.label(), node.id, info.summary())
-                    }
-                    (None, None) => format!("{} {}", node.kind.label(), node.id),
-                },
-            );
-            let width = ui
-                .painter()
-                .layout_no_wrap(text.clone(), metrics.body_font.clone(), metrics.text_color)
-                .size()
-                .x;
+            let node = app.layers.node(row.id);
+            let icon_row = node.is_some_and(|node| row_icon(node).is_some());
+            let text = node.map_or_else(|| "action".to_string(), row_label);
+            let width = if icon_row {
+                tool_icons::TREE_ICON_PT
+            } else {
+                ui.painter()
+                    .layout_no_wrap(text.clone(), metrics.body_font.clone(), metrics.text_color)
+                    .size()
+                    .x
+            };
             (text, width)
         })
         .collect();
@@ -311,13 +339,34 @@ pub(super) fn paint_graph(
             egui::vec2(label_width + 6.0, row_height - 2.0),
         );
         painter.rect_filled(backdrop, 2.0, window_fill);
-        painter.text(
-            egui::pos2(label_x, cy),
-            Align2::LEFT_CENTER,
-            label,
-            metrics.body_font.clone(),
-            text_color,
-        );
+        // The pencil row draws the TOOL'S ICON from the small second atlas
+        // (owner request 2026-11-21); the word stays the fallback for the
+        // frame before the atlas exists (unreachable: ensure() runs before
+        // the windows paint).
+        let icon = node.and_then(row_icon);
+        match icon.and_then(|tool| tool_icons::tree_texture_id(&app.tool_icons, tool)) {
+            Some(texture) => {
+                let icon_rect = Rect::from_min_size(
+                    Pos2::new(label_x, cy - tool_icons::TREE_ICON_PT / 2.0),
+                    Vec2::splat(tool_icons::TREE_ICON_PT),
+                );
+                painter.image(
+                    texture,
+                    icon_rect,
+                    Rect::from_min_size(Pos2::ZERO, Vec2::splat(1.0)),
+                    Color32::WHITE,
+                );
+            }
+            None => {
+                painter.text(
+                    egui::pos2(label_x, cy),
+                    Align2::LEFT_CENTER,
+                    label,
+                    metrics.body_font.clone(),
+                    text_color,
+                );
+            }
+        }
         if let Some(node) = node {
             // The Start root paints no swatch (it carries no stroke color);
             // a resize node has none either (owner request 2026-11-17 —
@@ -368,3 +417,6 @@ pub(super) fn paint_graph(
 
     clicked
 }
+
+#[cfg(test)]
+mod tests;

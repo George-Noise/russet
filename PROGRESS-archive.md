@@ -1,5 +1,39 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Refactor:` the five over-guard files split under the 500-line guard — pure code motion (owner order in chat)
+
+- **What:** the owner picked the split list this round (tool_icons/draw.rs,
+  app/preview.rs, app/windows.rs, tools.rs, tool_icons.rs; selection.rs +
+  app/selection.rs explicitly DEFERRED, history_tree.rs stays owner-deferred):
+  `tools.rs` → `tools/shapes.rs` (the polyline/shape rasterizers + the
+  outline-placement math); `tool_icons.rs` → `tool_icons/primitives.rs` (the
+  shared draw primitives); `tool_icons/draw.rs` → `draw/tools.rs` +
+  `draw/panels.rs` (the per-tool drawings / the panel sets, the shared emblem
+  geometry stayed in the root); `app/windows.rs` → `windows/settings_panel.rs`
+  (the magnetized panel, the icon buttons, the per-tool UIs, SIZE_SLIDER_W);
+  `app/preview.rs` → `preview/geometry.rs` + `preview/commit.rs` +
+  `preview/overlay.rs` (the pure math / the commits / the live overlay).
+  Every item moved VERBATIM (`scripts/split_russet.py`, one stage per file);
+  visibility follows the consumers (`pub(crate)`/`pub(super)`/
+  `pub(in crate::app::tool_icons)` for the icon dispatchers); the tests
+  import moved items from the OWNING module (the "move the test, not the
+  visibility" convention — re-exports consumed only by tests are clippy-flagged
+  dead weight, PROBLEMS.md ×2). No behavior change by construction.
+- **Files:** 8 new files (above), 5 rewritten roots, 4 test-import fixes
+  (`tools/tests.rs`, `windows/tests/{common,settings_panel,size_block}.rs`,
+  `app/preview/tests.rs`), PROBLEMS.md via `log_problem.sh`.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 295 default / 308 mcp,
+  the counts UNCHANGED — pure motion); clippy `-D warnings` clean on
+  --all-targets; no visual driver (no behavior change by construction — the
+  308 tests cover the moved units at their new paths).
+- **Owner-checks:** the owner's batch recorded this round: V65/V64/V63/
+  V62(keep the checkbox)/V61/V60/V59/V58/V57/V56/V53 verified, V46 — the
+  Wayland leg (the X11 leg remains); F19 paid (the AccessKit trim), F12 paid
+  (the scroll pan stays; F20 born — the touch/tablet surfaces, parked), F10
+  paid. Open: V66, V46 (X11); F21 born (the native-dialog freeze — the owner
+  picks the fix variant next round).
+- **Commit title:** `Refactor: split the five over-guard files — tools/shapes, tool_icons/primitives, draw tools+panels, windows/settings_panel, preview geometry/commit/overlay (pure code motion)`
+
 ### 2026-11-21 — `Feat:` an active selection confines every painting tool to its region (owner request in chat)
 
 - **What:** the classic paint-app rule: with a selection active, the

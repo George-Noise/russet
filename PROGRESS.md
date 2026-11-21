@@ -48,12 +48,14 @@
 
 | Extra: the native dialogs stop freezing the window — F21, variant A (owner pick 2026-11-21) | done — gates + wasm check + driver green | File ▸ Open (with its decode) and the Save dialog's folder pick (Browse… AND the Save-click fallback) run on a WORKER THREAD — the portal round-trip + `pollster::block_on` left the UI thread, GNOME no longer dims the window ("Not Responding" gone); ONE shared `file_io::FileTask` slot (both platforms, the web `AsyncFileDialog` rides it too) polled per frame (`document::poll_file_task`); the single-dialog guard (Open…/Browse… gray, no second chooser stacks); the Save-click fallback continues by itself when its pick answers (`save_after_folder_pick`); no task in flight = zero machinery; +4 tests; V67 born |
 | Extra: file_io.rs split under the ~500-line guard (owner 2026-11-21) | done — gates + wasm green, pure code motion | the pixel/byte codecs (`pixmap_from_image`, `png_compression_type`, the two PNG encoders, the JPEG encoder) + the two encoder defaults moved VERBATIM into the new `src/file_io/codecs.rs` (the F21 round's approved proposal); the root keeps the task/types/dialog glue and re-exports what bin code consumes (the MCP `encode_png` gated by the feature like `save_image_to`); the tests import from the owning module; file_io.rs 606 → 495, codecs.rs 134; +1 stale comment fixed (`FOLDER_PICKING_SUPPORTED`'s doc claimed the web stub "returns `None`") |
+| Extra: the History Tree rows go wordless for pencil, digitless for all (owner 2026-11-21) | done — gates + wasm + driver + new probe green, the icon dump and the tree screenshots looked at | the tree rows drop the node id EVERYWHERE ("pencil 7" → "pencil") and the PENCIL row draws the TOOL'S ICON — the same emblem the Tools button shows, from a SECOND, row-sized atlas (`tool_icons::TREE_ICON_PT` 12 pt, "по размеру заглавной буквы или чуть больше", the same `ensure` pass/key — a native small raster, not a downscaled 24 pt texture; the headless texture count 25 → 33); new tools join one row at a time; the digit removal EXPOSED a doubled kind word on crop rows ("crop crop …" — `CropInfo::summary` opens with "crop" itself, the id used to separate them) — the row now prints the summary alone; +4 tests (3 paint row-label/icon helpers in the new `paint/tests.rs`, 1 atlas row-size set); the new probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags: the rails' blue + the icon's warm-gold pixels on the screen's right side); V68 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the file_io split
-round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
---all-targets (default + mcp), `cargo test --profile gates` 299 default /
-312 mcp green (+1 ignored; the counts UNCHANGED — pure code motion), ALL
-GATES GREEN in 22 s; the wasm `cargo check` green.
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the tree-row
+icons round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
+--all-targets (default + mcp), `cargo test --profile gates` 303 default /
+316 mcp green (+1 ignored; +4 new: the paint helpers and the atlas
+row-size set), ALL GATES GREEN in 15 s; the wasm `cargo check` green; the
+visual driver exit 0 (recipe test done).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -69,9 +71,47 @@ GATES GREEN in 22 s; the wasm `cargo check` green.
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the selection-clipping Feat entry
-> (during the file_io-split round's budget — the file rode past ~200 lines;
+> PROGRESS-archive.md; the latest move: the five-file-split Refactor entry
+> (during the tree-row-icons round's budget — the file rode past ~200 lines;
 > three entries + the new one stay in the Log, all in the archive).
+
+### 2026-11-21 — `Feat:` the History Tree rows show the pencil's icon and lose the node id (owner request in chat)
+
+- **What:** two changes to the History Tree rows (owner request
+  2026-11-21): (1) EVERY row stops appending the node id — "pencil 7"
+  became "pencil", "start 1" "start" (the reading order is the id's
+  context; the dot's hover already carries the node); (2) the PENCIL row
+  draws the TOOL'S ICON instead of the word — the same emblem the Tools
+  window's button shows, from a SECOND, row-sized atlas: `TREE_ICON_PT`
+  12 pt («по размеру заглавной буквы или чуть больше» — the Body font's
+  capital is ~9 pt), rasterized in the same `ensure` pass and key as the
+  button icons, a native small raster instead of a downscaled 24 pt
+  texture. New tools join the icon rows ONE AT A TIME (the owner's «пока
+  что сделаем только для pencil» — `row_icon` maps only the Pencil).
+  Side catch (exposed by the digit removal, fixed in the same edit): the
+  crop row used to read "crop {id} crop …" — `CropInfo::summary` opens
+  with its own kind word — and without the id the doubling became visible;
+  the row now prints the summary alone.
+- **Files:** `src/app/tool_icons.rs` (the small atlas: `TREE_ICON_PT`, the
+  `tree_icons` set, `tree_texture_id`), `src/app/tree_window/paint.rs` (the
+  pure `row_label`/`row_icon` + the textured quad in the row, id-free
+  labels) with its new test child `paint/tests.rs` (+3),
+  `src/app/tool_icons/tests/atlas.rs` (+1, the counts 25 → 33 / 24 → 32,
+  the id-distinct chain, the dump's 12 px pass), doc updates:
+  SPEC §3.6 (the row-format bullet + the resize example), AGENTS.md (the
+  tool_icons clause + the texture-count fact), the module docs of
+  `tree_window.rs` / `history_tree.rs`.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 303 default / 316
+  mcp); the wasm `cargo check` green; the visual driver exit 0; the new
+  probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags, the
+  rails' blue + the icon's warm-gold on the right side); the 12 px icon
+  dump and the tree screenshots LOOKED AT (the icons legible at the row
+  size, no digits anywhere).
+- **Owner-checks:** V68 born (Windows: the pencil rows show the icon at a
+  readable size, no digits in any row, the crop summary unchanged).
+  Open: V68, V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17,
+  F16 newest-first in the files.
+- **Commit title:** `Feat: the History Tree rows drop the node id and the pencil row draws the tool's icon from a new 12 pt row-sized atlas (the crop row loses its doubled kind word)`
 
 ### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
 
@@ -132,37 +172,3 @@ GATES GREEN in 22 s; the wasm `cargo check` green.
   Debts: F21 PAID (this task); F20, F18, F17, F16 stay open (the files
   carry the full list).
 - **Commit title:** `Fix: the native file dialogs run on a worker thread — the portal pick and the image decode leave the UI loop (F21); one polled FileTask slot guards double dialogs and the Save fallback continues after its pick`
-
-### 2026-11-21 — `Refactor:` the five over-guard files split under the 500-line guard — pure code motion (owner order in chat)
-
-- **What:** the owner picked the split list this round (tool_icons/draw.rs,
-  app/preview.rs, app/windows.rs, tools.rs, tool_icons.rs; selection.rs +
-  app/selection.rs explicitly DEFERRED, history_tree.rs stays owner-deferred):
-  `tools.rs` → `tools/shapes.rs` (the polyline/shape rasterizers + the
-  outline-placement math); `tool_icons.rs` → `tool_icons/primitives.rs` (the
-  shared draw primitives); `tool_icons/draw.rs` → `draw/tools.rs` +
-  `draw/panels.rs` (the per-tool drawings / the panel sets, the shared emblem
-  geometry stayed in the root); `app/windows.rs` → `windows/settings_panel.rs`
-  (the magnetized panel, the icon buttons, the per-tool UIs, SIZE_SLIDER_W);
-  `app/preview.rs` → `preview/geometry.rs` + `preview/commit.rs` +
-  `preview/overlay.rs` (the pure math / the commits / the live overlay).
-  Every item moved VERBATIM (`scripts/split_russet.py`, one stage per file);
-  visibility follows the consumers (`pub(crate)`/`pub(super)`/
-  `pub(in crate::app::tool_icons)` for the icon dispatchers); the tests
-  import moved items from the OWNING module (the "move the test, not the
-  visibility" convention — re-exports consumed only by tests are clippy-flagged
-  dead weight, PROBLEMS.md ×2). No behavior change by construction.
-- **Files:** 8 new files (above), 5 rewritten roots, 4 test-import fixes
-  (`tools/tests.rs`, `windows/tests/{common,settings_panel,size_block}.rs`,
-  `app/preview/tests.rs`), PROBLEMS.md via `log_problem.sh`.
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 295 default / 308 mcp,
-  the counts UNCHANGED — pure motion); clippy `-D warnings` clean on
-  --all-targets; no visual driver (no behavior change by construction — the
-  308 tests cover the moved units at their new paths).
-- **Owner-checks:** the owner's batch recorded this round: V65/V64/V63/
-  V62(keep the checkbox)/V61/V60/V59/V58/V57/V56/V53 verified, V46 — the
-  Wayland leg (the X11 leg remains); F19 paid (the AccessKit trim), F12 paid
-  (the scroll pan stays; F20 born — the touch/tablet surfaces, parked), F10
-  paid. Open: V66, V46 (X11); F21 born (the native-dialog freeze — the owner
-  picks the fix variant next round).
-- **Commit title:** `Refactor: split the five over-guard files — tools/shapes, tool_icons/primitives, draw tools+panels, windows/settings_panel, preview geometry/commit/overlay (pure code motion)`

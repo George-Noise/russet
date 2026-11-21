@@ -62,6 +62,15 @@ use self::draw::{
 /// egui 0.37 has no rem API — same convention as `placement::FIRST_OPEN_GAP`).
 pub(super) const ICON_PT: f32 = 1.5 * 16.0;
 
+/// The SECOND atlas's icon size (owner request 2026-11-21): the History
+/// Tree rows are one text line tall and their labels read at the Body font
+/// size — a 24 pt button icon would tower over the row. The row icons
+/// rasterize at 12 pt — "по размеру заглавной буквы или чуть больше" (the
+/// Body font's capital letter is ~9 pt) — in the SAME pass and pipeline as
+/// the button icons, keyed by the same scale (a native small raster, NOT a
+/// downscaled 24 pt texture: the thin strokes would blur).
+pub(super) const TREE_ICON_PT: f32 = 12.0;
+
 /// The tools' canonical order — the icon atlas and the Tools window grid
 /// iterate this array, so the two always agree. The owner's 2026-11-21
 /// pass swapped two pairs for balance: the Eyedropper up beside the paint
@@ -183,6 +192,12 @@ pub(super) struct Atlas {
     /// mode marks + the four ops), same order as [`SELECT_ICONS`] (owner
     /// request 2026-11-20; the same retain-count reason as `line_icons`).
     pub(super) select_icons: [TextureHandle; 6],
+    /// The SECOND, smaller atlas (owner request 2026-11-21): the History
+    /// Tree row icons at [`TREE_ICON_PT`], one per [`Tool`], same order as
+    /// [`TOOLS`]. Rasterized in the same `ensure` pass (the same key), just
+    /// at the row size — the tree draws a native 12 pt quad, not a blurred
+    /// downscale. The same retain-count reason as every set above.
+    pub(super) tree_icons: Vec<TextureHandle>,
     /// The pipette's cursor bitmap (STRAIGHT alpha) — set on the canvas
     /// while the Eyedropper is the active tool (owner request 2026-11-18).
     pub(super) pipette_cursor: Option<egui::CustomCursorImage>,
@@ -283,12 +298,29 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let Ok(select_icons) = <[TextureHandle; 6]>::try_from(select_icons) else {
         return;
     };
+    // The History Tree's small set (owner request 2026-11-21): the same
+    // tool drawings at [`TREE_ICON_PT`] — the row-sized second atlas.
+    let tree_px = (TREE_ICON_PT * ppp).round().clamp(1.0, 256.0) as usize;
+    let mut tree_icons = Vec::with_capacity(TOOLS.len());
+    for tool in TOOLS {
+        let Some(pm) = rasterize_tool_icon(tool, tree_px, text) else {
+            return; // keep the previous atlas; retried next frame
+        };
+        let image = egui::ColorImage::from_rgba_premultiplied([tree_px, tree_px], pm.data());
+        tree_icons.push(ctx.load_texture_cached(
+            format!("russet_tree_icon_{tool:?}"),
+            Id::unique(format!("russet_tree_icon_{tool:?}")),
+            image,
+            TextureOptions::LINEAR,
+        ));
+    }
     *atlas = Some(Atlas {
         key: ppp,
         handles,
         shape_icons,
         line_icons,
         select_icons,
+        tree_icons,
         pipette_cursor: Some(pipette_cursor),
     });
 }
@@ -329,6 +361,16 @@ pub(super) fn select_texture_id(atlas: &Option<Atlas>, icon: SelectIcon) -> Opti
     atlas
         .as_ref()
         .and_then(|a| a.select_icons.get(i))
+        .map(TextureHandle::id)
+}
+
+/// A History Tree row icon's TextureId — the small second atlas (owner
+/// request 2026-11-21), if it is ready.
+pub(super) fn tree_texture_id(atlas: &Option<Atlas>, tool: Tool) -> Option<TextureId> {
+    let i = TOOLS.iter().position(|t| t == &tool)?;
+    atlas
+        .as_ref()
+        .and_then(|a| a.tree_icons.get(i))
         .map(TextureHandle::id)
 }
 
