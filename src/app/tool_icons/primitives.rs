@@ -119,6 +119,25 @@ pub(super) fn icon_transform(px: usize, angle_deg: f32) -> Transform {
     )
 }
 
+/// [`icon_transform`] with a small optical nudge bolted on AFTER the
+/// rotate-about-center: the design-space shift (`dx_pt`/`dy_pt` in the
+/// 24 pt emblem space, scaled by the same `k`) lands in the transform's
+/// TRANSLATION column, so the linear part is untouched and the direction
+/// stays screen-fixed under any tool angle. The pencil's
+/// `PENCIL_NUDGE` (draw.rs) is the only user.
+pub(super) fn nudged_icon_transform(
+    px: usize,
+    angle_deg: f32,
+    dx_pt: f32,
+    dy_pt: f32,
+) -> Transform {
+    let mut ts = icon_transform(px, angle_deg);
+    let k = px as f32 / SIZE;
+    ts.tx += dx_pt * k;
+    ts.ty += dy_pt * k;
+    ts
+}
+
 fn solid_paint(color: Color32) -> Paint<'static> {
     Paint {
         // egui's Color32 is premultiplied; the fixed palettes and the text

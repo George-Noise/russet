@@ -1,5 +1,31 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
+
+- **What:** pure code motion, no behavior change: the pixel/byte codecs —
+  `pixmap_from_image`, `png_compression_type`, `demultiplied_rgba`,
+  `encode_png`, `encode_png_with_compression`, `encode_jpeg_with_quality`
+  plus the two encoder defaults (`DEFAULT_JPEG_QUALITY`,
+  `DEFAULT_PNG_COMPRESSION`) — moved VERBATIM into the new
+  `src/file_io/codecs.rs` (the F21 round's approved proposal). The root
+  keeps the task/types/dialog glue (`FileTask`/`FileOutcome`,
+  `SaveFormat`/`SaveOptions`, the `native`/`web` mods) and re-exports what
+  bin code consumes (`app.rs`'s dialog-prefill consts, the MCP snapshot
+  tool's `encode_png` — feature-gated like the `save_image_to` re-export);
+  the tests import from the owning module. Sizes: file_io.rs 606 → 495,
+  codecs.rs 134.
+- **Files:** new `src/file_io/codecs.rs`; `src/file_io.rs` (the block out,
+  the re-exports in, one stale comment fixed — the
+  `FOLDER_PICKING_SUPPORTED` doc still claimed the web stub "returns
+  `None`" from the pre-F21 shape); `src/file_io/tests.rs` (the import now
+  names `super::codecs`).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — the counts unchanged
+  at 299 default / 312 mcp); the wasm `cargo check` green. No driver run —
+  no behavior change (pure code motion).
+- **Owner-checks:** none born. Open: V67, V66, V46 (X11); parked: V30, V8.
+  Debts: F20, F18, F17, F16 newest-first in the files.
+- **Commit title:** `Refactor: file_io.rs split under the 500-line guard — the PNG/JPEG codecs and the encoder defaults move verbatim to file_io/codecs.rs (the root keeps the task/types/dialog glue and re-exports what bin code consumes)`
+
 ### 2026-11-21 — `Fix:` the native dialogs no longer freeze the window — F21, variant A (owner pick in chat)
 
 - **What:** the File ▸ Open picker (with its decode) and the Save dialog's

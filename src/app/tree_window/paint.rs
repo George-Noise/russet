@@ -187,6 +187,11 @@ pub(super) fn paint_graph(
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(row_width, row_height), Sense::hover());
         rects.push(rect);
+        // The rows sit BACK-TO-BACK: the row height already IS the pitch —
+        // icon + TREE_ICON_GAP of air between two consecutive icons
+        // (owner request 2026-11-21: «0.0625rem») — so egui's default
+        // inter-item spacing is canceled after every row.
+        ui.add_space(-ui.spacing().item_spacing.y);
         // Scroll pins: the graph's end is the HEAD row — bottom edge in
         // top-down mode, top edge in bottom-up mode.
         if let Some(target) = pin {

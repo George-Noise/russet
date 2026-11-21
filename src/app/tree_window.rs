@@ -59,6 +59,12 @@ mod paint;
 
 use self::paint::{GraphMetrics, paint_graph};
 
+/// The vertical gap between two consecutive tree icons (owner request
+/// 2026-11-21: «между двумя иконками … 0.0625rem»). egui 0.37 has no rem
+/// API — one rem = 16 pt, the same convention as `tool_icons::ICON_PT`
+/// and `placement::FIRST_OPEN_GAP`.
+const TREE_ICON_GAP: f32 = 0.0625 * 16.0;
+
 /// Stable id of the main window; clones get numbered ids.
 fn main_tree_window_id() -> Id {
     Id::unique("history_tree_main_window")
@@ -382,12 +388,14 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
 
     // One height for EVERY row (the rails, dots, hit rects and the scroll
     // fallback all divide it): the text line, but never smaller than the
-    // row icon plus its 4 pt breathing room (owner request 2026-11-21,
-    // size pass: the 12 pt icons read too small — the emblem now sets the
-    // floor, so the row grows from ~15 pt to TREE_ICON_PT + 4).
+    // row icon plus TREE_ICON_GAP — the rows sit BACK-TO-BACK (paint.rs
+    // cancels egui's inter-row spacing), so the row height IS the pitch
+    // and two consecutive icons end exactly TREE_ICON_GAP apart (owner
+    // request 2026-11-21: the size pass grew the row to icon + 4; the
+    // follow-up pins the gap at 0.0625rem instead).
     let row_height = ui
         .text_style_height(&TextStyle::Body)
-        .max(tool_icons::TREE_ICON_PT + 4.0);
+        .max(tool_icons::TREE_ICON_PT + TREE_ICON_GAP);
     let body_font = ui
         .style()
         .text_styles

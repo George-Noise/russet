@@ -361,10 +361,13 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   tool's ICON instead of the word — the same emblem the Tools button shows, from a
   SECOND, row-sized atlas (`app/tool_icons.rs::TREE_ICON_PT` = 16 pt, sized up from
   the first 12 pt the same day 2026-11-21 after the `--atlas-test` rings showed how
-  much room the rows had left: the ROW grows to fit — `row_height =
-  max(text line, TREE_ICON_PT + 4 pt margins)` in `tree_window.rs`, one height for
-  every row so the rails' pitch stays uniform, ~20 pt at ppp 1), rasterized in the
-  same `ensure` pass and key as the button icons — a native small
+  much room the rows had left: the ROW grows to fit and the rows sit BACK-TO-BACK —
+  `row_height = max(text line, TREE_ICON_PT + TREE_ICON_GAP)` in `tree_window.rs`
+  (one height for every row so the rails' pitch stays uniform, ~17 pt at ppp 1),
+  `paint.rs` cancels egui's inter-row spacing, and the vertical gap between two
+  consecutive icons is EXACTLY 0.0625rem — the owner's follow-up the same day:
+  «между двумя иконками … 0.0625rem»; `tree_window.rs::TREE_ICON_GAP` = 1 pt),
+  rasterized in the same `ensure` pass and key as the button icons — a native small
   raster, NOT a downscaled 24 pt texture. New tools join the icon rows one at a time
   (pencil first, the owner's «пока что сделаем только для pencil»). The color chip and
   the crop row's summary (which already opens with its own kind word — "crop

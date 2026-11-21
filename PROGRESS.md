@@ -52,11 +52,11 @@
 | Extra: the `--atlas-test` diagnostic — a 1 px speckle edge on every atlas picture (owner 2026-11-21) | done — gates + wasm + driver green, the flagged screenshot looked at | the owner sees a gap between the icon pictures' edges and their emblems and wants to SEE it before deciding: the new boolean flag `--atlas-test` (§3.12, no value; `apply_to` → `App::atlas_test` → `ensure(…, debug_border)`) repaints every raster's outermost pixel ring with a STATIC black-and-white speckle (`tool_icons::paint_debug_border` — a per-pixel coordinate hash, replayed byte-identically on every rebuild, so no animation) — exactly ONE PHYSICAL pixel thick at any scale (the ring lives in the raster: ppp and the icon size cannot stretch it), applied to all five icon sets AND the pipette cursor's source raster, painted OVER the emblem on purpose; +1 test (the ring is opaque black/white only, BOTH colors present, the interior byte-identical, the repaint deterministic); the new shot script `scripts/gui_atlas_test_shot.sh` PASS (364 adjacent pure-black/pure-white pairs on screen); the measured insets it exists to expose: the 24 pt emblems leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the diagonal drawing), the 12 pt tree icons ≤3 px; V69 born |
 | Extra: the History Tree row icons grow 12 → 16 pt, the row grows to fit (owner 2026-11-21) | done — gates + wasm + driver + probe green, the flagged before/after screenshots looked at | the rings made it visible: the first 12 pt row icons read «слишком маленькие — там ещё довольно много свободного места». The measured reality (ppp 1): row 15 px, backdrop 13, icon 12 — a mere +1 pt would fit WITHOUT growing the row, so the row grows too: `TREE_ICON_PT` 12 → 16 and `row_height = max(text line, TREE_ICON_PT + 4)` (tree_window.rs) — one height for every row (~15 → 20 pt; pitch 18 → 23 px measured), so the emblem becomes the row's tallest element and the backdrop/swatch/hit/scroll math all follow the one value; the probe's warm-gold count 18 → 42 (2.3× the emblem pixels on screen); the 16 px dump's insets: pencil 2/1/1/2, Text 2/4/2/3 (~80% filled); the dump test's third size now rides `TREE_ICON_PT` (it was pinned 12); the tree probe passes extra launch args through (`… russet --atlas-test` — how this round's evidence was shot); +0 new tests (the row-size test and the counts ride the constant); docs: SPEC §3.6 + §3.12 example, AGENTS tool_icons clause, paint.rs/tool_icons.rs docs, the probe's header; V70 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the row-icon size
-round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
---all-targets (default + mcp), `cargo test --profile gates` 304 default /
-317 mcp green (+1 ignored), ALL GATES GREEN
-in 15 s; the wasm `cargo check` green; the visual driver exit 0.
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the row-gap +
+pencil-nudge round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp), `cargo test --profile gates` 304
+default / 317 mcp green (+1 ignored), ALL GATES GREEN in 16 s; the wasm
+`cargo check` green; the visual driver exit 0.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -72,9 +72,44 @@ in 15 s; the wasm `cargo check` green; the visual driver exit 0.
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the F21-dialogs Fix entry
-> (during the row-icon size round's budget — the file rode past ~200 lines;
-> three entries + the new one stay in the Log, all in the archive).
+> PROGRESS-archive.md; the latest move: the file_io-split Refactor entry
+> (during the row-gap + pencil-nudge round's budget — the file rode past
+> ~200 lines; three entries stay in the Log, all in the archive).
+
+### 2026-11-21 — `Fix:` the History Tree rows sit back-to-back — the icon gap is exactly 0.0625rem; the pencil emblem nudges left-down (owner request in chat)
+
+- **What:** two refinements on top of the size pass. (1) The vertical gap
+  between two consecutive row icons is EXACTLY 0.0625rem (= 1 pt; the
+  repo's rem convention, `ICON_PT`/`FIRST_OPEN_GAP`): the rows now sit
+  BACK-TO-BACK — `row_height = max(text line, TREE_ICON_PT +
+  TREE_ICON_GAP)` in `tree_window.rs` (new `TREE_ICON_GAP` const) and
+  `paint.rs` cancels egui's default inter-row spacing after every row
+  allocation (`ui.add_space(-item_spacing.y)`) — the row height IS the
+  pitch, measured 23 → 17 px at ppp 1. (2) The pencil emblem moves a
+  touch «влево-вниз» relative to the icon's center: `PENCIL_NUDGE`
+  (-1, +1 design pt of the 24 pt emblem space) applied AFTER
+  `icon_transform` through the new `primitives.rs::nudged_icon_transform`
+  (the shift lands in the transform's translation column) — the direction
+  is screen-FIXED (the -45° rotation cannot turn it) and scales with the
+  raster; the dump confirms: 24 px insets 4/1/1/4 → 3/2/2/3.
+- **Files:** `src/app/tree_window.rs` (the `TREE_ICON_GAP` const + the
+  row-height rule), `src/app/tree_window/paint.rs` (the spacing cancel),
+  `src/app/tool_icons/draw.rs` (`PENCIL_NUDGE`),
+  `src/app/tool_icons/primitives.rs` (`nudged_icon_transform`),
+  `src/app/tool_icons/draw/tools.rs` (the pencil dispatcher), the
+  tool_icons re-export; SPEC §3.6, AGENTS.md (the tool_icons clause),
+  the `TREE_ICON_PT` doc.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
+  mcp, clippy `-D warnings` clean, no new tests: the geometry rides the
+  consts and the probe); the wasm `cargo check` green; the visual driver
+  exit 0; the tree probe PASS with `--atlas-test`; the flagged screenshot
+  LOOKED AT (the two rings 1 px apart, nothing clipped, the pencil
+  off-center as ordered); the measured pitch 17 px and the 24/16 px dump
+  insets confirm both changes.
+- **Owner-checks:** V70 AMENDED (the refinements fold into the same
+  open check). Open: V70, V69, V68, V67, V66, V46 (X11); parked: V30,
+  V8. Debts: F20, F18, F17, F16 newest-first in the files.
+- **Commit title:** `Fix: the History Tree rows sit back-to-back - the icon gap is exactly 0.0625rem; the pencil emblem nudges a touch left-down`
 
 ### 2026-11-21 — `Fix:` the History Tree row icons grow 12 → 16 pt and the row grows to fit them (owner request in chat)
 
@@ -144,30 +179,4 @@ in 15 s; the wasm `cargo check` green; the visual driver exit 0.
   V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17, F16
   newest-first in the files.
 - **Commit title:** `Feat: the --atlas-test flag paints a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (the inset diagnostic)`
-
-### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
-
-- **What:** pure code motion, no behavior change: the pixel/byte codecs —
-  `pixmap_from_image`, `png_compression_type`, `demultiplied_rgba`,
-  `encode_png`, `encode_png_with_compression`, `encode_jpeg_with_quality`
-  plus the two encoder defaults (`DEFAULT_JPEG_QUALITY`,
-  `DEFAULT_PNG_COMPRESSION`) — moved VERBATIM into the new
-  `src/file_io/codecs.rs` (the F21 round's approved proposal). The root
-  keeps the task/types/dialog glue (`FileTask`/`FileOutcome`,
-  `SaveFormat`/`SaveOptions`, the `native`/`web` mods) and re-exports what
-  bin code consumes (`app.rs`'s dialog-prefill consts, the MCP snapshot
-  tool's `encode_png` — feature-gated like the `save_image_to` re-export);
-  the tests import from the owning module. Sizes: file_io.rs 606 → 495,
-  codecs.rs 134.
-- **Files:** new `src/file_io/codecs.rs`; `src/file_io.rs` (the block out,
-  the re-exports in, one stale comment fixed — the
-  `FOLDER_PICKING_SUPPORTED` doc still claimed the web stub "returns
-  `None`" from the pre-F21 shape); `src/file_io/tests.rs` (the import now
-  names `super::codecs`).
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — the counts unchanged
-  at 299 default / 312 mcp); the wasm `cargo check` green. No driver run —
-  no behavior change (pure code motion).
-- **Owner-checks:** none born. Open: V67, V66, V46 (X11); parked: V30, V8.
-  Debts: F20, F18, F17, F16 newest-first in the files.
-- **Commit title:** `Refactor: file_io.rs split under the 500-line guard — the PNG/JPEG codecs and the encoder defaults move verbatim to file_io/codecs.rs (the root keeps the task/types/dialog glue and re-exports what bin code consumes)`
 

@@ -51,7 +51,10 @@ mod draw;
 
 mod primitives;
 
-use primitives::{OUTLINE_W, arc_pts, dash_polyline, fill, icon_transform, quad_pts, stroke};
+use primitives::{
+    OUTLINE_W, arc_pts, dash_polyline, fill, icon_transform, nudged_icon_transform, quad_pts,
+    stroke,
+};
 
 use self::draw::{
     PIPETTE_TIP, TOOL_ANGLE, rasterize_line_icon, rasterize_select_icon, rasterize_shape_icon,
@@ -66,8 +69,10 @@ pub(super) const ICON_PT: f32 = 1.5 * 16.0;
 /// same day: the first 12 pt icons read «слишком маленькие — там ещё
 /// довольно много свободного места» once the `--atlas-test` rings made the
 /// picture's size visible): the History Tree rows GROW to fit the icon —
-/// `row_height = max(text line, TREE_ICON_PT + 4 pt margins)` in
-/// `tree_window.rs` — and the emblem becomes the row's tallest element,
+/// `row_height = max(text line, TREE_ICON_PT + TREE_ICON_GAP)` in
+/// `tree_window.rs` with the rows BACK-TO-BACK, so two consecutive icons
+/// end exactly TREE_ICON_GAP (0.0625rem, the owner's follow-up the same
+/// day) apart — and the emblem becomes the row's tallest element,
 /// dominating it the way the Tools button's emblem does. Still the SAME
 /// pass and pipeline as the button icons, keyed by the same scale (a
 /// native small raster, NOT a downscaled 24 pt texture: the thin strokes

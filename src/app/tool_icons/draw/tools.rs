@@ -7,8 +7,10 @@
 //! geometry. Every icon is closed polygons + round-cap strokes through the
 //! pipeline's primitives (imported from [`super`] and its re-exports).
 
-use super::super::{OUTLINE_W, arc_pts, fill, icon_transform, quad_pts, stroke};
-use super::{EMBLEM_RECT, TOOL_ANGLE, draw_line, draw_select_rect, emblem_circle};
+use super::super::{
+    OUTLINE_W, arc_pts, fill, icon_transform, nudged_icon_transform, quad_pts, stroke,
+};
+use super::{EMBLEM_RECT, PENCIL_NUDGE, TOOL_ANGLE, draw_line, draw_select_rect, emblem_circle};
 use crate::tools::Tool;
 use eframe::egui::Color32;
 use tiny_skia::{Pixmap, Transform};
@@ -335,7 +337,14 @@ pub(in crate::app::tool_icons) fn rasterize_tool_icon(
 ) -> Option<Pixmap> {
     let mut pm = Pixmap::new(px as u32, px as u32)?;
     match tool {
-        Tool::Pencil => draw_pencil(&mut pm, icon_transform(px, TOOL_ANGLE)),
+        Tool::Pencil => draw_pencil(
+            &mut pm,
+            // The pencil's emblem reads a touch up-right of the icon's
+            // center (owner request 2026-11-21: nudge it "чуть-чуть
+            // влево-вниз"); the shift applies AFTER the rotate-about-
+            // center — screen-fixed direction, scaled with the raster.
+            nudged_icon_transform(px, TOOL_ANGLE, PENCIL_NUDGE.0, PENCIL_NUDGE.1),
+        ),
         Tool::Brush => draw_brush(&mut pm, icon_transform(px, TOOL_ANGLE)),
         Tool::Eraser => draw_eraser(&mut pm, icon_transform(px, 0.0)),
         // The TOOLS array's placeholder slot: the live Select button draws

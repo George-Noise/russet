@@ -33,6 +33,14 @@ pub(super) use tools::rasterize_tool_icon;
 /// The angle every hand-held tool is drawn at (tip pointing down-left).
 pub(super) const TOOL_ANGLE: f32 = -45.0;
 
+/// The pencil's optical nudge (owner request 2026-11-21: move the pencil
+/// a touch LEFT-DOWN relative to the icon's center — judged against the
+/// `--atlas-test` rings). Design units of the 24 pt emblem space; the
+/// dispatcher applies it AFTER `icon_transform` (through
+/// `primitives::nudged_icon_transform`), so the direction is screen-fixed
+/// — the -45° rotation cannot turn it — and it scales with the raster.
+pub(super) const PENCIL_NUDGE: (f32, f32) = (-1.0, 1.0);
+
 /// The pipette's TIP in the logical space — the cursor hotspot's source
 /// (owner request 2026-11-18: the icon doubles as the canvas cursor, and the
 /// tip is where the pointer samples).
