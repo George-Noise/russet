@@ -59,9 +59,7 @@ use std::path::PathBuf;
 use eframe::egui::{self, Color32, PointerButton, Pos2, Rect, Sense, Vec2};
 
 use crate::canvas::Canvas;
-use crate::file_io::SaveFormat;
-#[cfg(target_arch = "wasm32")]
-use crate::file_io::WebTask;
+use crate::file_io::{FileTask, SaveFormat};
 use crate::history::ActionLog;
 use crate::history_tree::{ActionKind, NodeId, ResizeAnchor, ResizeFilter, ResizeMode};
 use crate::layers::LayerStack;
@@ -242,8 +240,22 @@ pub struct App {
     last_content_rect: Option<Rect>,
     #[cfg(not(target_arch = "wasm32"))]
     current_path: Option<PathBuf>,
-    #[cfg(target_arch = "wasm32")]
-    web_task: Option<WebTask>,
+    /// The ONE in-flight file task (F21, owner pick of variant A
+    /// 2026-11-21): the Open picker (both platforms), the Save download
+    /// (web) or the native folder pick of the Save dialog. The blocking
+    /// rfd call runs on the task's worker thread — the UI loop never
+    /// stops; [`document::poll_file_task`] consumes the result per frame.
+    /// The slot doubles as the SINGLE-DIALOG GUARD: while `Some`, every
+    /// new picker request is rejected (the first chooser keeps the
+    /// screen; the Open menu item and the Save dialog's Browse… button
+    /// gray while it lasts). `None` = nothing in flight: polling is one
+    /// option check, no threads or channels exist.
+    file_task: Option<FileTask>,
+    /// The Save click that opened the native folder picker continues once
+    /// the pick answers with a folder (the pre-F21 one-click save; F21).
+    /// Cleared whenever ANY task resolves — the continuation belongs to
+    /// its own pick only.
+    save_after_folder_pick: bool,
     display_name: String,
     dirty: bool,
     show_new_dialog: bool,
@@ -439,8 +451,8 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             current_path: None,
             save_dir: None,
-            #[cfg(target_arch = "wasm32")]
-            web_task: None,
+            file_task: None,
+            save_after_folder_pick: false,
             display_name: "Untitled".to_string(),
             dirty: false,
             show_new_dialog: false,
@@ -845,7 +857,6 @@ impl eframe::App for App {
         // MCP events first: tool calls land before anything else draws.
         #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
         self.mcp_poll();
-        #[cfg(target_arch = "wasm32")]
         self.poll_file_task();
         self.handle_hotkeys(&ctx);
         // The icon atlas must exist before the canvas (the Eyedropper's

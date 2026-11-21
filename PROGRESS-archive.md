@@ -1,5 +1,54 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Fix:` the Outline-placement radios' icons read as the outline — thicker segments running past the icon's edge (owner request in chat)
+
+- **What:** the owner's redraw recipe for the Shape panel's three
+  OUTLINE-PLACEMENT icons (outside / centered / inside): the click dot
+  stays exactly as it was ("точечку оставить как есть"), the
+  horizontal/vertical segments become ~2.5× thicker (`OUTLINE_BAND_W` 2.6 →
+  6.5 — "в 2-3 раза толще") and each segment's FAR end now leaves the
+  24-pt icon space (`OUTLINE_BAND_LEN` 11 → 17; the bitmap crop = the
+  segment visibly IS the outline line continuing beyond the corner
+  window). The modes still differ ONLY by where the bands sit relative to
+  the dot.
+- **Files:** `src/app/tool_icons/draw.rs` (the two constants + the
+  composition doc), `src/app/tool_icons/tests/shape_panel.rs` (the probe
+  strips/box recomputed for the new band edges), SPEC §3.2 (the placement
+  icons' sentence).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
+  295 mcp); the visual driver ALL SCENARIOS GREEN; the icons LOOKED AT on
+  the dump (`--ignored icons_dump`) at 256 px and at the real 24 px button
+  size — all three distinct, the bands run past the edge, the dot legible
+  on band, fill and background alike. No wasm check — no web-facing code
+  (the economy rule).
+- **Owner-checks:** V65 born (Windows + web: the three radios read as
+  outside / centered / inside at a glance; the dot untouched). Open: V65,
+  V64, V63, V62; parked: V30, V8. Debts open: F19, F18, F17, F16.
+- **Commit title:** `Fix: the Shape panel's Outline-placement radio icons — the segments ~2.5x thicker with their far ends running past the icon's edge so they read as the outline; the click dot untouched`
+
+### 2026-11-21 — `Fix:` the Tools window's button order — the Eyedropper ↔ Select, the Text ↔ Line (owner request in chat)
+
+- **What:** the owner's reorder: the grid's row 2 becomes Eraser +
+  Eyedropper (the color-picking pipette reads paint-adjacent), row 3
+  Select + Text, row 4 Shape + Line. One array (`TOOLS`) drives the grid,
+  the atlas and the icon lookup — the two swaps move the buttons without
+  touching anything else; the hotkeys and the tooltips travel with their
+  tools.
+- **Files:** `src/app/tool_icons.rs` (the `TOOLS` array + its doc), the new
+  `src/app/tool_icons/tests/order.rs` (+1 test pinning the layout), SPEC
+  §3.8 (the Select row's placement sentence).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
+  295 mcp). The visual probe and the MCP driver were SKIPPED — the owner
+  waived them for this round ("простенькая задачка… визуально не
+  проверять и mcp не использовать"); the on-screen layout is pinned by the
+  order test (the grid fills row-major over `TOOLS`). No wasm check — no
+  web-facing code (the economy rule).
+- **Owner-checks:** V64 born (Windows + web: the grid reads
+  Eraser+Eyedropper, Select+Text, Shape+Line; every hotkey still matches
+  its button). Open: V64, V63, V62, V61; parked: V30, V8.
+  Debts open: F19, F18, F17, F16.
+- **Commit title:** `Fix: the Tools window's button order — the Eyedropper swapped with the Select, the Text with the Line (the TOOLS array drives the grid row-major; hotkeys and tooltips unchanged)`
+
 ### 2026-11-21 — `Feat:` the diameter drag previews WHAT IT MEASURES — a dashed chord and the center dot (owner picked idea #3 from the chat)
 
 - **What:** while a diameter-circle gesture is LIVE (Ellipse kind, Shift

@@ -15,15 +15,15 @@
 use eframe::egui::{self, Color32, Vec2};
 
 use super::App;
+use super::dialogs::{dialog_id, forget_dialog_position};
 #[cfg(not(target_arch = "wasm32"))]
 use super::save_dialog::base_name_of;
 use super::save_dialog::compose_file_name;
 use crate::canvas::Canvas;
 use crate::file_io;
+use crate::file_io::FileOutcome;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file_io::SaveFormat;
-#[cfg(target_arch = "wasm32")]
-use crate::file_io::WebOutcome;
 use crate::layers::LayerStack;
 
 /// Default document size: the New dialog's initial values and the default
@@ -100,8 +100,12 @@ impl App {
         }
     }
 
-    /// "Open": ask before discarding unsaved changes.
+    /// "Open" gate first (a picker is already open — do not even ask about
+    /// the unsaved changes), then [`App::open_now`].
     pub(super) fn request_open(&mut self, ctx: &egui::Context) {
+        if self.file_task.is_some() {
+            return;
+        }
         if self.dirty {
             self.pending_action = Some(PendingAction::Open);
         } else {
@@ -149,20 +153,15 @@ impl App {
     }
 
     /// "Open" without the unsaved-changes gate (the gate already passed).
+    /// F21: the picker is ASYNC — the task parks in the ONE slot (the
+    /// single-dialog guard: a request while a picker is open is rejected,
+    /// the first chooser keeps the screen) and the frame poll applies the
+    /// answer; the UI loop never stops.
     pub(super) fn open_now(&mut self, ctx: &egui::Context) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let _ = ctx;
-            match file_io::open_image() {
-                Ok(Some(loaded)) => self.apply_loaded(loaded),
-                Ok(None) => {}
-                Err(error) => self.error_popup = Some(error),
-            }
+        if self.file_task.is_some() {
+            return;
         }
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.web_task = Some(file_io::open_image(ctx));
-        }
+        self.file_task = Some(file_io::open_image(ctx));
     }
 
     /// "Save" (Ctrl+S): opens the in-app "Save Image" dialog (owner request
@@ -208,11 +207,13 @@ impl App {
     /// gathers the dialog's encoding choices into a [`file_io::SaveOptions`]
     /// (both knobs clamped — the slider bounds are not the only writers),
     /// resolves the native folder — the dialog's pick, else the document's
-    /// own folder, else the folder picker opens right from the click (a
-    /// cancelled pick keeps the dialog open) — and writes. Returns whether
-    /// the dialog may close: success (or, on web, the spawned download
-    /// task); a write error surfaces through the error popup and the
-    /// dialog STAYS OPEN so the name can be fixed.
+    /// own folder, else the folder picker opens right from the click (F21:
+    /// ASYNC — the dialog stays open and the Save CONTINUES when the pick
+    /// answers with a folder, `save_after_folder_pick`; a cancelled pick
+    /// keeps the dialog open) — and writes. Returns whether the dialog may
+    /// close: success (or, on web, the spawned download task); a write
+    /// error surfaces through the error popup and the dialog STAYS OPEN so
+    /// the name can be fixed.
     pub(super) fn commit_save_dialog(&mut self) -> bool {
         self.save_quality = self.save_quality.clamp(1, 100);
         self.save_png_compression = self.save_png_compression.min(9);
@@ -233,14 +234,23 @@ impl App {
                         .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
                     {
                         Some(dir) => dir,
-                        None => match file_io::pick_save_folder(self.save_dir.as_deref()) {
-                            Some(picked) => {
-                                self.save_dir = Some(picked.clone());
-                                picked
+                        None => {
+                            // No folder known: the folder picker opens right
+                            // from the click — now ASYNC (F21): the task
+                            // parks in the ONE slot (occupied while another
+                            // pick runs — no second chooser stacks), the
+                            // dialog STAYS OPEN, and the Save continues
+                            // when the pick answers
+                            // (`save_after_folder_pick`).
+                            if self.file_task.is_none() {
+                                self.file_task = Some(file_io::pick_save_folder(
+                                    &self.ctx,
+                                    self.save_dir.as_deref(),
+                                ));
                             }
-                            // The user cancelled the picker: keep the dialog.
-                            None => return false,
-                        },
+                            self.save_after_folder_pick = true;
+                            return false;
+                        }
                     }
                 }
             };
@@ -257,7 +267,7 @@ impl App {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            self.web_task = Some(file_io::save_image_as(
+            self.file_task = Some(file_io::save_image_as(
                 &self.ctx,
                 self.canvas.pixmap().clone(),
                 name,
@@ -267,19 +277,42 @@ impl App {
         }
     }
 
-    /// Web only: polls the in-flight `AsyncFileDialog` task (native I/O is
-    /// synchronous and never sets `web_task`).
-    #[cfg(target_arch = "wasm32")]
+    /// The per-frame poll of the ONE in-flight file task (F21; BOTH
+    /// platforms — the web `AsyncFileDialog` and the native worker-thread
+    /// picker resolve through the same slot). `None` = still running: the
+    /// task goes back into the slot, nothing else happens this frame. A
+    /// resolved task frees the slot (a new request may spawn from the next
+    /// frame on) and routes: Open applies the loaded image, Save applies
+    /// the saved one, the native Folder pick fills the Save dialog's row —
+    /// and CONTINUES the Save click that opened it
+    /// (`save_after_folder_pick`, the pre-F21 one-click save) while the
+    /// dialog is still open. Any error is the "Error" popup.
     pub(super) fn poll_file_task(&mut self) {
-        let Some(task) = self.web_task.take() else {
+        let Some(mut task) = self.file_task.take() else {
             return;
         };
-        match task.poll() {
-            Some(Ok(WebOutcome::Opened(Some(loaded)))) => self.apply_loaded(loaded),
-            Some(Ok(WebOutcome::Opened(None))) | Some(Ok(WebOutcome::Saved(None))) => {}
-            Some(Ok(WebOutcome::Saved(Some(saved)))) => self.apply_saved(saved),
-            Some(Err(error)) => self.error_popup = Some(error),
-            None => self.web_task = Some(task),
+        let Some(outcome) = task.poll() else {
+            self.file_task = Some(task);
+            return;
+        };
+        // The slot is free from here. A pending save-continuation belongs
+        // to its OWN pick only — any other resolution drops it.
+        let save_after_pick = self.save_after_folder_pick;
+        self.save_after_folder_pick = false;
+        match outcome {
+            Ok(FileOutcome::Opened(Some(loaded))) => self.apply_loaded(loaded),
+            Ok(FileOutcome::Opened(None))
+            | Ok(FileOutcome::Saved(None))
+            | Ok(FileOutcome::Folder(None)) => {}
+            Ok(FileOutcome::Saved(Some(saved))) => self.apply_saved(saved),
+            Ok(FileOutcome::Folder(Some(picked))) => {
+                self.save_dir = Some(picked);
+                if save_after_pick && self.show_save_dialog && self.commit_save_dialog() {
+                    self.show_save_dialog = false;
+                    forget_dialog_position(&self.ctx, dialog_id("save"));
+                }
+            }
+            Err(error) => self.error_popup = Some(error),
         }
     }
 

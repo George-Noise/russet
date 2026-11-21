@@ -25,8 +25,16 @@ impl App {
                         self.request_new();
                         ui.close();
                     }
+                    // F21: while ANY file task is in flight the Open item
+                    // grays — the single-dialog guard, visible (a second
+                    // portal chooser must not stack on the one already
+                    // open; the guard inside `open_now` is belt and
+                    // braces).
                     if ui
-                        .add(egui::Button::new("Open…").shortcut_text("Ctrl+O"))
+                        .add_enabled(
+                            self.file_task.is_none(),
+                            egui::Button::new("Open…").shortcut_text("Ctrl+O"),
+                        )
                         .clicked()
                     {
                         self.request_open(ui.ctx());

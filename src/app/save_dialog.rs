@@ -191,11 +191,18 @@ impl App {
                         // Truncated so a long path cannot widen the dialog
                         // (a window's measured size never shrinks back).
                         ui.add(egui::Label::new(egui::RichText::new(shown).weak()).truncate());
-                        if ui.button("Browse…").clicked()
-                            && let Some(picked) =
-                                file_io::pick_save_folder(self.save_dir.as_deref())
-                        {
-                            self.save_dir = Some(picked);
+                        // F21: the picker is async — the button grays while
+                        // ANY file task is in flight (the single-dialog
+                        // guard: a second portal chooser must not stack on
+                        // the first one), and the click only spawns while
+                        // the slot is free (belt and braces).
+                        let browse =
+                            ui.add_enabled(self.file_task.is_none(), egui::Button::new("Browse…"));
+                        if browse.clicked() {
+                            self.file_task = Some(file_io::pick_save_folder(
+                                &self.ctx,
+                                self.save_dir.as_deref(),
+                            ));
                         }
                     });
                 }

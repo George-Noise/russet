@@ -215,3 +215,68 @@ fn intermediate_png_compression_levels_encode_intermediate_files() {
         best.len()
     );
 }
+
+/// F21 (owner pick of variant A, 2026-11-21): the file tasks are POLL
+/// handles — the blocking picker runs on a worker thread and the UI loop
+/// consumes the result per frame. These tests drive the handle itself
+/// (channel-fed tasks — no dialog opens, no thread spawns).
+#[cfg(not(target_arch = "wasm32"))]
+mod file_task {
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+
+    use super::super::{FileOutcome, FileTask};
+
+    #[test]
+    fn a_file_task_yields_its_result_exactly_once() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(Ok(FileOutcome::Folder(Some(PathBuf::from("/picked")))))
+            .expect("the channel is alive");
+
+        let mut task = FileTask { rx };
+        let outcome = task.poll().expect("the sent result arrives");
+        assert!(
+            matches!(outcome, Ok(FileOutcome::Folder(Some(ref picked))) if picked == &PathBuf::from("/picked")),
+            "expected the picked folder, got a different outcome"
+        );
+
+        assert!(task.poll().is_none(), "the result is consumed once");
+    }
+
+    #[test]
+    fn a_running_file_task_polls_as_pending() {
+        let (_tx, rx) = mpsc::channel::<Result<FileOutcome, String>>();
+        // `_tx` stays alive: no verdict has been sent yet.
+
+        let mut task = FileTask { rx };
+        assert!(task.poll().is_none(), "no result yet — the task is pending");
+        assert!(task.poll().is_none(), "pending again on the next poll");
+    }
+
+    #[test]
+    fn a_worker_dying_without_a_verdict_resolves_the_task_with_an_error() {
+        // The no-wedge rule: the single-dialog slot must never stay shut
+        // because a worker vanished — the poll resolves with an error
+        // instead and the slot frees (the slot consumes the task on its
+        // first verdict — poll_file_task's take-then-drop).
+        let (tx, rx) = mpsc::channel::<Result<FileOutcome, String>>();
+        drop(tx);
+
+        let mut task = FileTask { rx };
+        let outcome = task.poll().expect("a dropped sender resolves the task");
+        assert!(outcome.is_err(), "expected an error verdict");
+    }
+
+    #[test]
+    fn a_cancelled_open_resolves_to_no_image() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(Ok(FileOutcome::Opened(None)))
+            .expect("the channel is alive");
+
+        let mut task = FileTask { rx };
+        assert!(
+            matches!(task.poll(), Some(Ok(FileOutcome::Opened(None)))),
+            "a cancelled pick must resolve to no image"
+        );
+    }
+}

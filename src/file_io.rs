@@ -1,6 +1,5 @@
 use tiny_skia::Pixmap;
 
-#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 pub struct LoadedImage {
@@ -15,6 +14,58 @@ pub struct SavedImage {
     #[cfg(not(target_arch = "wasm32"))]
     pub path: PathBuf,
 }
+
+/// The verdict of one in-flight file task ([`FileTask`]): what the Open
+/// pick, the Save download or the native folder pick came back with.
+pub enum FileOutcome {
+    Opened(Option<LoadedImage>),
+    /// The web download's verdict — the NATIVE save is a synchronous file
+    /// write with no dialog in it, so no native task ever carries this
+    /// variant (same shape as [`SaveFormat::mime_type`]).
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    Saved(Option<SavedImage>),
+    /// The native folder pick of the "Save Image" dialog (the row's
+    /// Browse… button and the Save-click fallback). `None` = cancelled.
+    Folder(Option<PathBuf>),
+}
+
+/// ONE in-flight file dialog (F21, owner pick of variant A 2026-11-21):
+/// the platform pickers no longer run on the UI thread — a task owns the
+/// blocking call and the UI loop keeps painting while the chooser is
+/// open. `App`'s `file_task: Option<FileTask>` slot doubles as the
+/// SINGLE-DIALOG GUARD: a task is spawned only while the slot is empty,
+/// so two portal choosers can never stack (a second request while one is
+/// open is rejected — the first keeps the screen; the Open menu item and
+/// the Save dialog's Browse… button gray while it lasts). When no task is
+/// in flight the slot is `None` and polling it is one option check — no
+/// threads, channels or repaint timers exist until a picker is requested.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct FileTask {
+    rx: std::sync::mpsc::Receiver<Result<FileOutcome, String>>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl FileTask {
+    /// `None` while the dialog is open (the UI loop runs normally — F21);
+    /// the result EXACTLY once once the worker thread has delivered it.
+    /// A worker that died without a verdict (a panic inside the picker)
+    /// resolves the task with an error instead of wedging the
+    /// single-dialog slot shut (the slot consumes the task on its first
+    /// verdict — `poll_file_task`'s take-then-drop — so the App never
+    /// polls one task twice).
+    pub fn poll(&mut self) -> Option<Result<FileOutcome, String>> {
+        match self.rx.try_recv() {
+            Ok(result) => Some(result),
+            Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Some(Err("The file dialog closed without a result".to_string()))
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub use web::FileTask;
 
 /// The save formats of the "Save Image" dialog (SPEC §3.7; owner request
 /// 2026-11-19): the format choice lives IN the dialog — a dropdown since
@@ -227,15 +278,20 @@ pub(crate) fn encode_jpeg_with_quality(pixmap: &Pixmap, quality: u8) -> Result<V
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::path::{Path, PathBuf};
+    use std::sync::mpsc::{self, Sender};
 
+    use eframe::egui;
     use tiny_skia::Pixmap;
 
     use super::{
-        LoadedImage, SaveFormat, SaveOptions, SavedImage, encode_jpeg_with_quality,
-        encode_png_with_compression, pixmap_from_image,
+        FileOutcome, FileTask, LoadedImage, SaveFormat, SaveOptions, SavedImage,
+        encode_jpeg_with_quality, encode_png_with_compression, pixmap_from_image,
     };
 
-    pub fn open_image() -> Result<Option<LoadedImage>, String> {
+    /// The blocking picker + decode (the pre-F21 `open_image` body): runs
+    /// on the TASK'S WORKER THREAD now — the UI thread only spawns it and
+    /// polls the result (F21).
+    fn open_image_blocking() -> Result<Option<LoadedImage>, String> {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("Images", &["png", "jpg", "jpeg"])
             .pick_file()
@@ -251,15 +307,68 @@ mod native {
         Ok(Some(LoadedImage { pixmap, path, name }))
     }
 
-    /// The "Save Image" dialog's folder row (owner request 2026-11-19): the
-    /// native folder picker, opened at `start` when there is one. On web the
-    /// dialog hides the row and the stub below answers `None`.
-    pub fn pick_save_folder(start: Option<&Path>) -> Option<PathBuf> {
+    /// The blocking folder picker (the pre-F21 body), worker thread too.
+    fn pick_save_folder_blocking(start: Option<&Path>) -> Option<PathBuf> {
         let mut dialog = rfd::FileDialog::new();
         if let Some(start) = start {
             dialog = dialog.set_directory(start);
         }
         dialog.pick_folder()
+    }
+
+    /// The F21 spawn glue shared by both constructors: `job` (the blocking
+    /// picker plus the Open-path decode) runs on a named worker thread, its
+    /// result goes through `tx` and the UI is woken so the next frame
+    /// consumes it instead of waiting for an interaction with our window.
+    /// A failed spawn (practically impossible) resolves the task with an
+    /// error instead of panicking or leaving the single-dialog slot wedged.
+    fn spawn_dialog_task(
+        tx: Sender<Result<FileOutcome, String>>,
+        ctx: egui::Context,
+        job: impl FnOnce() -> Result<FileOutcome, String> + Send + 'static,
+    ) {
+        let spawned = std::thread::Builder::new()
+            .name("russet-file-dialog".to_string())
+            .spawn({
+                let tx = tx.clone();
+                move || {
+                    let _ = tx.send(job());
+                    // The chooser just closed: wake the loop so the result
+                    // is consumed on the next frame.
+                    ctx.request_repaint();
+                }
+            });
+        if let Err(error) = spawned {
+            // The ORIGINAL `tx` handle stays here: a failed spawn resolves
+            // the task with an error instead of wedging the slot.
+            let _ = tx.send(Err(format!("Failed to open the file dialog: {error}")));
+        }
+    }
+
+    /// The File ▸ Open picker (F21: async — the portal chooser runs on a
+    /// worker thread and the UI loop keeps running while it is open; the
+    /// image decode moved onto the same thread).
+    pub fn open_image(ctx: &egui::Context) -> FileTask {
+        let (tx, rx) = mpsc::channel();
+        spawn_dialog_task(tx, ctx.clone(), || {
+            open_image_blocking().map(FileOutcome::Opened)
+        });
+        FileTask { rx }
+    }
+
+    /// The "Save Image" dialog's folder row / Save-click fallback (owner
+    /// request 2026-11-19), opened at `start` when there is one — F21:
+    /// async, the same slot mechanics as [`open_image`]. On web the dialog
+    /// hides the row and the stub below answers "no folder".
+    pub fn pick_save_folder(ctx: &egui::Context, start: Option<&Path>) -> FileTask {
+        let (tx, rx) = mpsc::channel();
+        let start = start.map(Path::to_path_buf);
+        spawn_dialog_task(tx, ctx.clone(), move || {
+            Ok(FileOutcome::Folder(pick_save_folder_blocking(
+                start.as_deref(),
+            )))
+        });
+        FileTask { rx }
     }
 
     /// The dialog's save: an already-resolved folder + the COMPOSED file
@@ -310,7 +419,7 @@ mod native {
 
 #[cfg(target_arch = "wasm32")]
 mod web {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::sync::{Arc, Mutex};
 
     use eframe::egui;
@@ -319,45 +428,40 @@ mod web {
     use wasm_bindgen_futures::wasm_bindgen::JsCast;
 
     use super::{
-        LoadedImage, SaveFormat, SaveOptions, SavedImage, encode_jpeg_with_quality,
+        FileOutcome, LoadedImage, SaveFormat, SaveOptions, SavedImage, encode_jpeg_with_quality,
         encode_png_with_compression, pixmap_from_image,
     };
 
-    type OpenSlot = Arc<Mutex<Option<Result<Option<LoadedImage>, String>>>>;
-    type SaveSlot = Arc<Mutex<Option<Result<Option<SavedImage>, String>>>>;
+    /// The one-slot mailbox of a web task: `None` while the task runs,
+    /// `Some(result)` once it has finished (set by the `spawn_local`
+    /// closure, consumed by the frame poll — the §3.10 mechanism).
+    type Slot = Arc<Mutex<Option<Result<FileOutcome, String>>>>;
 
-    pub struct WebTask {
-        kind: WebTaskKind,
+    pub struct FileTask {
+        kind: SlotKind,
     }
 
-    enum WebTaskKind {
-        Open(OpenSlot),
-        Save(SaveSlot),
+    enum SlotKind {
+        Open(Slot),
+        Save(Slot),
+        /// Never produced by a real web flow — the shared `pick_save_folder`
+        /// stub (the folder row hides on web) returns an already-resolved
+        /// "no folder" task so the shared dialog code compiles unchanged.
+        Folder(Slot),
     }
 
-    pub enum WebOutcome {
-        Opened(Option<LoadedImage>),
-        Saved(Option<SavedImage>),
-    }
-
-    impl WebTask {
-        pub fn poll(&self) -> Option<Result<WebOutcome, String>> {
-            match &self.kind {
-                WebTaskKind::Open(slot) => {
-                    let mut guard = slot.lock().ok()?;
-                    let result = guard.take()?;
-                    Some(result.map(WebOutcome::Opened))
-                }
-                WebTaskKind::Save(slot) => {
-                    let mut guard = slot.lock().ok()?;
-                    let result = guard.take()?;
-                    Some(result.map(WebOutcome::Saved))
-                }
-            }
+    impl FileTask {
+        /// The result exactly once; `None` while the task is still running.
+        pub fn poll(&mut self) -> Option<Result<FileOutcome, String>> {
+            let slot = match &mut self.kind {
+                SlotKind::Open(slot) | SlotKind::Save(slot) | SlotKind::Folder(slot) => slot,
+            };
+            let mut guard = slot.lock().ok()?;
+            guard.take()
         }
     }
 
-    pub fn open_image(ctx: &egui::Context) -> WebTask {
+    pub fn open_image(ctx: &egui::Context) -> FileTask {
         let slot = Arc::new(Mutex::new(None));
         let task_slot = Arc::clone(&slot);
         let ctx = ctx.clone();
@@ -381,22 +485,25 @@ mod web {
             }
             .await;
             if let Ok(mut guard) = task_slot.lock() {
-                *guard = Some(result);
+                *guard = Some(result.map(FileOutcome::Opened));
             }
             ctx.request_repaint();
         });
-        WebTask {
-            kind: WebTaskKind::Open(slot),
+        FileTask {
+            kind: SlotKind::Open(slot),
         }
     }
 
     /// Web stub of the dialog's folder row [`super::FOLDER_PICKING_SUPPORTED`]
     /// hides: the browser owns where a download lands, so there is nothing
     /// to pick. Present so the SHARED dialog code compiles unchanged — the
-    /// row's Browse… click calls this and answers `None` (unreachable: the
-    /// row is hidden first).
-    pub fn pick_save_folder(_start: Option<&Path>) -> Option<PathBuf> {
-        None
+    /// row's Browse… click never fires on web, and the stub is an
+    /// already-resolved "no folder" task.
+    pub fn pick_save_folder(_ctx: &egui::Context, _start: Option<&Path>) -> FileTask {
+        let slot = Arc::new(Mutex::new(Some(Ok(FileOutcome::Folder(None)))));
+        FileTask {
+            kind: SlotKind::Folder(slot),
+        }
     }
 
     /// The dialog's save (owner request 2026-11-19): name/format/quality
@@ -414,7 +521,7 @@ mod web {
         pixmap: Pixmap,
         name: String,
         options: SaveOptions,
-    ) -> WebTask {
+    ) -> FileTask {
         let slot = Arc::new(Mutex::new(None));
         let task_slot = Arc::clone(&slot);
         let ctx = ctx.clone();
@@ -422,12 +529,12 @@ mod web {
             let result =
                 download_image(&name, &pixmap, options).map(|()| Some(SavedImage { name }));
             if let Ok(mut guard) = task_slot.lock() {
-                *guard = Some(result);
+                *guard = Some(result.map(FileOutcome::Saved));
             }
             ctx.request_repaint();
         });
-        WebTask {
-            kind: WebTaskKind::Save(slot),
+        FileTask {
+            kind: SlotKind::Save(slot),
         }
     }
 
@@ -493,7 +600,7 @@ pub use native::save_image_to;
 pub use native::{open_image, pick_save_folder, save_image_as};
 
 #[cfg(target_arch = "wasm32")]
-pub use web::{WebOutcome, WebTask, open_image, pick_save_folder, save_image_as};
+pub use web::{open_image, pick_save_folder, save_image_as};
 
 #[cfg(test)]
 mod tests;

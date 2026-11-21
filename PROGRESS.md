@@ -46,11 +46,14 @@
 
 | Extra: the five over-guard files split (owner 2026-11-21) | done — gates green, pure code motion | the owner ordered the splits for the five files past the ~500-line guard: tools.rs → tools/shapes.rs (241), tool_icons.rs → tool_icons/primitives.rs (180), tool_icons/draw.rs → draw/tools.rs (350) + draw/panels.rs (315), app/windows.rs → windows/settings_panel.rs (~460), app/preview.rs → preview/geometry.rs (63) + commit.rs (123) + overlay.rs (191) — every item moved verbatim by scripts/split_russet.py, roots re-export what bin code consumes, tests import from the owning module; selection.rs + app/selection.rs deferred by the owner, history_tree.rs stays owner-deferred; the post-split sizes: selection.rs 890 and app/selection.rs 647 are the ONLY remaining over-guard files (+ tools/tests.rs 503, report-only) |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the file-split
-round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
---all-targets (default + mcp), `cargo test --profile gates` 295 default /
-308 mcp green (+1 ignored; the counts UNCHANGED — the splits are pure code
-motion, every test passes at its new path), ALL GATES GREEN in 21 s.
+| Extra: the native dialogs stop freezing the window — F21, variant A (owner pick 2026-11-21) | done — gates + wasm check + driver green | File ▸ Open (with its decode) and the Save dialog's folder pick (Browse… AND the Save-click fallback) run on a WORKER THREAD — the portal round-trip + `pollster::block_on` left the UI thread, GNOME no longer dims the window ("Not Responding" gone); ONE shared `file_io::FileTask` slot (both platforms, the web `AsyncFileDialog` rides it too) polled per frame (`document::poll_file_task`); the single-dialog guard (Open…/Browse… gray, no second chooser stacks); the Save-click fallback continues by itself when its pick answers (`save_after_folder_pick`); no task in flight = zero machinery; +4 tests; V67 born |
+
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the F21
+async-dialog round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp), `cargo test --profile gates` 299
+default / 312 mcp green (+1 ignored; +4 new `file_io::tests::file_task`
+tests), ALL GATES GREEN in 21 s; the wasm `cargo check` green; the visual
+driver ALL SCENARIOS GREEN.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -66,9 +69,43 @@ motion, every test passes at its new path), ALL GATES GREEN in 21 s.
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the diameter-guides Feat entry (during
-> the selection-clip round's budget — the file rode over the ~200-line
-> budget; all in the archive).
+> PROGRESS-archive.md; the latest move: the Outline-placement icons entry
+> (during the F21 round's budget — the file rode past ~200 lines; three
+> entries + the new one stay in the Log, all in the archive).
+
+### 2026-11-21 — `Fix:` the native dialogs no longer freeze the window — F21, variant A (owner pick in chat)
+
+- **What:** the File ▸ Open picker (with its decode) and the Save dialog's
+  folder pick — the Browse… button AND the Save-click fallback — run on a
+  WORKER THREAD now: the blocking portal round-trip left the UI thread
+  (GNOME no longer dims the window / offers Force Quit), the window keeps
+  painting while a chooser is open, and the image decode no longer stalls
+  the frame. ONE shared slot `App::file_task: Option<file_io::FileTask>`
+  (BOTH platforms — the web `AsyncFileDialog` rides it too; `WebTask`/
+  `WebOutcome` folded into `FileTask`/`FileOutcome`) polled per frame
+  (`document::poll_file_task`). The slot doubles as the SINGLE-DIALOG
+  GUARD (owner's pick of the two options: "не открываем новое"): while a
+  chooser is open the Open… item and Browse… GRAY and a second request is
+  rejected; the Save-click fallback CONTINUES BY ITSELF when its pick
+  answers (`save_after_folder_pick` — the pre-F21 one-click save; a
+  cancelled pick keeps the dialog open). No task in flight = zero
+  machinery (one option check per frame, no threads/timers; a quit with a
+  chooser open just drops the detached worker; a worker that dies without
+  a verdict resolves the slot with an error instead of wedging it).
+- **Files:** `src/file_io.rs` (the `FileTask`/`FileOutcome` handle, the
+  spawn glue, the unified web slots), `src/app.rs` (the slot + the
+  unconditional poll call), `src/app/document.rs` (the routing + the
+  guards), `src/app/save_dialog.rs` (the grayed Browse…), `src/app/menu.rs`
+  (the grayed Open…), SPEC §3.7 + §3.10, AGENTS.md (the File-I/O fact),
+  +4 tests (`file_io/tests.rs::file_task`).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 299 default / 312
+  mcp); the wasm `cargo check` green; the visual driver ALL SCENARIOS
+  GREEN. V67 born (Windows + GNOME: no freeze, the guard, the
+  auto-continue, web unchanged).
+- **Owner-checks:** V67 born. Open: V67, V66, V46 (X11); parked: V30, V8.
+  Debts: F21 PAID (this task); F20, F18, F17, F16 stay open (the files
+  carry the full list).
+- **Commit title:** `Fix: the native file dialogs run on a worker thread — the portal pick and the image decode leave the UI loop (F21); one polled FileTask slot guards double dialogs and the Save fallback continues after its pick`
 
 ### 2026-11-21 — `Refactor:` the five over-guard files split under the 500-line guard — pure code motion (owner order in chat)
 
@@ -139,52 +176,3 @@ motion, every test passes at its new path), ALL GATES GREEN in 21 s.
   commits clipped; no selection = unchanged behavior). Open: V66, V65,
   V64, V63; parked: V30, V8. Debts open: F19, F18, F17, F16.
 - **Commit title:** `Feat: an active selection confines every painting tool to its region — the mask snapshots at gesture start, strokes/lines/shapes/text transfer only masked pixels, the MCP stroke obeys the same clip`
-
-### 2026-11-21 — `Fix:` the Outline-placement radios' icons read as the outline — thicker segments running past the icon's edge (owner request in chat)
-
-- **What:** the owner's redraw recipe for the Shape panel's three
-  OUTLINE-PLACEMENT icons (outside / centered / inside): the click dot
-  stays exactly as it was ("точечку оставить как есть"), the
-  horizontal/vertical segments become ~2.5× thicker (`OUTLINE_BAND_W` 2.6 →
-  6.5 — "в 2-3 раза толще") and each segment's FAR end now leaves the
-  24-pt icon space (`OUTLINE_BAND_LEN` 11 → 17; the bitmap crop = the
-  segment visibly IS the outline line continuing beyond the corner
-  window). The modes still differ ONLY by where the bands sit relative to
-  the dot.
-- **Files:** `src/app/tool_icons/draw.rs` (the two constants + the
-  composition doc), `src/app/tool_icons/tests/shape_panel.rs` (the probe
-  strips/box recomputed for the new band edges), SPEC §3.2 (the placement
-  icons' sentence).
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
-  295 mcp); the visual driver ALL SCENARIOS GREEN; the icons LOOKED AT on
-  the dump (`--ignored icons_dump`) at 256 px and at the real 24 px button
-  size — all three distinct, the bands run past the edge, the dot legible
-  on band, fill and background alike. No wasm check — no web-facing code
-  (the economy rule).
-- **Owner-checks:** V65 born (Windows + web: the three radios read as
-  outside / centered / inside at a glance; the dot untouched). Open: V65,
-  V64, V63, V62; parked: V30, V8. Debts open: F19, F18, F17, F16.
-- **Commit title:** `Fix: the Shape panel's Outline-placement radio icons — the segments ~2.5x thicker with their far ends running past the icon's edge so they read as the outline; the click dot untouched`
-
-### 2026-11-21 — `Fix:` the Tools window's button order — the Eyedropper ↔ Select, the Text ↔ Line (owner request in chat)
-
-- **What:** the owner's reorder: the grid's row 2 becomes Eraser +
-  Eyedropper (the color-picking pipette reads paint-adjacent), row 3
-  Select + Text, row 4 Shape + Line. One array (`TOOLS`) drives the grid,
-  the atlas and the icon lookup — the two swaps move the buttons without
-  touching anything else; the hotkeys and the tooltips travel with their
-  tools.
-- **Files:** `src/app/tool_icons.rs` (the `TOOLS` array + its doc), the new
-  `src/app/tool_icons/tests/order.rs` (+1 test pinning the layout), SPEC
-  §3.8 (the Select row's placement sentence).
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
-  295 mcp). The visual probe and the MCP driver were SKIPPED — the owner
-  waived them for this round ("простенькая задачка… визуально не
-  проверять и mcp не использовать"); the on-screen layout is pinned by the
-  order test (the grid fills row-major over `TOOLS`). No wasm check — no
-  web-facing code (the economy rule).
-- **Owner-checks:** V64 born (Windows + web: the grid reads
-  Eraser+Eyedropper, Select+Text, Shape+Line; every hotkey still matches
-  its button). Open: V64, V63, V62, V61; parked: V30, V8.
-  Debts open: F19, F18, F17, F16.
-- **Commit title:** `Fix: the Tools window's button order — the Eyedropper swapped with the Select, the Text with the Line (the TOOLS array drives the grid row-major; hotkeys and tooltips unchanged)`
