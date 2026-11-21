@@ -7,7 +7,9 @@
 //! The PURE Shape color rules (which wells a gesture uses, what the commit
 //! records) live in the child [`colors`]. Holding `Shift` during a Shape
 //! drag constrains it to a proportional square/circle (Paint.NET-style —
-//! owner request 2026-11-16), live, through the pure [`proportional_current`].
+//! owner request 2026-11-16), live, through the pure [`proportional_current`];
+//! the TESTING diameter-circle rule (owner request 2026-11-21) replaces that
+//! for the Ellipse kind through the pure [`diameter_rect`].
 
 mod colors;
 
@@ -36,7 +38,12 @@ pub(super) enum PreviewState {
     /// `outline_pos` carries the outline placement the shape commits with
     /// (owner request 2026-11-20; lines never outline, so they store the
     /// default) — stored like the colors, so a mid-drag panel switch
-    /// cannot change what the release commits.
+    /// cannot change what the release commits. `diameter` carries the
+    /// TESTING diameter-circle rule (owner request 2026-11-21) the same
+    /// way, refreshed live every frame like `current`: when set, the two
+    /// raw drag points are the committed circle's diameter endpoints, so
+    /// both the overlay and the commit draw the circle's bounding square
+    /// ([`diameter_rect`]) instead of the corner-to-corner rect.
     Drag {
         kind: DragKind,
         start: Pos2,
@@ -45,6 +52,7 @@ pub(super) enum PreviewState {
         fill: Option<Color32>,
         width: f32,
         outline_pos: ShapeOutline,
+        diameter: bool,
     },
     /// A curve-mode polyline: `points` are confirmed vertices, the rubber
     /// band follows the pointer; `mode` is remembered so that switching the
@@ -80,6 +88,21 @@ fn proportional_current(start: Pos2, current: Pos2) -> Pos2 {
     let dy = current.y - start.y;
     let side = dx.abs().max(dy.abs());
     pos2(start.x + side * dx.signum(), start.y + side * dy.signum())
+}
+
+/// The TESTING diameter-circle rule (owner request 2026-11-21): with the
+/// Ellipse kind and `Shift` held (the panel's feature checkbox on), the
+/// drag's two points do NOT corner the shape — they both lie ON the circle,
+/// and the segment between them is its DIAMETER: the center is the segment's
+/// midpoint and the radius is half its length. The returned rect is the
+/// circle's bounding square — the exact opposite corners
+/// [`crate::tools::rasterize_shape`] inscribes the ellipse into, so the
+/// committed boundary passes through both drag points. Pure — no egui
+/// state, no `App` — so the rule stays unit-testable.
+fn diameter_rect(start: Pos2, current: Pos2) -> Rect {
+    let center = Pos2::new((start.x + current.x) * 0.5, (start.y + current.y) * 0.5);
+    let radius = (current - start).length() * 0.5;
+    Rect::from_center_size(center, egui::Vec2::splat(radius * 2.0))
 }
 
 impl App {
@@ -162,6 +185,7 @@ impl App {
                                     fill: None,
                                     width,
                                     outline_pos: ShapeOutline::Center,
+                                    diameter: false,
                                 };
                                 // Blocks Space-pan while the drag is in
                                 // progress, same as a freehand stroke.
@@ -202,6 +226,7 @@ impl App {
                             fill,
                             width,
                             outline_pos: self.tools.shape_outline,
+                            diameter: false,
                         };
                         self.is_stroking = true;
                     }
@@ -221,6 +246,7 @@ impl App {
                         kind,
                         start,
                         current,
+                        diameter,
                         ..
                     } = &mut self.preview
                 {
@@ -229,11 +255,23 @@ impl App {
                     // pulled onto the dominant-axis square each frame. The
                     // constrained point is STORED, so both the overlay
                     // preview and the commit rasterize the same geometry.
-                    *current = if shift && matches!(kind, DragKind::Shape(_)) {
+                    // TESTING (owner request 2026-11-21): with the Ellipse
+                    // kind and the panel's diameter-circle checkbox on, the
+                    // Shift rule is the DIAMETER circle instead — `current`
+                    // stays the raw pointer position (both drag points are
+                    // the circle's diameter endpoints) and the flag marks
+                    // the geometry the overlay and the commit must convert.
+                    // The flag is refreshed live like the point, so the
+                    // release commits exactly what the preview showed.
+                    let diameter_now = shift
+                        && matches!(kind, DragKind::Shape(ShapeKind::Ellipse))
+                        && self.tools.shape_diameter_circle;
+                    *current = if shift && matches!(kind, DragKind::Shape(_)) && !diameter_now {
                         proportional_current(*start, pos)
                     } else {
                         pos
                     };
+                    *diameter = diameter_now;
                 }
                 if any_released {
                     let state = std::mem::take(&mut self.preview);
@@ -245,9 +283,19 @@ impl App {
                         fill,
                         width,
                         outline_pos,
+                        diameter,
                     } = state
                     {
-                        self.commit_drag(kind, start, current, outline, fill, width, outline_pos);
+                        self.commit_drag(
+                            kind,
+                            start,
+                            current,
+                            outline,
+                            fill,
+                            width,
+                            outline_pos,
+                            diameter,
+                        );
                     }
                     self.is_stroking = false;
                 }
@@ -314,6 +362,7 @@ impl App {
         fill: Option<Color32>,
         width: f32,
         outline_pos: ShapeOutline,
+        diameter: bool,
     ) {
         match kind {
             DragKind::Line => {
@@ -340,11 +389,21 @@ impl App {
                     ShapeKind::Rectangle => "Rectangle",
                     ShapeKind::Ellipse => "Ellipse",
                 };
+                // TESTING (owner request 2026-11-21): a diameter-circle
+                // gesture commits the circle's bounding SQUARE (the circle
+                // through both raw drag points), not the corner-to-corner
+                // rect — the same geometry the overlay previewed.
+                let (from, to) = if diameter {
+                    let rect = diameter_rect(start, current);
+                    (rect.min, rect.max)
+                } else {
+                    (start, current)
+                };
                 let dirty = rasterize_shape(
                     self.layers.active_mut().pixmap_mut(),
                     shape_kind,
-                    start,
-                    current,
+                    from,
+                    to,
                     width,
                     outline,
                     fill,
@@ -408,9 +467,18 @@ impl App {
                 fill,
                 width,
                 outline_pos,
+                diameter,
             } => {
-                let a = to_screen(*start);
-                let b = to_screen(*current);
+                // TESTING (owner request 2026-11-21): the diameter-circle
+                // gesture previews the COMMITTED bounding square — the
+                // circle through both raw drag points — not the raw
+                // corner-to-corner rect.
+                let (a, b) = if *diameter {
+                    let rect = diameter_rect(*start, *current);
+                    (to_screen(rect.min), to_screen(rect.max))
+                } else {
+                    (to_screen(*start), to_screen(*current))
+                };
                 let stroke = outline
                     .map(|c| {
                         let mut s = screen_stroke(*width);

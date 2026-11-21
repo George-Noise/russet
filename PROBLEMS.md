@@ -1,3 +1,25 @@
+### 2026-11-21 — raw-Xvfb key/modifier events silently dropped (no WM → no input focus); cost three probe iterations
+
+- Expected vs actual: the diameter-circle GUI probe's `xdotool keydown shift` +
+  drag should draw a Shift-constrained shape; every drag drew the UNCONSTRAINED
+  form (a flat 204×44 ellipse instead of a circle). Clicks and pointer moves
+  landed fine the whole time, so nothing looked broken from the outside.
+- How it showed up: only through measured pixels — the drawn ring was 208×48
+  where 208×208 was expected. No error, no log line; the screenshots even looked
+  plausible at a glance (a red ring WAS there).
+- Cost: ~3 probe iterations / ~10 minutes, plus one extra app relaunch to
+  isolate the rectangle-vs-ellipse confound.
+- Root cause + fix: raw Xvfb has no window manager → no window ever gets the
+  X input focus → winit drops key/modifier events entirely; mouse events still
+  work because X's initial focus is PointerRoot (they follow the pointer). One
+  `xdotool windowfocus <id>` per launch fixes it. The durable fact moved to
+  SANDBOX.md pitfall 11 in the same edit; the drag-probe template
+  (`gui_magnet_check.sh`) never hit this because its drags carry no modifier
+  keys.
+- Could improve: `scripts/sandbox_check.sh`'s GUI-lane verdict could probe the
+  `windowfocus` path alongside its xdotool row — a one-line addition, not done
+  now (this entry is bookkeeping, not a task).
+
 ### 2026-11-20 — visual_driver.py exits 0 SILENTLY against a non-MCP binary
 
 - Expected: the driver prints its per-scenario lines (or fails loudly when the binary cannot speak MCP).

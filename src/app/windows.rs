@@ -251,7 +251,11 @@ fn icon_button_state(
 /// Tools window's element gap apart ([`TOOL_GRID_GAP`] — "ровно такой же,
 /// как в окошке Tools"; the row is laid out by egui's `item_spacing.x`, so
 /// it is set here once and the three rows inherit it), and the rows sit
-/// further apart vertically ([`SHAPE_GROUP_GAP`] above).
+/// further apart vertically ([`SHAPE_GROUP_GAP`] above). While the
+/// diameter-circle feature is under test (owner request 2026-11-21) a FOURTH
+/// group — a plain checkbox — closes the panel, shown for the ELLIPSE kind
+/// only: the rectangle's Shift rule is untouched, so the toggle must not
+/// tempt anyone into reading it through the rectangle.
 ///
 /// Extracted as a free fn over [`ToolState`] so the regression tests run
 /// the exact UI the app runs (headless; the atlas is optional — the buttons
@@ -325,6 +329,22 @@ fn shape_settings_ui(ui: &mut egui::Ui, tools: &mut ToolState, icons: &Option<to
             }
         }
     });
+    // TESTING FEATURE (owner request 2026-11-21): the diameter-circle
+    // toggle, bound straight to the tool state the gesture reads live — a
+    // flip applies to the very next frame's geometry, mid-drag included.
+    // ELLIPSE KIND ONLY (the owner: "чтобы никто случайно не пытался её
+    // понять через прямоугольник"): with the Rectangle kind selected the
+    // row does not exist at all — not a disabled checkbox, the same
+    // no-dead-controls rule the Size slider follows.
+    if tools.shape_kind == ShapeKind::Ellipse {
+        ui.add_space(SHAPE_GROUP_GAP);
+        ui.checkbox(&mut tools.shape_diameter_circle, "Diameter circle (Shift)")
+            .on_hover_text(
+                "Under test: Shift-drag makes the press and release points the endpoints \
+                 of the circle's diameter (the center is the segment's midpoint). \
+                 Unchecked = the old proportional circle growing from the corner.",
+            );
+    }
 }
 
 /// The Line tool's settings panel (owner request 2026-11-20: the word

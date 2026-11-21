@@ -1,5 +1,31 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Fix:` the V58 pass — the move-drag ghost, the dead Ctrl+C/X/V combos, the lasso blot — owner bug report
+
+- **What:** the owner's V58 findings: (1) dragging a selection PRINTED A
+  GHOST every frame — `redraw_moved` restored only the ORIGIN rect, so the
+  previous frame's stamp survived; the restore now covers origin ∪ last
+  frame ∪ new position (the full-layer backup covers all three) + a
+  regression test (two redraws — the intermediate stamp must vanish);
+  (2) Ctrl+C/X/V did NOTHING — egui-winit's `clipboard_shortcuts` (ON by
+  default) converts the combos into DEDICATED `Event::Copy/Cut/Paste` and
+  swallows the Key events, so `consume_key` could never match (issue
+  #3653; the conversion matches the PHYSICAL keys — the combos now also
+  work on non-Latin layouts); the handler consumes the dedicated events
+  (the wants-keyboard guard keeps a focused Text-tool field its OS-text
+  semantics) + 2 headless tests (the events drive the ops; a bare Key
+  event does NOT); (3) the lasso icon read as a CIRCLE — redrawn as an
+  irregular round blot (six anchors with varying radii, C1-smoothed
+  through the midpoints, the same dashes).
+- **Files:** `app/input.rs` (+ tests), `app/selection.rs` (+ tests),
+  `app/tool_icons/draw.rs`, SPEC §3.9 (the combo-mechanism row).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp). No wasm check —
+  no web-facing code (the economy rule).
+- **Owner-checks:** V59 born (Windows + web: a clean drag-move, working
+  combos, the blot mark). Open: V59, V58, V57, V56; parked: V30, V8.
+  Debts open: F18, F17, F16, F15.
+- **Commit title:** `Fix: the move drag leaves no per-frame ghosts (the restore covers the last stamp), Ctrl+C/X/V consume egui-winit's dedicated Copy/Cut/Paste events (consume_key never sees the combos), the lasso icon is an irregular blot`
+
 ### 2026-11-20 — `Docs:` PROBLEMS.md — the write-only agent-friction log — owner request
 
 - **What:** the owner asked for a file where EVERY problem the LLM agent runs

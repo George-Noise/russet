@@ -4,12 +4,14 @@
 //! Fill/Outline gating (owner request 2026-11-10; the two checkboxes became
 //! the THREE-way paint radio 2026-11-20), the recorded-color mapping
 //! ([`super::shape_record_colors`] — owner request 2026-11-16: a two-color
-//! gesture carries BOTH colors on its history node), and the
+//! gesture carries BOTH colors on its history node), the
 //! Shift-proportional drag rule ([`super::proportional_current`] — owner
-//! request 2026-11-16, Paint.NET style).
+//! request 2026-11-16, Paint.NET style), and the TESTING Shift diameter-circle
+//! rule for the Ellipse kind ([`super::diameter_rect`] — owner request
+//! 2026-11-21).
 
 use super::*;
-use crate::tools::ShapePaint;
+use crate::tools::{ShapeKind, ShapeOutline, ShapePaint, rasterize_shape};
 
 /// The EXACT well-decoding the gesture start runs (preview.rs): the radio's
 /// `outlines()`/`fills()` halves feed [`shape_gesture_wells`], so each of
@@ -182,5 +184,106 @@ fn shift_does_not_move_the_anchor_corner() {
         pulled.y - start.y,
         100.0,
         "the side equals the dominant delta on both axes"
+    );
+}
+
+// --- the TESTING Shift diameter-circle rule (owner request 2026-11-21) ---
+
+#[test]
+fn the_diameter_circle_centers_on_the_drag_segment_midpoint() {
+    let rect = diameter_rect(pos2(40.0, 30.0), pos2(60.0, 50.0));
+
+    assert_eq!(
+        rect.center(),
+        pos2(50.0, 40.0),
+        "the circle's center is the segment between the two points' midpoint"
+    );
+    assert_eq!(
+        rect.width(),
+        rect.height(),
+        "the bounding square of a circle: the side is the diameter"
+    );
+    assert_eq!(
+        rect.width(),
+        (pos2(60.0, 50.0) - pos2(40.0, 30.0)).length(),
+        "the square's side equals the drag segment — its diameter"
+    );
+}
+
+#[test]
+fn both_drag_points_lie_on_the_diameter_circle_boundary() {
+    let start = pos2(40.0, 30.0);
+    let current = pos2(60.0, 50.0);
+    let rect = diameter_rect(start, current);
+    let radius = (current - start).length() * 0.5;
+
+    let off_boundary = |p: Pos2| ((p - rect.center()).length() - radius).abs();
+    assert!(
+        off_boundary(start) < 0.001,
+        "the press point is on the circle"
+    );
+    assert!(
+        off_boundary(current) < 0.001,
+        "the release point is on the circle too"
+    );
+}
+
+#[test]
+fn a_zero_length_diameter_drag_stays_degenerate() {
+    let rect = diameter_rect(pos2(12.0, 34.0), pos2(12.0, 34.0));
+
+    assert_eq!(rect.width(), 0.0);
+    assert_eq!(
+        rect.height(),
+        0.0,
+        "a click without movement still draws nothing, Shift or not"
+    );
+}
+
+#[test]
+fn the_committed_diameter_circle_passes_through_both_drag_points() {
+    // The exact geometry the commit rasterizes (commit_drag): the bounding
+    // square of `diameter_rect`, outline-only in the Center placement — the
+    // band straddles the boundary, so both drag points (boundary points)
+    // must be painted, while the segment's midpoint (the CENTER) stays
+    // unpainted with the outline-only paint.
+    let start = pos2(40.0, 30.0);
+    let current = pos2(60.0, 50.0);
+    let rect = diameter_rect(start, current);
+    let mut pixmap = tiny_skia::Pixmap::new(100, 100).expect("100x100 pixmap");
+    rasterize_shape(
+        &mut pixmap,
+        ShapeKind::Ellipse,
+        rect.min,
+        rect.max,
+        2.0,
+        Some(Color32::BLACK),
+        None,
+        ShapeOutline::Center,
+    );
+
+    assert!(
+        pixmap
+            .pixel(40, 30)
+            .expect("the press point is in bounds")
+            .alpha()
+            > 0,
+        "the press point lies on the committed circle"
+    );
+    assert!(
+        pixmap
+            .pixel(60, 50)
+            .expect("the release point is in bounds")
+            .alpha()
+            > 0,
+        "the release point lies on the committed circle"
+    );
+    assert_eq!(
+        pixmap
+            .pixel(50, 40)
+            .expect("the midpoint is in bounds")
+            .alpha(),
+        0,
+        "the drag segment's midpoint is the circle's CENTER — no paint there"
     );
 }

@@ -120,6 +120,15 @@ pkill -x Xvfb
     stdin itself (`exec </dev/null`) — the gate needs no redirect anymore. A BARE
     `cargo test --features mcp` outside the gate still needs the manual pipe
     (`< /dev/null`): the reader sees an immediate EOF and everything exits in seconds.
+11. KEY and MODIFIER events never reach the app under a raw Xvfb (found 2026-11-21,
+    the diameter-circle probe: three Shift drags all drew UNCONSTRAINED shapes while
+    every click and pointer move landed fine): raw Xvfb has no window manager, so no
+    window is ever given the X input focus — winit drops the key events entirely.
+    MOUSE events still work because X's initial focus is PointerRoot (they follow the
+    pointer). Fix: focus the window explicitly once per launch —
+    `WID=$(xdotool search --name Russet | head -1); xdotool windowfocus $WID` — then
+    `xdotool keydown shift` + drags behave like real input (the drag-probe template's
+    `gui_magnet_check.sh` never hit this because its drags carry no modifier keys).
 
 ## What this unlocked, and what still belongs to the owner
 

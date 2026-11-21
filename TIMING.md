@@ -23,24 +23,21 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-21 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets --features mcp` + `cargo test --profile gates --features mcp --no-run`): the whole lane COLD on the fresh GitHub clone — rustup + the pinned 1.99.1 toolchain installed first | **≈ 3 min total (clippy 1m 30s)** | the warm-up log's timestamps (started 07:29:25, finished 07:32:21) |
+| 2026-11-21 | `cargo check` (this round's quick loop — COLD dev-lane dep graph on the fresh clone) | **1m 20s** | cargo's print |
+| 2026-11-21 | targeted `cargo test app::preview --profile gates` + `cargo test app::windows::tests::settings_panel --profile gates` (the first compiled the COLD gates test graph, the second ran hot) | **≈ 2–3 min total** | the tool-call wall clock ≈ (not time'd) |
 | 2026-11-20 | targeted `cargo test app::windows --profile gates` (the panel-spacing round: the gates test graph COLD in the fresh sandbox — first compile died on a fmt-broken signature, the hot re-run was instant) | **1m 59s** | time'd exactly |
 | 2026-11-20 | `cargo check` (this round's quick loop — COLD dep graph on the fresh clone; rustup + the pinned toolchain installed first) | **1m 25s** | time'd exactly |
-| 2026-11-20 | bare `cargo test --profile gates --features mcp` AGAIN (trap 10 recidive No. 2: no stdin shield → the MCP stdin-reader teardown hung; two 300 s tool timeouts died mid-run) AND the mcp-feature switch rebuilt the gates dep graph (~4 min); with the shield (`> /tmp/log`, no pipe) and the cache the suite ran in 4 s | **≈ 10 min wasted across 2 retries; 4 s final** | the tool timeouts + the log |
-| 2026-11-20 | bare `cargo test --profile gates --features mcp` (no `< /dev/null` shield) — SANDBOX.md trap 10 recidive in the recycled sandbox: tests themselves green, the cargo↔test-binary teardown hung on the MCP stdin reader until the 600 s tool timeout killed it | **600 s (timeout)** | the tool timeout |
-| 2026-11-20 | `cargo check` (this round's quick loop — COLD dep graph on the dev lane, fresh sandbox: rustup + the pinned toolchain installed first) | **1m 23s** | time'd exactly |
 
 ## Hot
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-21 | `bash scripts/verify.sh` (the diameter-circle round's full gate — the gates lane warm from the detached warm-up) | **19.7 s** | time'd exactly |
+| 2026-11-21 | NOTE: THIS recycled sandbox KEPT the detached warm-up alive across tool calls (started in one call, finished ~3 min later, verified hot by the next call's targeted tests) — the 2026-11-20 NOTE below is per-sandbox; re-probe detached survival each session | — | the warm-up log |
 | 2026-11-20 | `bash scripts/verify.sh` (the V60-fixes round's full gate — rules + fmt + clippy ×2 + test ×2; warm deps) | **20 s** | the gate's own print |
 | 2026-11-20 | `bash scripts/verify.sh` (the V59-fixes round's full gate — rules + fmt + clippy ×2 + test ×2; warm deps) | **21 s** | the gate's own print |
 | 2026-11-20 | `cargo build --features mcp` (the dev MCP binary for the driver; warm deps) | **2 s** | cargo's print |
-| 2026-11-20 | `cargo test --profile gates` (the V59-fixes round's suite; warm deps, the crate recompile per iteration) | **≈ 5 s** × 6 runs | the gate's own print |
-| 2026-11-20 | `bash scripts/verify.sh` (the panel-spacing round's gate; the dev `cargo build` for the GUI probe ran just before — 1m 43s, the dev-lane codegen cold from a check-only session) | **73 s** | the gate's own print |
-| 2026-11-20 | `cargo build` (the dev GUI-probe binary; check-artifacts existed but codegen was cold) | **1m 43s** | cargo's print |
-| 2026-11-20 | `cargo build` (the dev GUI-probe binary; deps hot from this round's cargo check) | **1m 40s** | cargo's print |
-| 2026-11-20 | `bash scripts/verify.sh` (this round's gate — the gates dep graph warm from a first run that the sandbox killed mid-compile) | **12 s** | the gate's own print |
 | 2026-11-20 | NOTE: DETACHED `setsid` background processes do NOT survive between tool calls in THIS recycled sandbox — both the gates warm-up and a detached verify.sh died silently between commands; heavy commands must run SYNCHRONOUSLY here (the compiled fingerprints persist, so the sync re-run is hot) | — | observed twice |
 
 ## Reading the numbers

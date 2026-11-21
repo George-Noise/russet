@@ -141,6 +141,15 @@ pub struct ToolState {
     /// points (owner request 2026-11-20): outside / straddling (default) /
     /// inside — the panel's second three-way radio.
     pub shape_outline: ShapeOutline,
+    /// TESTING FEATURE (owner request 2026-11-21): with the Ellipse kind
+    /// selected, a `Shift` drag no longer pulls the free corner onto the
+    /// proportional circle from the anchor corner — the press and release
+    /// points lie ON the circle and the segment between them is its
+    /// DIAMETER (the center is the segment's midpoint). The magnetized
+    /// panel's checkbox toggles it (shown for the Ellipse kind only — the
+    /// rectangle's Shift rule is untouched, so the toggle must not tempt
+    /// anyone there); ON while the feature is under test.
+    pub shape_diameter_circle: bool,
     /// Which kind of region the Select tool drags (owner request
     /// 2026-11-20): rectangle (the default) or lasso. The Tools button
     /// cycles it; the magnetized panel's mode row sets it explicitly.
@@ -160,6 +169,7 @@ impl ToolState {
             shape_kind: ShapeKind::Rectangle,
             shape_paint: ShapePaint::Outline,
             shape_outline: ShapeOutline::Center,
+            shape_diameter_circle: true,
             select_mode: SelectMode::Rect,
             font_size: 24.0,
         }

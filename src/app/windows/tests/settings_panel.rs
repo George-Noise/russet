@@ -10,7 +10,7 @@ use super::super::{
     line_settings_ui, settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size,
 };
 use super::common::{SCREEN, show_once, show_tools_once};
-use crate::tools::{LineMode, ShapeOutline, ShapePaint, Tool};
+use crate::tools::{LineMode, ShapeKind, ShapeOutline, ShapePaint, Tool};
 use eframe::egui::{self, Pos2, Rect};
 
 /// Owner request 2026-11-19: while the Tools window is COLLAPSED to its
@@ -326,6 +326,70 @@ fn the_line_mode_radio_starts_straight_and_stays_single() {
         tools.line_mode = pick; // the exact assignment the click runs
         assert_eq!(tools.line_mode, pick);
     }
+}
+
+/// The TESTING diameter-circle checkbox (owner request 2026-11-21): the
+/// Shape panel shows it ONLY for the Ellipse kind — the rectangle's Shift
+/// rule is untouched, so the toggle must not tempt anyone into reading it
+/// through the rectangle. No dead controls: with the Rectangle kind the
+/// row does not exist at all (the Size-slider rule), and the startup state
+/// is ON while the feature is under test.
+#[test]
+fn the_diameter_circle_checkbox_shows_only_for_the_ellipse_kind() {
+    fn painted_texts(kind: ShapeKind) -> Vec<String> {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+            ..egui::RawInput::default()
+        };
+        let mut texts: Vec<String> = Vec::new();
+        fn collect_texts(shape: &egui::Shape, out: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(text) => out.push(text.galley.job.text.clone()),
+                egui::Shape::Vec(children) => {
+                    children.iter().for_each(|c| collect_texts(c, out));
+                }
+                _ => {}
+            }
+        }
+        // Three passes: egui paints real shapes from the second pass on and
+        // settles fresh-area geometry on the frame after the first layout —
+        // the LAST pass is read.
+        for _ in 0..3 {
+            let mut output = ctx.run_pass(input.clone(), |ctx| {
+                let mut tools = crate::tools::ToolState::new();
+                tools.shape_kind = kind;
+                egui::Area::new(egui::Id::unique("diameter_checkbox_probe"))
+                    .fixed_pos(Pos2::ZERO)
+                    .show(ctx, |ui| {
+                        shape_settings_ui(ui, &mut tools, &None);
+                    });
+            });
+            output.textures_delta.clear();
+            texts.clear();
+            for clipped in &output.shapes {
+                collect_texts(&clipped.shape, &mut texts);
+            }
+        }
+        texts
+    }
+
+    let tools = crate::tools::ToolState::new();
+    assert!(
+        tools.shape_diameter_circle,
+        "the feature starts ON while under test"
+    );
+
+    let ellipse = painted_texts(ShapeKind::Ellipse);
+    assert!(
+        ellipse.iter().any(|t| t.contains("Diameter circle")),
+        "the checkbox shows for the Ellipse kind: {ellipse:?}"
+    );
+    let rectangle = painted_texts(ShapeKind::Rectangle);
+    assert!(
+        rectangle.iter().all(|t| !t.contains("Diameter circle")),
+        "no diameter checkbox through the rectangle: {rectangle:?}"
+    );
 }
 
 /// The Line panel's ONE icon row renders COMPACT headless — the exact
