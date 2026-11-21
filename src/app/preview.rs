@@ -105,6 +105,27 @@ fn diameter_rect(start: Pos2, current: Pos2) -> Rect {
     Rect::from_center_size(center, egui::Vec2::splat(radius * 2.0))
 }
 
+/// The TESTING diameter-circle guides (owner request 2026-11-21): while a
+/// diameter gesture is live, the overlay draws WHAT IS MEASURED on top of
+/// the shape — a thin DASHED chord between the two drag points and a small
+/// dot at the segment's midpoint (the circle's center; the white-core +
+/// dark-ring marker style of the polyline's vertex handles, visible on any
+/// canvas color) — so the rule reads while dragging. Overlay-only: the
+/// commit rasterizes just the ellipse, the guides die with the gesture.
+/// Screen-space (the overlay's coordinate system); pure — no egui state, no
+/// `App` — so the geometry stays unit-testable.
+fn diameter_guides(a: Pos2, b: Pos2, color: Color32) -> Vec<Shape> {
+    let mut shapes = Shape::dashed_line(&[a, b], Stroke::new(1.0, color), 4.0, 3.0);
+    let center = Pos2::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+    shapes.push(Shape::circle_filled(center, 2.5, Color32::WHITE));
+    shapes.push(Shape::circle_stroke(
+        center,
+        2.5,
+        Stroke::new(1.0, Color32::from_black_alpha(180)),
+    ));
+    shapes
+}
+
 impl App {
     /// Press/drag/release and click handling for the Line and Shape tools.
     pub(super) fn handle_preview_input(
@@ -562,6 +583,20 @@ impl App {
                             }
                         }
                     }
+                }
+                // TESTING (owner request 2026-11-21): while the diameter
+                // rule shapes the gesture, the overlay also draws WHAT IS
+                // MEASURED — the dashed chord between the two raw drag
+                // points and the center dot at the segment's midpoint —
+                // on top of the shape (only diameter gestures ever carry
+                // the flag, so Line never draws guides).
+                if *diameter {
+                    let guide_color = outline.unwrap_or(fill.unwrap_or(Color32::GRAY));
+                    painter.extend(diameter_guides(
+                        to_screen(*start),
+                        to_screen(*current),
+                        guide_color,
+                    ));
                 }
             }
             PreviewState::Polyline {

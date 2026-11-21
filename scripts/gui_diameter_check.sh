@@ -18,7 +18,11 @@
 #     (the CENTER) stays unpainted (the default outline-only paint),
 #   - checkbox OFF (one click): the same drag draws the OLD corner-anchored
 #     proportional circle — the center leaves the midpoint and drops to the
-#     anchor diagonal, the press point (the bbox corner) leaves the ring.
+#     anchor diagonal, the press point (the bbox corner) leaves the ring,
+#   - MID-DRAG screenshots: with the checkbox ON the live overlay shows the
+#     measurement guides — dashed chord dashes along the drag segment and
+#     the center dot's dark ring at the segment's midpoint; with the box
+#     OFF no chord red and no dot leak at the same-kind samples.
 # The panel-level rules (the checkbox exists ONLY for the Ellipse kind, the
 # startup state is ON) are pinned by the headless unit tests
 # (`app/windows/tests/settings_panel.rs`) — this probe is the end-to-end
@@ -154,7 +158,9 @@ DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove $ELLIPSE_XY click 1
 sleep 1
 shot 2_ellipse_kind_selected
 
-drag() { # drag <x1> <y1> <x2> <y2> — Shift held across the whole gesture
+drag() { # drag <x1> <y1> <x2> <y2> [midshot-name] — Shift held across the
+  # whole gesture; with a 5th arg a screenshot is taken MID-DRAG (the live
+  # preview + the measurement guides are on screen, the commit is not).
   DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove "$1" "$2"
   sleep 0.3
   DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" keydown shift
@@ -163,6 +169,7 @@ drag() { # drag <x1> <y1> <x2> <y2> — Shift held across the whole gesture
   sleep 0.3
   DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove "$3" "$4"
   sleep 0.5
+  [ -n "${5:-}" ] && shot "$5"
   DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mouseup 1
   sleep 0.3
   DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" keyup shift
@@ -173,17 +180,19 @@ drag() { # drag <x1> <y1> <x2> <y2> — Shift held across the whole gesture
 }
 
 # The feature starts ON (the testing default): the drag
-# (500,300)->(700,340) must draw the diameter circle.
-drag 500 300 700 340
+# (500,300)->(700,340) must draw the diameter circle, and MID-DRAG the
+# measurement guides — the dashed chord between the two points and the
+# center dot at the segment's midpoint.
+drag 500 300 700 340 5_guides_mid_drag_on
 shot 3_diameter_circle_on
 
 # One checkbox click turns the feature OFF: the same-kind drag must draw
-# the OLD corner-anchored proportional circle. The second drag runs in its
-# OWN clean canvas region (disjoint from the first circle, so the pixel
-# diff isolates it fully).
+# the OLD corner-anchored proportional circle — and NO guides MID-DRAG.
+# The second drag runs in its OWN clean canvas region (disjoint from the
+# first circle, so the pixel diff isolates it fully).
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove $CB_XY click 1
 sleep 1
-drag 400 450 600 490
+drag 400 450 600 490 6_guides_mid_drag_off
 shot 4_diameter_circle_off
 
 pkill -x russet
@@ -274,6 +283,48 @@ appeared = sum(
 print(f"   checkbox icon: {appeared} new bright pixels at ({cbx},{cby})")
 if appeared < 25:
     fail(f"the checkbox icon did not appear at ({cbx},{cby}) after the Ellipse click")
+
+def red_near(path, x, y, r):
+    return near(red_set(path), x, y, r)
+
+def dark_near(path, x, y, r, thresh=140):
+    """Dark pixels in a window (the center dot's dark ring; red converts to
+    ~76 gray in L, so chord dashes count as dark too — only used where the
+    chord's presence/absence is checked separately)."""
+    im = Image.open(path).convert("L")
+    px = im.load()
+    return sum(
+        1
+        for xx in range(x - r, x + r + 1)
+        for yy in range(y - r, y + r + 1)
+        if 0 <= xx < im.size[0] and 0 <= yy < im.size[1]
+        and px[xx, yy] < thresh
+    )
+
+# --- screenshot 5: MID-DRAG with the checkbox ON — the measurement guides ---
+# The live overlay shows the dashed chord (red dashes along the drag
+# segment; the two samples sit at t=0.25 / t=0.75 of A->B, deep inside the
+# live circle, ~50 px off its ring) and the center dot's dark ring at the
+# segment's midpoint.
+for sx, sy in [(550, 310), (650, 330)]:
+    if not red_near(f"{out}/5_guides_mid_drag_on.png", sx, sy, 4):
+        fail(f"no chord dash near ({sx},{sy}) mid-drag with the feature ON")
+dark5 = dark_near(f"{out}/5_guides_mid_drag_on.png", int(M[0]), int(M[1]), 4)
+if dark5 < 6:
+    fail(f"no center-dot ring at the midpoint {M}: {dark5} dark pixels")
+print(f"   ON guides: chord dashes at both samples, dot ring {dark5} dark px at {M}")
+
+# --- screenshot 6: MID-DRAG with the checkbox OFF — no guides ---
+# The second drag ran A2=(400,450)->B2=(600,490); its chord samples sit at
+# t=0.5 / t=0.7 of A2->B2, ~20 px inside the live proportional ring's band —
+# with the feature OFF there must be NO chord red and NO center dot there.
+for sx, sy in [(500, 470), (540, 478)]:
+    if red_near(f"{out}/6_guides_mid_drag_off.png", sx, sy, 4):
+        fail(f"red near ({sx},{sy}) mid-drag with the feature OFF — a chord leaked")
+dark6 = dark_near(f"{out}/6_guides_mid_drag_off.png", 500, 470, 4)
+if dark6 != 0:
+    fail(f"dark pixels near (500,470) mid-drag with the feature OFF — a center dot leaked")
+print("   OFF guides: no chord dashes, no center dot at the samples")
 
 # --- screenshot 3: checkbox ON — the diameter circle ---
 bbox, pts = ring(f"{out}/1_shape_panel_rect_kind.png", f"{out}/3_diameter_circle_on.png")

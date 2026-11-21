@@ -1,5 +1,41 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Fix:` the V59 pass — clipboard_shortcuts OFF, the overlay move drag, the pan-on-Ctrl+S guard, the real blot — owner bug report
+
+- **What:** the owner's V59 findings: (1) the egui-winit `clipboard_shortcuts`
+  conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`,
+  owner: "я не согласен с разработчиками этой библиотеки") — Ctrl+C/X/V now
+  arrive as plain Key events and `consume_key` sees them again; the dedicated
+  `Event::Copy/Cut/Paste` stay consumed as the WEB fallback (the browser's
+  copy/cut/paste DOM events are the only channel there) with a one-op guard
+  (a web frame can carry the same gesture twice — 2 tests); (2) Ctrl+S /
+  Ctrl+Shift+S also PANNED on S (the pan reads `key_down` — the pressed
+  state — and the save's consume_key does not lift it): an accelerator
+  modifier (Ctrl/⌘/Alt) now suppresses the W/A/S/D pan, Shift stays allowed
+  (+ test); (3) the move drag REDESIGNED (owner: "отдельным элементом от
+  холста... видно за границами холста... при отпускании"): the layer is
+  written exactly TWICE — the erase at the lift, the stamp at the release —
+  the drag rides a FOREGROUND overlay (the floating pixels as a GPU texture
+  + the ants, whole-viewport clip, visible past the canvas bounds; the old
+  per-frame restore/erase/stamp painted unclear artifacts) (+ 3 tests: the
+  no-write-until-release, the live overlay texture, the past-the-bounds
+  geometry); (4) the lasso icon is now a real blot: five lobes (9.3–7.2)
+  interleaved with five deep waists (5.0–6.2), picked from rendered
+  candidates (the second take read as an upside-down pear).
+- **Files:** `main.rs`, `app/input.rs` (+ tests), `app/camera.rs` (+ tests),
+  `app/selection.rs` (+ tests), `app/tool_icons/draw.rs`, SPEC §3.9 (the
+  combo row + the pan row) and §3.13 (the move row).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp); the visual driver
+  + the select probe PASS; the blot verified on the cropped screenshot. No
+  wasm check — no web-facing code (the economy rule).
+- **Owner-checks:** V60 born (Windows + web: the combos fire ONCE and pan
+  does not run on Ctrl+S; a clean overlay drag visible past the canvas; the
+  blot reads as a blot). Open: V60, V59, V58, V57; parked: V30, V8.
+  Debts open: F18, F17, F16, F15. NOTE: `app/selection.rs` (611) and
+  `app/tool_icons/draw.rs` (798) grew past the 500-guard — the standing
+  split proposal, at task end as the rules ask.
+- **Commit title:** `Fix: clipboard_shortcuts off (the combos arrive as Key events), the move drag rides a foreground overlay (no canvas writes until release), Ctrl+S no longer pans, the lasso icon is a five-lobe blot`
+
 ### 2026-11-20 — `Fix:` the V58 pass — the move-drag ghost, the dead Ctrl+C/X/V combos, the lasso blot — owner bug report
 
 - **What:** the owner's V58 findings: (1) dragging a selection PRINTED A

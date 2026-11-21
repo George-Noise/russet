@@ -39,17 +39,17 @@
 | Extra: the V59 fixes — clipboard_shortcuts OFF, the overlay move, the pan guard, the real blot (owner 2026-11-20) | done — gates + driver + probes green | (1) the egui-winit conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`, owner: "я не согласен с разработчиками") — Ctrl+C/X/V arrive as plain Key events (logical-or-physical `key`, so non-Latin layouts still work); the dedicated events stay consumed as the WEB fallback (the browser's DOM copy/cut/paste — not flag-controlled) with a one-op-per-frame twin guard + 2 tests; (2) Ctrl+S / Ctrl+Shift+S no longer PAN on S: an accelerator modifier (Ctrl/⌘/Alt) suppresses the W/A/S/D pan (Shift stays allowed) + a test; (3) the move drag is an OVERLAY ELEMENT: the layer is written exactly TWICE (the erase at the lift, the stamp at the release), the drag rides a Foreground painter (the floating texture + the ants, whole-viewport clip, visible past the canvas bounds) + 3 tests (no-write-until-release, the live texture, the past-the-bounds geometry); (4) the lasso icon = five lobes + five deep waists, picked from rendered candidates (the pear is gone) |
 | Extra: the V60 fixes — the off-canvas move clip + the AccessKit audit (owner 2026-11-20) | done — gates + driver + probes green | (1) a move that lands PARTIALLY off-canvas now CLIPS the selection to the canvas (`Selection::clip_to_canvas`: rects intersect, lassos Sutherland–Hodgman-clipped, fully-outside regions drop, an empty result deselects) — the op list was the only unclamped thing (the views always clamped), so the next move used to heal the full shape over destroyed pixels + 5 tests (the domain clip ×3, the owner's back-to-the-center scenario, the fully-off deselect); (2) the AccessKit/trim audit measured and parked (F19: accesskit ≈310/761 dep edges ~40%, the one-line disable switch, what breaks = only screen readers; system_fonts ≈126 edges ~16%; clipboard/wayland/x11/default_fonts stay) — NOTHING changed per the owner's "пока думаем" |
 | Extra: the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner 2026-11-21) | done — gates + driver + GUI probe green | with the Ellipse kind a Shift drag makes the two drag points the endpoints of the circle's DIAMETER (center = the segment's midpoint, the pure `app/preview.rs::diameter_rect`) instead of the corner-anchored proportional circle; behind the Shape panel's FOURTH group — the plain "Diameter circle (Shift)" checkbox, startup ON, shown ONLY for the Ellipse kind (the rectangle's row does not exist — no dead controls); the flag rides the gesture refreshed live (a mid-drag Shift/checkbox flip re-shapes the next frame's preview); the rectangle's Shift rule and the plain Shift-less ellipse untouched; +6 tests; the new probe `scripts/gui_diameter_check.sh` PROBE PASS (ON: ring center = the drag midpoint, both points on the ring, the center unpainted; OFF: the old square; the checkbox appears only after the Ellipse click); SANDBOX.md pitfall 11 (raw-Xvfb key events need `xdotool windowfocus` — no WM → no input focus); V62 born |
+| Extra: the diameter drag's measurement guides (owner picked idea #3, 2026-11-21) | done — gates + driver + GUI probe green | while a diameter gesture is LIVE the overlay draws WHAT IS MEASURED on top of the shape: a thin DASHED chord between the two drag points (the gesture's outline color, dashes 4 / gaps 3) and a small white dot with a dark ring at the segment's midpoint (the center; the polyline vertex-handle marker style — visible on any canvas color); the pure `app/preview.rs::diameter_guides`, drawn only while the flag rides (Line/Rectangle never guide) and GONE at release (the commit rasterizes just the ellipse); +2 tests (every dash endpoint lies on the measured segment, the dot = the midpoint, a zero-length drag draws no dashes); the probe gained MID-DRAG screenshots (chord dashes at t=0.25/0.75 + the dot's ring at the midpoint with the box ON; no chord red and no dot leak with the box OFF) — PROBE PASS; V63 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-21 (the
-diameter-circle round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 279 default / 292 mcp green
-(+1 ignored; +6 net — the 5 `diameter_rect`/commit-geometry tests in
-`app/preview/tests.rs` + the Ellipse-only checkbox test in
-`windows/tests/settings_panel.rs`), the visual driver ALL SCENARIOS GREEN
-under Xvfb through the gates binary + the NEW diameter probe PASS (the
-checkbox appears only for the Ellipse kind; ON: the ring's center = the drag
-midpoint and both points lie on the ring; OFF: the old corner-anchored
-square) — Rust 1.99.1 pinned via rust-toolchain.toml, Linux. NO wasm check
+diameter-guides round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+(default + mcp), `cargo test --profile gates` 281 default / 294 mcp green
+(+1 ignored; +2 net — the `diameter_guides` tests in
+`app/preview/tests.rs`), the visual driver ALL SCENARIOS GREEN
+under Xvfb through the gates binary + the diameter probe PASS with its NEW
+MID-DRAG checks (the chord dashes on the measured segment and the center
+dot's ring at the midpoint with the box ON; no chord red and no dot leak
+with the box OFF) — Rust 1.99.1 pinned via rust-toolchain.toml, Linux. NO wasm check
 this round (the diff touches no web-facing code — the economy rule). NOTE
 2026-11-21: FRESH GitHub clone (the repo re-cloned from the owner's push) —
 rustup + the pinned toolchain + the GUI .debs installed per SANDBOX.md; the
@@ -60,7 +60,7 @@ here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: t
 the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`); the manual trunk
 lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only over-guard set — the owner-deferred
-`history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 606,
+`history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 641,
 `app/tool_icons/draw.rs` 786, `app/tool_icons.rs` 602, `selection.rs` 752,
 `tools.rs` 608, `app/selection.rs` 639, and NOW `app/windows.rs` 672 over
 the guard (warn + propose splits at task end; no split mid-task — the
@@ -87,9 +87,36 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the V58-pass entry (during the
-> diameter-circle round's budget — the file rode over the ~200-line budget; all
+> PROGRESS-archive.md; the latest move: the V59-pass entry (during the
+> diameter-guides round's budget — the file rode over the ~200-line budget; all
 > in the archive).
+
+### 2026-11-21 — `Feat:` the diameter drag previews WHAT IT MEASURES — a dashed chord and the center dot (owner picked idea #3 from the chat)
+
+- **What:** while a diameter-circle gesture is LIVE (Ellipse kind, Shift
+  held, the panel's checkbox ON), the overlay draws on top of the shape: a
+  thin DASHED chord between the two drag points (the gesture's outline
+  color — falling back to the fill for Fill-only gestures) and a small
+  white dot with a dark ring at the segment's midpoint (the circle's
+  center; the polyline vertex-handle marker style — visible on any canvas
+  color). Overlay-only: the commit rasterizes just the ellipse and the
+  guides die with the gesture; the flag rides the gesture (Line and the
+  Rectangle kind never guide).
+- **Files:** `src/app/preview.rs` (the pure `diameter_guides` + the live
+  overlay call), `src/app/preview/tests.rs` (+2 tests), SPEC §3.2 (the
+  guides sentence), the probe `scripts/gui_diameter_check.sh` (+ the
+  MID-DRAG screenshots).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 281 default /
+  294 mcp); the visual driver ALL SCENARIOS GREEN; the probe PROBE PASS
+  with the new mid-drag checks (chord dashes at t=0.25/0.75 of the drag
+  segment and the dot's ring at the midpoint with the box ON; no chord red
+  and no dot leak with the box OFF; the final-ring measurements
+  unchanged). No wasm check — no web-facing code (the economy rule).
+- **Owner-checks:** V63 born (Windows + web: the guides visible during a
+  diameter drag, gone at release, absent when the checkbox is off or the
+  kind is Rectangle/Line). Open: V63, V62, V61, V60; parked: V30, V8.
+  Debts open: F19, F18, F17, F16.
+- **Commit title:** `Feat: the diameter-circle Shift drag previews WHAT IT MEASURES — a thin dashed chord between the two drag points and a center dot at the segment's midpoint (overlay-only; the commit still rasterizes just the ellipse)`
 
 ### 2026-11-21 — `Feat:` the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner request in chat)
 
@@ -158,40 +185,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   parked: V30, V8. Debts open: F19 (the AccessKit/trim decision — the
   owner's), F18, F17, F16, F15.
 - **Commit title:** `Fix: the move commit clips the selection to the canvas (rects intersect, lassos Sutherland–Hodgman-clipped) so a partially off-canvas drag no longer heals its old shape; the AccessKit/trim audit parked as F19`
-
-### 2026-11-20 — `Fix:` the V59 pass — clipboard_shortcuts OFF, the overlay move drag, the pan-on-Ctrl+S guard, the real blot — owner bug report
-
-- **What:** the owner's V59 findings: (1) the egui-winit `clipboard_shortcuts`
-  conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`,
-  owner: "я не согласен с разработчиками этой библиотеки") — Ctrl+C/X/V now
-  arrive as plain Key events and `consume_key` sees them again; the dedicated
-  `Event::Copy/Cut/Paste` stay consumed as the WEB fallback (the browser's
-  copy/cut/paste DOM events are the only channel there) with a one-op guard
-  (a web frame can carry the same gesture twice — 2 tests); (2) Ctrl+S /
-  Ctrl+Shift+S also PANNED on S (the pan reads `key_down` — the pressed
-  state — and the save's consume_key does not lift it): an accelerator
-  modifier (Ctrl/⌘/Alt) now suppresses the W/A/S/D pan, Shift stays allowed
-  (+ test); (3) the move drag REDESIGNED (owner: "отдельным элементом от
-  холста... видно за границами холста... при отпускании"): the layer is
-  written exactly TWICE — the erase at the lift, the stamp at the release —
-  the drag rides a FOREGROUND overlay (the floating pixels as a GPU texture
-  + the ants, whole-viewport clip, visible past the canvas bounds; the old
-  per-frame restore/erase/stamp painted unclear artifacts) (+ 3 tests: the
-  no-write-until-release, the live overlay texture, the past-the-bounds
-  geometry); (4) the lasso icon is now a real blot: five lobes (9.3–7.2)
-  interleaved with five deep waists (5.0–6.2), picked from rendered
-  candidates (the second take read as an upside-down pear).
-- **Files:** `main.rs`, `app/input.rs` (+ tests), `app/camera.rs` (+ tests),
-  `app/selection.rs` (+ tests), `app/tool_icons/draw.rs`, SPEC §3.9 (the
-  combo row + the pan row) and §3.13 (the move row).
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp); the visual driver
-  + the select probe PASS; the blot verified on the cropped screenshot. No
-  wasm check — no web-facing code (the economy rule).
-- **Owner-checks:** V60 born (Windows + web: the combos fire ONCE and pan
-  does not run on Ctrl+S; a clean overlay drag visible past the canvas; the
-  blot reads as a blot). Open: V60, V59, V58, V57; parked: V30, V8.
-  Debts open: F18, F17, F16, F15. NOTE: `app/selection.rs` (611) and
-  `app/tool_icons/draw.rs` (798) grew past the 500-guard — the standing
-  split proposal, at task end as the rules ask.
-- **Commit title:** `Fix: clipboard_shortcuts off (the combos arrive as Key events), the move drag rides a foreground overlay (no canvas writes until release), Ctrl+S no longer pans, the lasso icon is a five-lobe blot`
 

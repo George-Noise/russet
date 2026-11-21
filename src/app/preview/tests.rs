@@ -287,3 +287,73 @@ fn the_committed_diameter_circle_passes_through_both_drag_points() {
         "the drag segment's midpoint is the circle's CENTER — no paint there"
     );
 }
+
+#[test]
+fn the_diameter_guides_draw_the_measured_chord_and_center() {
+    let a = pos2(100.0, 200.0);
+    let b = pos2(300.0, 240.0);
+    let shapes = diameter_guides(a, b, Color32::RED);
+
+    // The chord: dashed line segments, every dash ENDPOINT collinear with
+    // and between a and b — the dashes lie ON the measured segment.
+    let mut chord_dashes = 0usize;
+    let mut dot_centers = Vec::new();
+    for shape in &shapes {
+        match shape {
+            Shape::LineSegment { points, .. } => {
+                chord_dashes += 1;
+                let ab = b - a;
+                for &p in points.iter() {
+                    let t = (p - a).dot(ab) / ab.dot(ab);
+                    assert!(
+                        (0.0..=1.0).contains(&t),
+                        "a dash endpoint strays past the chord: t={t}"
+                    );
+                    let projected = a + ab * t;
+                    assert!(
+                        (p - projected).length() < 0.01,
+                        "a dash endpoint strays off the chord line"
+                    );
+                }
+            }
+            Shape::Circle(circle) => dot_centers.push(circle.center),
+            _ => {}
+        }
+    }
+    assert!(
+        chord_dashes > 0,
+        "a 200+ px chord must produce dashes, not an empty path"
+    );
+    assert_eq!(
+        dot_centers.len(),
+        2,
+        "the center dot is the white core + the dark ring"
+    );
+    let mid = Pos2::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+    for center in &dot_centers {
+        assert_eq!(
+            *center, mid,
+            "the dot sits at the segment's midpoint — the circle's center"
+        );
+    }
+}
+
+#[test]
+fn the_diameter_guides_survive_a_zero_length_drag() {
+    let shapes = diameter_guides(pos2(50.0, 60.0), pos2(50.0, 60.0), Color32::RED);
+
+    let dashes = shapes
+        .iter()
+        .filter(|s| matches!(s, Shape::LineSegment { .. }))
+        .count();
+    assert_eq!(
+        dashes, 0,
+        "a zero-length chord has no room for dashes (the commit draws nothing anyway)"
+    );
+    let mid = Pos2::new(50.0, 60.0);
+    for shape in &shapes {
+        if let Shape::Circle(circle) = shape {
+            assert_eq!(circle.center, mid, "the dot marks the click point");
+        }
+    }
+}
