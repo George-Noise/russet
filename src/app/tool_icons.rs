@@ -65,17 +65,19 @@ pub(super) const ICON_PT: f32 = 1.5 * 16.0;
 const SIZE: f32 = 24.0;
 
 /// The tools' canonical order — the icon atlas and the Tools window grid
-/// iterate this array, so the two always agree. Select sits right after
-/// the paint trio (owner request 2026-11-20).
+/// iterate this array, so the two always agree. The owner's 2026-11-21
+/// pass swapped two pairs for balance: the Eyedropper up beside the paint
+/// trio (it picks colors, so it reads paint-adjacent) and the Text up next
+/// to Select, leaving the Line to close the grid after the Shape.
 pub(super) const TOOLS: [Tool; 8] = [
     Tool::Pencil,
     Tool::Brush,
     Tool::Eraser,
-    Tool::Select,
     Tool::Eyedropper,
-    Tool::Line,
-    Tool::Shape,
+    Tool::Select,
     Tool::Text,
+    Tool::Shape,
+    Tool::Line,
 ];
 
 /// The hover tooltip of a tool button: the name and the keyboard key

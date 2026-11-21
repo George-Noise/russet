@@ -1,5 +1,39 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-20 — `Fix:` the V60 pass — the off-canvas move clips the selection to the canvas — owner bug report; AccessKit/trim audit recorded, nothing changed
+
+- **What:** (1) the owner's V60 bug: dragging a selection PARTIALLY off the
+  canvas and then moving it back toward the center RESTORED the full
+  region shape over pixels that no longer exist. Root cause: the derived
+  views (mask, bounds, ants) were always canvas-clamped, but the OP LIST
+  was not — `contains` (the move hit test) and `translate` work on the
+  ops, so the next move healed the full shape. Fix: the move commit now
+  CLIPS the selection to the canvas (`Selection::clip_to_canvas` — rect
+  regions intersect, lasso polygons run a Sutherland–Hodgman clip against
+  the canvas rect, fully-outside regions drop, an empty result
+  deselects) + 5 tests (the domain clip: the rect shrink, the fully-off
+  None, the lasso cut with new crossing vertices; the app level: the
+  owner's exact scenario — the clipped shape rides along AND the healed
+  corner is not selectable — and a fully-off move deselecting while the
+  move node still records). (2) The owner's AccessKit question answered
+  READ-ONLY (measured: ≈310 of 761 normal dep edges, ~40% of the graph —
+  the zbus/AT-SPI D-Bus bridge; the disable switch is a one-line feature
+  removal; what breaks = only screen readers) and the whole trim-candidate
+  audit recorded as DEBTS-functional F19 — NOTHING changed per the owner's
+  "пока думаем".
+- **Files:** `selection.rs` (+3 tests: `clipped_to`, the SH helpers,
+  `clip_to_canvas`), `app/selection.rs` (the commit wiring), SPEC §3.13
+  (the move row's clip rule), DEBTS-functional F19.
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp); the visual
+  driver + the select probe PASS. No wasm check — no web-facing code (the
+  economy rule).
+- **Owner-checks:** V61 born (Windows + web: a move partially off-canvas
+  shrinks the selection to what survived; the second move keeps the
+  clipped shape; a fully-off move deselects). Open: V61, V60, V59, V58;
+  parked: V30, V8. Debts open: F19 (the AccessKit/trim decision — the
+  owner's), F18, F17, F16, F15.
+- **Commit title:** `Fix: the move commit clips the selection to the canvas (rects intersect, lassos Sutherland–Hodgman-clipped) so a partially off-canvas drag no longer heals its old shape; the AccessKit/trim audit parked as F19`
+
 ### 2026-11-20 — `Fix:` the V59 pass — clipboard_shortcuts OFF, the overlay move drag, the pan-on-Ctrl+S guard, the real blot — owner bug report
 
 - **What:** the owner's V59 findings: (1) the egui-winit `clipboard_shortcuts`

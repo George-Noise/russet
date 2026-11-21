@@ -9,7 +9,8 @@
 //! TOPICS (Tests rule 7; the file grew past the ~300-line guard with the
 //! Shape-panel round): the per-tool drawings in [`drawings`], the
 //! atlas/cursor pipeline + the icon dump in [`atlas`], the Shape panel's
-//! set in [`shape_panel`]. The pixel-poking helpers below are shared by all
+//! set in [`shape_panel`], the Tools window's button order in [`order`].
+//! The pixel-poking helpers below are shared by all
 //! three topics (children reach them with `use super::*;`).
 
 use super::{
@@ -21,6 +22,7 @@ use eframe::egui::Color32;
 mod atlas;
 mod drawings;
 mod line_panel;
+mod order;
 mod shape_panel;
 
 /// Opaque-pixel threshold: every icon must draw a substantial mark in its

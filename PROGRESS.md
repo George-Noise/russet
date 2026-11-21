@@ -40,16 +40,17 @@
 | Extra: the V60 fixes — the off-canvas move clip + the AccessKit audit (owner 2026-11-20) | done — gates + driver + probes green | (1) a move that lands PARTIALLY off-canvas now CLIPS the selection to the canvas (`Selection::clip_to_canvas`: rects intersect, lassos Sutherland–Hodgman-clipped, fully-outside regions drop, an empty result deselects) — the op list was the only unclamped thing (the views always clamped), so the next move used to heal the full shape over destroyed pixels + 5 tests (the domain clip ×3, the owner's back-to-the-center scenario, the fully-off deselect); (2) the AccessKit/trim audit measured and parked (F19: accesskit ≈310/761 dep edges ~40%, the one-line disable switch, what breaks = only screen readers; system_fonts ≈126 edges ~16%; clipboard/wayland/x11/default_fonts stay) — NOTHING changed per the owner's "пока думаем" |
 | Extra: the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner 2026-11-21) | done — gates + driver + GUI probe green | with the Ellipse kind a Shift drag makes the two drag points the endpoints of the circle's DIAMETER (center = the segment's midpoint, the pure `app/preview.rs::diameter_rect`) instead of the corner-anchored proportional circle; behind the Shape panel's FOURTH group — the plain "Diameter circle (Shift)" checkbox, startup ON, shown ONLY for the Ellipse kind (the rectangle's row does not exist — no dead controls); the flag rides the gesture refreshed live (a mid-drag Shift/checkbox flip re-shapes the next frame's preview); the rectangle's Shift rule and the plain Shift-less ellipse untouched; +6 tests; the new probe `scripts/gui_diameter_check.sh` PROBE PASS (ON: ring center = the drag midpoint, both points on the ring, the center unpainted; OFF: the old square; the checkbox appears only after the Ellipse click); SANDBOX.md pitfall 11 (raw-Xvfb key events need `xdotool windowfocus` — no WM → no input focus); V62 born |
 | Extra: the diameter drag's measurement guides (owner picked idea #3, 2026-11-21) | done — gates + driver + GUI probe green | while a diameter gesture is LIVE the overlay draws WHAT IS MEASURED on top of the shape: a thin DASHED chord between the two drag points (the gesture's outline color, dashes 4 / gaps 3) and a small white dot with a dark ring at the segment's midpoint (the center; the polyline vertex-handle marker style — visible on any canvas color); the pure `app/preview.rs::diameter_guides`, drawn only while the flag rides (Line/Rectangle never guide) and GONE at release (the commit rasterizes just the ellipse); +2 tests (every dash endpoint lies on the measured segment, the dot = the midpoint, a zero-length drag draws no dashes); the probe gained MID-DRAG screenshots (chord dashes at t=0.25/0.75 + the dot's ring at the midpoint with the box ON; no chord red and no dot leak with the box OFF) — PROBE PASS; V63 born |
+| Extra: the Tools window's button order pass (owner 2026-11-21) | done — gates green; the visual probe/driver skipped per the owner's waiver | the canonical `app/tool_icons.rs::TOOLS` array reordered by two swaps — the Eyedropper ↔ the Select and the Text ↔ the Line — so the two-column grid (row-major over the array) now reads Pencil+Brush, Eraser+Eyedropper, Select+Text, Shape+Line; hotkeys, tooltips, the atlas and the panels untouched (every consumer is order-agnostic — the atlas looks icons up by position, the grid chunks the array); pinned by the new `tool_icons/tests/order.rs` test; SPEC §3.8's Select row updated (its "right after the paint trio" phrase is now historical); V64 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-21 (the
-diameter-guides round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 281 default / 294 mcp green
-(+1 ignored; +2 net — the `diameter_guides` tests in
-`app/preview/tests.rs`), the visual driver ALL SCENARIOS GREEN
-under Xvfb through the gates binary + the diameter probe PASS with its NEW
-MID-DRAG checks (the chord dashes on the measured segment and the center
-dot's ring at the midpoint with the box ON; no chord red and no dot leak
-with the box OFF) — Rust 1.99.1 pinned via rust-toolchain.toml, Linux. NO wasm check
+tools-order round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+(default + mcp), `cargo test --profile gates` 282 default / 295 mcp green
+(+1 ignored; +1 net — the `tool_icons/tests/order.rs` layout-pinning test),
+the visual probe and the MCP driver SKIPPED this round — the owner waived
+them for the reorder ("простенькая задачка… визуально не проверять и mcp
+не использовать"); the on-screen layout is pinned by the order test (the
+grid fills row-major over `TOOLS`) — Rust 1.99.1 pinned via rust-toolchain.toml,
+Linux. NO wasm check
 this round (the diff touches no web-facing code — the economy rule). NOTE
 2026-11-21: FRESH GitHub clone (the repo re-cloned from the owner's push) —
 rustup + the pinned toolchain + the GUI .debs installed per SANDBOX.md; the
@@ -87,9 +88,32 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the V59-pass entry (during the
-> diameter-guides round's budget — the file rode over the ~200-line budget; all
+> PROGRESS-archive.md; the latest move: the V60-pass entry (during the
+> tools-order round's budget — the file rode over the ~200-line budget; all
 > in the archive).
+
+### 2026-11-21 — `Fix:` the Tools window's button order — the Eyedropper ↔ Select, the Text ↔ Line (owner request in chat)
+
+- **What:** the owner's reorder: the grid's row 2 becomes Eraser +
+  Eyedropper (the color-picking pipette reads paint-adjacent), row 3
+  Select + Text, row 4 Shape + Line. One array (`TOOLS`) drives the grid,
+  the atlas and the icon lookup — the two swaps move the buttons without
+  touching anything else; the hotkeys and the tooltips travel with their
+  tools.
+- **Files:** `src/app/tool_icons.rs` (the `TOOLS` array + its doc), the new
+  `src/app/tool_icons/tests/order.rs` (+1 test pinning the layout), SPEC
+  §3.8 (the Select row's placement sentence).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
+  295 mcp). The visual probe and the MCP driver were SKIPPED — the owner
+  waived them for this round ("простенькая задачка… визуально не
+  проверять и mcp не использовать"); the on-screen layout is pinned by the
+  order test (the grid fills row-major over `TOOLS`). No wasm check — no
+  web-facing code (the economy rule).
+- **Owner-checks:** V64 born (Windows + web: the grid reads
+  Eraser+Eyedropper, Select+Text, Shape+Line; every hotkey still matches
+  its button). Open: V64, V63, V62, V61; parked: V30, V8.
+  Debts open: F19, F18, F17, F16.
+- **Commit title:** `Fix: the Tools window's button order — the Eyedropper swapped with the Select, the Text with the Line (the TOOLS array drives the grid row-major; hotkeys and tooltips unchanged)`
 
 ### 2026-11-21 — `Feat:` the diameter drag previews WHAT IT MEASURES — a dashed chord and the center dot (owner picked idea #3 from the chat)
 
@@ -151,38 +175,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   rule; when the verdict lands the checkbox goes away). Open: V62, V61, V60,
   V59; parked: V30, V8. Debts open: F19, F18, F17, F16.
 - **Commit title:** `Feat: the Shape tool's Ellipse kind draws the Shift circle THROUGH the two drag points (the segment is its diameter) behind a testing Diameter-circle checkbox shown only for the Ellipse kind`
-
-### 2026-11-20 — `Fix:` the V60 pass — the off-canvas move clips the selection to the canvas — owner bug report; AccessKit/trim audit recorded, nothing changed
-
-- **What:** (1) the owner's V60 bug: dragging a selection PARTIALLY off the
-  canvas and then moving it back toward the center RESTORED the full
-  region shape over pixels that no longer exist. Root cause: the derived
-  views (mask, bounds, ants) were always canvas-clamped, but the OP LIST
-  was not — `contains` (the move hit test) and `translate` work on the
-  ops, so the next move healed the full shape. Fix: the move commit now
-  CLIPS the selection to the canvas (`Selection::clip_to_canvas` — rect
-  regions intersect, lasso polygons run a Sutherland–Hodgman clip against
-  the canvas rect, fully-outside regions drop, an empty result
-  deselects) + 5 tests (the domain clip: the rect shrink, the fully-off
-  None, the lasso cut with new crossing vertices; the app level: the
-  owner's exact scenario — the clipped shape rides along AND the healed
-  corner is not selectable — and a fully-off move deselecting while the
-  move node still records). (2) The owner's AccessKit question answered
-  READ-ONLY (measured: ≈310 of 761 normal dep edges, ~40% of the graph —
-  the zbus/AT-SPI D-Bus bridge; the disable switch is a one-line feature
-  removal; what breaks = only screen readers) and the whole trim-candidate
-  audit recorded as DEBTS-functional F19 — NOTHING changed per the owner's
-  "пока думаем".
-- **Files:** `selection.rs` (+3 tests: `clipped_to`, the SH helpers,
-  `clip_to_canvas`), `app/selection.rs` (the commit wiring), SPEC §3.13
-  (the move row's clip rule), DEBTS-functional F19.
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp); the visual
-  driver + the select probe PASS. No wasm check — no web-facing code (the
-  economy rule).
-- **Owner-checks:** V61 born (Windows + web: a move partially off-canvas
-  shrinks the selection to what survived; the second move keeps the
-  clipped shape; a fully-off move deselects). Open: V61, V60, V59, V58;
-  parked: V30, V8. Debts open: F19 (the AccessKit/trim decision — the
-  owner's), F18, F17, F16, F15.
-- **Commit title:** `Fix: the move commit clips the selection to the canvas (rects intersect, lassos Sutherland–Hodgman-clipped) so a partially off-canvas drag no longer heals its old shape; the AccessKit/trim audit parked as F19`
 
