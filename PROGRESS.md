@@ -47,13 +47,13 @@
 | Extra: the five over-guard files split (owner 2026-11-21) | done — gates green, pure code motion | the owner ordered the splits for the five files past the ~500-line guard: tools.rs → tools/shapes.rs (241), tool_icons.rs → tool_icons/primitives.rs (180), tool_icons/draw.rs → draw/tools.rs (350) + draw/panels.rs (315), app/windows.rs → windows/settings_panel.rs (~460), app/preview.rs → preview/geometry.rs (63) + commit.rs (123) + overlay.rs (191) — every item moved verbatim by scripts/split_russet.py, roots re-export what bin code consumes, tests import from the owning module; selection.rs + app/selection.rs deferred by the owner, history_tree.rs stays owner-deferred; the post-split sizes: selection.rs 890 and app/selection.rs 647 are the ONLY remaining over-guard files (+ tools/tests.rs 503, report-only) |
 
 | Extra: the native dialogs stop freezing the window — F21, variant A (owner pick 2026-11-21) | done — gates + wasm check + driver green | File ▸ Open (with its decode) and the Save dialog's folder pick (Browse… AND the Save-click fallback) run on a WORKER THREAD — the portal round-trip + `pollster::block_on` left the UI thread, GNOME no longer dims the window ("Not Responding" gone); ONE shared `file_io::FileTask` slot (both platforms, the web `AsyncFileDialog` rides it too) polled per frame (`document::poll_file_task`); the single-dialog guard (Open…/Browse… gray, no second chooser stacks); the Save-click fallback continues by itself when its pick answers (`save_after_folder_pick`); no task in flight = zero machinery; +4 tests; V67 born |
+| Extra: file_io.rs split under the ~500-line guard (owner 2026-11-21) | done — gates + wasm green, pure code motion | the pixel/byte codecs (`pixmap_from_image`, `png_compression_type`, the two PNG encoders, the JPEG encoder) + the two encoder defaults moved VERBATIM into the new `src/file_io/codecs.rs` (the F21 round's approved proposal); the root keeps the task/types/dialog glue and re-exports what bin code consumes (the MCP `encode_png` gated by the feature like `save_image_to`); the tests import from the owning module; file_io.rs 606 → 495, codecs.rs 134; +1 stale comment fixed (`FOLDER_PICKING_SUPPORTED`'s doc claimed the web stub "returns `None`") |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the F21
-async-dialog round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
-green on --all-targets (default + mcp), `cargo test --profile gates` 299
-default / 312 mcp green (+1 ignored; +4 new `file_io::tests::file_task`
-tests), ALL GATES GREEN in 21 s; the wasm `cargo check` green; the visual
-driver ALL SCENARIOS GREEN.
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the file_io split
+round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
+--all-targets (default + mcp), `cargo test --profile gates` 299 default /
+312 mcp green (+1 ignored; the counts UNCHANGED — pure code motion), ALL
+GATES GREEN in 22 s; the wasm `cargo check` green.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -69,9 +69,35 @@ driver ALL SCENARIOS GREEN.
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the Outline-placement icons entry
-> (during the F21 round's budget — the file rode past ~200 lines; three
-> entries + the new one stay in the Log, all in the archive).
+> PROGRESS-archive.md; the latest move: the selection-clipping Feat entry
+> (during the file_io-split round's budget — the file rode past ~200 lines;
+> three entries + the new one stay in the Log, all in the archive).
+
+### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
+
+- **What:** pure code motion, no behavior change: the pixel/byte codecs —
+  `pixmap_from_image`, `png_compression_type`, `demultiplied_rgba`,
+  `encode_png`, `encode_png_with_compression`, `encode_jpeg_with_quality`
+  plus the two encoder defaults (`DEFAULT_JPEG_QUALITY`,
+  `DEFAULT_PNG_COMPRESSION`) — moved VERBATIM into the new
+  `src/file_io/codecs.rs` (the F21 round's approved proposal). The root
+  keeps the task/types/dialog glue (`FileTask`/`FileOutcome`,
+  `SaveFormat`/`SaveOptions`, the `native`/`web` mods) and re-exports what
+  bin code consumes (`app.rs`'s dialog-prefill consts, the MCP snapshot
+  tool's `encode_png` — feature-gated like the `save_image_to` re-export);
+  the tests import from the owning module. Sizes: file_io.rs 606 → 495,
+  codecs.rs 134.
+- **Files:** new `src/file_io/codecs.rs`; `src/file_io.rs` (the block out,
+  the re-exports in, one stale comment fixed — the
+  `FOLDER_PICKING_SUPPORTED` doc still claimed the web stub "returns
+  `None`" from the pre-F21 shape); `src/file_io/tests.rs` (the import now
+  names `super::codecs`).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — the counts unchanged
+  at 299 default / 312 mcp); the wasm `cargo check` green. No driver run —
+  no behavior change (pure code motion).
+- **Owner-checks:** none born. Open: V67, V66, V46 (X11); parked: V30, V8.
+  Debts: F20, F18, F17, F16 newest-first in the files.
+- **Commit title:** `Refactor: file_io.rs split under the 500-line guard — the PNG/JPEG codecs and the encoder defaults move verbatim to file_io/codecs.rs (the root keeps the task/types/dialog glue and re-exports what bin code consumes)`
 
 ### 2026-11-21 — `Fix:` the native dialogs no longer freeze the window — F21, variant A (owner pick in chat)
 
@@ -140,39 +166,3 @@ driver ALL SCENARIOS GREEN.
   paid. Open: V66, V46 (X11); F21 born (the native-dialog freeze — the owner
   picks the fix variant next round).
 - **Commit title:** `Refactor: split the five over-guard files — tools/shapes, tool_icons/primitives, draw tools+panels, windows/settings_panel, preview geometry/commit/overlay (pure code motion)`
-
-### 2026-11-21 — `Feat:` an active selection confines every painting tool to its region (owner request in chat)
-
-- **What:** the classic paint-app rule: with a selection active, the
-  freehand strokes, the Line/Curve drags, the Shape drags and the Text
-  commit paint ONLY inside it (the Eyedropper still reads anywhere, Select
-  edits the selection itself). The mask snapshots at each gesture's start
-  (`App::selection_clip`; freehand `stroke_clip`, the drags carry it in
-  `PreviewState`, Text at commit — the MCP pencil stroke clips the same).
-  The pencil filters its plots; the thick strokes rasterize onto a
-  transparent bbox scratch (`tools.rs::paint_clipped`) and transfer via
-  `selection.rs::stamp_masked` / `erase_masked_by` (the eraser marks its
-  footprint — the scratch's alpha IS the erase strength, AA ±1 rounding);
-  the text rasterizer skips masked glyph pixels; outside pixels stay
-  byte-identical; no selection = the unchanged direct path. The live
-  vector previews clip to the selection's cached bounds.
-- **Files:** `src/selection.rs` (the transfer helpers), `src/tools.rs` +
-  `src/tools/smooth.rs` + `src/text.rs` (the clip param ×5), `src/app.rs`,
-  `src/app/input.rs`, `src/app/preview.rs`, `src/app/text_tool.rs`,
-  `src/app/selection.rs` (the snapshot + the wiring), `src/app/mcp/tools/
-  edits.rs` (the MCP stroke clips), SPEC §3.5 (the canonical "Selection
-  clipping" block) + §3.13, SANDBOX.md pitfall 12, the probe
-  `scripts/gui_selection_clip.sh`, +13 tests.
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 295 default /
-  308 mcp); the visual driver ALL SCENARIOS GREEN; the probe PROBE PASS
-  (the crossing stroke's red stops at x=728 / edge 730, the endpoint 850);
-  the wasm `cargo check` green (the target installed into the sandbox
-  first). INCIDENT (pitfall 12): a mechanical patch redo used `git
-  checkout --` and silently reverted the UNCOMMITTED diameter/guides tests
-  to HEAD (282 → 276 caught by the count); restored verbatim from the
-  previous round's delivery zip.
-- **Owner-checks:** V66 born (Windows + web: draw across a selection with
-  each tool — nothing outside it changes; erasing stays inside; text
-  commits clipped; no selection = unchanged behavior). Open: V66, V65,
-  V64, V63; parked: V30, V8. Debts open: F19, F18, F17, F16.
-- **Commit title:** `Feat: an active selection confines every painting tool to its region — the mask snapshots at gesture start, strokes/lines/shapes/text transfer only masked pixels, the MCP stroke obeys the same clip`

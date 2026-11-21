@@ -7,9 +7,10 @@
 
 use tiny_skia::{ColorU8, Pixmap};
 
-use super::{
-    DEFAULT_JPEG_QUALITY, DEFAULT_PNG_COMPRESSION, SaveFormat, encode_jpeg_with_quality,
-    encode_png, encode_png_with_compression, pixmap_from_image, png_compression_type,
+use super::SaveFormat;
+use super::codecs::{
+    DEFAULT_JPEG_QUALITY, DEFAULT_PNG_COMPRESSION, encode_jpeg_with_quality, encode_png,
+    encode_png_with_compression, pixmap_from_image, png_compression_type,
 };
 
 #[test]

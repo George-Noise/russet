@@ -1,5 +1,41 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Feat:` an active selection confines every painting tool to its region (owner request in chat)
+
+- **What:** the classic paint-app rule: with a selection active, the
+  freehand strokes, the Line/Curve drags, the Shape drags and the Text
+  commit paint ONLY inside it (the Eyedropper still reads anywhere, Select
+  edits the selection itself). The mask snapshots at each gesture's start
+  (`App::selection_clip`; freehand `stroke_clip`, the drags carry it in
+  `PreviewState`, Text at commit — the MCP pencil stroke clips the same).
+  The pencil filters its plots; the thick strokes rasterize onto a
+  transparent bbox scratch (`tools.rs::paint_clipped`) and transfer via
+  `selection.rs::stamp_masked` / `erase_masked_by` (the eraser marks its
+  footprint — the scratch's alpha IS the erase strength, AA ±1 rounding);
+  the text rasterizer skips masked glyph pixels; outside pixels stay
+  byte-identical; no selection = the unchanged direct path. The live
+  vector previews clip to the selection's cached bounds.
+- **Files:** `src/selection.rs` (the transfer helpers), `src/tools.rs` +
+  `src/tools/smooth.rs` + `src/text.rs` (the clip param ×5), `src/app.rs`,
+  `src/app/input.rs`, `src/app/preview.rs`, `src/app/text_tool.rs`,
+  `src/app/selection.rs` (the snapshot + the wiring), `src/app/mcp/tools/
+  edits.rs` (the MCP stroke clips), SPEC §3.5 (the canonical "Selection
+  clipping" block) + §3.13, SANDBOX.md pitfall 12, the probe
+  `scripts/gui_selection_clip.sh`, +13 tests.
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 295 default /
+  308 mcp); the visual driver ALL SCENARIOS GREEN; the probe PROBE PASS
+  (the crossing stroke's red stops at x=728 / edge 730, the endpoint 850);
+  the wasm `cargo check` green (the target installed into the sandbox
+  first). INCIDENT (pitfall 12): a mechanical patch redo used `git
+  checkout --` and silently reverted the UNCOMMITTED diameter/guides tests
+  to HEAD (282 → 276 caught by the count); restored verbatim from the
+  previous round's delivery zip.
+- **Owner-checks:** V66 born (Windows + web: draw across a selection with
+  each tool — nothing outside it changes; erasing stays inside; text
+  commits clipped; no selection = unchanged behavior). Open: V66, V65,
+  V64, V63; parked: V30, V8. Debts open: F19, F18, F17, F16.
+- **Commit title:** `Feat: an active selection confines every painting tool to its region — the mask snapshots at gesture start, strokes/lines/shapes/text transfer only masked pixels, the MCP stroke obeys the same clip`
+
 ### 2026-11-21 — `Fix:` the Outline-placement radios' icons read as the outline — thicker segments running past the icon's edge (owner request in chat)
 
 - **What:** the owner's redraw recipe for the Shape panel's three
