@@ -1,3 +1,7 @@
+2026-11-21 — the file-split round (5 files) — re-exports consumed ONLY by tests: clippy `-D warnings` flags them unused even with `--all-targets` (the bin view of the same lint also fires), so a re-export whose only consumers are test files cannot carry the round. The convention that actually passes the gate: the tests import the moved item from its OWNING module (`tools/tests.rs` → `super::shapes::outline_stroke_bounds`, `windows/tests/*` → `super::super::settings_panel::…`) and the parent keeps re-exports for BIN consumers only. AGENTS.md "Tests" rule 2 ("move the test, not the visibility", learned in the palette split) is the same law seen from the other side — worth a line in the split playbook.
+
+2026-11-21 — the file-split round (5 files) — impl-method visibility after a move into a CHILD module: `pub(super)` there means "visible in the child's parent" (= the old module's scope), NOT visible to `app.rs` — `app.rs:736 draw_preview_overlay` failed with E0624 twice until the method was widened to `pub(in crate::app)`. Rule of thumb that worked: match the visibility to the CALLER's module path, not to the old declaration.
+
 ### 2026-11-21 — raw-Xvfb key/modifier events silently dropped (no WM → no input focus); cost three probe iterations
 
 - Expected vs actual: the diameter-circle GUI probe's `xdotool keydown shift` +

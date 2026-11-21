@@ -6,7 +6,7 @@
 //! window. Since the owner request 2026-11-19 also the collapse rule: while
 //! the Tools window is collapsed to its title bar the panel hides with it.
 
-use super::super::{
+use super::super::settings_panel::{
     line_settings_ui, settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size,
 };
 use super::common::{SCREEN, show_once, show_tools_once};

@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::tools::{ShapeKind, ShapeOutline, ShapePaint, rasterize_shape};
+use eframe::egui::{Shape, pos2};
 
 /// The EXACT well-decoding the gesture start runs (preview.rs): the radio's
 /// `outlines()`/`fills()` halves feed [`shape_gesture_wells`], so each of

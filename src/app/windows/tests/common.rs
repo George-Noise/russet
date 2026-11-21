@@ -3,7 +3,8 @@
 //! no renderer, no App; the window builders are the exact functions the app
 //! uses.
 
-use super::super::{tool_settings_window_builder, tools_window_builder};
+use super::super::settings_panel::tool_settings_window_builder;
+use super::super::tools_window_builder;
 use eframe::egui::{self, Pos2, Rect, Vec2};
 
 /// The screen every test runs on (bigger than the 500×400 main-window

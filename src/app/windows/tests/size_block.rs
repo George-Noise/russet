@@ -7,8 +7,9 @@
 //! writes back only when dragged; egui's default `SliderClamping::Always`
 //! would otherwise snap the bound value every frame).
 
-use super::super::{
-    SHAPE_GROUP_GAP, SIZE_SLIDER_W, line_settings_ui, shape_settings_ui, size_block_ui,
+use super::super::SHAPE_GROUP_GAP;
+use super::super::settings_panel::{
+    SIZE_SLIDER_W, line_settings_ui, shape_settings_ui, size_block_ui,
 };
 use super::common::SCREEN;
 use crate::tools::{Tool, ToolState};

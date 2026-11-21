@@ -44,41 +44,13 @@
 | Extra: the Outline-placement radios' icon redraw (owner 2026-11-21) | done — gates + driver green, the icon dump looked at | the Shape panel's three OUTLINE-PLACEMENT icons redrawn per the owner's recipe: the dot untouched ("точечку оставить как есть"), the horizontal/vertical segments ~2.5× thicker (`OUTLINE_BAND_W` 2.6 → 6.5) and each segment's FAR end running past the icon's 24-pt edge (`OUTLINE_BAND_LEN` 11 → 17, the bitmap crop = the outline continues beyond the corner window); the modes still differ only by where the bands sit (outside / straddling / inside); the placement test's probe strips/box recomputed for the new band edges (the Outside-only strip left of Center's 6.75, the Inside-only right of 13.25, the straddle box clear of Outside's ≤10); verified visually on the icon dump at 256 px AND the real 24 px button size (all three distinct, the dot legible on every background); V65 born |
 | Extra: the selection CLIPS every painting tool (owner 2026-11-21) | done — gates + driver + new probe green + wasm lane green | with an active selection every canvas-changing tool paints ONLY inside it, like the classic paint apps: the mask snapshots at each gesture's start (`App::selection_clip` — freehand keeps `stroke_clip`, the Line/Shape drags carry it in `PreviewState`, the Text builds at commit; the MCP pencil stroke clips the same way), the pencil filters its plots against the mask, the thick strokes rasterize onto a transparent bbox scratch through an integer translation (`tools.rs::paint_clipped`) and transfer via `selection.rs::stamp_masked` / `erase_masked_by` (the eraser marks its footprint; the scratch's alpha IS the erase strength — AA edges fade like the direct path within ±1 rounding), the text rasterizer skips masked glyph pixels; outside pixels stay byte-identical, the dirty rect shrinks to region ∩ mask bounds, no selection = the unchanged direct path; the live vector previews clip to the selection's cached bounds; +13 tests (`tools/tests/clip.rs` ×5 — the full-mask pixel-identity, the outside-untouched trio, the shape; `selection/tests.rs` ×3 — the transfer primitives; text ×1, app preview ×2, input ×2); the new probe `scripts/gui_selection_clip.sh` PROBE PASS (a rect selection + the `b` hotkey + two red strokes on one self-located canvas row: the crossing stroke's red STOPS at the edge x=728/edge 730, the drag endpoint 850 px); SANDBOX.md pitfall 12 (the git-checkout test-loss incident — restored from the delivery zip); V66 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the
-selection-clip round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 295 default / 308 mcp green
-(+1 ignored; +13 net — the clip tests: `tools/tests/clip.rs` ×5,
-`selection/tests.rs` ×3, text ×1, app preview ×2, input ×2), the visual driver
-ALL SCENARIOS GREEN under Xvfb through the gates (mcp) binary + the NEW probe
-`scripts/gui_selection_clip.sh` PROBE PASS (a rect selection + the `b`
-hotkey + two red strokes: the crossing stroke's red stops at x=728 /
-edge 730, the drag endpoint 850 — the clip works end-to-end) + the wasm
-`cargo check --target wasm32-unknown-unknown` green (32.7 s; the target had
-to be installed into this sandbox's rustup first — SANDBOX.md's install list
-gains nothing: a one-off) — Rust 1.99.1 pinned via rust-toolchain.toml,
-Linux. NOTE
-2026-11-21: FRESH GitHub clone (the repo re-cloned from the owner's push) —
-rustup + the pinned toolchain + the GUI .debs installed per SANDBOX.md; the
-detached warm-up SURVIVED between tool calls in this sandbox (see TIMING).
-English-only repo-wide — a language WHITELIST (English is simply the only written language
-here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: the wasm
-`cargo check` green in every hot gate; the flake's trunk apps landed 2026-11-19 (V43 =
-the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`); the manual trunk
-lanes last verified 2026-11-16 (see the archived log history);
-every src file ≤ 500 EXCEPT the report-only over-guard set — the owner-deferred
-`history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 684,
-`app/tool_icons/draw.rs` 794, `app/tool_icons.rs` 602, `selection.rs` 890,
-`tools.rs` 665, `app/selection.rs` 647, and NOW `app/windows.rs` 672 over
-the guard (warn + propose splits at task end; no split mid-task — the
-proposed splits: the settings-panel half → an `app/windows/settings_panel.rs`
-child, the select icons → an `app/tool_icons/select.rs` child, both the
-palette-split pattern); the
-tool_icons + tools tests topic-splits (Tests rule 7) kept the topic files
-small (tools/tests.rs itself rides at 476 — the root's shared helpers + the
-topic mod decls; this round's clip tests went into a NEW `tools/tests/clip.rs`
-topic).
+| Extra: the five over-guard files split (owner 2026-11-21) | done — gates green, pure code motion | the owner ordered the splits for the five files past the ~500-line guard: tools.rs → tools/shapes.rs (241), tool_icons.rs → tool_icons/primitives.rs (180), tool_icons/draw.rs → draw/tools.rs (350) + draw/panels.rs (315), app/windows.rs → windows/settings_panel.rs (~460), app/preview.rs → preview/geometry.rs (63) + commit.rs (123) + overlay.rs (191) — every item moved verbatim by scripts/split_russet.py, roots re-export what bin code consumes, tests import from the owning module; selection.rs + app/selection.rs deferred by the owner, history_tree.rs stays owner-deferred; the post-split sizes: selection.rs 890 and app/selection.rs 647 are the ONLY remaining over-guard files (+ tools/tests.rs 503, report-only) |
 
-Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the file-split
+round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
+--all-targets (default + mcp), `cargo test --profile gates` 295 default /
+308 mcp green (+1 ignored; the counts UNCHANGED — the splits are pure code
+motion, every test passes at its new path), ALL GATES GREEN in 21 s.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -97,6 +69,40 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md; the latest move: the diameter-guides Feat entry (during
 > the selection-clip round's budget — the file rode over the ~200-line
 > budget; all in the archive).
+
+### 2026-11-21 — `Refactor:` the five over-guard files split under the 500-line guard — pure code motion (owner order in chat)
+
+- **What:** the owner picked the split list this round (tool_icons/draw.rs,
+  app/preview.rs, app/windows.rs, tools.rs, tool_icons.rs; selection.rs +
+  app/selection.rs explicitly DEFERRED, history_tree.rs stays owner-deferred):
+  `tools.rs` → `tools/shapes.rs` (the polyline/shape rasterizers + the
+  outline-placement math); `tool_icons.rs` → `tool_icons/primitives.rs` (the
+  shared draw primitives); `tool_icons/draw.rs` → `draw/tools.rs` +
+  `draw/panels.rs` (the per-tool drawings / the panel sets, the shared emblem
+  geometry stayed in the root); `app/windows.rs` → `windows/settings_panel.rs`
+  (the magnetized panel, the icon buttons, the per-tool UIs, SIZE_SLIDER_W);
+  `app/preview.rs` → `preview/geometry.rs` + `preview/commit.rs` +
+  `preview/overlay.rs` (the pure math / the commits / the live overlay).
+  Every item moved VERBATIM (`scripts/split_russet.py`, one stage per file);
+  visibility follows the consumers (`pub(crate)`/`pub(super)`/
+  `pub(in crate::app::tool_icons)` for the icon dispatchers); the tests
+  import moved items from the OWNING module (the "move the test, not the
+  visibility" convention — re-exports consumed only by tests are clippy-flagged
+  dead weight, PROBLEMS.md ×2). No behavior change by construction.
+- **Files:** 8 new files (above), 5 rewritten roots, 4 test-import fixes
+  (`tools/tests.rs`, `windows/tests/{common,settings_panel,size_block}.rs`,
+  `app/preview/tests.rs`), PROBLEMS.md via `log_problem.sh`.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 295 default / 308 mcp,
+  the counts UNCHANGED — pure motion); clippy `-D warnings` clean on
+  --all-targets; no visual driver (no behavior change by construction — the
+  308 tests cover the moved units at their new paths).
+- **Owner-checks:** the owner's batch recorded this round: V65/V64/V63/
+  V62(keep the checkbox)/V61/V60/V59/V58/V57/V56/V53 verified, V46 — the
+  Wayland leg (the X11 leg remains); F19 paid (the AccessKit trim), F12 paid
+  (the scroll pan stays; F20 born — the touch/tablet surfaces, parked), F10
+  paid. Open: V66, V46 (X11); F21 born (the native-dialog freeze — the owner
+  picks the fix variant next round).
+- **Commit title:** `Refactor: split the five over-guard files — tools/shapes, tool_icons/primitives, draw tools+panels, windows/settings_panel, preview geometry/commit/overlay (pure code motion)`
 
 ### 2026-11-21 — `Feat:` an active selection confines every painting tool to its region (owner request in chat)
 
