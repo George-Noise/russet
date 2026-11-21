@@ -50,12 +50,13 @@
 | Extra: file_io.rs split under the ~500-line guard (owner 2026-11-21) | done — gates + wasm green, pure code motion | the pixel/byte codecs (`pixmap_from_image`, `png_compression_type`, the two PNG encoders, the JPEG encoder) + the two encoder defaults moved VERBATIM into the new `src/file_io/codecs.rs` (the F21 round's approved proposal); the root keeps the task/types/dialog glue and re-exports what bin code consumes (the MCP `encode_png` gated by the feature like `save_image_to`); the tests import from the owning module; file_io.rs 606 → 495, codecs.rs 134; +1 stale comment fixed (`FOLDER_PICKING_SUPPORTED`'s doc claimed the web stub "returns `None`") |
 | Extra: the History Tree rows go wordless for pencil, digitless for all (owner 2026-11-21) | done — gates + wasm + driver + new probe green, the icon dump and the tree screenshots looked at | the tree rows drop the node id EVERYWHERE ("pencil 7" → "pencil") and the PENCIL row draws the TOOL'S ICON — the same emblem the Tools button shows, from a SECOND, row-sized atlas (`tool_icons::TREE_ICON_PT` 12 pt, "по размеру заглавной буквы или чуть больше", the same `ensure` pass/key — a native small raster, not a downscaled 24 pt texture; the headless texture count 25 → 33); new tools join one row at a time; the digit removal EXPOSED a doubled kind word on crop rows ("crop crop …" — `CropInfo::summary` opens with "crop" itself, the id used to separate them) — the row now prints the summary alone; +4 tests (3 paint row-label/icon helpers in the new `paint/tests.rs`, 1 atlas row-size set); the new probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags: the rails' blue + the icon's warm-gold pixels on the screen's right side); V68 born |
 | Extra: the `--atlas-test` diagnostic — a 1 px speckle edge on every atlas picture (owner 2026-11-21) | done — gates + wasm + driver green, the flagged screenshot looked at | the owner sees a gap between the icon pictures' edges and their emblems and wants to SEE it before deciding: the new boolean flag `--atlas-test` (§3.12, no value; `apply_to` → `App::atlas_test` → `ensure(…, debug_border)`) repaints every raster's outermost pixel ring with a STATIC black-and-white speckle (`tool_icons::paint_debug_border` — a per-pixel coordinate hash, replayed byte-identically on every rebuild, so no animation) — exactly ONE PHYSICAL pixel thick at any scale (the ring lives in the raster: ppp and the icon size cannot stretch it), applied to all five icon sets AND the pipette cursor's source raster, painted OVER the emblem on purpose; +1 test (the ring is opaque black/white only, BOTH colors present, the interior byte-identical, the repaint deterministic); the new shot script `scripts/gui_atlas_test_shot.sh` PASS (364 adjacent pure-black/pure-white pairs on screen); the measured insets it exists to expose: the 24 pt emblems leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the diagonal drawing), the 12 pt tree icons ≤3 px; V69 born |
+| Extra: the History Tree row icons grow 12 → 16 pt, the row grows to fit (owner 2026-11-21) | done — gates + wasm + driver + probe green, the flagged before/after screenshots looked at | the rings made it visible: the first 12 pt row icons read «слишком маленькие — там ещё довольно много свободного места». The measured reality (ppp 1): row 15 px, backdrop 13, icon 12 — a mere +1 pt would fit WITHOUT growing the row, so the row grows too: `TREE_ICON_PT` 12 → 16 and `row_height = max(text line, TREE_ICON_PT + 4)` (tree_window.rs) — one height for every row (~15 → 20 pt; pitch 18 → 23 px measured), so the emblem becomes the row's tallest element and the backdrop/swatch/hit/scroll math all follow the one value; the probe's warm-gold count 18 → 42 (2.3× the emblem pixels on screen); the 16 px dump's insets: pencil 2/1/1/2, Text 2/4/2/3 (~80% filled); the dump test's third size now rides `TREE_ICON_PT` (it was pinned 12); the tree probe passes extra launch args through (`… russet --atlas-test` — how this round's evidence was shot); +0 new tests (the row-size test and the counts ride the constant); docs: SPEC §3.6 + §3.12 example, AGENTS tool_icons clause, paint.rs/tool_icons.rs docs, the probe's header; V70 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the atlas-test
-flag round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the row-icon size
+round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
 --all-targets (default + mcp), `cargo test --profile gates` 304 default /
-317 mcp green (+1 ignored; +1 new: the speckle-ring test), ALL GATES GREEN
-in 21 s; the wasm `cargo check` green; the visual driver exit 0.
+317 mcp green (+1 ignored), ALL GATES GREEN
+in 15 s; the wasm `cargo check` green; the visual driver exit 0.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -71,9 +72,43 @@ in 21 s; the wasm `cargo check` green; the visual driver exit 0.
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the History-Tree-icons Feat entry
-> (during the atlas-test round's budget — the file rode past ~200 lines;
+> PROGRESS-archive.md; the latest move: the F21-dialogs Fix entry
+> (during the row-icon size round's budget — the file rode past ~200 lines;
 > three entries + the new one stay in the Log, all in the archive).
+
+### 2026-11-21 — `Fix:` the History Tree row icons grow 12 → 16 pt and the row grows to fit them (owner request in chat)
+
+- **What:** the `--atlas-test` rings made the row icons' size readable and
+  the owner judged the first 12 pt emblems «слишком маленькими — там ещё
+  довольно много свободного места». Measured at ppp 1: the row is 15 px
+  tall, the opaque backdrop 13, the icon 12 — fitting a bigger icon INTO
+  the unchanged row buys only +1 pt, so the row grows WITH the icon:
+  `TREE_ICON_PT` 12 → 16 and `row_height =
+  max(text line, TREE_ICON_PT + 4 pt)` in `tree_window.rs` — one height
+  for every row (the rails' pitch, the dots, the hit rects and the scroll
+  fallback all divide it; measured pitch 18 → 23 px). The emblem is now
+  the row's tallest element; the swatch (row_height − 4) keeps matching
+  it; the backdrop still has its 1 px margins and the ring sits inside.
+- **Files:** `src/app/tool_icons.rs` (the constant + its doc),
+  `src/app/tree_window.rs` (the row-height floor + the import),
+  `src/app/tree_window/paint.rs` (the `row_icon` doc), the atlas tests'
+  comment, the dump test's third size (pinned 12 → rides
+  `TREE_ICON_PT`), `scripts/gui_tree_icon_check.sh` (extra launch args
+  pass through + the header), SPEC §3.6 + §3.12 (the example numbers),
+  AGENTS.md (the tool_icons clause).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
+  mcp, no new tests: the row-size test and the texture counts ride the
+  constant); the wasm `cargo check` green; the visual driver exit 0; the
+  tree probe PASS (the warm-gold emblem pixels 18 → 42 — 2.3× more ink on
+  screen); the flagged before/after screenshots LOOKED AT (12 pt in an
+  18 px pitch vs 16 pt in a 23 px pitch — the ring inside the backdrop);
+  the 16 px dump measured (pencil 2/1/1/2, Text 2/4/2/3 — ~80% filled).
+- **Owner-checks:** V70 born (Windows `cargo run` + `--atlas-test`: the
+  pencil rows show the bigger emblem filling its picture, the rows are
+  taller and everything stays aligned on BOTH themes). Open: V70, V69,
+  V68, V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17, F16
+  newest-first in the files.
+- **Commit title:** `Fix: the History Tree row icons grow 12 -> 16 pt and the row grows to fit them (the atlas-test rings showed the room)`
 
 ### 2026-11-21 — `Feat:` the `--atlas-test` flag — a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (owner request in chat)
 
@@ -136,36 +171,3 @@ in 21 s; the wasm `cargo check` green; the visual driver exit 0.
   Debts: F20, F18, F17, F16 newest-first in the files.
 - **Commit title:** `Refactor: file_io.rs split under the 500-line guard — the PNG/JPEG codecs and the encoder defaults move verbatim to file_io/codecs.rs (the root keeps the task/types/dialog glue and re-exports what bin code consumes)`
 
-### 2026-11-21 — `Fix:` the native dialogs no longer freeze the window — F21, variant A (owner pick in chat)
-
-- **What:** the File ▸ Open picker (with its decode) and the Save dialog's
-  folder pick — the Browse… button AND the Save-click fallback — run on a
-  WORKER THREAD now: the blocking portal round-trip left the UI thread
-  (GNOME no longer dims the window / offers Force Quit), the window keeps
-  painting while a chooser is open, and the image decode no longer stalls
-  the frame. ONE shared slot `App::file_task: Option<file_io::FileTask>`
-  (BOTH platforms — the web `AsyncFileDialog` rides it too; `WebTask`/
-  `WebOutcome` folded into `FileTask`/`FileOutcome`) polled per frame
-  (`document::poll_file_task`). The slot doubles as the SINGLE-DIALOG
-  GUARD (owner's pick of the two options: "не открываем новое"): while a
-  chooser is open the Open… item and Browse… GRAY and a second request is
-  rejected; the Save-click fallback CONTINUES BY ITSELF when its pick
-  answers (`save_after_folder_pick` — the pre-F21 one-click save; a
-  cancelled pick keeps the dialog open). No task in flight = zero
-  machinery (one option check per frame, no threads/timers; a quit with a
-  chooser open just drops the detached worker; a worker that dies without
-  a verdict resolves the slot with an error instead of wedging it).
-- **Files:** `src/file_io.rs` (the `FileTask`/`FileOutcome` handle, the
-  spawn glue, the unified web slots), `src/app.rs` (the slot + the
-  unconditional poll call), `src/app/document.rs` (the routing + the
-  guards), `src/app/save_dialog.rs` (the grayed Browse…), `src/app/menu.rs`
-  (the grayed Open…), SPEC §3.7 + §3.10, AGENTS.md (the File-I/O fact),
-  +4 tests (`file_io/tests.rs::file_task`).
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 299 default / 312
-  mcp); the wasm `cargo check` green; the visual driver ALL SCENARIOS
-  GREEN. V67 born (Windows + GNOME: no freeze, the guard, the
-  auto-continue, web unchanged).
-- **Owner-checks:** V67 born. Open: V67, V66, V46 (X11); parked: V30, V8.
-  Debts: F21 PAID (this task); F20, F18, F17, F16 stay open (the files
-  carry the full list).
-- **Commit title:** `Fix: the native file dialogs run on a worker thread — the portal pick and the image decode leave the UI loop (F21); one polled FileTask slot guards double dialogs and the Save fallback continues after its pick`

@@ -131,7 +131,7 @@ fn atlas_rebuilds_only_on_scale_change() {
 }
 
 /// The SECOND atlas (owner request 2026-11-21): the History Tree row icons
-/// rasterize at [`TREE_ICON_PT`] — one per tool, at the ROW size (12 px at
+/// rasterize at [`TREE_ICON_PT`] — one per tool, at the ROW size (16 px at
 /// ppp 1), not a downscaled 24 pt texture (the thin strokes would blur).
 #[test]
 fn the_tree_atlas_rasterizes_one_row_icon_per_tool() {
@@ -288,9 +288,9 @@ fn icons_dump_when_requested() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("the dump folder must be creatable");
     for tool in TOOLS {
-        // 256 = the design view, 24 = the real button, 12 = the History
-        // Tree row size (owner request 2026-11-21).
-        for px in [256, 24, 12] {
+        // 256 = the design view, 24 = the real button, TREE_ICON_PT = the
+        // History Tree row size (owner request 2026-11-21).
+        for px in [256, 24, TREE_ICON_PT as usize] {
             let pm = rasterize_tool_icon(tool, px, Color32::BLACK).expect("px is in 1..=256");
             let path = dir.join(format!("{px}px_{tool:?}.png"));
             pm.save_png(&path)

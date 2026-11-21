@@ -62,14 +62,17 @@ use self::draw::{
 /// egui 0.37 has no rem API — same convention as `placement::FIRST_OPEN_GAP`).
 pub(super) const ICON_PT: f32 = 1.5 * 16.0;
 
-/// The SECOND atlas's icon size (owner request 2026-11-21): the History
-/// Tree rows are one text line tall and their labels read at the Body font
-/// size — a 24 pt button icon would tower over the row. The row icons
-/// rasterize at 12 pt — "по размеру заглавной буквы или чуть больше" (the
-/// Body font's capital letter is ~9 pt) — in the SAME pass and pipeline as
-/// the button icons, keyed by the same scale (a native small raster, NOT a
-/// downscaled 24 pt texture: the thin strokes would blur).
-pub(super) const TREE_ICON_PT: f32 = 12.0;
+/// The SECOND atlas's icon size (owner request 2026-11-21, size pass the
+/// same day: the first 12 pt icons read «слишком маленькие — там ещё
+/// довольно много свободного места» once the `--atlas-test` rings made the
+/// picture's size visible): the History Tree rows GROW to fit the icon —
+/// `row_height = max(text line, TREE_ICON_PT + 4 pt margins)` in
+/// `tree_window.rs` — and the emblem becomes the row's tallest element,
+/// dominating it the way the Tools button's emblem does. Still the SAME
+/// pass and pipeline as the button icons, keyed by the same scale (a
+/// native small raster, NOT a downscaled 24 pt texture: the thin strokes
+/// would blur).
+pub(super) const TREE_ICON_PT: f32 = 16.0;
 
 /// The tools' canonical order — the icon atlas and the Tools window grid
 /// iterate this array, so the two always agree. The owner's 2026-11-21
@@ -195,7 +198,7 @@ pub(super) struct Atlas {
     /// The SECOND, smaller atlas (owner request 2026-11-21): the History
     /// Tree row icons at [`TREE_ICON_PT`], one per [`Tool`], same order as
     /// [`TOOLS`]. Rasterized in the same `ensure` pass (the same key), just
-    /// at the row size — the tree draws a native 12 pt quad, not a blurred
+    /// at the row size — the tree draws a native [`TREE_ICON_PT`] quad, not a blurred
     /// downscale. The same retain-count reason as every set above.
     pub(super) tree_icons: Vec<TextureHandle>,
     /// The pipette's cursor bitmap (STRAIGHT alpha) — set on the canvas
@@ -347,7 +350,7 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, debug_border: boo
 /// the pixmap's OUTERMOST pixel ring with a static black-and-white speckle.
 /// The ring lives in the RASTER, so it is exactly one physical pixel thick
 /// at any scale — neither `pixels_per_point` nor the icon size can stretch
-/// it (a 12 pt tree icon and a 24 pt button carry the same 1 px ring). The
+/// it (a 16 pt tree icon and a 24 pt button carry the same 1 px ring). The
 /// pattern is a per-pixel hash of the coordinates, so a rebuild at the same
 /// size replays it exactly — no animation between frames. It paints OVER
 /// the emblem on purpose (a diagnostic overlay: some drawings reach the

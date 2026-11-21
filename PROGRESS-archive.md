@@ -1,5 +1,39 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Fix:` the native dialogs no longer freeze the window — F21, variant A (owner pick in chat)
+
+- **What:** the File ▸ Open picker (with its decode) and the Save dialog's
+  folder pick — the Browse… button AND the Save-click fallback — run on a
+  WORKER THREAD now: the blocking portal round-trip left the UI thread
+  (GNOME no longer dims the window / offers Force Quit), the window keeps
+  painting while a chooser is open, and the image decode no longer stalls
+  the frame. ONE shared slot `App::file_task: Option<file_io::FileTask>`
+  (BOTH platforms — the web `AsyncFileDialog` rides it too; `WebTask`/
+  `WebOutcome` folded into `FileTask`/`FileOutcome`) polled per frame
+  (`document::poll_file_task`). The slot doubles as the SINGLE-DIALOG
+  GUARD (owner's pick of the two options: "не открываем новое"): while a
+  chooser is open the Open… item and Browse… GRAY and a second request is
+  rejected; the Save-click fallback CONTINUES BY ITSELF when its pick
+  answers (`save_after_folder_pick` — the pre-F21 one-click save; a
+  cancelled pick keeps the dialog open). No task in flight = zero
+  machinery (one option check per frame, no threads/timers; a quit with a
+  chooser open just drops the detached worker; a worker that dies without
+  a verdict resolves the slot with an error instead of wedging it).
+- **Files:** `src/file_io.rs` (the `FileTask`/`FileOutcome` handle, the
+  spawn glue, the unified web slots), `src/app.rs` (the slot + the
+  unconditional poll call), `src/app/document.rs` (the routing + the
+  guards), `src/app/save_dialog.rs` (the grayed Browse…), `src/app/menu.rs`
+  (the grayed Open…), SPEC §3.7 + §3.10, AGENTS.md (the File-I/O fact),
+  +4 tests (`file_io/tests.rs::file_task`).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 299 default / 312
+  mcp); the wasm `cargo check` green; the visual driver ALL SCENARIOS
+  GREEN. V67 born (Windows + GNOME: no freeze, the guard, the
+  auto-continue, web unchanged).
+- **Owner-checks:** V67 born. Open: V67, V66, V46 (X11); parked: V30, V8.
+  Debts: F21 PAID (this task); F20, F18, F17, F16 stay open (the files
+  carry the full list).
+- **Commit title:** `Fix: the native file dialogs run on a worker thread — the portal pick and the image decode leave the UI loop (F21); one polled FileTask slot guards double dialogs and the Save fallback continues after its pick`
+
 ### 2026-11-21 — `Feat:` the History Tree rows show the pencil's icon and lose the node id (owner request in chat)
 
 - **What:** two changes to the History Tree rows (owner request

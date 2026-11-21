@@ -18,9 +18,13 @@
 # human pass — no pixel assertion could be cheaper than looking.
 # Requires the SANDBOX.md fix (/tmp/xkbfix, /tmp/xdotool) and a built
 # binary. Exit 0 = all assertions pass.
-# Usage: bash scripts/gui_tree_icon_check.sh <path-to-russet-binary>
+# Usage: bash scripts/gui_tree_icon_check.sh <path-to-russet-binary> [extra launch args...]
+#       e.g. `... target/debug/russet --atlas-test` — the atlas diagnostic's
+#       speckle rings mark every icon picture's exact edge, which is how the
+#       size pass of 2026-11-21 (12 pt → 16 pt) was judged.
 set -u
 BIN="$1"
+shift 2>/dev/null || true
 LIB=/tmp/xkbfix/ext/usr/lib/x86_64-linux-gnu:/tmp/xdotool/ext/usr/lib/x86_64-linux-gnu
 XD=/tmp/xdotool/ext/usr/bin/xdotool
 OUT=/tmp/tree_icon_shots
@@ -31,7 +35,7 @@ pkill -x Xvfb 2>/dev/null; pkill -x russet 2>/dev/null; sleep 1
 setsid Xvfb :99 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 </dev/null &
 sleep 2
 DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 LD_LIBRARY_PATH="$LIB" \
-  setsid "$BIN" >/tmp/russet_run.log 2>&1 </dev/null &
+  setsid "$BIN" "$@" >/tmp/russet_run.log 2>&1 </dev/null &
 sleep 8
 
 # Raw Xvfb has NO window manager — focus the window explicitly (the drag

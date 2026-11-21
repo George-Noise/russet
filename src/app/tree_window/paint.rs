@@ -93,8 +93,9 @@ fn row_label(node: &TreeNode) -> String {
 
 /// The tool whose ICON the row draws instead of the word (owner request
 /// 2026-11-21: the pencil row shows the tool's emblem from the small
-/// second atlas at [`tool_icons::TREE_ICON_PT`] — "по размеру заглавной
-/// буквы или чуть больше"). `None` = print [`row_label`]. New tools join
+/// second atlas at [`tool_icons::TREE_ICON_PT`] — sized up from 12 pt the
+/// same day, the `--atlas-test` rings showing how much room the row had
+/// left). `None` = print [`row_label`]. New tools join
 /// one row at a time — the owner's «пока что сделаем только для pencil».
 fn row_icon(node: &TreeNode) -> Option<Tool> {
     match node.kind {

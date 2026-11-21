@@ -52,6 +52,7 @@ use super::App;
 use super::placement::{
     AxisAnchor, FIRST_OPEN_GAP, WindowAnchor, WindowPlacement, place_floating_window,
 };
+use crate::app::tool_icons;
 use crate::history_tree::{Change, NodeId, Removal};
 
 mod paint;
@@ -379,7 +380,14 @@ fn tree_content(app: &mut App, ui: &mut egui::Ui, view: &mut TreeView, request: 
     });
     ui.separator();
 
-    let row_height = ui.text_style_height(&TextStyle::Body);
+    // One height for EVERY row (the rails, dots, hit rects and the scroll
+    // fallback all divide it): the text line, but never smaller than the
+    // row icon plus its 4 pt breathing room (owner request 2026-11-21,
+    // size pass: the 12 pt icons read too small — the emblem now sets the
+    // floor, so the row grows from ~15 pt to TREE_ICON_PT + 4).
+    let row_height = ui
+        .text_style_height(&TextStyle::Body)
+        .max(tool_icons::TREE_ICON_PT + 4.0);
     let body_font = ui
         .style()
         .text_styles
