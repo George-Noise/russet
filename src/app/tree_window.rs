@@ -24,7 +24,8 @@
 //!   DEFAULT) and "New at top" (bottom-up, VS Code-like).
 //! - Node rows: circle + "pencil" + ONE color square exactly one text
 //!   line tall (owner request 2026-11-13: a stroke has a single color — no
-//!   primary/secondary pair; the Start root shows no swatch). The DOT is
+//!   primary/secondary pair; chipless rows: the Start root, resize nodes,
+//!   the eraser — owner request 2026-11-21). The DOT is
 //!   interactive since 2026-11-13: LEFT-click moves the head there and the
 //!   canvas shows that node's PNG snapshot; the label stays passive. Branches differ by rail
 //!   color; the CURRENT timeline is the straight LEFT edge (lane 0), side

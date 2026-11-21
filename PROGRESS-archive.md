@@ -1,5 +1,40 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Feat:` the `--atlas-test` flag — a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (owner request in chat)
+
+- **What:** the owner observes that the icons are drawn with a gap between
+  the picture's edge and the emblem and wants to SEE that edge before
+  deciding the next step. The new boolean launch flag `--atlas-test`
+  (SPEC §3.12) turns on a diagnostic in the icon pipeline: every atlas
+  raster's outermost pixel ring is repainted with a STATIC black-and-white
+  speckle — exactly one PHYSICAL pixel thick at any scale (the ring lives
+  in the raster, so neither `pixels_per_point` nor the icon size can
+  stretch it) and animation-free (a per-pixel coordinate hash replays
+  byte-identically on every rebuild). It covers all five icon sets AND the
+  pipette cursor's source raster, and it paints OVER the emblem on purpose.
+- **Files:** `src/app/tool_icons.rs` (`paint_debug_border`, the
+  `ensure(…, debug_border)` parameter applied at the five raster loops),
+  `src/app/launch.rs` (the flag: parse arm, field, `apply_to`, module doc),
+  `src/app.rs` (the `atlas_test` field + the `ensure` call), `src/main.rs`
+  (the `--help` text), SPEC §3.12 (the flag bullet), tests
+  (`tool_icons/tests/atlas.rs`: the 6 `ensure` call sites +1 speckle-ring
+  test).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
+  mcp); the wasm `cargo check` green; the visual driver exit 0 (the flag
+  off = zero behavior change); the new shot script
+  `scripts/gui_atlas_test_shot.sh` PASS with the flag on (364 adjacent
+  pure-black/pure-white pixel pairs on screen — the ring's signature; the
+  plain UI has none); the flagged screenshot LOOKED AT (the rings read on
+  the Tools grid). Measured for the owner's decision: the 24 pt emblems
+  leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the rotated
+  drawing's bounding box), the 12 pt tree icons ≤3 px.
+- **Owner-checks:** V69 born (Windows: `cargo run -- --atlas-test` — every
+  icon picture carries the 1 px speckle ring, the emblem's inset is
+  readable on the real screen scale; the cursor ring too). Open: V69, V68,
+  V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17, F16
+  newest-first in the files.
+- **Commit title:** `Feat: the --atlas-test flag paints a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (the inset diagnostic)`
+
 ### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
 
 - **What:** pure code motion, no behavior change: the pixel/byte codecs —

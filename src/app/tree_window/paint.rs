@@ -32,6 +32,10 @@ const LANE_STEP: f32 = 14.0;
 const NODE_RADIUS: f32 = 3.5;
 const HEAD_RING_EXTRA: f32 = 2.0;
 const LABEL_GAP: f32 = 10.0;
+/// The icon row's tightened gap between the emblem and its color chip
+/// (owner request 2026-11-21: «чтобы между иконкой и цветом … стало чуть
+/// меньше места» — word rows keep [`LABEL_GAP`]).
+const ICON_CHIP_GAP: f32 = 6.0;
 /// Quarter-ellipse radius of a fork connector: half the lane step, so two
 /// adjacent arcs never overlap (owner request 2026-11-13: the fork path is
 /// a straight run, a quarter ellipse, then a straight rail to the node).
@@ -95,19 +99,33 @@ fn row_label(node: &TreeNode) -> String {
 /// 2026-11-21: the pencil row shows the tool's emblem from the small
 /// second atlas at [`tool_icons::TREE_ICON_PT`] — sized up from 12 pt the
 /// same day, the `--atlas-test` rings showing how much room the row had
-/// left). `None` = print [`row_label`]. New tools join
-/// one row at a time — the owner's «пока что сделаем только для pencil».
+/// left; the same-day follow-up extends the set: «как pencil давай в
+/// дереве истории сделаем и brush и eraser»). `None` = print
+/// [`row_label`]. New tools join one row at a time — the next on the
+/// owner's word.
 fn row_icon(node: &TreeNode) -> Option<Tool> {
     match node.kind {
         ActionKind::Pencil => Some(Tool::Pencil),
+        ActionKind::Brush => Some(Tool::Brush),
+        ActionKind::Eraser => Some(Tool::Eraser),
         _ => None,
     }
 }
 
+/// Whether the row paints the stroke-color chip. The Start root carries
+/// no stroke color; a resize node's choices live in the label instead
+/// (owner request 2026-11-17); the ERASER shows none since 2026-11-21 —
+/// it erases, it does not paint (owner: «у eraser почему-то есть цвет в
+/// дереве истории, так не должно быть»).
+fn row_swatch(node: &TreeNode) -> bool {
+    !matches!(node.kind, ActionKind::Start | ActionKind::Eraser) && node.resize.is_none()
+}
+
 /// The graph itself: one row per action, exactly one text line tall —
 /// branch rails, fork connectors, the commit circle (LEFT-click = jump
-/// there), the label (the pencil row draws the TOOL'S icon, owner request
-/// 2026-11-21) and the single color swatch. Returns the id
+/// there), the label (pencil/brush/eraser rows draw the TOOL'S icon,
+/// owner request 2026-11-21) and the single color swatch (chipless rows:
+/// Start, resize, eraser — see [`row_swatch`]). Returns the id
 /// of the node whose dot was clicked this frame, if any.
 ///
 /// Geometry (owner request 2026-11-13): all rails and dots live inside a
@@ -134,9 +152,9 @@ pub(super) fn paint_graph(
     let row_height = metrics.row_height;
     let text_color = metrics.text_color;
     // Per-row labels (owner request 2026-11-13, simplified 2026-11-21):
-    // the kind word — the node id is gone from EVERY row; a PENCIL row
-    // reserves the small icon's width instead of a word (the icon replaces
-    // it). A resize node appends the dialog's choices (owner request
+    // the kind word — the node id is gone from EVERY row; an ICON row
+    // (pencil, brush, eraser) reserves the small icon's width instead of
+    // a word (the icon replaces it). A resize node appends the dialog's choices (owner request
     // 2026-11-17: "canvas 800×600→1000×800 (TL)" / "image … (bicubic)"), a
     // crop node the selection's rect (owner request 2026-11-20: "crop
     // 800×600→300×200 @(100,50)") — jumping a layer back beyond the node
@@ -176,7 +194,21 @@ pub(super) fn paint_graph(
     let content_width = rows
         .iter()
         .zip(&labels)
-        .map(|(row, (_, width))| label_offset(row.branch) + width + LABEL_GAP + SWATCH_WIDTH + 8.0)
+        .map(|(row, (_, width))| {
+            let node = app.layers.node(row.id);
+            let icon_row = node.is_some_and(|node| row_icon(node).is_some());
+            // Only rows that PAINT the chip reserve its room: word rows
+            // the word gap, icon rows the tightened one (owner request
+            // 2026-11-21); chipless rows (Start, resize, eraser) reserve
+            // just the tail margin.
+            let chip = match node {
+                Some(node) if row_swatch(node) => {
+                    (if icon_row { ICON_CHIP_GAP } else { LABEL_GAP }) + SWATCH_WIDTH
+                }
+                _ => 0.0,
+            };
+            label_offset(row.branch) + width + chip + 8.0
+        })
         .fold(gutter_end, f32::max);
     let row_width = content_width.max(ui.available_width());
 
@@ -345,8 +377,9 @@ pub(super) fn paint_graph(
             egui::vec2(label_width + 6.0, row_height - 2.0),
         );
         painter.rect_filled(backdrop, 2.0, window_fill);
-        // The pencil row draws the TOOL'S ICON from the small second atlas
-        // (owner request 2026-11-21); the word stays the fallback for the
+        // An icon row (pencil, brush, eraser) draws the TOOL'S ICON from
+        // the small second atlas (owner request 2026-11-21); the word
+        // stays the fallback for the
         // frame before the atlas exists (unreachable: ensure() runs before
         // the windows paint).
         let icon = node.and_then(row_icon);
@@ -374,12 +407,21 @@ pub(super) fn paint_graph(
             }
         }
         if let Some(node) = node {
-            // The Start root paints no swatch (it carries no stroke color);
-            // a resize node has none either (owner request 2026-11-17 —
-            // the choices live in the label instead).
-            if node.kind != crate::history_tree::ActionKind::Start && node.resize.is_none() {
+            // Chipless rows — see row_swatch: the Start root (no stroke
+            // color), a resize node (the choices live in the label — owner
+            // request 2026-11-17) and the ERASER (it erases, it does not
+            // paint — owner request 2026-11-21). Icon rows pull the chip
+            // in to ICON_CHIP_GAP (owner request 2026-11-21: «чтобы между
+            // иконкой и цветом … чуть меньше места»); word rows keep the
+            // label gap.
+            let chip_gap = if icon.is_some() {
+                ICON_CHIP_GAP
+            } else {
+                LABEL_GAP
+            };
+            if row_swatch(node) {
                 let swatch = Rect::from_min_size(
-                    egui::pos2(label_x + label_width + LABEL_GAP, rect.top() + 2.0),
+                    egui::pos2(label_x + label_width + chip_gap, rect.top() + 2.0),
                     egui::vec2(SWATCH_WIDTH, row_height - 4.0),
                 );
                 // A two-color gesture (a Shape commit with outline AND

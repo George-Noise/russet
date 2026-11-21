@@ -1,8 +1,9 @@
 //! The row-label helpers of the graph painter (owner request 2026-11-21):
-//! every row drops the node id, and only the pencil row swaps its word for
-//! the tool's icon. Pure functions over [`TreeNode`] — no UI.
+//! every row drops the node id, and the pencil/brush/eraser rows swap
+//! their words for the tool's icons. Pure functions over [`TreeNode`] —
+//! no UI.
 
-use super::{row_icon, row_label};
+use super::{row_icon, row_label, row_swatch};
 use crate::history_tree::{ActionKind, CropInfo, ResizeAnchor, ResizeInfo, ResizeMode, TreeNode};
 use crate::tools::Tool;
 use eframe::egui::Color32;
@@ -80,14 +81,47 @@ fn resize_and_crop_rows_keep_their_summary() {
 }
 
 #[test]
-fn only_the_pencil_row_draws_an_icon() {
-    // Owner request 2026-11-21: «пока что сделаем только для pencil» —
-    // every other kind stays a word row (new tools join one at a time).
+fn pencil_brush_eraser_rows_draw_an_icon() {
+    // Owner request 2026-11-21: «пока что сделаем только для pencil», then
+    // the same-day follow-up «как pencil давай в дереве истории сделаем
+    // и brush и eraser» — the three painting tools are icon rows, every
+    // other kind stays a word row (the next tool joins on the owner's
+    // word).
     assert_eq!(row_icon(&node(ActionKind::Pencil)), Some(Tool::Pencil));
+    assert_eq!(row_icon(&node(ActionKind::Brush)), Some(Tool::Brush));
+    assert_eq!(row_icon(&node(ActionKind::Eraser)), Some(Tool::Eraser));
     for kind in ALL_KINDS {
-        if kind == ActionKind::Pencil {
+        if matches!(
+            kind,
+            ActionKind::Pencil | ActionKind::Brush | ActionKind::Eraser
+        ) {
             continue;
         }
         assert_eq!(row_icon(&node(kind)), None, "{kind:?} stays a word row");
     }
+}
+
+#[test]
+fn the_eraser_row_paints_no_swatch() {
+    // Owner request 2026-11-21: «у eraser почему-то есть цвет в дереве
+    // истории, так не должно быть» — the eraser erases, it does not
+    // paint. The Start root and the resize rows carry no color either
+    // (the resize choices live in the label); the painting tools do.
+    assert!(!row_swatch(&node(ActionKind::Eraser)));
+    assert!(!row_swatch(&node(ActionKind::Start)));
+    assert!(row_swatch(&node(ActionKind::Pencil)));
+    assert!(row_swatch(&node(ActionKind::Brush)));
+    assert!(row_swatch(&node(ActionKind::Text)));
+
+    let mut resize = node(ActionKind::Resize);
+    resize.resize = Some(ResizeInfo {
+        mode: ResizeMode::Canvas,
+        from_w: 800,
+        from_h: 600,
+        to_w: 1000,
+        to_h: 800,
+        anchor: None,
+        filter: None,
+    });
+    assert!(!row_swatch(&resize));
 }

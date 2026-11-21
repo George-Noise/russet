@@ -368,10 +368,16 @@ The history lives PER LAYER as a git-style tree of nodes (`layers.rs` owns the s
   consecutive icons is EXACTLY 0.0625rem — the owner's follow-up the same day:
   «между двумя иконками … 0.0625rem»; `tree_window.rs::TREE_ICON_GAP` = 1 pt),
   rasterized in the same `ensure` pass and key as the button icons — a native small
-  raster, NOT a downscaled 24 pt texture. New tools join the icon rows one at a time
-  (pencil first, the owner's «пока что сделаем только для pencil»). The color chip and
-  the crop row's summary (which already opens with its own kind word — "crop
-  800×600→300×200 @(100,50)" — so no second one is prepended) are unchanged.
+  raster, NOT a downscaled 24 pt texture. New tools join the icon rows one at a
+  time — the set is PENCIL, BRUSH, ERASER (owner request 2026-11-21: «как pencil
+  давай в дереве истории сделаем и brush и eraser»; the next on the owner's word).
+  The chip: icon rows pull it in to 6 pt after the emblem («чтобы между иконкой
+  и цветом … стало чуть меньше места» — `paint.rs::ICON_CHIP_GAP`, word rows keep
+  the 10 pt label gap), and the ERASER row paints none at all — it erases, it does
+  not paint («у eraser почему-то есть цвет в дереве истории, так не должно быть»);
+  the Start root and the resize rows stay chipless too (`paint.rs::row_swatch`).
+  The crop row's summary (which already opens with its own kind word — "crop
+  800×600→300×200 @(100,50)" — so no second one is prepended) is unchanged.
 - No node-count limit at this stage (owner decision 2026-11-13): the PNG compression
   keeps memory small; eviction-by-memory arrives together with the action model.
 - **Sizes (owner request 2026-11-17): the BOTTOM layer owns the canvas size** — its buffer
