@@ -43,7 +43,7 @@
 
 use eframe::egui::{self, Color32, Context, Id, TextureHandle, TextureId, TextureOptions};
 use std::sync::Arc;
-use tiny_skia::{Pixmap, Point};
+use tiny_skia::{Pixmap, Point, PremultipliedColorU8};
 
 use crate::tools::Tool;
 
@@ -212,7 +212,7 @@ pub(super) struct Atlas {
 /// Total: on any raster failure the OLD atlas is kept and the call is
 /// retried next frame (the pixel size is clamped to `1..=256`, so this is
 /// unreachable in practice).
-pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
+pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, debug_border: bool) {
     let ppp = ctx.pixels_per_point();
     if atlas.as_ref().is_some_and(|a| a.key == ppp) {
         return;
@@ -225,9 +225,14 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let mut handles = Vec::with_capacity(TOOLS.len());
     let mut cursor = None;
     for tool in TOOLS {
-        let Some(pm) = rasterize_tool_icon(tool, px, text) else {
+        let Some(mut pm) = rasterize_tool_icon(tool, px, text) else {
             return; // keep the previous atlas; retried next frame
         };
+        if debug_border {
+            // The `--atlas-test` ring rides EVERY picture, the pipette
+            // cursor bitmap included (it is converted from this same pm).
+            paint_debug_border(&mut pm);
+        }
         if tool == Tool::Eyedropper {
             cursor = cursor_bitmap(&pm);
         }
@@ -243,9 +248,12 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     // drawings, the key carries only the scale.
     let mut shape_icons = Vec::with_capacity(SHAPE_ICONS.len());
     for icon in SHAPE_ICONS {
-        let Some(pm) = rasterize_shape_icon(icon, px, text) else {
+        let Some(mut pm) = rasterize_shape_icon(icon, px, text) else {
             return; // keep the previous atlas; retried next frame
         };
+        if debug_border {
+            paint_debug_border(&mut pm);
+        }
         let image = egui::ColorImage::from_rgba_premultiplied([px, px], pm.data());
         shape_icons.push(ctx.load_texture_cached(
             format!("russet_shape_icon_{icon:?}"),
@@ -266,9 +274,12 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     // set above.
     let mut line_icons = Vec::with_capacity(LINE_ICONS.len());
     for icon in LINE_ICONS {
-        let Some(pm) = rasterize_line_icon(icon, px, text) else {
+        let Some(mut pm) = rasterize_line_icon(icon, px, text) else {
             return; // keep the previous atlas; retried next frame
         };
+        if debug_border {
+            paint_debug_border(&mut pm);
+        }
         let image = egui::ColorImage::from_rgba_premultiplied([px, px], pm.data());
         line_icons.push(ctx.load_texture_cached(
             format!("russet_line_icon_{icon:?}"),
@@ -284,9 +295,12 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     // mode marks + the four ops — the same fixed-drawing pipeline.
     let mut select_icons = Vec::with_capacity(SELECT_ICONS.len());
     for icon in SELECT_ICONS {
-        let Some(pm) = rasterize_select_icon(icon, px, text) else {
+        let Some(mut pm) = rasterize_select_icon(icon, px, text) else {
             return; // keep the previous atlas; retried next frame
         };
+        if debug_border {
+            paint_debug_border(&mut pm);
+        }
         let image = egui::ColorImage::from_rgba_premultiplied([px, px], pm.data());
         select_icons.push(ctx.load_texture_cached(
             format!("russet_select_icon_{icon:?}"),
@@ -303,9 +317,12 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
     let tree_px = (TREE_ICON_PT * ppp).round().clamp(1.0, 256.0) as usize;
     let mut tree_icons = Vec::with_capacity(TOOLS.len());
     for tool in TOOLS {
-        let Some(pm) = rasterize_tool_icon(tool, tree_px, text) else {
+        let Some(mut pm) = rasterize_tool_icon(tool, tree_px, text) else {
             return; // keep the previous atlas; retried next frame
         };
+        if debug_border {
+            paint_debug_border(&mut pm);
+        }
         let image = egui::ColorImage::from_rgba_premultiplied([tree_px, tree_px], pm.data());
         tree_icons.push(ctx.load_texture_cached(
             format!("russet_tree_icon_{tool:?}"),
@@ -323,6 +340,36 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context) {
         tree_icons,
         pipette_cursor: Some(pipette_cursor),
     });
+}
+
+/// The `--atlas-test` diagnostic (owner request 2026-11-21: «чёрно-белая
+/// мурашка … в ровно 1 px вне зависимости от масштабирования»): repaints
+/// the pixmap's OUTERMOST pixel ring with a static black-and-white speckle.
+/// The ring lives in the RASTER, so it is exactly one physical pixel thick
+/// at any scale — neither `pixels_per_point` nor the icon size can stretch
+/// it (a 12 pt tree icon and a 24 pt button carry the same 1 px ring). The
+/// pattern is a per-pixel hash of the coordinates, so a rebuild at the same
+/// size replays it exactly — no animation between frames. It paints OVER
+/// the emblem on purpose (a diagnostic overlay: some drawings reach the
+/// raster's edge — the Outline-placement bands run past the 24 pt edge —
+/// and the point is to see where the picture ends and how much of it the
+/// emblem leaves empty).
+pub(super) fn paint_debug_border(pm: &mut Pixmap) {
+    let (w, h) = (pm.width(), pm.height());
+    for y in 0..h {
+        for x in 0..w {
+            if x != 0 && y != 0 && x != w - 1 && y != h - 1 {
+                continue;
+            }
+            let mut s = x.wrapping_mul(0x9E37_79B9) ^ y.wrapping_mul(0x85EB_CA6B);
+            s ^= s << 13;
+            s ^= s >> 17;
+            s ^= s << 5;
+            let c = if s & 1 == 0 { 255 } else { 0 };
+            pm.pixels_mut()[(y * w + x) as usize] =
+                PremultipliedColorU8::from_rgba(c, c, c, 255).expect("opaque colors are valid");
+        }
+    }
 }
 
 /// The icon's TextureId for a tool, if the atlas is ready.

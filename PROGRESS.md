@@ -49,13 +49,13 @@
 | Extra: the native dialogs stop freezing the window — F21, variant A (owner pick 2026-11-21) | done — gates + wasm check + driver green | File ▸ Open (with its decode) and the Save dialog's folder pick (Browse… AND the Save-click fallback) run on a WORKER THREAD — the portal round-trip + `pollster::block_on` left the UI thread, GNOME no longer dims the window ("Not Responding" gone); ONE shared `file_io::FileTask` slot (both platforms, the web `AsyncFileDialog` rides it too) polled per frame (`document::poll_file_task`); the single-dialog guard (Open…/Browse… gray, no second chooser stacks); the Save-click fallback continues by itself when its pick answers (`save_after_folder_pick`); no task in flight = zero machinery; +4 tests; V67 born |
 | Extra: file_io.rs split under the ~500-line guard (owner 2026-11-21) | done — gates + wasm green, pure code motion | the pixel/byte codecs (`pixmap_from_image`, `png_compression_type`, the two PNG encoders, the JPEG encoder) + the two encoder defaults moved VERBATIM into the new `src/file_io/codecs.rs` (the F21 round's approved proposal); the root keeps the task/types/dialog glue and re-exports what bin code consumes (the MCP `encode_png` gated by the feature like `save_image_to`); the tests import from the owning module; file_io.rs 606 → 495, codecs.rs 134; +1 stale comment fixed (`FOLDER_PICKING_SUPPORTED`'s doc claimed the web stub "returns `None`") |
 | Extra: the History Tree rows go wordless for pencil, digitless for all (owner 2026-11-21) | done — gates + wasm + driver + new probe green, the icon dump and the tree screenshots looked at | the tree rows drop the node id EVERYWHERE ("pencil 7" → "pencil") and the PENCIL row draws the TOOL'S ICON — the same emblem the Tools button shows, from a SECOND, row-sized atlas (`tool_icons::TREE_ICON_PT` 12 pt, "по размеру заглавной буквы или чуть больше", the same `ensure` pass/key — a native small raster, not a downscaled 24 pt texture; the headless texture count 25 → 33); new tools join one row at a time; the digit removal EXPOSED a doubled kind word on crop rows ("crop crop …" — `CropInfo::summary` opens with "crop" itself, the id used to separate them) — the row now prints the summary alone; +4 tests (3 paint row-label/icon helpers in the new `paint/tests.rs`, 1 atlas row-size set); the new probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags: the rails' blue + the icon's warm-gold pixels on the screen's right side); V68 born |
+| Extra: the `--atlas-test` diagnostic — a 1 px speckle edge on every atlas picture (owner 2026-11-21) | done — gates + wasm + driver green, the flagged screenshot looked at | the owner sees a gap between the icon pictures' edges and their emblems and wants to SEE it before deciding: the new boolean flag `--atlas-test` (§3.12, no value; `apply_to` → `App::atlas_test` → `ensure(…, debug_border)`) repaints every raster's outermost pixel ring with a STATIC black-and-white speckle (`tool_icons::paint_debug_border` — a per-pixel coordinate hash, replayed byte-identically on every rebuild, so no animation) — exactly ONE PHYSICAL pixel thick at any scale (the ring lives in the raster: ppp and the icon size cannot stretch it), applied to all five icon sets AND the pipette cursor's source raster, painted OVER the emblem on purpose; +1 test (the ring is opaque black/white only, BOTH colors present, the interior byte-identical, the repaint deterministic); the new shot script `scripts/gui_atlas_test_shot.sh` PASS (364 adjacent pure-black/pure-white pairs on screen); the measured insets it exists to expose: the 24 pt emblems leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the diagonal drawing), the 12 pt tree icons ≤3 px; V69 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the tree-row
-icons round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
---all-targets (default + mcp), `cargo test --profile gates` 303 default /
-316 mcp green (+1 ignored; +4 new: the paint helpers and the atlas
-row-size set), ALL GATES GREEN in 15 s; the wasm `cargo check` green; the
-visual driver exit 0 (recipe test done).
+**Verification stamp:** FULL gate re-verified 2026-11-21 (the atlas-test
+flag round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green on
+--all-targets (default + mcp), `cargo test --profile gates` 304 default /
+317 mcp green (+1 ignored; +1 new: the speckle-ring test), ALL GATES GREEN
+in 21 s; the wasm `cargo check` green; the visual driver exit 0.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -71,47 +71,44 @@ visual driver exit 0 (recipe test done).
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the five-file-split Refactor entry
-> (during the tree-row-icons round's budget — the file rode past ~200 lines;
+> PROGRESS-archive.md; the latest move: the History-Tree-icons Feat entry
+> (during the atlas-test round's budget — the file rode past ~200 lines;
 > three entries + the new one stay in the Log, all in the archive).
 
-### 2026-11-21 — `Feat:` the History Tree rows show the pencil's icon and lose the node id (owner request in chat)
+### 2026-11-21 — `Feat:` the `--atlas-test` flag — a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (owner request in chat)
 
-- **What:** two changes to the History Tree rows (owner request
-  2026-11-21): (1) EVERY row stops appending the node id — "pencil 7"
-  became "pencil", "start 1" "start" (the reading order is the id's
-  context; the dot's hover already carries the node); (2) the PENCIL row
-  draws the TOOL'S ICON instead of the word — the same emblem the Tools
-  window's button shows, from a SECOND, row-sized atlas: `TREE_ICON_PT`
-  12 pt («по размеру заглавной буквы или чуть больше» — the Body font's
-  capital is ~9 pt), rasterized in the same `ensure` pass and key as the
-  button icons, a native small raster instead of a downscaled 24 pt
-  texture. New tools join the icon rows ONE AT A TIME (the owner's «пока
-  что сделаем только для pencil» — `row_icon` maps only the Pencil).
-  Side catch (exposed by the digit removal, fixed in the same edit): the
-  crop row used to read "crop {id} crop …" — `CropInfo::summary` opens
-  with its own kind word — and without the id the doubling became visible;
-  the row now prints the summary alone.
-- **Files:** `src/app/tool_icons.rs` (the small atlas: `TREE_ICON_PT`, the
-  `tree_icons` set, `tree_texture_id`), `src/app/tree_window/paint.rs` (the
-  pure `row_label`/`row_icon` + the textured quad in the row, id-free
-  labels) with its new test child `paint/tests.rs` (+3),
-  `src/app/tool_icons/tests/atlas.rs` (+1, the counts 25 → 33 / 24 → 32,
-  the id-distinct chain, the dump's 12 px pass), doc updates:
-  SPEC §3.6 (the row-format bullet + the resize example), AGENTS.md (the
-  tool_icons clause + the texture-count fact), the module docs of
-  `tree_window.rs` / `history_tree.rs`.
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 303 default / 316
-  mcp); the wasm `cargo check` green; the visual driver exit 0; the new
-  probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags, the
-  rails' blue + the icon's warm-gold on the right side); the 12 px icon
-  dump and the tree screenshots LOOKED AT (the icons legible at the row
-  size, no digits anywhere).
-- **Owner-checks:** V68 born (Windows: the pencil rows show the icon at a
-  readable size, no digits in any row, the crop summary unchanged).
-  Open: V68, V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17,
-  F16 newest-first in the files.
-- **Commit title:** `Feat: the History Tree rows drop the node id and the pencil row draws the tool's icon from a new 12 pt row-sized atlas (the crop row loses its doubled kind word)`
+- **What:** the owner observes that the icons are drawn with a gap between
+  the picture's edge and the emblem and wants to SEE that edge before
+  deciding the next step. The new boolean launch flag `--atlas-test`
+  (SPEC §3.12) turns on a diagnostic in the icon pipeline: every atlas
+  raster's outermost pixel ring is repainted with a STATIC black-and-white
+  speckle — exactly one PHYSICAL pixel thick at any scale (the ring lives
+  in the raster, so neither `pixels_per_point` nor the icon size can
+  stretch it) and animation-free (a per-pixel coordinate hash replays
+  byte-identically on every rebuild). It covers all five icon sets AND the
+  pipette cursor's source raster, and it paints OVER the emblem on purpose.
+- **Files:** `src/app/tool_icons.rs` (`paint_debug_border`, the
+  `ensure(…, debug_border)` parameter applied at the five raster loops),
+  `src/app/launch.rs` (the flag: parse arm, field, `apply_to`, module doc),
+  `src/app.rs` (the `atlas_test` field + the `ensure` call), `src/main.rs`
+  (the `--help` text), SPEC §3.12 (the flag bullet), tests
+  (`tool_icons/tests/atlas.rs`: the 6 `ensure` call sites +1 speckle-ring
+  test).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
+  mcp); the wasm `cargo check` green; the visual driver exit 0 (the flag
+  off = zero behavior change); the new shot script
+  `scripts/gui_atlas_test_shot.sh` PASS with the flag on (364 adjacent
+  pure-black/pure-white pixel pairs on screen — the ring's signature; the
+  plain UI has none); the flagged screenshot LOOKED AT (the rings read on
+  the Tools grid). Measured for the owner's decision: the 24 pt emblems
+  leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the rotated
+  drawing's bounding box), the 12 pt tree icons ≤3 px.
+- **Owner-checks:** V69 born (Windows: `cargo run -- --atlas-test` — every
+  icon picture carries the 1 px speckle ring, the emblem's inset is
+  readable on the real screen scale; the cursor ring too). Open: V69, V68,
+  V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17, F16
+  newest-first in the files.
+- **Commit title:** `Feat: the --atlas-test flag paints a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (the inset diagnostic)`
 
 ### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
 

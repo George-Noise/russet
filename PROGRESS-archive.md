@@ -1,5 +1,43 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Feat:` the History Tree rows show the pencil's icon and lose the node id (owner request in chat)
+
+- **What:** two changes to the History Tree rows (owner request
+  2026-11-21): (1) EVERY row stops appending the node id — "pencil 7"
+  became "pencil", "start 1" "start" (the reading order is the id's
+  context; the dot's hover already carries the node); (2) the PENCIL row
+  draws the TOOL'S ICON instead of the word — the same emblem the Tools
+  window's button shows, from a SECOND, row-sized atlas: `TREE_ICON_PT`
+  12 pt («по размеру заглавной буквы или чуть больше» — the Body font's
+  capital is ~9 pt), rasterized in the same `ensure` pass and key as the
+  button icons, a native small raster instead of a downscaled 24 pt
+  texture. New tools join the icon rows ONE AT A TIME (the owner's «пока
+  что сделаем только для pencil» — `row_icon` maps only the Pencil).
+  Side catch (exposed by the digit removal, fixed in the same edit): the
+  crop row used to read "crop {id} crop …" — `CropInfo::summary` opens
+  with its own kind word — and without the id the doubling became visible;
+  the row now prints the summary alone.
+- **Files:** `src/app/tool_icons.rs` (the small atlas: `TREE_ICON_PT`, the
+  `tree_icons` set, `tree_texture_id`), `src/app/tree_window/paint.rs` (the
+  pure `row_label`/`row_icon` + the textured quad in the row, id-free
+  labels) with its new test child `paint/tests.rs` (+3),
+  `src/app/tool_icons/tests/atlas.rs` (+1, the counts 25 → 33 / 24 → 32,
+  the id-distinct chain, the dump's 12 px pass), doc updates:
+  SPEC §3.6 (the row-format bullet + the resize example), AGENTS.md (the
+  tool_icons clause + the texture-count fact), the module docs of
+  `tree_window.rs` / `history_tree.rs`.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 303 default / 316
+  mcp); the wasm `cargo check` green; the visual driver exit 0; the new
+  probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags, the
+  rails' blue + the icon's warm-gold on the right side); the 12 px icon
+  dump and the tree screenshots LOOKED AT (the icons legible at the row
+  size, no digits anywhere).
+- **Owner-checks:** V68 born (Windows: the pencil rows show the icon at a
+  readable size, no digits in any row, the crop summary unchanged).
+  Open: V68, V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17,
+  F16 newest-first in the files.
+- **Commit title:** `Feat: the History Tree rows drop the node id and the pencil row draws the tool's icon from a new 12 pt row-sized atlas (the crop row loses its doubled kind word)`
+
 ### 2026-11-21 — `Refactor:` the five over-guard files split under the 500-line guard — pure code motion (owner order in chat)
 
 - **What:** the owner picked the split list this round (tool_icons/draw.rs,

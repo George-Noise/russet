@@ -37,6 +37,9 @@ Launch arguments:
                        eyedropper, line, shape, text
   --canvas-size <WxH>  the startup canvas in pixels, e.g. 1024x768
                        (1..=4096 per side)
+  --atlas-test         paint a static 1 px black-and-white speckle ring on
+                       the outer edge of every icon-atlas picture (the
+                       atlas diagnostic)
   -h, --help           print this help and exit
 
 Both `--flag value` and `--flag=value` work. An invalid value is reported

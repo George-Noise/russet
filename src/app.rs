@@ -185,6 +185,11 @@ pub struct App {
     /// In-place layer rename ([`layers_window`]): (index, current buffer); the
     /// TextEdit lives in the Layers window rows.
     layer_rename: Option<(usize, String)>,
+    /// The `--atlas-test` diagnostic (owner request 2026-11-21): paint a
+    /// static 1 px black-and-white speckle ring on the outer edge of every
+    /// atlas picture (`tool_icons::paint_debug_border`) — the owner's tool
+    /// for measuring the icon's inset inside its picture.
+    atlas_test: bool,
     /// Visual "History Tree" windows (owner request 2026-11-12): view 0 is
     /// the main window (shown while this flag is set), the rest are clones.
     tree_window_open: bool,
@@ -402,6 +407,7 @@ impl App {
             stroke_trail: PencilTrail::default(),
             stroke_button: None,
             tool_icons: None,
+            atlas_test: false,
             tools_window_open: true,
             palette_window_open: true,
             history_window_open: true,
@@ -863,8 +869,10 @@ impl eframe::App for App {
         // pipette cursor) and the Tools window (the icon buttons) draw. It
         // is scale-keyed only — theme-independent since the v4 pass and
         // kind-independent since the owner request 2026-11-20 (the Shape
-        // panel's MODE radios draw the Shape tool's emblem).
-        tool_icons::ensure(&mut self.tool_icons, &ctx);
+        // panel's MODE radios draw the Shape tool's emblem); the
+        // `--atlas-test` flag turns on the 1 px speckle edge ring (owner
+        // request 2026-11-21).
+        tool_icons::ensure(&mut self.tool_icons, &ctx, self.atlas_test);
         self.top_menu(ui);
 
         // no_frame: zero margin, the gray canvas background reaches the

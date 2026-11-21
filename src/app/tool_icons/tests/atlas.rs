@@ -8,8 +8,8 @@
 
 use super::super::{
     LINE_ICONS, PIPETTE_TIP, SHAPE_ICONS, TOOL_ANGLE, TOOL_INK, TOOLS, TREE_ICON_PT, cursor_bitmap,
-    ensure, icon_transform, rasterize_line_icon, rasterize_shape_icon, rasterize_tool_icon,
-    tree_texture_id,
+    ensure, icon_transform, paint_debug_border, rasterize_line_icon, rasterize_shape_icon,
+    rasterize_tool_icon, tree_texture_id,
 };
 use crate::tools::Tool;
 use eframe::egui::{Color32, Context, RawInput, TextureHandle, Theme, Visuals};
@@ -83,7 +83,7 @@ fn atlas_rebuilds_only_on_scale_change() {
         uploaded
     }
     let mut atlas = None;
-    ensure(&mut atlas, &ctx);
+    ensure(&mut atlas, &ctx, false);
     assert_eq!(
         pass(&ctx),
         33,
@@ -95,7 +95,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     assert_eq!(cursor0.size, [24, 24]);
 
     // Same conditions: a cheap no-op (the key match must keep the atlas).
-    ensure(&mut atlas, &ctx);
+    ensure(&mut atlas, &ctx, false);
     assert_eq!(pass(&ctx), 0);
     assert_eq!(atlas.as_ref().expect("kept").key, 1.0);
 
@@ -104,7 +104,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     // so a pass runs before ensure() can observe the new scale.
     ctx.set_pixels_per_point(2.0);
     pass(&ctx);
-    ensure(&mut atlas, &ctx);
+    ensure(&mut atlas, &ctx, false);
     assert_eq!(
         pass(&ctx),
         32,
@@ -125,7 +125,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     // thirty-two icons would make it 33 — the count stays the "did the
     // atlas rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
-    ensure(&mut atlas, &ctx);
+    ensure(&mut atlas, &ctx, false);
     assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 32 icons");
     assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
 }
@@ -137,7 +137,7 @@ fn atlas_rebuilds_only_on_scale_change() {
 fn the_tree_atlas_rasterizes_one_row_icon_per_tool() {
     let ctx = Context::default();
     let mut atlas = None;
-    ensure(&mut atlas, &ctx);
+    ensure(&mut atlas, &ctx, false);
     let built = atlas.as_ref().expect("built");
     assert_eq!(
         built.tree_icons.len(),
@@ -161,6 +161,56 @@ fn the_tree_atlas_rasterizes_one_row_icon_per_tool() {
         pm.pixels().iter().filter(|p| p.alpha() > 0).count() > 8,
         "the small pencil raster is not empty"
     );
+}
+
+/// The `--atlas-test` border (owner request 2026-11-21): a STATIC 1 px
+/// black-and-white speckle on the raster's outer ring — one physical pixel
+/// at any size, deterministic, the interior untouched.
+#[test]
+fn the_atlas_test_border_is_a_static_one_pixel_speckle_ring() {
+    let size = 24u32;
+    let mut pm =
+        rasterize_tool_icon(Tool::Pencil, size as usize, TOOL_INK).expect("px is in 1..=256");
+    let before = pm.clone();
+    paint_debug_border(&mut pm);
+
+    // The ring is ONLY fully-opaque black or white — and it IS a speckle
+    // (both colors appear), not a solid frame.
+    let mut blacks = 0;
+    let mut whites = 0;
+    for i in 0..size {
+        for (x, y) in [(i, 0), (i, size - 1), (0, i), (size - 1, i)] {
+            let c = pm.pixel(x, y).expect("inside");
+            assert_eq!(c.alpha(), 255, "the ring pixel ({x},{y}) is opaque");
+            match (c.red(), c.green(), c.blue()) {
+                (0, 0, 0) => blacks += 1,
+                (255, 255, 255) => whites += 1,
+                other => panic!("the ring is black/white only at ({x},{y}): {other:?}"),
+            }
+        }
+    }
+    assert!(
+        blacks > 0 && whites > 0,
+        "a speckle has BOTH colors ({blacks} black, {whites} white)"
+    );
+
+    // Exactly ONE pixel: the interior keeps whatever the emblem painted
+    // there — the ring never leaks inward.
+    for y in 1..size - 1 {
+        for x in 1..size - 1 {
+            assert_eq!(
+                pm.pixel(x, y),
+                before.pixel(x, y),
+                "the interior pixel ({x},{y}) is untouched"
+            );
+        }
+    }
+
+    // Deterministic: repainting the ALREADY bordered raster replays the
+    // same ring byte-for-byte (no animation between frames).
+    let first = pm.data().to_vec();
+    paint_debug_border(&mut pm);
+    assert_eq!(pm.data(), &first[..], "the speckle is static");
 }
 
 /// The monochrome ink is FIXED (owner v4) and sits a bit BELOW the light
@@ -190,7 +240,7 @@ fn mono_ink_is_fixed_below_the_light_theme_text() {
 fn atlas_ids_are_one_per_tool() {
     let ctx = Context::default();
     let mut atlas = None;
-    ensure(&mut atlas, &ctx);
+    ensure(&mut atlas, &ctx, false);
     let atlas = atlas.expect("built");
     let mut ids: Vec<_> = atlas
         .handles

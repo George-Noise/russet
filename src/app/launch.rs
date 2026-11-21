@@ -1,6 +1,6 @@
 //! Launch arguments (owner request 2026-11-17): the native command line —
 //! `--primary` / `--secondary` color wells, `--tool`, `--canvas-size`,
-//! `--help`.
+//! `--atlas-test`, `--help`.
 //!
 //! OWNS: parsing argv into [`LaunchConfig`] (the pure [`LaunchConfig::parse`]
 //! with its [`LaunchConfig::from_env`] adapter) and applying the parsed
@@ -66,6 +66,12 @@ pub(crate) struct LaunchConfig {
     /// `--canvas-size` (width, height), ALREADY clamped into
     /// `MIN_CANVAS..=MAX_CANVAS` at parse time (a clamp warns).
     pub(crate) canvas: Option<(u32, u32)>,
+    /// `--atlas-test` (owner request 2026-11-21): the icon-atlas
+    /// diagnostic — every atlas picture's outer 1 px ring is repainted
+    /// with a static black-and-white speckle (one PHYSICAL pixel, no
+    /// animation; `tool_icons::paint_debug_border`), so the gap between a
+    /// picture's edge and its drawn emblem is measurable on screen.
+    pub(crate) atlas_test: bool,
     /// Human-readable parse problems; `main.rs` prints each to stderr
     /// (`report_warnings`). Nothing aborts, the defaults stay.
     pub(crate) warnings: Vec<String>,
@@ -119,6 +125,15 @@ impl LaunchConfig {
                 // Owned by the `mcp` feature (`super::mcp::maybe_spawn`
                 // scans argv itself) — not an error here, just not ours.
                 "--mcp" => continue,
+                // A boolean diagnostic — no value, like `--help` (owner
+                // request 2026-11-21).
+                "--atlas-test" => {
+                    config.atlas_test = true;
+                    if let Some(value) = inline {
+                        config.warn(format!("--atlas-test takes no value ('{value}' ignored)"));
+                    }
+                    continue;
+                }
                 "--primary" => "primary",
                 "--secondary" => "secondary",
                 "--tool" => "tool",
@@ -166,6 +181,9 @@ impl LaunchConfig {
             app.tools.tool = tool;
             app.last_tool = tool;
         }
+        // A boolean diagnostic: the built-in default is false, the flag
+        // only turns it on.
+        app.atlas_test = self.atlas_test;
     }
 
     fn warn(&mut self, message: impl Into<String>) {
