@@ -37,15 +37,16 @@
 | Extra: the Select tool — regions, copy/cut/paste/move, crop (owner 2026-11-20) | done — gates + driver + GUI probes green | ONE "Select (V)" button (the grid is 8 tools), the icon = the mode's mark (dashed square/blob), while active L-click cycles the mode forward / R-click backward (over `SelectMode::ALL` — ready for more kinds); the panel: the MODE row (Rect/Lasso) + the OPS row (Copy/Cut/Paste/Crop, grayed without a selection/clipboard; the Edit menu + Ctrl+C/X/V run the same ops); a plain drag replaces, Shift-drag adds, Alt-drag subtracts (rect AND lasso — the mask derives from the op list, so subtract cuts true holes); the ants = the crack-boundary loops of the mask (the true contour, holes, checkerboard corners) drawn under every tool; move = press inside the selection lifts the pixels (a full-layer backup) + the drag re-draws at the integer offset + ONE `move` node, Esc/pan/tool-switch restores; crop = `layers::crop_all` reusing the resize machinery's `fit_copy_at` (one `crop` node per layer, `CropInfo` in the tree rows) — the owner's "связать с resize"; the pure domain in `selection.rs`, the gestures/ops in `app/selection.rs`, the panel in `app/windows/select_panel.rs`; the clipboard is in-app and paste stamps immediately (F18); V58 born |
 | Extra: the V58 fixes — the move ghost, the dead combos, the blot (owner 2026-11-20) | done — gates + driver + probes green | the owner's three findings fixed: (1) the move drag printed a GHOST every frame (the restore covered only the origin — the previous frame's stamp survived); now the restore covers origin ∪ last frame ∪ new position + the regression test (two redraws, the intermediate stamp vanishes); (2) Ctrl+C/X/V never fired — egui-winit's `clipboard_shortcuts` (ON by default) converts the combos into DEDICATED `Event::Copy/Cut/Paste` and swallows the Key events (issue #3653; matches PHYSICAL keys — non-Latin layouts work too); the handler consumes the dedicated events, the wants-keyboard guard keeps the Text-tool field its OS-text semantics + 2 tests (the events drive the ops; a bare Key event does not); (3) the lasso icon was circle-like — redrawn as an irregular round blot (6 anchors, varying radii, C1 midpoints, the same dashes); V59 born |
 | Extra: the V59 fixes — clipboard_shortcuts OFF, the overlay move, the pan guard, the real blot (owner 2026-11-20) | done — gates + driver + probes green | (1) the egui-winit conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`, owner: "я не согласен с разработчиками") — Ctrl+C/X/V arrive as plain Key events (logical-or-physical `key`, so non-Latin layouts still work); the dedicated events stay consumed as the WEB fallback (the browser's DOM copy/cut/paste — not flag-controlled) with a one-op-per-frame twin guard + 2 tests; (2) Ctrl+S / Ctrl+Shift+S no longer PAN on S: an accelerator modifier (Ctrl/⌘/Alt) suppresses the W/A/S/D pan (Shift stays allowed) + a test; (3) the move drag is an OVERLAY ELEMENT: the layer is written exactly TWICE (the erase at the lift, the stamp at the release), the drag rides a Foreground painter (the floating texture + the ants, whole-viewport clip, visible past the canvas bounds) + 3 tests (no-write-until-release, the live texture, the past-the-bounds geometry); (4) the lasso icon = five lobes + five deep waists, picked from rendered candidates (the pear is gone) |
+| Extra: the V60 fixes — the off-canvas move clip + the AccessKit audit (owner 2026-11-20) | done — gates + driver + probes green | (1) a move that lands PARTIALLY off-canvas now CLIPS the selection to the canvas (`Selection::clip_to_canvas`: rects intersect, lassos Sutherland–Hodgman-clipped, fully-outside regions drop, an empty result deselects) — the op list was the only unclamped thing (the views always clamped), so the next move used to heal the full shape over destroyed pixels + 5 tests (the domain clip ×3, the owner's back-to-the-center scenario, the fully-off deselect); (2) the AccessKit/trim audit measured and parked (F19: accesskit ≈310/761 dep edges ~40%, the one-line disable switch, what breaks = only screen readers; system_fonts ≈126 edges ~16%; clipboard/wayland/x11/default_fonts stay) — NOTHING changed per the owner's "пока думаем" |
 
-**Verification stamp:** FULL gate re-verified 2026-11-20 (the V59-fixes
+**Verification stamp:** FULL gate re-verified 2026-11-20 (the V60-fixes
 round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 269 default / 282 mcp green
-(+1 ignored; +28 net tests since b54a7fd — the Select-tool topics, the
-V58-fixes and this round's: the Key-path combos (a plain Ctrl+C Key event
-runs the copy), the one-op twin guard (a translucent paste stays 127 red),
-the pan-modifier suppression, the move-drag no-write-until-release, the
-live overlay texture, the past-the-bounds overlay geometry, plus the
+(default + mcp), `cargo test --profile gates` 274 default / 287 mcp green
+(+1 ignored; +33 net tests since b54a7fd — the Select-tool topics, the
+V58/V59-fixes and this round's: the region clip (the rect shrink, the
+fully-off None, the lasso Sutherland–Hodgman cut), the owner's
+back-to-the-center scenario (the clipped shape rides along, the healed
+corner is not selectable), the fully-off move deselecting, plus the
 earlier rounds' topics), the visual driver ALL SCENARIOS GREEN under Xvfb
 through the dev+mcp binary + the GUI probes PASS (the select probe: the
 2/2/2/2 grid, the panel rows, the gaps; the blot verified on the cropped
@@ -90,6 +91,40 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md; the latest move: the Select-tool entry (during the
 > V59 round's budget — the total passed ~200 after two V58-fixes cuts; all
 > in the archive).
+
+### 2026-11-20 — `Fix:` the V60 pass — the off-canvas move clips the selection to the canvas — owner bug report; AccessKit/trim audit recorded, nothing changed
+
+- **What:** (1) the owner's V60 bug: dragging a selection PARTIALLY off the
+  canvas and then moving it back toward the center RESTORED the full
+  region shape over pixels that no longer exist. Root cause: the derived
+  views (mask, bounds, ants) were always canvas-clamped, but the OP LIST
+  was not — `contains` (the move hit test) and `translate` work on the
+  ops, so the next move healed the full shape. Fix: the move commit now
+  CLIPS the selection to the canvas (`Selection::clip_to_canvas` — rect
+  regions intersect, lasso polygons run a Sutherland–Hodgman clip against
+  the canvas rect, fully-outside regions drop, an empty result
+  deselects) + 5 tests (the domain clip: the rect shrink, the fully-off
+  None, the lasso cut with new crossing vertices; the app level: the
+  owner's exact scenario — the clipped shape rides along AND the healed
+  corner is not selectable — and a fully-off move deselecting while the
+  move node still records). (2) The owner's AccessKit question answered
+  READ-ONLY (measured: ≈310 of 761 normal dep edges, ~40% of the graph —
+  the zbus/AT-SPI D-Bus bridge; the disable switch is a one-line feature
+  removal; what breaks = only screen readers) and the whole trim-candidate
+  audit recorded as DEBTS-functional F19 — NOTHING changed per the owner's
+  "пока думаем".
+- **Files:** `selection.rs` (+3 tests: `clipped_to`, the SH helpers,
+  `clip_to_canvas`), `app/selection.rs` (the commit wiring), SPEC §3.13
+  (the move row's clip rule), DEBTS-functional F19.
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp); the visual
+  driver + the select probe PASS. No wasm check — no web-facing code (the
+  economy rule).
+- **Owner-checks:** V61 born (Windows + web: a move partially off-canvas
+  shrinks the selection to what survived; the second move keeps the
+  clipped shape; a fully-off move deselects). Open: V61, V60, V59, V58;
+  parked: V30, V8. Debts open: F19 (the AccessKit/trim decision — the
+  owner's), F18, F17, F16, F15.
+- **Commit title:** `Fix: the move commit clips the selection to the canvas (rects intersect, lassos Sutherland–Hodgman-clipped) so a partially off-canvas drag no longer heals its old shape; the AccessKit/trim audit parked as F19`
 
 ### 2026-11-20 — `Fix:` the V59 pass — clipboard_shortcuts OFF, the overlay move drag, the pan-on-Ctrl+S guard, the real blot — owner bug report
 

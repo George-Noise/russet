@@ -295,3 +295,89 @@ fn the_move_overlay_rect_extends_past_the_canvas_bounds() {
     );
     assert_eq!(rect.width(), 20.0, "the pixel size is preserved");
 }
+
+#[test]
+fn a_move_partially_off_canvas_clips_the_selection() {
+    // Owner bug report 2026-11-20: drag the selection partially off the
+    // canvas, then move it back toward the center — the selection must
+    // STAY the clipped shape (the off-canvas pixels are gone; the
+    // un-clipped region list would heal the full 20×20 shape and claim
+    // pixels that no longer exist). The headless canvas is 800×600.
+    let mut app = app_with_square();
+
+    // Move 1: +785 on x — the square lands at (795..815, 10..30), 15px
+    // past the right edge; the stamp keeps only the on-canvas strip.
+    app.start_move(pos2(15.0, 15.0));
+    app.update_move((785, 0));
+    app.commit_move((785, 0));
+    assert_eq!(
+        app.selection.bounds(),
+        Some(IRect {
+            x: 795,
+            y: 10,
+            w: 5,
+            h: 20
+        }),
+        "the selection shrinks to the on-canvas strip"
+    );
+    assert_eq!(alpha_at(&app, 799, 15), 255, "the surviving strip");
+
+    // Move 2: back toward the center — the clipped shape must ride along,
+    // NOT grow back to 20×20.
+    app.start_move(pos2(797.0, 15.0));
+    app.update_move((-760, 0));
+    app.commit_move((-760, 0));
+    assert_eq!(
+        app.selection.bounds(),
+        Some(IRect {
+            x: 35,
+            y: 10,
+            w: 5,
+            h: 20
+        }),
+        "the clipped shape, not the healed 20×20"
+    );
+    // The strip (BLACK pixels) landed at (35..40); the headless canvas is
+    // WHITE everywhere else, so "no pixels" reads as red == 255 there.
+    let strip = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(36, 15)
+        .expect("in bounds");
+    assert_eq!(strip.red(), 0, "the black strip at the new spot");
+    let healed_corner = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(50, 15)
+        .expect("in bounds");
+    assert_eq!(
+        healed_corner.red(),
+        255,
+        "the canvas beyond the strip is untouched — no healed stamp"
+    );
+    assert!(
+        !app.selection.contains(egui::pos2(50.0, 15.0)),
+        "the healed part must NOT be selectable — there are no pixels there"
+    );
+}
+
+#[test]
+fn a_move_fully_off_canvas_deselects() {
+    let mut app = app_with_square();
+
+    app.start_move(pos2(15.0, 15.0));
+    app.update_move((900, 700));
+    app.commit_move((900, 700));
+
+    assert!(
+        app.selection.is_empty(),
+        "nothing of the region survives on the canvas — no selection"
+    );
+    assert_eq!(
+        head_kind(&app),
+        ActionKind::Move,
+        "the move node still records"
+    );
+}

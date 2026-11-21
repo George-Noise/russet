@@ -371,6 +371,13 @@ impl App {
         self.dirty = true;
         let (width, height) = (self.canvas.width, self.canvas.height);
         self.selection.translate(offset.0, offset.1, width, height);
+        // Owner bug report 2026-11-20: a move that lands PARTIALLY
+        // off-canvas must shrink the selection to the pixels that actually
+        // survived (the stamp clips them) — the un-clipped region list
+        // would restore the full shape on the next move, because
+        // `contains` (the move hit test) and `translate` work on the ops,
+        // not the derived views.
+        self.selection.clip_to_canvas(width, height);
         self.record_active_action(ActionKind::Move, Color32::WHITE, None);
         self.action_log.push("Selection moved");
     }

@@ -164,6 +164,90 @@ impl Region {
             Region::Lasso { points } => fill_polygon_scanline(mask, points, add),
         }
     }
+
+    /// The region intersected with the canvas rect (owner bug report
+    /// 2026-11-20: a move that lands PARTIALLY off-canvas must shrink the
+    /// selection with the pixels — the stamp clips them, so the region
+    /// list must follow, or the next move "heals" the full shape and
+    /// claims pixels that no longer exist). `None` = the region lies
+    /// fully outside the canvas (or degenerates).
+    pub fn clipped_to(self, width: u32, height: u32) -> Option<Region> {
+        match self {
+            Region::Rect { a, b } => {
+                let (min_x, max_x) = (a.x.min(b.x).max(0.0), a.x.max(b.x).min(width as f32));
+                let (min_y, max_y) = (a.y.min(b.y).max(0.0), a.y.max(b.y).min(height as f32));
+                if max_x <= min_x || max_y <= min_y {
+                    return None;
+                }
+                Some(Region::Rect {
+                    a: Pos2::new(min_x, min_y),
+                    b: Pos2::new(max_x, max_y),
+                })
+            }
+            Region::Lasso { points } => {
+                let clipped = clip_polygon_to_rect(&points, width as f32, height as f32);
+                // Fewer than 3 DISTINCT points select nothing (the module rule).
+                (distinct_points(&clipped).len() >= 3).then_some(Region::Lasso { points: clipped })
+            }
+        }
+    }
+}
+
+/// One Sutherland–Hodgman half-plane pass: keep the polygon's points where
+/// `coord ≥ bound` or `coord ≤ bound`, closing the cut with the segment ×
+/// plane crossings. `horizontal` picks the clipped axis.
+fn clip_halfplane(poly: Vec<Pos2>, horizontal: bool, bound: f32, keep_ge: bool) -> Vec<Pos2> {
+    let inside = |p: &Pos2| {
+        let c = if horizontal { p.x } else { p.y };
+        if keep_ge { c >= bound } else { c <= bound }
+    };
+    let cross = |a: &Pos2, b: &Pos2| -> Pos2 {
+        let (ca, cb) = if horizontal { (a.x, b.x) } else { (a.y, b.y) };
+        // Both endpoints straddle the plane, so cb != ca: t is finite.
+        let t = (bound - ca) / (cb - ca);
+        if horizontal {
+            Pos2::new(bound, a.y + (b.y - a.y) * t)
+        } else {
+            Pos2::new(a.x + (b.x - a.x) * t, bound)
+        }
+    };
+    let mut out = Vec::with_capacity(poly.len() + 1);
+    let n = poly.len();
+    for i in 0..n {
+        let cur = poly[i];
+        let prev = poly[(i + n - 1) % n];
+        match (inside(&prev), inside(&cur)) {
+            (true, true) => out.push(cur),
+            (true, false) => out.push(cross(&prev, &cur)),
+            (false, true) => {
+                out.push(cross(&prev, &cur));
+                out.push(cur);
+            }
+            (false, false) => {}
+        }
+    }
+    out
+}
+
+/// Sutherland–Hodgman: clip the polygon against the canvas rect, one edge
+/// half-plane at a time. For a path that leaves and re-enters the canvas
+/// SH leaves zero-width connecting bridges — they contribute nothing to
+/// the scanline fill, and the ants derive from the MASK, so the true
+/// contour stays true.
+fn clip_polygon_to_rect(points: &[Pos2], w: f32, h: f32) -> Vec<Pos2> {
+    let mut poly = points.to_vec();
+    for (horizontal, bound, keep_ge) in [
+        (true, 0.0, true),
+        (true, w, false),
+        (false, 0.0, true),
+        (false, h, false),
+    ] {
+        if poly.len() < 3 {
+            return Vec::new();
+        }
+        poly = clip_halfplane(poly, horizontal, bound, keep_ge);
+    }
+    poly
 }
 
 /// The even-odd point-in-polygon test (the lasso's continuous hit rule).
@@ -432,6 +516,25 @@ impl Selection {
                 }
             }
         }
+        self.refresh(width, height);
+    }
+
+    /// Clips every op's region to the canvas rect and drops the regions
+    /// that fell outside entirely; an empty result deselects (owner bug
+    /// report 2026-11-20, the move commit's clip). The derived views
+    /// (bounds, ants, mask) were always canvas-clamped — but the OPS were
+    /// not, and `contains` (the move hit test) and `translate` work on the
+    /// ops: an off-canvas excursion would restore the full region shape on
+    /// the next move, claiming pixels the canvas no longer holds.
+    pub fn clip_to_canvas(&mut self, width: u32, height: u32) {
+        self.ops = self
+            .ops
+            .drain(..)
+            .filter_map(|mut op| {
+                op.region = op.region.clipped_to(width, height)?;
+                Some(op)
+            })
+            .collect();
         self.refresh(width, height);
     }
 

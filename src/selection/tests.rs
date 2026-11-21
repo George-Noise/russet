@@ -241,3 +241,72 @@ fn the_select_mode_cycles_forward_and_backward() {
     assert_eq!(SelectMode::Lasso.prev(), SelectMode::Rect);
     assert_eq!(SelectMode::Rect.prev(), SelectMode::Lasso);
 }
+
+#[test]
+fn clipping_a_rect_region_to_the_canvas_shrinks_it() {
+    // Owner bug report 2026-11-20: a move that lands partially off-canvas
+    // must shrink the region with the pixels.
+    let region = Region::Rect {
+        a: pos2(85.0, 85.0),
+        b: pos2(105.0, 105.0),
+    };
+    let clipped = region.clipped_to(100, 100).expect("partially inside");
+    assert_eq!(
+        clipped.pixel_rect(),
+        Some(IRect {
+            x: 85,
+            y: 85,
+            w: 15,
+            h: 15
+        }),
+        "the 5px overflow past both edges is cut"
+    );
+}
+
+#[test]
+fn a_region_fully_off_canvas_clips_to_none() {
+    let region = Region::Rect {
+        a: pos2(120.0, 120.0),
+        b: pos2(140.0, 140.0),
+    };
+    assert!(region.clone().clipped_to(100, 100).is_none());
+
+    // A lasso fully outside one axis clips to nothing as well.
+    let lasso = Region::Lasso {
+        points: vec![pos2(120.0, 10.0), pos2(140.0, 10.0), pos2(140.0, 30.0)],
+    };
+    assert!(lasso.clipped_to(100, 100).is_none());
+}
+
+#[test]
+fn clipping_a_lasso_cuts_the_polygon_at_the_edge() {
+    // A triangle straddling the right edge: the clipped polygon keeps only
+    // the on-canvas part, with the cut corners ON the edge.
+    let lasso = Region::Lasso {
+        points: vec![pos2(90.0, 10.0), pos2(110.0, 30.0), pos2(90.0, 50.0)],
+    };
+    let clipped = lasso.clipped_to(100, 100).expect("partially inside");
+    let Region::Lasso { points } = clipped else {
+        panic!("a lasso stays a lasso");
+    };
+    assert!(
+        points
+            .iter()
+            .all(|p| p.x <= 100.0 && p.x >= 0.0 && p.y >= 0.0 && p.y <= 100.0),
+        "every clipped vertex sits on the canvas"
+    );
+    assert!(
+        points.len() > 3,
+        "the cut introduced new vertices at the crossings"
+    );
+    // The clipped polygon still selects pixels (the mask builds non-empty).
+    let mut selection = Selection::default();
+    selection.add(Region::Lasso { points }, 100, 100);
+    let mask = selection
+        .build_mask(100, 100)
+        .expect("pixels inside the canvas");
+    assert!(
+        mask.tight_bounds().is_some(),
+        "the clipped lasso selects pixels"
+    );
+}
