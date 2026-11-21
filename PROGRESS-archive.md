@@ -1,5 +1,39 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Feat:` the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner request in chat)
+
+- **What:** with the Ellipse kind selected, a Shift drag no longer pulls the
+  free corner onto the proportional circle — the press and release points lie
+  ON the circle and the segment between them is its DIAMETER (the center is
+  the segment's midpoint). Behind a TESTING checkbox: the Shape panel's FOURTH
+  group — the plain `Diameter circle (Shift)` checkbox (startup ON) — shown
+  for the ELLIPSE kind only (the owner: nobody should have to read the toggle
+  through the rectangle; no dead controls — the row does not exist for the
+  Rectangle kind). The flag rides the gesture refreshed live (a mid-drag
+  Shift/checkbox flip re-shapes the next frame's preview); the overlay preview
+  and the commit rasterize the same bounding square (the pure
+  `app/preview.rs::diameter_rect`). The rectangle's Shift rule and the plain
+  Shift-less ellipse are untouched (the ellipse itself stays as it was).
+- **Files:** `src/tools.rs` (the `shape_diameter_circle` state), `src/app
+  /preview.rs` (the rule + the live flag + the commit/overlay geometry),
+  `src/app/windows.rs` (the Ellipse-only checkbox row), `src/app/preview
+  /tests.rs` (+5 tests), `src/app/windows/tests/settings_panel.rs` (+1 test),
+  SPEC §3.2 + §3.9, the new probe `scripts/gui_diameter_check.sh`, SANDBOX.md
+  pitfall 11 (raw-Xvfb key events need `xdotool windowfocus` — no WM → no
+  input focus; found by this round's probe), PROBLEMS.md (the raw entry).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 279 default / 292
+  mcp); the visual driver ALL SCENARIOS GREEN under Xvfb through the gates
+  binary; the diameter probe PROBE PASS (the checkbox appears only for the
+  Ellipse kind; ON: ring center = the drag midpoint, both points on the ring,
+  the center unpainted; OFF: the old corner-anchored square). No wasm check —
+  no web-facing code (the economy rule).
+- **Owner-checks:** V62 born (Windows + web: the checkbox shows only with the
+  Ellipse kind; Shift-drag = the circle through the two points; unchecking
+  restores the old corner-anchored circle; the rectangle keeps its Shift
+  rule; when the verdict lands the checkbox goes away). Open: V62, V61, V60,
+  V59; parked: V30, V8. Debts open: F19, F18, F17, F16.
+- **Commit title:** `Feat: the Shape tool's Ellipse kind draws the Shift circle THROUGH the two drag points (the segment is its diameter) behind a testing Diameter-circle checkbox shown only for the Ellipse kind`
+
 ### 2026-11-20 — `Fix:` the V60 pass — the off-canvas move clips the selection to the canvas — owner bug report; AccessKit/trim audit recorded, nothing changed
 
 - **What:** (1) the owner's V60 bug: dragging a selection PARTIALLY off the

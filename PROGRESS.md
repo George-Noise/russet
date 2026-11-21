@@ -41,15 +41,17 @@
 | Extra: the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner 2026-11-21) | done — gates + driver + GUI probe green | with the Ellipse kind a Shift drag makes the two drag points the endpoints of the circle's DIAMETER (center = the segment's midpoint, the pure `app/preview.rs::diameter_rect`) instead of the corner-anchored proportional circle; behind the Shape panel's FOURTH group — the plain "Diameter circle (Shift)" checkbox, startup ON, shown ONLY for the Ellipse kind (the rectangle's row does not exist — no dead controls); the flag rides the gesture refreshed live (a mid-drag Shift/checkbox flip re-shapes the next frame's preview); the rectangle's Shift rule and the plain Shift-less ellipse untouched; +6 tests; the new probe `scripts/gui_diameter_check.sh` PROBE PASS (ON: ring center = the drag midpoint, both points on the ring, the center unpainted; OFF: the old square; the checkbox appears only after the Ellipse click); SANDBOX.md pitfall 11 (raw-Xvfb key events need `xdotool windowfocus` — no WM → no input focus); V62 born |
 | Extra: the diameter drag's measurement guides (owner picked idea #3, 2026-11-21) | done — gates + driver + GUI probe green | while a diameter gesture is LIVE the overlay draws WHAT IS MEASURED on top of the shape: a thin DASHED chord between the two drag points (the gesture's outline color, dashes 4 / gaps 3) and a small white dot with a dark ring at the segment's midpoint (the center; the polyline vertex-handle marker style — visible on any canvas color); the pure `app/preview.rs::diameter_guides`, drawn only while the flag rides (Line/Rectangle never guide) and GONE at release (the commit rasterizes just the ellipse); +2 tests (every dash endpoint lies on the measured segment, the dot = the midpoint, a zero-length drag draws no dashes); the probe gained MID-DRAG screenshots (chord dashes at t=0.25/0.75 + the dot's ring at the midpoint with the box ON; no chord red and no dot leak with the box OFF) — PROBE PASS; V63 born |
 | Extra: the Tools window's button order pass (owner 2026-11-21) | done — gates green; the visual probe/driver skipped per the owner's waiver | the canonical `app/tool_icons.rs::TOOLS` array reordered by two swaps — the Eyedropper ↔ the Select and the Text ↔ the Line — so the two-column grid (row-major over the array) now reads Pencil+Brush, Eraser+Eyedropper, Select+Text, Shape+Line; hotkeys, tooltips, the atlas and the panels untouched (every consumer is order-agnostic — the atlas looks icons up by position, the grid chunks the array); pinned by the new `tool_icons/tests/order.rs` test; SPEC §3.8's Select row updated (its "right after the paint trio" phrase is now historical); V64 born |
+| Extra: the Outline-placement radios' icon redraw (owner 2026-11-21) | done — gates + driver green, the icon dump looked at | the Shape panel's three OUTLINE-PLACEMENT icons redrawn per the owner's recipe: the dot untouched ("точечку оставить как есть"), the horizontal/vertical segments ~2.5× thicker (`OUTLINE_BAND_W` 2.6 → 6.5) and each segment's FAR end running past the icon's 24-pt edge (`OUTLINE_BAND_LEN` 11 → 17, the bitmap crop = the outline continues beyond the corner window); the modes still differ only by where the bands sit (outside / straddling / inside); the placement test's probe strips/box recomputed for the new band edges (the Outside-only strip left of Center's 6.75, the Inside-only right of 13.25, the straddle box clear of Outside's ≤10); verified visually on the icon dump at 256 px AND the real 24 px button size (all three distinct, the dot legible on every background); V65 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-21 (the
-tools-order round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+placement-icons round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
 (default + mcp), `cargo test --profile gates` 282 default / 295 mcp green
-(+1 ignored; +1 net — the `tool_icons/tests/order.rs` layout-pinning test),
-the visual probe and the MCP driver SKIPPED this round — the owner waived
-them for the reorder ("простенькая задачка… визуально не проверять и mcp
-не использовать"); the on-screen layout is pinned by the order test (the
-grid fills row-major over `TOOLS`) — Rust 1.99.1 pinned via rust-toolchain.toml,
+(+1 ignored; the placement test's probe strips recomputed in place — no net
+test change), the visual driver ALL SCENARIOS GREEN
+under Xvfb through the gates binary + the icon dump LOOKED AT (the
+placement trio at 256 px and at the real 24 px button size: the bands read
+as the outline and run past the icon's edge, the dot stays legible) —
+Rust 1.99.1 pinned via rust-toolchain.toml,
 Linux. NO wasm check
 this round (the diff touches no web-facing code — the economy rule). NOTE
 2026-11-21: FRESH GitHub clone (the repo re-cloned from the owner's push) —
@@ -62,7 +64,7 @@ the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`)
 lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only over-guard set — the owner-deferred
 `history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 641,
-`app/tool_icons/draw.rs` 786, `app/tool_icons.rs` 602, `selection.rs` 752,
+`app/tool_icons/draw.rs` 794, `app/tool_icons.rs` 602, `selection.rs` 752,
 `tools.rs` 608, `app/selection.rs` 639, and NOW `app/windows.rs` 672 over
 the guard (warn + propose splits at task end; no split mid-task — the
 proposed splits: the settings-panel half → an `app/windows/settings_panel.rs`
@@ -88,9 +90,35 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the V60-pass entry (during the
-> tools-order round's budget — the file rode over the ~200-line budget; all
-> in the archive).
+> PROGRESS-archive.md; the latest move: the diameter-circle Feat entry (during
+> the placement-icons round's budget — the file rode over the ~200-line
+> budget; all in the archive).
+
+### 2026-11-21 — `Fix:` the Outline-placement radios' icons read as the outline — thicker segments running past the icon's edge (owner request in chat)
+
+- **What:** the owner's redraw recipe for the Shape panel's three
+  OUTLINE-PLACEMENT icons (outside / centered / inside): the click dot
+  stays exactly as it was ("точечку оставить как есть"), the
+  horizontal/vertical segments become ~2.5× thicker (`OUTLINE_BAND_W` 2.6 →
+  6.5 — "в 2-3 раза толще") and each segment's FAR end now leaves the
+  24-pt icon space (`OUTLINE_BAND_LEN` 11 → 17; the bitmap crop = the
+  segment visibly IS the outline line continuing beyond the corner
+  window). The modes still differ ONLY by where the bands sit relative to
+  the dot.
+- **Files:** `src/app/tool_icons/draw.rs` (the two constants + the
+  composition doc), `src/app/tool_icons/tests/shape_panel.rs` (the probe
+  strips/box recomputed for the new band edges), SPEC §3.2 (the placement
+  icons' sentence).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
+  295 mcp); the visual driver ALL SCENARIOS GREEN; the icons LOOKED AT on
+  the dump (`--ignored icons_dump`) at 256 px and at the real 24 px button
+  size — all three distinct, the bands run past the edge, the dot legible
+  on band, fill and background alike. No wasm check — no web-facing code
+  (the economy rule).
+- **Owner-checks:** V65 born (Windows + web: the three radios read as
+  outside / centered / inside at a glance; the dot untouched). Open: V65,
+  V64, V63, V62; parked: V30, V8. Debts open: F19, F18, F17, F16.
+- **Commit title:** `Fix: the Shape panel's Outline-placement radio icons — the segments ~2.5x thicker with their far ends running past the icon's edge so they read as the outline; the click dot untouched`
 
 ### 2026-11-21 — `Fix:` the Tools window's button order — the Eyedropper ↔ Select, the Text ↔ Line (owner request in chat)
 
@@ -141,38 +169,4 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   kind is Rectangle/Line). Open: V63, V62, V61, V60; parked: V30, V8.
   Debts open: F19, F18, F17, F16.
 - **Commit title:** `Feat: the diameter-circle Shift drag previews WHAT IT MEASURES — a thin dashed chord between the two drag points and a center dot at the segment's midpoint (overlay-only; the commit still rasterizes just the ellipse)`
-
-### 2026-11-21 — `Feat:` the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner request in chat)
-
-- **What:** with the Ellipse kind selected, a Shift drag no longer pulls the
-  free corner onto the proportional circle — the press and release points lie
-  ON the circle and the segment between them is its DIAMETER (the center is
-  the segment's midpoint). Behind a TESTING checkbox: the Shape panel's FOURTH
-  group — the plain `Diameter circle (Shift)` checkbox (startup ON) — shown
-  for the ELLIPSE kind only (the owner: nobody should have to read the toggle
-  through the rectangle; no dead controls — the row does not exist for the
-  Rectangle kind). The flag rides the gesture refreshed live (a mid-drag
-  Shift/checkbox flip re-shapes the next frame's preview); the overlay preview
-  and the commit rasterize the same bounding square (the pure
-  `app/preview.rs::diameter_rect`). The rectangle's Shift rule and the plain
-  Shift-less ellipse are untouched (the ellipse itself stays as it was).
-- **Files:** `src/tools.rs` (the `shape_diameter_circle` state), `src/app
-  /preview.rs` (the rule + the live flag + the commit/overlay geometry),
-  `src/app/windows.rs` (the Ellipse-only checkbox row), `src/app/preview
-  /tests.rs` (+5 tests), `src/app/windows/tests/settings_panel.rs` (+1 test),
-  SPEC §3.2 + §3.9, the new probe `scripts/gui_diameter_check.sh`, SANDBOX.md
-  pitfall 11 (raw-Xvfb key events need `xdotool windowfocus` — no WM → no
-  input focus; found by this round's probe), PROBLEMS.md (the raw entry).
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 279 default / 292
-  mcp); the visual driver ALL SCENARIOS GREEN under Xvfb through the gates
-  binary; the diameter probe PROBE PASS (the checkbox appears only for the
-  Ellipse kind; ON: ring center = the drag midpoint, both points on the ring,
-  the center unpainted; OFF: the old corner-anchored square). No wasm check —
-  no web-facing code (the economy rule).
-- **Owner-checks:** V62 born (Windows + web: the checkbox shows only with the
-  Ellipse kind; Shift-drag = the circle through the two points; unchecking
-  restores the old corner-anchored circle; the rectangle keeps its Shift
-  rule; when the verdict lands the checkbox goes away). Open: V62, V61, V60,
-  V59; parked: V30, V8. Debts open: F19, F18, F17, F16.
-- **Commit title:** `Feat: the Shape tool's Ellipse kind draws the Shift circle THROUGH the two drag points (the segment is its diameter) behind a testing Diameter-circle checkbox shown only for the Ellipse kind`
 

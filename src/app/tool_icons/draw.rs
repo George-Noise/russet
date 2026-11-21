@@ -482,19 +482,27 @@ fn draw_paint_mode(pm: &mut Pixmap, ts: Transform, both: bool, solid: bool, mono
 /// point as a contrasting dot at that corner ("точечка… кружочек правильной
 /// контрастности, размера и формы"), and two segments — horizontal and
 /// vertical — ALONG the outline's lines ("отрезки по горизонтали и по
-/// вертикали вдоль линий Outline"). The bands' position relative to the
-/// corner IS the mode: fully beyond the dot = [`ShapeOutline::Outside`],
-/// straddling the dot = [`ShapeOutline::Center`] (the old look), fully
-/// inside the fill = [`ShapeOutline::Inside`].
+/// вертикали вдоль линий Outline"). The owner's 2026-11-21 pass made the
+/// segments read unmistakably as the OUTLINE: 2–3× thicker (6.5) and each
+/// one's far end running PAST the icon's edge (the bitmap crop says the
+/// outline line continues beyond the corner window), while the click dot
+/// stays exactly as it was ("точечку оставить как есть"). The bands'
+/// position relative to the corner IS the mode: fully beyond the dot =
+/// [`ShapeOutline::Outside`], straddling the dot = [`ShapeOutline::Center`]
+/// (the old look), fully inside the fill = [`ShapeOutline::Inside`].
 const OUTLINE_DOT: (f32, f32) = (10.0, 10.0);
 
-/// The outline bands' drawn thickness in the logical space (clearly
-/// heavier than the 1.9 emblem rim: the band IS the outline).
-const OUTLINE_BAND_W: f32 = 2.6;
+/// The outline bands' drawn thickness in the logical space (owner request
+/// 2026-11-21: 2–3× the old 2.6 — a heavy band reads as THE outline, the
+/// thing the radio places, not as another 1.9 rim).
+const OUTLINE_BAND_W: f32 = 6.5;
 
-/// How far each outline segment runs from the corner (a SEGMENT along the
-/// outline line, not the whole edge — the fill quadrant runs past it).
-const OUTLINE_BAND_LEN: f32 = 11.0;
+/// How far each outline segment runs from the corner (owner request
+/// 2026-11-21: the FAR end leaves the 24-pt icon space — 10 + 17 = 27,
+/// cropped ~3 pt past the edge — so the segment visibly IS the outline
+/// line continuing beyond the corner window; the near end stays at the
+/// corner).
+const OUTLINE_BAND_LEN: f32 = 17.0;
 
 /// The dot's radius (the click point): white core + ink ring — the same
 /// anchor vocabulary the curve preview's vertex handles speak.

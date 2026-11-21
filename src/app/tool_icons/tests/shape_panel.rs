@@ -170,23 +170,24 @@ fn the_three_mode_radios_are_mutually_distinct() {
 // -----------------------------------------------------------------------
 
 /// The composition's landmarks in the icons' logical space (draw.rs):
-/// the click dot at (10, 10), the outline bands 2.6 thick, the gray fill
-/// quadrant running from the dot to the icon's edges.
+/// the click dot at (10, 10), the outline bands 6.5 thick (the owner's
+/// 2026-11-21 pass), each running to 27 — past the icon's 24-pt edge — and
+/// the gray fill quadrant running from the dot to the icon's edges.
 const DOT: (f32, f32) = (10.0, 10.0);
 
-/// The strip INSIDE the outline band's Outside-only position (the left
-/// band x 7.4..10, y 10..21; clear of the dot's ring and of the Center
-/// band's x ≥ 8.7) — inked ONLY by the Outside radio.
-const OUTSIDE_STRIP: (f32, f32, f32, f32) = (7.5, 13.0, 8.4, 19.0);
+/// The strip INSIDE the Outside band's left segment (x 3.5..10), LEFT of
+/// the Center band's inner edge (6.75) and clear of the dot's ring —
+/// inked ONLY by the Outside radio.
+const OUTSIDE_STRIP: (f32, f32, f32, f32) = (4.0, 14.0, 6.0, 20.0);
 
-/// The strip INSIDE the outline band's Inside-only position (the left band
-/// x 10..12.6; clear of the Center band's x ≤ 11.3 and the dot) — inked
+/// The strip INSIDE the Inside band's left segment (x 10..16.5), RIGHT of
+/// the Center band's outer edge (13.25) and clear of the dot — inked
 /// ONLY by the Inside radio.
-const INSIDE_STRIP: (f32, f32, f32, f32) = (11.5, 13.0, 12.4, 19.0);
+const INSIDE_STRIP: (f32, f32, f32, f32) = (14.0, 14.0, 15.8, 20.0);
 
-/// A point on the straddling Center band (x 8.7..11.3, below the dot):
-/// inked by Center and Inside, but NOT by Outside (its band ends at 10).
-const CENTER_BOX: (f32, f32, f32, f32) = (9.8, 12.6, 10.6, 13.4);
+/// A box ON the boundary below the dot (x ≥ 10.3): inked by Center and
+/// Inside, but NOT by Outside (its band ends at 10).
+const CENTER_BOX: (f32, f32, f32, f32) = (10.3, 12.6, 11.3, 13.4);
 
 /// The placement trio: ALWAYS a square corner (no circle anywhere — the
 /// owner: "в виде угла квадратика вне зависимости от выбранной фигуры"),
