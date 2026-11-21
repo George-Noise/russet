@@ -260,6 +260,7 @@ fn the_committed_diameter_circle_passes_through_both_drag_points() {
         Some(Color32::BLACK),
         None,
         ShapeOutline::Center,
+        None,
     );
 
     assert!(
@@ -356,4 +357,111 @@ fn the_diameter_guides_survive_a_zero_length_drag() {
             assert_eq!(circle.center, mid, "the dot marks the click point");
         }
     }
+}
+
+// -----------------------------------------------------------------------
+// The selection-clipped commits (owner request 2026-11-21): the drag
+// gesture snapshots the selection mask at start and the commit transfers
+// only masked pixels — outside them the canvas stays byte-identical.
+// -----------------------------------------------------------------------
+
+/// A half-canvas selection (the left 20 columns) on the default app.
+fn left_half_clip(app: &App) -> crate::selection::Mask {
+    let (w, h) = (app.canvas.width, app.canvas.height);
+    let mut sel = crate::selection::Selection::default();
+    sel.replace(
+        Some(crate::selection::Region::Rect {
+            a: pos2(0.0, 0.0),
+            b: pos2(20.0, h as f32),
+        }),
+        w,
+        h,
+    );
+    sel.build_mask(w, h).expect("non-empty selection")
+}
+
+#[test]
+fn a_line_commit_confines_to_the_selection() {
+    let mut app = App::new_headless();
+    let mask = left_half_clip(&app);
+    let slate = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(30, 20)
+        .expect("in bounds");
+    app.commit_drag(
+        DragKind::Line,
+        pos2(6.0, 20.0),
+        pos2(34.0, 20.0),
+        Some(Color32::BLACK),
+        None,
+        2.0,
+        ShapeOutline::Center,
+        false,
+        Some(&mask),
+    );
+    for x in [20, 26, 33] {
+        assert_eq!(
+            app.layers
+                .active()
+                .pixmap()
+                .pixel(x, 20)
+                .expect("in bounds"),
+            slate,
+            "outside the selection the canvas must stay untouched at {x}"
+        );
+    }
+    assert!(
+        app.layers
+            .active()
+            .pixmap()
+            .pixel(10, 20)
+            .expect("in bounds")
+            .alpha()
+            > 0,
+        "inside the selection the line paints"
+    );
+}
+
+#[test]
+fn a_shape_commit_confines_to_the_selection() {
+    let mut app = App::new_headless();
+    let mask = left_half_clip(&app);
+    let slate = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(30, 4)
+        .expect("in bounds");
+    app.commit_drag(
+        DragKind::Shape(ShapeKind::Rectangle),
+        pos2(4.0, 4.0),
+        pos2(36.0, 30.0),
+        Some(Color32::BLACK),
+        None,
+        2.0,
+        ShapeOutline::Center,
+        false,
+        Some(&mask),
+    );
+    assert_eq!(
+        app.layers
+            .active()
+            .pixmap()
+            .pixel(30, 4)
+            .expect("in bounds"),
+        slate,
+        "the outline's right half must stay untouched"
+    );
+    assert!(
+        app.layers
+            .active()
+            .pixmap()
+            .pixel(10, 4)
+            .expect("in bounds")
+            .alpha()
+            > 0,
+        "the outline's left half paints"
+    );
 }

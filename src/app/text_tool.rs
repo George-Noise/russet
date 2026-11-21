@@ -154,6 +154,10 @@ impl App {
         if state.buffer.trim().is_empty() {
             return;
         }
+        // The selection confines the text (owner request 2026-11-21): the
+        // mask builds at COMMIT time — the selection may change while the
+        // entry window stays open.
+        let clip = self.selection_clip();
         let dirty = crate::text::rasterize_text(
             &self.ctx,
             self.layers.active_mut().pixmap_mut(),
@@ -161,6 +165,7 @@ impl App {
             state.anchor,
             self.tools.font_size,
             state.color,
+            clip.as_ref(),
         );
         if let Some(dirty) = dirty {
             self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -198,6 +203,23 @@ impl App {
         );
         if !state.buffer.is_empty() {
             let size = (self.tools.font_size * self.zoom / ppp).max(1.0);
+            // The glyph preview clips to the selection's cached bounds like
+            // the drag previews do (owner request 2026-11-21) — the anchor
+            // marker above stays visible wherever it is (it is UI, not
+            // paint).
+            let painter = match self.selection.bounds() {
+                Some(b) => {
+                    let min = self.screen_pos(canvas_rect, Pos2::new(b.x as f32, b.y as f32));
+                    let max = self.screen_pos(
+                        canvas_rect,
+                        Pos2::new((b.x + b.w as i64) as f32, (b.y + b.h as i64) as f32),
+                    );
+                    painter
+                        .clone()
+                        .with_clip_rect(painter.clip_rect().intersect(Rect::from_two_pos(min, max)))
+                }
+                None => painter.clone(),
+            };
             painter.text(
                 anchor_screen,
                 egui::Align2::LEFT_TOP,

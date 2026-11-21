@@ -42,18 +42,21 @@
 | Extra: the diameter drag's measurement guides (owner picked idea #3, 2026-11-21) | done — gates + driver + GUI probe green | while a diameter gesture is LIVE the overlay draws WHAT IS MEASURED on top of the shape: a thin DASHED chord between the two drag points (the gesture's outline color, dashes 4 / gaps 3) and a small white dot with a dark ring at the segment's midpoint (the center; the polyline vertex-handle marker style — visible on any canvas color); the pure `app/preview.rs::diameter_guides`, drawn only while the flag rides (Line/Rectangle never guide) and GONE at release (the commit rasterizes just the ellipse); +2 tests (every dash endpoint lies on the measured segment, the dot = the midpoint, a zero-length drag draws no dashes); the probe gained MID-DRAG screenshots (chord dashes at t=0.25/0.75 + the dot's ring at the midpoint with the box ON; no chord red and no dot leak with the box OFF) — PROBE PASS; V63 born |
 | Extra: the Tools window's button order pass (owner 2026-11-21) | done — gates green; the visual probe/driver skipped per the owner's waiver | the canonical `app/tool_icons.rs::TOOLS` array reordered by two swaps — the Eyedropper ↔ the Select and the Text ↔ the Line — so the two-column grid (row-major over the array) now reads Pencil+Brush, Eraser+Eyedropper, Select+Text, Shape+Line; hotkeys, tooltips, the atlas and the panels untouched (every consumer is order-agnostic — the atlas looks icons up by position, the grid chunks the array); pinned by the new `tool_icons/tests/order.rs` test; SPEC §3.8's Select row updated (its "right after the paint trio" phrase is now historical); V64 born |
 | Extra: the Outline-placement radios' icon redraw (owner 2026-11-21) | done — gates + driver green, the icon dump looked at | the Shape panel's three OUTLINE-PLACEMENT icons redrawn per the owner's recipe: the dot untouched ("точечку оставить как есть"), the horizontal/vertical segments ~2.5× thicker (`OUTLINE_BAND_W` 2.6 → 6.5) and each segment's FAR end running past the icon's 24-pt edge (`OUTLINE_BAND_LEN` 11 → 17, the bitmap crop = the outline continues beyond the corner window); the modes still differ only by where the bands sit (outside / straddling / inside); the placement test's probe strips/box recomputed for the new band edges (the Outside-only strip left of Center's 6.75, the Inside-only right of 13.25, the straddle box clear of Outside's ≤10); verified visually on the icon dump at 256 px AND the real 24 px button size (all three distinct, the dot legible on every background); V65 born |
+| Extra: the selection CLIPS every painting tool (owner 2026-11-21) | done — gates + driver + new probe green + wasm lane green | with an active selection every canvas-changing tool paints ONLY inside it, like the classic paint apps: the mask snapshots at each gesture's start (`App::selection_clip` — freehand keeps `stroke_clip`, the Line/Shape drags carry it in `PreviewState`, the Text builds at commit; the MCP pencil stroke clips the same way), the pencil filters its plots against the mask, the thick strokes rasterize onto a transparent bbox scratch through an integer translation (`tools.rs::paint_clipped`) and transfer via `selection.rs::stamp_masked` / `erase_masked_by` (the eraser marks its footprint; the scratch's alpha IS the erase strength — AA edges fade like the direct path within ±1 rounding), the text rasterizer skips masked glyph pixels; outside pixels stay byte-identical, the dirty rect shrinks to region ∩ mask bounds, no selection = the unchanged direct path; the live vector previews clip to the selection's cached bounds; +13 tests (`tools/tests/clip.rs` ×5 — the full-mask pixel-identity, the outside-untouched trio, the shape; `selection/tests.rs` ×3 — the transfer primitives; text ×1, app preview ×2, input ×2); the new probe `scripts/gui_selection_clip.sh` PROBE PASS (a rect selection + the `b` hotkey + two red strokes on one self-located canvas row: the crossing stroke's red STOPS at the edge x=728/edge 730, the drag endpoint 850 px); SANDBOX.md pitfall 12 (the git-checkout test-loss incident — restored from the delivery zip); V66 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-21 (the
-placement-icons round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
-(default + mcp), `cargo test --profile gates` 282 default / 295 mcp green
-(+1 ignored; the placement test's probe strips recomputed in place — no net
-test change), the visual driver ALL SCENARIOS GREEN
-under Xvfb through the gates binary + the icon dump LOOKED AT (the
-placement trio at 256 px and at the real 24 px button size: the bands read
-as the outline and run past the icon's edge, the dot stays legible) —
-Rust 1.99.1 pinned via rust-toolchain.toml,
-Linux. NO wasm check
-this round (the diff touches no web-facing code — the economy rule). NOTE
+selection-clip round): fmt clean, rules.sh HARD-green, clippy `-D warnings` green
+(default + mcp), `cargo test --profile gates` 295 default / 308 mcp green
+(+1 ignored; +13 net — the clip tests: `tools/tests/clip.rs` ×5,
+`selection/tests.rs` ×3, text ×1, app preview ×2, input ×2), the visual driver
+ALL SCENARIOS GREEN under Xvfb through the gates (mcp) binary + the NEW probe
+`scripts/gui_selection_clip.sh` PROBE PASS (a rect selection + the `b`
+hotkey + two red strokes: the crossing stroke's red stops at x=728 /
+edge 730, the drag endpoint 850 — the clip works end-to-end) + the wasm
+`cargo check --target wasm32-unknown-unknown` green (32.7 s; the target had
+to be installed into this sandbox's rustup first — SANDBOX.md's install list
+gains nothing: a one-off) — Rust 1.99.1 pinned via rust-toolchain.toml,
+Linux. NOTE
 2026-11-21: FRESH GitHub clone (the repo re-cloned from the owner's push) —
 rustup + the pinned toolchain + the GUI .debs installed per SANDBOX.md; the
 detached warm-up SURVIVED between tool calls in this sandbox (see TIMING).
@@ -63,16 +66,17 @@ here: comments, docs, commit titles), not a script blacklist. Web/trunk lanes: t
 the NixOS pass of `nix run .#web-serve` / `.#web-build` / `.#web-build-release`); the manual trunk
 lanes last verified 2026-11-16 (see the archived log history);
 every src file ≤ 500 EXCEPT the report-only over-guard set — the owner-deferred
-`history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 641,
-`app/tool_icons/draw.rs` 794, `app/tool_icons.rs` 602, `selection.rs` 752,
-`tools.rs` 608, `app/selection.rs` 639, and NOW `app/windows.rs` 672 over
+`history_tree.rs` PLUS the rounds' growth: `app/preview.rs` 684,
+`app/tool_icons/draw.rs` 794, `app/tool_icons.rs` 602, `selection.rs` 890,
+`tools.rs` 665, `app/selection.rs` 647, and NOW `app/windows.rs` 672 over
 the guard (warn + propose splits at task end; no split mid-task — the
 proposed splits: the settings-panel half → an `app/windows/settings_panel.rs`
 child, the select icons → an `app/tool_icons/select.rs` child, both the
 palette-split pattern); the
 tool_icons + tools tests topic-splits (Tests rule 7) kept the topic files
 small (tools/tests.rs itself rides at 476 — the root's shared helpers + the
-topic mod decls).
+topic mod decls; this round's clip tests went into a NEW `tools/tests/clip.rs`
+topic).
 
 Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log").
 
@@ -90,9 +94,45 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the diameter-circle Feat entry (during
-> the placement-icons round's budget — the file rode over the ~200-line
+> PROGRESS-archive.md; the latest move: the diameter-guides Feat entry (during
+> the selection-clip round's budget — the file rode over the ~200-line
 > budget; all in the archive).
+
+### 2026-11-21 — `Feat:` an active selection confines every painting tool to its region (owner request in chat)
+
+- **What:** the classic paint-app rule: with a selection active, the
+  freehand strokes, the Line/Curve drags, the Shape drags and the Text
+  commit paint ONLY inside it (the Eyedropper still reads anywhere, Select
+  edits the selection itself). The mask snapshots at each gesture's start
+  (`App::selection_clip`; freehand `stroke_clip`, the drags carry it in
+  `PreviewState`, Text at commit — the MCP pencil stroke clips the same).
+  The pencil filters its plots; the thick strokes rasterize onto a
+  transparent bbox scratch (`tools.rs::paint_clipped`) and transfer via
+  `selection.rs::stamp_masked` / `erase_masked_by` (the eraser marks its
+  footprint — the scratch's alpha IS the erase strength, AA ±1 rounding);
+  the text rasterizer skips masked glyph pixels; outside pixels stay
+  byte-identical; no selection = the unchanged direct path. The live
+  vector previews clip to the selection's cached bounds.
+- **Files:** `src/selection.rs` (the transfer helpers), `src/tools.rs` +
+  `src/tools/smooth.rs` + `src/text.rs` (the clip param ×5), `src/app.rs`,
+  `src/app/input.rs`, `src/app/preview.rs`, `src/app/text_tool.rs`,
+  `src/app/selection.rs` (the snapshot + the wiring), `src/app/mcp/tools/
+  edits.rs` (the MCP stroke clips), SPEC §3.5 (the canonical "Selection
+  clipping" block) + §3.13, SANDBOX.md pitfall 12, the probe
+  `scripts/gui_selection_clip.sh`, +13 tests.
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 295 default /
+  308 mcp); the visual driver ALL SCENARIOS GREEN; the probe PROBE PASS
+  (the crossing stroke's red stops at x=728 / edge 730, the endpoint 850);
+  the wasm `cargo check` green (the target installed into the sandbox
+  first). INCIDENT (pitfall 12): a mechanical patch redo used `git
+  checkout --` and silently reverted the UNCOMMITTED diameter/guides tests
+  to HEAD (282 → 276 caught by the count); restored verbatim from the
+  previous round's delivery zip.
+- **Owner-checks:** V66 born (Windows + web: draw across a selection with
+  each tool — nothing outside it changes; erasing stays inside; text
+  commits clipped; no selection = unchanged behavior). Open: V66, V65,
+  V64, V63; parked: V30, V8. Debts open: F19, F18, F17, F16.
+- **Commit title:** `Feat: an active selection confines every painting tool to its region — the mask snapshots at gesture start, strokes/lines/shapes/text transfer only masked pixels, the MCP stroke obeys the same clip`
 
 ### 2026-11-21 — `Fix:` the Outline-placement radios' icons read as the outline — thicker segments running past the icon's edge (owner request in chat)
 
@@ -142,31 +182,3 @@ Update this stamp in the same edit as a log entry (AGENTS.md "Git & progress log
   its button). Open: V64, V63, V62, V61; parked: V30, V8.
   Debts open: F19, F18, F17, F16.
 - **Commit title:** `Fix: the Tools window's button order — the Eyedropper swapped with the Select, the Text with the Line (the TOOLS array drives the grid row-major; hotkeys and tooltips unchanged)`
-
-### 2026-11-21 — `Feat:` the diameter drag previews WHAT IT MEASURES — a dashed chord and the center dot (owner picked idea #3 from the chat)
-
-- **What:** while a diameter-circle gesture is LIVE (Ellipse kind, Shift
-  held, the panel's checkbox ON), the overlay draws on top of the shape: a
-  thin DASHED chord between the two drag points (the gesture's outline
-  color — falling back to the fill for Fill-only gestures) and a small
-  white dot with a dark ring at the segment's midpoint (the circle's
-  center; the polyline vertex-handle marker style — visible on any canvas
-  color). Overlay-only: the commit rasterizes just the ellipse and the
-  guides die with the gesture; the flag rides the gesture (Line and the
-  Rectangle kind never guide).
-- **Files:** `src/app/preview.rs` (the pure `diameter_guides` + the live
-  overlay call), `src/app/preview/tests.rs` (+2 tests), SPEC §3.2 (the
-  guides sentence), the probe `scripts/gui_diameter_check.sh` (+ the
-  MID-DRAG screenshots).
-- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 281 default /
-  294 mcp); the visual driver ALL SCENARIOS GREEN; the probe PROBE PASS
-  with the new mid-drag checks (chord dashes at t=0.25/0.75 of the drag
-  segment and the dot's ring at the midpoint with the box ON; no chord red
-  and no dot leak with the box OFF; the final-ring measurements
-  unchanged). No wasm check — no web-facing code (the economy rule).
-- **Owner-checks:** V63 born (Windows + web: the guides visible during a
-  diameter drag, gone at release, absent when the checkbox is off or the
-  kind is Rectangle/Line). Open: V63, V62, V61, V60; parked: V30, V8.
-  Debts open: F19, F18, F17, F16.
-- **Commit title:** `Feat: the diameter-circle Shift drag previews WHAT IT MEASURES — a thin dashed chord between the two drag points and a center dot at the segment's midpoint (overlay-only; the commit still rasterizes just the ellipse)`
-

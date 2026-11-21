@@ -95,6 +95,14 @@ pub(super) enum RegionOp {
 }
 
 impl App {
+    /// The selection mask snapshot a painting gesture takes at start (owner
+    /// request 2026-11-21: an active selection confines every canvas-
+    /// changing tool). `None` = no selection — the tool paints unclipped.
+    pub(super) fn selection_clip(&self) -> Option<crate::selection::Mask> {
+        self.selection
+            .build_mask(self.canvas.width, self.canvas.height)
+    }
+
     /// Press/drag/release handling of the Select tool (the dispatch lives
     /// in `draw_canvas`, the same pattern as the freehand and preview
     /// handlers).

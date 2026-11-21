@@ -20,9 +20,10 @@
 //! for the press-time touch dot and the MCP paths.
 
 use eframe::egui::{Color32, Pos2};
-use tiny_skia::{BlendMode, LineCap, Paint, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{BlendMode, LineCap, Paint, PathBuilder, Pixmap, Stroke};
 
-use super::{DirtyRect, MAX_STROKE_SIZE, Tool, blend_pixel, dirty_rect_for};
+use super::{DirtyRect, MAX_STROKE_SIZE, Tool, blend_pixel, dirty_rect_for, paint_clipped};
+use crate::selection::Mask;
 
 /// Subdivision cap for the pencil's flattened quadratic centerline: the
 /// quads are cut into ~1 px chords so the drifting pen follows the curve's
@@ -225,6 +226,7 @@ pub fn pencil_pixel(p: Pos2) -> (i64, i64) {
 /// hook: the closing call passes the raw release point so the trail ends
 /// exactly on its pixel (the walk itself stops within one pixel of its
 /// target and catches up on the next sample).
+#[allow(clippy::too_many_arguments)] // the flat paint list the gesture carries (same as tools.rs::rasterize_shape)
 pub fn rasterize_smooth_pieces(
     pixmap: &mut Pixmap,
     tool: Tool,
@@ -233,6 +235,7 @@ pub fn rasterize_smooth_pieces(
     pieces: &[SmoothPiece],
     trail: &mut PencilTrail,
     pin: Option<Pos2>,
+    clip: Option<&Mask>,
 ) -> Option<DirtyRect> {
     let width = match tool {
         Tool::Pencil => 1.0,
@@ -272,6 +275,14 @@ pub fn rasterize_smooth_pieces(
         {
             let mut plot = |x: i64, y: i64| {
                 if last_pixel == Some((x, y)) {
+                    return;
+                }
+                // The selection confines the pencil (owner request
+                // 2026-11-21): masked-out pixels stay untouched; the trail's
+                // dedupe state only tracks pixels actually plotted.
+                if let Some(mask) = clip
+                    && !mask.get(x, y)
+                {
                     return;
                 }
                 blend_pixel(pixels, pw, ph, x, y, src);
@@ -348,24 +359,27 @@ pub fn rasterize_smooth_pieces(
     }
     let path = builder.finish()?;
 
-    let mut paint = Paint::default();
+    let erase = matches!(tool, Tool::Eraser);
     let [r, g, b, a] = match tool {
         Tool::Eraser => [0, 0, 0, 255],
         _ => color.to_srgba_unmultiplied(),
     };
-    paint.set_color_rgba8(r, g, b, a);
-    paint.anti_alias = true;
-    if matches!(tool, Tool::Eraser) {
-        paint.blend_mode = BlendMode::DestinationOut;
-    }
     let stroke = Stroke {
         width,
         line_cap: LineCap::Round,
         ..Default::default()
     };
-    pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-
-    Some(dirty)
+    // Clipped: the eraser marks its footprint on the scratch (normal
+    // blend), the transfer destination-outs by the scratch's alpha.
+    paint_clipped(pixmap, dirty, clip, erase, |pm, ts, scratch| {
+        let mut paint = Paint::default();
+        paint.set_color_rgba8(r, g, b, a);
+        paint.anti_alias = true;
+        if erase && !scratch {
+            paint.blend_mode = BlendMode::DestinationOut;
+        }
+        pm.stroke_path(&path, &paint, &stroke, ts, None);
+    })
 }
 
 #[cfg(test)]

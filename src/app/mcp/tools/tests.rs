@@ -99,6 +99,7 @@ fn apply_stroke_records_node_pixels_and_snapshot() {
         2,
         &[Pos2::new(10.0, 10.0), Pos2::new(50.0, 50.0)],
         Color32::BLACK,
+        None,
     )
     .expect("node id");
 
@@ -134,6 +135,7 @@ fn apply_stroke_after_undo_forks_like_a_hand_gesture() {
         2,
         &[Pos2::new(10.0, 10.0), Pos2::new(20.0, 10.0)],
         Color32::BLACK,
+        None,
     )
     .expect("first node");
     apply_stroke(
@@ -143,6 +145,7 @@ fn apply_stroke_after_undo_forks_like_a_hand_gesture() {
         3,
         &[Pos2::new(30.0, 10.0), Pos2::new(40.0, 10.0)],
         Color32::BLACK,
+        None,
     )
     .expect("second node");
 
@@ -158,6 +161,7 @@ fn apply_stroke_after_undo_forks_like_a_hand_gesture() {
         4,
         &[Pos2::new(25.0, 50.0), Pos2::new(28.0, 50.0)],
         Color32::BLACK,
+        None,
     )
     .expect("third node");
 

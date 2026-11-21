@@ -217,6 +217,12 @@ pub struct App {
     /// [`crate::selection`], the gestures and the ops in [`selection`].
     /// DOCUMENT state, not history: cleared on New/Open/resize/crop.
     selection: crate::selection::Selection,
+    /// The selection mask SNAPSHOT of the freehand gesture in flight (owner
+    /// request 2026-11-21: a selection confines every painting tool). Built
+    /// once at stroke start — the selection cannot change while the pointer
+    /// drags a stroke (the OPS buttons need Select active) — and cleared
+    /// with the gesture; `None` = no selection, no clipping.
+    stroke_clip: Option<crate::selection::Mask>,
     /// The in-app clipboard (owner request 2026-11-20): the last copied or
     /// cut pixels of the ACTIVE layer, mask-shaped. Not the OS image
     /// clipboard; survives document switches.
@@ -423,6 +429,7 @@ impl App {
             }),
             preview: PreviewState::None,
             selection: crate::selection::Selection::default(),
+            stroke_clip: None,
             clipboard: None,
             select_gesture: SelectGesture::None,
             text_edit: None,

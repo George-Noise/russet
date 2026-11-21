@@ -188,3 +188,101 @@ fn a_key_op_wins_over_its_dedicated_twin_in_one_pass() {
         "exactly ONE paste ran despite both channels carrying the gesture (the headless layer is WHITE — the half-alpha black halves it once; a second stamp would blend it to ~190)"
     );
 }
+
+// -----------------------------------------------------------------------
+// The selection-clipped freehand commit (owner request 2026-11-21): the
+// gesture snapshots the mask at press (`stroke_clip`) and both paint
+// paths transfer only masked pixels — the press dot and the frame's
+// smoothed pieces alike.
+// -----------------------------------------------------------------------
+
+/// An app with a half-canvas selection and a brush stroke in flight at
+/// (20, 20) — the state the press sets up, minus the egui plumbing.
+fn stroking_app() -> (App, crate::selection::Mask) {
+    let mut app = App::new_headless();
+    let (w, h) = (app.canvas.width, app.canvas.height);
+    app.selection.replace(
+        Some(Region::Rect {
+            a: pos2(0.0, 0.0),
+            b: pos2(20.0, h as f32),
+        }),
+        w,
+        h,
+    );
+    let mask = app.selection.build_mask(w, h).expect("non-empty selection");
+    app.tools.tool = Tool::Brush;
+    app.tools.size = 4.0;
+    app.tools.primary = Color32::BLACK;
+    app.stroke_paint = Some(app.tools.primary);
+    app.stroke_trail = PencilTrail::starting_from(pencil_pixel(pos2(20.0, 20.0)));
+    (app, mask)
+}
+
+#[test]
+fn the_press_dot_and_smoothed_pieces_confine_to_the_selection() {
+    let (mut app, mask) = stroking_app();
+    app.stroke_clip = Some(mask);
+
+    // The press dot OUTSIDE the selection: nothing changes...
+    let slate = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(30, 20)
+        .expect("in bounds");
+    app.paint_segment(pos2(30.0, 20.0), pos2(30.0, 20.0));
+    assert_eq!(
+        app.layers
+            .active()
+            .pixmap()
+            .pixel(30, 20)
+            .expect("in bounds"),
+        slate,
+        "the press dot outside the selection must not paint"
+    );
+
+    // ...and a frame's smoothed pieces crossing the edge paint only inside.
+    let pieces = [SmoothPiece::Line {
+        from: pos2(6.0, 20.0),
+        to: pos2(34.0, 20.0),
+    }];
+    app.paint_smooth_pieces(&pieces, None);
+    for x in [21, 27, 33] {
+        assert_eq!(
+            app.layers
+                .active()
+                .pixmap()
+                .pixel(x, 20)
+                .expect("in bounds"),
+            slate,
+            "outside the selection must stay untouched at {x}"
+        );
+    }
+    assert!(
+        app.layers
+            .active()
+            .pixmap()
+            .pixel(10, 20)
+            .expect("in bounds")
+            .alpha()
+            > 0,
+        "inside the selection the stroke paints"
+    );
+}
+
+#[test]
+fn a_stroke_without_a_selection_paints_everywhere() {
+    let (mut app, _) = stroking_app();
+    // No selection: `stroke_clip` stays None — the direct fast path.
+    app.paint_segment(pos2(30.0, 20.0), pos2(30.0, 20.0));
+    assert!(
+        app.layers
+            .active()
+            .pixmap()
+            .pixel(30, 20)
+            .expect("in bounds")
+            .alpha()
+            > 0,
+        "without a selection the press dot paints anywhere"
+    );
+}

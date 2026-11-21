@@ -244,6 +244,7 @@ impl App {
             color,
             from,
             to,
+            self.stroke_clip.as_ref(),
         );
         if let Some(dirty) = dirty {
             self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -273,6 +274,7 @@ impl App {
             pieces,
             &mut self.stroke_trail,
             pin,
+            self.stroke_clip.as_ref(),
         );
         if let Some(dirty) = dirty {
             self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -303,6 +305,7 @@ impl App {
     ) {
         if panning {
             self.is_stroking = false;
+            self.stroke_clip = None;
             self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
             self.stroke_trail = PencilTrail::default();
             self.stroke_button = None;
@@ -362,6 +365,7 @@ impl App {
             }
             self.stroke_paint = None;
             self.is_stroking = false;
+            self.stroke_clip = None;
             self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
             self.stroke_trail = PencilTrail::default();
             self.stroke_button = None;
@@ -379,6 +383,11 @@ impl App {
                 self.stroke_button = Some(button);
                 self.is_stroking = true;
                 self.stroke_paint = Some(self.stroke_color());
+                // The gesture's clip snapshot (owner request 2026-11-21): an
+                // active selection confines the stroke to its region. The
+                // selection cannot change mid-stroke (the OPS buttons need
+                // the Select tool), so the snapshot stays exact.
+                self.stroke_clip = self.selection_clip();
                 let pos = self.canvas_pos(rect, cursor);
                 self.stroke_smooth = SmoothStroke::new(pos);
                 // The press dot's pixel seeds the pencil trail's dedupe so

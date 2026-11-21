@@ -44,8 +44,19 @@ pub(super) fn add_stroke(app: &mut App, args: &Value) -> Result<Value, String> {
     };
     let next_id = app.layers.next_node_id();
     let node = {
+        // An MCP stroke is a hand stroke: it obeys the selection clip the
+        // same way (the mask snapshot at the call = the gesture's start).
+        let clip = app.selection_clip();
         let (pixmap, tree) = app.layers.active_parts();
-        apply_stroke(pixmap, tree, &mut app.action_log, next_id, &points, color)
+        apply_stroke(
+            pixmap,
+            tree,
+            &mut app.action_log,
+            next_id,
+            &points,
+            color,
+            clip.as_ref(),
+        )
     };
     if node.is_some() {
         app.layers.advance_next_node_id();
@@ -76,14 +87,15 @@ pub(super) fn apply_stroke(
     next_id: NodeId,
     points: &[Pos2],
     color: Color32,
+    clip: Option<&crate::selection::Mask>,
 ) -> Option<NodeId> {
     let &first = points.first()?;
     log.push("Pencil stroke (MCP)");
     let mut last = first;
-    let _ = draw_segment(pixmap, Tool::Pencil, 1.0, color, first, first);
+    let _ = draw_segment(pixmap, Tool::Pencil, 1.0, color, first, first, clip);
     for &point in points.iter().skip(1) {
         if point != last {
-            let _ = draw_segment(pixmap, Tool::Pencil, 1.0, color, last, point);
+            let _ = draw_segment(pixmap, Tool::Pencil, 1.0, color, last, point, clip);
             last = point;
         }
     }

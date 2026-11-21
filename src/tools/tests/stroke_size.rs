@@ -35,6 +35,7 @@ fn smooth_brush_stroke_honors_a_width_above_100() {
         &pieces,
         &mut trail,
         None,
+        None,
     )
     .expect("stroke rasterizes");
     // 85 px below the centerline: inside a 200-wide band (half-width 100,
@@ -52,6 +53,7 @@ fn draw_segment_stroke_honors_a_width_above_100() {
         Color32::BLACK,
         pos2(150.0, 20.0),
         pos2(150.0, 180.0),
+        None,
     )
     .expect("segment rasterizes");
     // 85 px right of the vertical centerline at x = 150 (the band edge at
@@ -67,6 +69,7 @@ fn line_tool_polyline_honors_a_width_above_100() {
         &[pos2(20.0, 100.0), pos2(280.0, 100.0)],
         200.0,
         Color32::BLACK,
+        None,
     )
     .expect("polyline rasterizes");
     assert_eq!(alpha(&pixmap, 150, 185), 255);
@@ -84,6 +87,7 @@ fn shape_outline_honors_a_width_above_100() {
         Some(Color32::BLACK),
         None,
         ShapeOutline::Center,
+        None,
     )
     .expect("shape rasterizes");
     // 70 px left of the boundary at x = 100: the centered band spans
@@ -105,6 +109,7 @@ fn the_sanity_ceiling_stays_the_entry_box_bound() {
         Color32::BLACK,
         pos2(0.0, 0.0),
         pos2(49.0, 49.0),
+        None,
     )
     .expect("ceiling width rasterizes");
     assert_eq!((dirty.x, dirty.y, dirty.w, dirty.h), (0, 0, 50, 50));

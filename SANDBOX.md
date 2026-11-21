@@ -129,6 +129,18 @@ pkill -x Xvfb
     `WID=$(xdotool search --name Russet | head -1); xdotool windowfocus $WID` — then
     `xdotool keydown shift` + drags behave like real input (the drag-probe template's
     `gui_magnet_check.sh` never hit this because its drags carry no modifier keys).
+12. `git checkout -- <file>` silently DESTROYS uncommitted work from earlier rounds
+    (found 2026-11-21, the selection-clip round: a mechanical call-site patch had to
+    be redone and `git checkout -- src/app/preview/tests.rs` restored the file to
+    HEAD — which predates the diameter/guides rounds, whose TEST additions lived
+    only in the working tree; seven tests vanished, caught only because the test
+    count dropped 282 → 276). The tree accumulates rounds between the owner's
+    pushes: HEAD is NOT "the last round". Never `git checkout` a file to undo a
+    bad edit — re-apply the edit instead; if a revert already happened, restore
+    the file from the latest delivery zip (`unzip -p download/russet.zip
+    russet/<path>`), which byte-compared to the tree at the last round. Watch the
+    test count in every gate run — a silent drop means lost tests, not green.
+
 
 ## What this unlocked, and what still belongs to the owner
 

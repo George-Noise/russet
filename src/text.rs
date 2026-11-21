@@ -9,11 +9,15 @@
 use eframe::egui::{self, Align, Color32, Context, FontId, Pos2};
 use tiny_skia::Pixmap;
 
+use crate::selection::Mask;
 use crate::tools::{DirtyRect, blend_pixel};
 
 /// Renders `text` (may contain `\n`) into `pixmap` with the top-left of the
 /// text box at `origin` (canvas coordinates). `font_size` is the font size
-/// in canvas pixels. Returns the dirty rectangle, or `None` when nothing
+/// in canvas pixels. `clip` confines the commit to a selection's mask
+/// (owner request 2026-11-21): masked-out glyph pixels are skipped, so text
+/// placed over an empty selection changes nothing. Returns the dirty
+/// rectangle, or `None` when nothing
 /// was drawn (empty/blank text, or all glyphs landed outside the canvas).
 pub fn rasterize_text(
     ctx: &Context,
@@ -22,6 +26,7 @@ pub fn rasterize_text(
     origin: Pos2,
     font_size: f32,
     color: Color32,
+    clip: Option<&Mask>,
 ) -> Option<DirtyRect> {
     if text.trim().is_empty() {
         return None;
@@ -104,6 +109,13 @@ pub fn rasterize_text(
                     }
                     let dx = left + (tx - uv.min[0]) as i64;
                     let dy = top + (ty - uv.min[1]) as i64;
+                    // The selection confines the text: masked-out pixels
+                    // stay untouched and extend no dirty rect.
+                    if let Some(mask) = clip
+                        && !mask.get(dx, dy)
+                    {
+                        continue;
+                    }
                     blend_pixel(pixels, pw, ph, dx, dy, src_px);
                     if dx < min_x {
                         min_x = dx;

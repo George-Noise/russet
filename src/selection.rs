@@ -36,6 +36,7 @@
 //!   right); at a diagonal-touch (checkerboard) corner the walk turns
 //!   RIGHT, keeping the two touching loops separate.
 
+use crate::tools::{DirtyRect, blend_pixel};
 use eframe::egui::Pos2;
 use tiny_skia::{Pixmap, PixmapPaint, PremultipliedColorU8, Transform};
 
@@ -746,6 +747,143 @@ pub fn stamp(dst: &mut Pixmap, clip: &Pixmap, x: i64, y: i64) {
         Transform::identity(),
         None,
     );
+}
+
+/// The selection-CLIPPED paint commit's transfer step (owner request
+/// 2026-11-21: an active selection confines every canvas-changing tool to
+/// its region). The stroke first rasterizes into a transparent SCRATCH
+/// pixmap — so the tiny-skia paths keep their exact geometry and AA, and
+/// src-over's associativity makes the transferred result pixel-identical
+/// to the direct paint — then this blends the scratch's `region` (canvas
+/// space) onto `dst` ONLY where the mask selects: each scratch pixel goes
+/// down as premultiplied src-over at `origin + scratch pixel` (`origin` is
+/// the scratch's canvas position; a full-canvas scratch passes `(0, 0)`).
+/// Returns the touched rect (the region ∩ the mask's tight bounds), `None`
+/// when that intersection is empty.
+pub fn stamp_masked(
+    dst: &mut Pixmap,
+    scratch: &Pixmap,
+    region: DirtyRect,
+    origin: (i64, i64),
+    mask: &Mask,
+) -> Option<DirtyRect> {
+    let region = transfer_target(dst, scratch, region, origin, mask)?;
+    transfer(dst, scratch, region, origin, mask, Mode::Paint);
+    Some(region)
+}
+
+/// The clipped ERASER's counterpart: destination-out by the scratch's
+/// alpha — every masked pixel fades by `1 − scratch alpha`, the same math
+/// tiny-skia's `BlendMode::DestinationOut` applies unmasked (the eraser
+/// marks its footprint on the scratch with an opaque paint first, so the
+/// scratch's alpha IS the erase strength, AA edges included).
+pub fn erase_masked_by(
+    dst: &mut Pixmap,
+    scratch: &Pixmap,
+    region: DirtyRect,
+    origin: (i64, i64),
+    mask: &Mask,
+) -> Option<DirtyRect> {
+    let region = transfer_target(dst, scratch, region, origin, mask)?;
+    transfer(dst, scratch, region, origin, mask, Mode::Erase);
+    Some(region)
+}
+
+/// The paint/erase variants of [`transfer`].
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Paint,
+    Erase,
+}
+
+/// Intersects the canvas-space `region` with the mask's tight bounds, the
+/// scratch's coverage (`origin + scratch size`) and `dst`'s bounds — the
+/// rect the transfer loop may touch.
+fn transfer_target(
+    dst: &Pixmap,
+    scratch: &Pixmap,
+    region: DirtyRect,
+    origin: (i64, i64),
+    mask: &Mask,
+) -> Option<DirtyRect> {
+    let bounds = mask.tight_bounds()?;
+    let (rx, rx1) = (region.x as i64, (region.x + region.w) as i64);
+    let (ry, ry1) = (region.y as i64, (region.y + region.h) as i64);
+    let (sx, sx1) = (origin.0, origin.0 + scratch.width() as i64);
+    let (sy, sy1) = (origin.1, origin.1 + scratch.height() as i64);
+    let (dx, dx1) = (0, dst.width() as i64);
+    let (dy, dy1) = (0, dst.height() as i64);
+    let x0 = rx.max(bounds.x).max(sx).max(dx);
+    let y0 = ry.max(bounds.y).max(sy).max(dy);
+    let x1 = rx1.min(bounds.x + bounds.w as i64).min(sx1).min(dx1);
+    let y1 = ry1.min(bounds.y + bounds.h as i64).min(sy1).min(dy1);
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    Some(DirtyRect {
+        x: x0 as u32,
+        y: y0 as u32,
+        w: (x1 - x0) as u32,
+        h: (y1 - y0) as u32,
+    })
+}
+
+/// The shared masked-transfer loop: for every pixel of the target rect the
+/// mask selects, applies the scratch's pixel — [`Mode::Paint`] blends it
+/// premultiplied src-over ([`blend_pixel`]), [`Mode::Erase`] scales the
+/// destination by `1 − scratch alpha` (destination-out).
+fn transfer(
+    dst: &mut Pixmap,
+    scratch: &Pixmap,
+    region: DirtyRect,
+    origin: (i64, i64),
+    mask: &Mask,
+    mode: Mode,
+) {
+    let (pw, ph) = (dst.width() as i64, dst.height() as i64);
+    let scratch_stride = scratch.width() as i64;
+    let scratch_pixels = scratch.pixels();
+    let pixels = dst.pixels_mut();
+    for py in region.y as i64..(region.y + region.h) as i64 {
+        for px in region.x as i64..(region.x + region.w) as i64 {
+            if !mask.get(px, py) {
+                continue;
+            }
+            let s = scratch_pixels[((py - origin.1) * scratch_stride + (px - origin.0)) as usize];
+            if s.alpha() == 0 {
+                continue;
+            }
+            match mode {
+                Mode::Paint => blend_pixel(
+                    pixels,
+                    pw,
+                    ph,
+                    px,
+                    py,
+                    [
+                        s.red() as u32,
+                        s.green() as u32,
+                        s.blue() as u32,
+                        s.alpha() as u32,
+                    ],
+                ),
+                Mode::Erase => {
+                    let idx = (py * pw + px) as usize;
+                    let d = pixels[idx];
+                    let ia = 255 - s.alpha() as u32;
+                    let mix = |c: u8| ((c as u32 * ia + 127) / 255) as u8;
+                    if let Some(out) = PremultipliedColorU8::from_rgba(
+                        mix(d.red()),
+                        mix(d.green()),
+                        mix(d.blue()),
+                        mix(d.alpha()),
+                    ) {
+                        pixels[idx] = out;
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

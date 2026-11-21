@@ -96,6 +96,7 @@ fn draw_in_batches(
             chunk,
             &mut trail,
             if is_last { Some(release) } else { None },
+            None,
         )
         .expect("chunk rasterizes");
     }

@@ -1,5 +1,32 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Feat:` the diameter drag previews WHAT IT MEASURES — a dashed chord and the center dot (owner picked idea #3 from the chat)
+
+- **What:** while a diameter-circle gesture is LIVE (Ellipse kind, Shift
+  held, the panel's checkbox ON), the overlay draws on top of the shape: a
+  thin DASHED chord between the two drag points (the gesture's outline
+  color — falling back to the fill for Fill-only gestures) and a small
+  white dot with a dark ring at the segment's midpoint (the circle's
+  center; the polyline vertex-handle marker style — visible on any canvas
+  color). Overlay-only: the commit rasterizes just the ellipse and the
+  guides die with the gesture; the flag rides the gesture (Line and the
+  Rectangle kind never guide).
+- **Files:** `src/app/preview.rs` (the pure `diameter_guides` + the live
+  overlay call), `src/app/preview/tests.rs` (+2 tests), SPEC §3.2 (the
+  guides sentence), the probe `scripts/gui_diameter_check.sh` (+ the
+  MID-DRAG screenshots).
+- **Verified:** FULL gate ALL GATES GREEN (see the stamp — 281 default /
+  294 mcp); the visual driver ALL SCENARIOS GREEN; the probe PROBE PASS
+  with the new mid-drag checks (chord dashes at t=0.25/0.75 of the drag
+  segment and the dot's ring at the midpoint with the box ON; no chord red
+  and no dot leak with the box OFF; the final-ring measurements
+  unchanged). No wasm check — no web-facing code (the economy rule).
+- **Owner-checks:** V63 born (Windows + web: the guides visible during a
+  diameter drag, gone at release, absent when the checkbox is off or the
+  kind is Rectangle/Line). Open: V63, V62, V61, V60; parked: V30, V8.
+  Debts open: F19, F18, F17, F16.
+- **Commit title:** `Feat: the diameter-circle Shift drag previews WHAT IT MEASURES — a thin dashed chord between the two drag points and a center dot at the segment's midpoint (overlay-only; the commit still rasterizes just the ellipse)`
+
 ### 2026-11-21 — `Feat:` the TESTING diameter-circle Shift rule for the Shape tool's Ellipse kind (owner request in chat)
 
 - **What:** with the Ellipse kind selected, a Shift drag no longer pulls the

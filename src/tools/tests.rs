@@ -1,6 +1,7 @@
 use super::*;
 use eframe::egui::pos2;
 
+mod clip;
 mod stroke_size;
 
 fn line_points(x0: i64, y0: i64, x1: i64, y1: i64) -> Vec<(i64, i64)> {
@@ -45,7 +46,18 @@ fn pencil_draws_hard_one_pixel_line_on_pixmap() {
     let mut pixmap = Pixmap::new(16, 16).expect("16x16 pixmap");
     let from = pos2(0.4, 0.6); // rounds to (0, 1)
     let to = pos2(7.6, 3.4); // rounds to (8, 3)
-    assert!(draw_segment(&mut pixmap, Tool::Pencil, 1.0, Color32::BLACK, from, to).is_some());
+    assert!(
+        draw_segment(
+            &mut pixmap,
+            Tool::Pencil,
+            1.0,
+            Color32::BLACK,
+            from,
+            to,
+            None
+        )
+        .is_some()
+    );
     let black: Vec<(usize, usize)> = pixmap
         .pixels()
         .iter()
@@ -67,6 +79,7 @@ fn polyline_draws_a_line() {
         &[pos2(2.0, 10.2), pos2(17.0, 10.0)],
         2.0,
         Color32::BLACK,
+        None,
     );
     assert!(dirty.is_some());
     // Two mostly-solid pixel rows per column from 2..=17 (a width-2
@@ -100,6 +113,7 @@ fn polyline_handles_perfectly_horizontal_line() {
         &[pos2(2.0, 10.0), pos2(17.0, 10.0)],
         1.0,
         Color32::BLACK,
+        None,
     );
     assert!(dirty.is_some());
     let painted = pixmap.pixels().iter().filter(|c| c.alpha() > 0).count();
@@ -109,7 +123,9 @@ fn polyline_handles_perfectly_horizontal_line() {
 #[test]
 fn polyline_single_point_draws_a_dot() {
     let mut pixmap = Pixmap::new(20, 20).expect("20x20 pixmap");
-    assert!(rasterize_polyline(&mut pixmap, &[pos2(10.0, 10.0)], 1.0, Color32::BLACK).is_some());
+    assert!(
+        rasterize_polyline(&mut pixmap, &[pos2(10.0, 10.0)], 1.0, Color32::BLACK, None).is_some()
+    );
     // A width-1 dot straddles the pixel grid: a 2×2 block of partial
     // coverage (the brush's round-cap look).
     let painted = pixmap.pixels().iter().filter(|c| c.alpha() > 0).count();
@@ -119,7 +135,7 @@ fn polyline_single_point_draws_a_dot() {
 #[test]
 fn empty_polyline_draws_nothing() {
     let mut pixmap = Pixmap::new(20, 20).expect("20x20 pixmap");
-    assert!(rasterize_polyline(&mut pixmap, &[], 1.0, Color32::BLACK).is_none());
+    assert!(rasterize_polyline(&mut pixmap, &[], 1.0, Color32::BLACK, None).is_none());
     assert!(pixmap.pixels().iter().all(|c| c.alpha() == 0));
 }
 
@@ -135,6 +151,7 @@ fn rectangle_outline_keeps_center_transparent() {
         Some(Color32::BLACK),
         None,
         ShapeOutline::Center,
+        None,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -156,6 +173,7 @@ fn filled_rectangle_paints_the_center() {
         None,
         Some(Color32::BLACK),
         ShapeOutline::Center,
+        None,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -174,6 +192,7 @@ fn fill_and_outline_paint_both() {
         Some(Color32::BLACK),
         Some(Color32::WHITE),
         ShapeOutline::Center,
+        None,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -196,6 +215,7 @@ fn shape_without_outline_or_fill_draws_nothing() {
             None,
             None,
             ShapeOutline::Center,
+            None
         )
         .is_none()
     );
@@ -214,6 +234,7 @@ fn ellipse_outline_keeps_center_and_corners_transparent() {
         Some(Color32::BLACK),
         None,
         ShapeOutline::Center,
+        None,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 40 + x];
@@ -236,6 +257,7 @@ fn zero_size_shape_draws_nothing() {
             Some(Color32::BLACK),
             None,
             ShapeOutline::Center,
+            None
         )
         .is_none()
     );
@@ -265,6 +287,7 @@ fn brush_size_controls_stroke_thickness() {
         Color32::BLACK,
         pos2(6.0, 16.0),
         pos2(26.0, 16.0),
+        None,
     )
     .expect("brush stroke rasterizes");
 
@@ -292,6 +315,7 @@ fn eraser_clears_pixels_to_transparency() {
         Color32::BLACK,
         pos2(3.0, 8.0),
         pos2(12.0, 8.0),
+        None,
     )
     .expect("eraser stroke rasterizes");
 
@@ -357,6 +381,7 @@ fn the_outside_outline_lies_fully_beyond_the_two_points() {
         Some(Color32::BLACK),
         None,
         ShapeOutline::Outside,
+        None,
     );
     assert!(dirty.is_some());
     let dirty = dirty.expect("the outside shape rasterizes");
@@ -402,6 +427,7 @@ fn the_inside_outline_lies_fully_within_the_two_points() {
         Some(Color32::BLACK),
         Some(Color32::WHITE),
         ShapeOutline::Inside,
+        None,
     );
     assert!(dirty.is_some());
     let at = |x: usize, y: usize| pixmap.pixels()[y * 48 + x];
@@ -432,6 +458,7 @@ fn the_center_outline_straddles_the_two_points() {
         Some(Color32::BLACK),
         None,
         ShapeOutline::Center,
+        None,
     )
     .expect("the shape rasterizes");
     let at = |x: usize, y: usize| pixmap.pixels()[y * 48 + x];

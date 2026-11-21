@@ -53,6 +53,12 @@ pub(super) enum PreviewState {
         width: f32,
         outline_pos: ShapeOutline,
         diameter: bool,
+        /// The selection mask snapshot at drag start (owner request
+        /// 2026-11-21): the commit transfers only masked pixels — the
+        /// selection confines every painting tool. The selection cannot
+        /// change mid-drag (the pointer is busy), so the snapshot stays
+        /// exact.
+        clip: Option<crate::selection::Mask>,
     },
     /// A curve-mode polyline: `points` are confirmed vertices, the rubber
     /// band follows the pointer; `mode` is remembered so that switching the
@@ -63,6 +69,9 @@ pub(super) enum PreviewState {
         color: Color32,
         width: f32,
         mode: LineMode,
+        /// The selection mask snapshot at gesture start (owner request
+        /// 2026-11-21): the commit transfers only masked pixels.
+        clip: Option<crate::selection::Mask>,
     },
 }
 
@@ -207,6 +216,7 @@ impl App {
                                     width,
                                     outline_pos: ShapeOutline::Center,
                                     diameter: false,
+                                    clip: self.selection_clip(),
                                 };
                                 // Blocks Space-pan while the drag is in
                                 // progress, same as a freehand stroke.
@@ -219,6 +229,7 @@ impl App {
                                     color,
                                     width,
                                     mode: LineMode::Curve,
+                                    clip: self.selection_clip(),
                                 };
                             }
                         }
@@ -248,6 +259,7 @@ impl App {
                             width,
                             outline_pos: self.tools.shape_outline,
                             diameter: false,
+                            clip: self.selection_clip(),
                         };
                         self.is_stroking = true;
                     }
@@ -305,6 +317,7 @@ impl App {
                         width,
                         outline_pos,
                         diameter,
+                        clip,
                     } = state
                     {
                         self.commit_drag(
@@ -316,6 +329,7 @@ impl App {
                             width,
                             outline_pos,
                             diameter,
+                            clip.as_ref(),
                         );
                     }
                     self.is_stroking = false;
@@ -384,6 +398,7 @@ impl App {
         width: f32,
         outline_pos: ShapeOutline,
         diameter: bool,
+        clip: Option<&crate::selection::Mask>,
     ) {
         match kind {
             DragKind::Line => {
@@ -396,6 +411,7 @@ impl App {
                     &[start, current],
                     width,
                     color,
+                    clip,
                 );
                 if let Some(dirty) = dirty {
                     self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -429,6 +445,7 @@ impl App {
                     outline,
                     fill,
                     outline_pos,
+                    clip,
                 );
                 if let Some(dirty) = dirty {
                     self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -449,6 +466,7 @@ impl App {
             mut points,
             color,
             width,
+            clip,
             ..
         } = state
         else {
@@ -459,8 +477,13 @@ impl App {
         if points.is_empty() {
             return;
         }
-        let dirty =
-            rasterize_polyline(self.layers.active_mut().pixmap_mut(), &points, width, color);
+        let dirty = rasterize_polyline(
+            self.layers.active_mut().pixmap_mut(),
+            &points,
+            width,
+            color,
+            clip.as_ref(),
+        );
         if let Some(dirty) = dirty {
             self.composite_dirty(dirty.x, dirty.y, dirty.w, dirty.h);
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -474,6 +497,25 @@ impl App {
     /// while a gesture is pending (never touches the `Pixmap`).
     pub(super) fn draw_preview_overlay(&self, painter: &egui::Painter, canvas_rect: Rect) {
         let ppp = self.ctx.pixels_per_point();
+        // The live preview follows the selection too (owner request
+        // 2026-11-21): the commit will never paint outside the selected
+        // region, so the overlay must not show paint there either. The
+        // CACHED tight bounds clip pixel-exact for rect selections; for a
+        // lasso they clip to the bounding rect (a superset — the commit
+        // still clips exactly to the mask).
+        let painter = match self.selection.bounds() {
+            Some(b) => {
+                let min = self.screen_pos(canvas_rect, Pos2::new(b.x as f32, b.y as f32));
+                let max = self.screen_pos(
+                    canvas_rect,
+                    Pos2::new((b.x + b.w as i64) as f32, (b.y + b.h as i64) as f32),
+                );
+                painter
+                    .clone()
+                    .with_clip_rect(painter.clip_rect().intersect(Rect::from_two_pos(min, max)))
+            }
+            None => painter.clone(),
+        };
         let screen_stroke =
             |width: f32| Stroke::new((width * self.zoom / ppp).max(1.0), Color32::TRANSPARENT);
         let to_screen = |p: Pos2| self.screen_pos(canvas_rect, p);
@@ -489,6 +531,7 @@ impl App {
                 width,
                 outline_pos,
                 diameter,
+                ..
             } => {
                 // TESTING (owner request 2026-11-21): the diameter-circle
                 // gesture previews the COMMITTED bounding square — the

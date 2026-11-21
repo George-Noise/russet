@@ -1,3 +1,4 @@
+use crate::selection::{Mask, erase_masked_by, stamp_masked};
 use eframe::egui::{Color32, Pos2};
 use tiny_skia::{
     BlendMode, FillRule, LineCap, Paint, PathBuilder, Pixmap, PremultipliedColorU8, Stroke,
@@ -195,6 +196,44 @@ pub struct DirtyRect {
 /// every draw path ignored it).
 pub const MAX_STROKE_SIZE: f32 = 10_000.0;
 
+/// The selection-clipped commit's shared pipeline (owner request 2026-11-21:
+/// an active selection confines every canvas-changing tool to its region).
+/// `paint` draws the geometry with a transform — `identity()` for the
+/// direct path, a translation onto a transparent bbox SCRATCH when a mask
+/// is active (`scratch` = true then; the eraser MARKS its footprint there
+/// instead of destination-out — the scratch's alpha is the erase strength).
+/// The scratch then transfers onto `pixmap` through the mask
+/// ([`selection::stamp_masked`] / [`selection::erase_masked_by`]) — src-over
+/// is associative and a pure integer translation preserves coverage
+/// exactly, so the clipped result is pixel-identical to the direct paint
+/// inside the selection. Returns the dirty rect — mask-clipped when
+/// clipped, `None` when the selection covers none of it.
+pub(crate) fn paint_clipped(
+    pixmap: &mut Pixmap,
+    dirty: DirtyRect,
+    clip: Option<&Mask>,
+    erase: bool,
+    paint: impl FnOnce(&mut Pixmap, Transform, bool),
+) -> Option<DirtyRect> {
+    match clip {
+        None => {
+            paint(pixmap, Transform::identity(), false);
+            Some(dirty)
+        }
+        Some(mask) => {
+            let mut scratch = Pixmap::new(dirty.w.max(1), dirty.h.max(1))?;
+            let origin = (dirty.x as i64, dirty.y as i64);
+            let shift = Transform::from_translate(-(dirty.x as f32), -(dirty.y as f32));
+            paint(&mut scratch, shift, true);
+            if erase {
+                erase_masked_by(pixmap, &scratch, dirty, origin, mask)
+            } else {
+                stamp_masked(pixmap, &scratch, dirty, origin, mask)
+            }
+        }
+    }
+}
+
 pub fn draw_segment(
     pixmap: &mut Pixmap,
     tool: Tool,
@@ -202,6 +241,7 @@ pub fn draw_segment(
     color: Color32,
     from: Pos2,
     to: Pos2,
+    clip: Option<&Mask>,
 ) -> Option<DirtyRect> {
     let width = match tool {
         Tool::Pencil => 1.0,
@@ -251,6 +291,14 @@ pub fn draw_segment(
                 if x < 0 || y < 0 || x >= pw || y >= ph {
                     return;
                 }
+                // The selection confines the pencil: masked-out pixels stay
+                // untouched (the bookkeeping `last_pixel`-style dedupe lives
+                // in the trail, not here).
+                if let Some(mask) = clip
+                    && !mask.get(x, y)
+                {
+                    return;
+                }
                 let dst = pixels[(y * pw + x) as usize];
                 // src-over: out = src + dst * (1 - src_alpha), rounded.
                 let ia = 255 - a as u32;
@@ -283,7 +331,7 @@ pub fn draw_segment(
     builder.line_to(end_x, end_y);
     let path = builder.finish()?;
 
-    let mut paint = Paint::default();
+    let erase = matches!(tool, Tool::Eraser);
     let [r, g, b, a] = match tool {
         Tool::Eraser => [0, 0, 0, 255],
         Tool::Pencil | Tool::Brush => color.to_srgba_unmultiplied(),
@@ -291,25 +339,33 @@ pub fn draw_segment(
             color.to_srgba_unmultiplied()
         }
     };
-    paint.set_color_rgba8(r, g, b, a);
-    paint.anti_alias = !matches!(tool, Tool::Pencil);
-    if matches!(tool, Tool::Eraser) {
-        paint.blend_mode = BlendMode::DestinationOut;
-    }
-
     let stroke = Stroke {
         width,
         line_cap: LineCap::Round,
         ..Default::default()
     };
-    pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-
-    Some(DirtyRect {
-        x: x0,
-        y: y0,
-        w: x1 - x0,
-        h: y1 - y0,
-    })
+    // Clipped: the eraser marks its footprint on the scratch (normal
+    // blend), the transfer destination-outs by the scratch's alpha.
+    paint_clipped(
+        pixmap,
+        DirtyRect {
+            x: x0,
+            y: y0,
+            w: x1 - x0,
+            h: y1 - y0,
+        },
+        clip,
+        erase,
+        |pm, ts, scratch| {
+            let mut paint = Paint::default();
+            paint.set_color_rgba8(r, g, b, a);
+            paint.anti_alias = true;
+            if erase && !scratch {
+                paint.blend_mode = BlendMode::DestinationOut;
+            }
+            pm.stroke_path(&path, &paint, &stroke, ts, None);
+        },
+    )
 }
 
 /// Blends one premultiplied source pixel over the pixmap pixel at `(x, y)`
@@ -376,6 +432,7 @@ pub fn rasterize_polyline(
     points: &[Pos2],
     width: f32,
     color: Color32,
+    clip: Option<&Mask>,
 ) -> Option<DirtyRect> {
     let width = width.clamp(1.0, MAX_STROKE_SIZE);
     let (&first, rest) = points.split_first()?;
@@ -400,18 +457,13 @@ pub fn rasterize_polyline(
         let mut builder = PathBuilder::new();
         builder.push_circle(first.x, first.y, width * 0.5);
         let path = builder.finish()?;
-        let mut paint = Paint::default();
         let [r, g, b, a] = color.to_srgba_unmultiplied();
-        paint.set_color_rgba8(r, g, b, a);
-        paint.anti_alias = true;
-        pixmap.fill_path(
-            &path,
-            &paint,
-            FillRule::Winding,
-            Transform::identity(),
-            None,
-        );
-        return Some(dirty);
+        return paint_clipped(pixmap, dirty, clip, false, |pm, ts, _| {
+            let mut paint = Paint::default();
+            paint.set_color_rgba8(r, g, b, a);
+            paint.anti_alias = true;
+            pm.fill_path(&path, &paint, FillRule::Winding, ts, None);
+        });
     }
 
     let mut builder = PathBuilder::new();
@@ -432,18 +484,18 @@ pub fn rasterize_polyline(
     }
     let path = builder.finish()?;
 
-    let mut paint = Paint::default();
     let [r, g, b, a] = color.to_srgba_unmultiplied();
-    paint.set_color_rgba8(r, g, b, a);
-    paint.anti_alias = true;
     let stroke = Stroke {
         width,
         line_cap: LineCap::Round,
         ..Default::default()
     };
-    pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-
-    Some(dirty)
+    paint_clipped(pixmap, dirty, clip, false, |pm, ts, _| {
+        let mut paint = Paint::default();
+        paint.set_color_rgba8(r, g, b, a);
+        paint.anti_alias = true;
+        pm.stroke_path(&path, &paint, &stroke, ts, None);
+    })
 }
 
 /// The bounds of the path the shape's outline stroke runs along. The stroke
@@ -498,6 +550,7 @@ pub fn rasterize_shape(
     outline: Option<Color32>,
     fill: Option<Color32>,
     outline_pos: ShapeOutline,
+    clip: Option<&Mask>,
 ) -> Option<DirtyRect> {
     let width = width.clamp(1.0, MAX_STROKE_SIZE);
     let (min_x, max_x) = (from.x.min(to.x), from.x.max(to.x));
@@ -520,50 +573,54 @@ pub fn rasterize_shape(
     };
     let dirty = dirty_rect_for(pixmap, min_x, min_y, max_x, max_y, reach)?;
 
-    if let Some(fill) = fill {
-        let mut builder = PathBuilder::new();
-        match kind {
-            ShapeKind::Rectangle => builder.push_rect(bounds),
-            ShapeKind::Ellipse => builder.push_oval(bounds),
+    // Fill first, outline over it — the same order on the direct surface
+    // and on the scratch (the scratch transfers the composited result, and
+    // src-over's associativity keeps it pixel-identical).
+    paint_clipped(pixmap, dirty, clip, false, |pm, ts, _| {
+        if let Some(fill) = fill {
+            let mut builder = PathBuilder::new();
+            match kind {
+                ShapeKind::Rectangle => builder.push_rect(bounds),
+                ShapeKind::Ellipse => builder.push_oval(bounds),
+            }
+            let Some(path) = builder.finish() else {
+                return;
+            };
+            let mut paint = Paint::default();
+            let [r, g, b, a] = fill.to_srgba_unmultiplied();
+            paint.set_color_rgba8(r, g, b, a);
+            paint.anti_alias = true;
+            pm.fill_path(&path, &paint, FillRule::Winding, ts, None);
         }
-        let path = builder.finish()?;
-        let mut paint = Paint::default();
-        let [r, g, b, a] = fill.to_srgba_unmultiplied();
-        paint.set_color_rgba8(r, g, b, a);
-        paint.anti_alias = true;
-        pixmap.fill_path(
-            &path,
-            &paint,
-            FillRule::Winding,
-            Transform::identity(),
-            None,
-        );
-    }
-    if let Some(outline) = outline {
-        let (sx0, sy0, sx1, sy1) =
-            outline_stroke_bounds(min_x, min_y, max_x, max_y, width, outline_pos);
-        // Unreachable None: the bounds were just built from valid extents
-        // and `outline_stroke_bounds` never shrinks a span below 0.1.
-        let stroke_bounds = tiny_skia::Rect::from_xywh(sx0, sy0, sx1 - sx0, sy1 - sy0)?;
-        let mut builder = PathBuilder::new();
-        match kind {
-            ShapeKind::Rectangle => builder.push_rect(stroke_bounds),
-            ShapeKind::Ellipse => builder.push_oval(stroke_bounds),
+        if let Some(outline) = outline {
+            let (sx0, sy0, sx1, sy1) =
+                outline_stroke_bounds(min_x, min_y, max_x, max_y, width, outline_pos);
+            // Unreachable None: the bounds were just built from valid extents
+            // and `outline_stroke_bounds` never shrinks a span below 0.1.
+            let Some(stroke_bounds) = tiny_skia::Rect::from_xywh(sx0, sy0, sx1 - sx0, sy1 - sy0)
+            else {
+                return;
+            };
+            let mut builder = PathBuilder::new();
+            match kind {
+                ShapeKind::Rectangle => builder.push_rect(stroke_bounds),
+                ShapeKind::Ellipse => builder.push_oval(stroke_bounds),
+            }
+            let Some(path) = builder.finish() else {
+                return;
+            };
+            let mut paint = Paint::default();
+            let [r, g, b, a] = outline.to_srgba_unmultiplied();
+            paint.set_color_rgba8(r, g, b, a);
+            paint.anti_alias = true;
+            let stroke = Stroke {
+                width,
+                line_cap: LineCap::Round,
+                ..Default::default()
+            };
+            pm.stroke_path(&path, &paint, &stroke, ts, None);
         }
-        let path = builder.finish()?;
-        let mut paint = Paint::default();
-        let [r, g, b, a] = outline.to_srgba_unmultiplied();
-        paint.set_color_rgba8(r, g, b, a);
-        paint.anti_alias = true;
-        let stroke = Stroke {
-            width,
-            line_cap: LineCap::Round,
-            ..Default::default()
-        };
-        pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-    }
-
-    Some(dirty)
+    })
 }
 
 /// Samples the canvas pixel at integer coordinates and returns it as a

@@ -33,6 +33,7 @@ fn pencil_line_piece_plots_one_pixel_per_column_between_its_endpoints() {
         &[piece],
         &mut trail,
         Some(pos2(20.7, 11.3)),
+        None,
     )
     .expect("piece rasterizes");
     let mut got = plotted_black(&pixmap);
@@ -81,6 +82,7 @@ fn pencil_quad_centerline_is_a_gap_free_pixel_chain() {
         &[piece],
         &mut trail,
         Some(pos2(55.0, 45.0)),
+        None,
     )
     .expect("piece rasterizes");
     let black = plotted_black(&pixmap);
@@ -135,6 +137,7 @@ fn pencil_joint_pixels_blend_once_for_translucent_colors() {
         &pieces,
         &mut trail,
         None,
+        None,
     )
     .expect("pieces rasterize");
     let alpha_at = |x: u32, y: u32| pixmap.pixel(x, y).expect("in bounds").alpha();
@@ -168,6 +171,7 @@ fn brush_pieces_stroke_one_continuous_path() {
         Color32::BLACK,
         &pieces,
         &mut trail,
+        None,
         None,
     )
     .expect("pieces rasterize");
@@ -207,6 +211,7 @@ fn eraser_pieces_erase_to_transparency() {
         &pieces,
         &mut trail,
         None,
+        None,
     )
     .expect("pieces rasterize");
     assert_eq!(pixmap.pixel(8, 16).expect("in bounds").alpha(), 0);
@@ -229,6 +234,7 @@ fn dirty_rect_covers_the_quad_control_point() {
         Color32::BLACK,
         &[piece],
         &mut trail,
+        None,
         None,
     )
     .expect("piece rasterizes");
@@ -253,6 +259,7 @@ fn no_pieces_rasterize_nothing() {
             Color32::BLACK,
             &[],
             &mut trail,
+            None,
             None
         )
         .is_none()

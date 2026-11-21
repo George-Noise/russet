@@ -310,3 +310,172 @@ fn clipping_a_lasso_cuts_the_polygon_at_the_edge() {
         "the clipped lasso selects pixels"
     );
 }
+
+// -----------------------------------------------------------------------
+// The selection-clipped commit's transfer primitives (owner request
+// 2026-11-21): the stroke rasterizes into a transparent scratch, these
+// transfer it onto the layer through the mask. The tool-level behavior is
+// pinned in `tools/tests/clip.rs`.
+// -----------------------------------------------------------------------
+
+/// An opaque scratch pixel (premultiplied red).
+fn red() -> PremultipliedColorU8 {
+    PremultipliedColorU8::from_rgba(180, 0, 0, 255).expect("opaque")
+}
+
+#[test]
+fn stamp_masked_blends_scratch_pixels_only_where_masked() {
+    let mut sel = Selection::default();
+    sel.replace(Some(rect((5.0, 5.0), (15.0, 15.0))), 20, 20);
+    let mask = sel.build_mask(20, 20).expect("non-empty selection");
+
+    // The scratch paints the 10×10 block at (2..12, 2..12); only the part
+    // the mask selects (5..12 on both axes) may reach the layer.
+    let mut scratch = Pixmap::new(20, 20).expect("the pixmap builds");
+    for y in 2..12 {
+        for x in 2..12 {
+            scratch.pixels_mut()[y * 20 + x] = red();
+        }
+    }
+    let mut dst = Pixmap::new(20, 20).expect("the pixmap builds");
+    let region = stamp_masked(
+        &mut dst,
+        &scratch,
+        DirtyRect {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 20,
+        },
+        (0, 0),
+        &mask,
+    )
+    .expect("the mask intersects the scratch");
+    // The contract: the REGION ∩ the mask's tight bounds (the rect the
+    // caller composites/syncs — it may exceed the actually-painted part of
+    // the scratch).
+    assert_eq!((region.x, region.y, region.w, region.h), (5, 5, 10, 10));
+
+    for y in 0..20 {
+        for x in 0..20 {
+            let px = dst.pixel(x, y).expect("in bounds");
+            let inside = (5..12).contains(&x) && (5..12).contains(&y);
+            assert_eq!(
+                px.alpha() > 0,
+                inside,
+                "pixel ({x}, {y}) must be {inside} painted"
+            );
+        }
+    }
+}
+
+#[test]
+fn erase_masked_by_fades_only_masked_pixels_by_scratch_alpha() {
+    let mut sel = Selection::default();
+    sel.replace(Some(rect((0.0, 0.0), (10.0, 20.0))), 20, 20);
+    let mask = sel.build_mask(20, 20).expect("non-empty selection");
+
+    // The layer is fully opaque black; the scratch holds a full-alpha mark
+    // on rows 0..5 and a half-alpha mark on rows 10..15 (both columns
+    // 0..10, inside the mask) — the masked pixels fade, everything else
+    // keeps alpha 255.
+    let black = PremultipliedColorU8::from_rgba(0, 0, 0, 255).expect("opaque");
+    let mut dst = Pixmap::new(20, 20).expect("the pixmap builds");
+    for p in dst.pixels_mut() {
+        *p = black;
+    }
+    let mut scratch = Pixmap::new(20, 20).expect("the pixmap builds");
+    for y in 0..5 {
+        for x in 0..10 {
+            scratch.pixels_mut()[y * 20 + x] = black;
+        }
+    }
+    let half = PremultipliedColorU8::from_rgba(0, 0, 0, 128).expect("half");
+    for y in 10..15 {
+        for x in 0..10 {
+            scratch.pixels_mut()[y * 20 + x] = half;
+        }
+    }
+    erase_masked_by(
+        &mut dst,
+        &scratch,
+        DirtyRect {
+            x: 0,
+            y: 0,
+            w: 20,
+            h: 20,
+        },
+        (0, 0),
+        &mask,
+    )
+    .expect("the mask intersects");
+
+    for y in 0..5 {
+        assert_eq!(dst.pixel(5, y).expect("in bounds").alpha(), 0, "full erase");
+        assert_eq!(
+            dst.pixel(15, y).expect("in bounds").alpha(),
+            255,
+            "outside the scratch"
+        );
+    }
+    for y in 10..15 {
+        // Destination-out by alpha 128: 255 × (255−128)/255 = 127 exactly
+        // (premultiplied black stays black).
+        assert_eq!(
+            dst.pixel(5, y).expect("in bounds").alpha(),
+            127,
+            "half erase"
+        );
+    }
+    assert_eq!(
+        dst.pixel(5, 18).expect("in bounds").alpha(),
+        255,
+        "outside the scratch's mark"
+    );
+    assert_eq!(
+        dst.pixel(15, 2).expect("in bounds").alpha(),
+        255,
+        "outside the mask"
+    );
+}
+
+#[test]
+fn masked_transfer_is_none_when_the_mask_misses_the_region() {
+    let mut sel = Selection::default();
+    sel.replace(Some(rect((10.0, 10.0), (15.0, 15.0))), 20, 20);
+    let mask = sel.build_mask(20, 20).expect("non-empty selection");
+    let mut scratch = Pixmap::new(20, 20).expect("the pixmap builds");
+    scratch.pixels_mut()[0] = red();
+    let mut dst = Pixmap::new(20, 20).expect("the pixmap builds");
+    // A region in the top-left corner does not overlap the mask at all.
+    assert!(
+        stamp_masked(
+            &mut dst,
+            &scratch,
+            DirtyRect {
+                x: 0,
+                y: 0,
+                w: 5,
+                h: 5
+            },
+            (0, 0),
+            &mask,
+        )
+        .is_none()
+    );
+    assert!(
+        erase_masked_by(
+            &mut dst,
+            &scratch,
+            DirtyRect {
+                x: 0,
+                y: 0,
+                w: 5,
+                h: 5
+            },
+            (0, 0),
+            &mask,
+        )
+        .is_none()
+    );
+}
