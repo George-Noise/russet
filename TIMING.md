@@ -78,3 +78,11 @@ probe's pointer never moves).
 | `cargo build` (cold target/) | 1 m 39 s | the slider round's first full build |
 | `verify.sh` | 82 s first / 15 s warm | ALL GATES GREEN (351 default / 364 mcp) |
 | `gui_wand_fill_check.sh` | ~45 s ×2 | the calibration run + the 100 % pour-over assert |
+
+## 2026-11-23 — the fill-confinement round (fourth recycle: full restore + rebuild)
+
+| Command | Duration | Note |
+|---|---|---|
+| `cargo build` (cold target/) | 1 m 59 s | after the restore |
+| `verify.sh` | (see the round log) | the full gate before the delivery |
+| `gui_cut_fill_check.sh` | ~65 s | the extended probe: the outside-click step added, PASS |

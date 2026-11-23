@@ -88,10 +88,24 @@ if ! pgrep -x russet >/dev/null; then
 fi
 shot 4_after_fill_inside_hole
 
-# Undo restores the hole, then the WAND click on the transparent pixels —
-# the same flood read path — must survive too.
+# Undo restores the hole. Then THE OWNER'S CRASH CLICK: a fill click on
+# the background OUTSIDE the active selection — with the confinement the
+# gate stops it before any flood (nothing paints, nothing records); the
+# app must survive.
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key ctrl+z
 sleep 1
+DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove 700 150 click 1
+sleep 1.5
+
+if ! pgrep -x russet >/dev/null; then
+  echo "APP CRASHED after the fill click outside the selection; log tail:"
+  tail -20 "$OUT/app.log"
+  exit 1
+fi
+shot 5_after_fill_outside
+
+# The WAND click on the transparent pixels — the same flood read path —
+# must survive too.
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key v
 sleep 0.3
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove 30 358 click 1
@@ -106,7 +120,7 @@ if ! pgrep -x russet >/dev/null; then
   tail -20 "$OUT/app.log"
   exit 1
 fi
-shot 5_after_wand_on_hole
+shot 6_after_wand_on_hole
 
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key Escape
 sleep 0.5
@@ -138,6 +152,7 @@ a = img("1a_blob_drawn")
 sel = img("2_rect_selected")
 hole = img("3_after_cut_hole")
 filled = img("4_after_fill_inside_hole")
+outside = img("5_after_fill_outside")
 
 w_before = whites(a, BLOB)
 b_before = blacks(a, BLOB)
@@ -145,6 +160,11 @@ b_sel = blacks(sel, BLOB)
 w_hole = whites(hole, BLOB)
 b_hole = blacks(hole, BLOB)
 b_filled = blacks(filled, BLOB)
+# The background box around the outside-click point (700, 150): with the
+# confinement nothing paints there (without it the whole background would
+# flood black — the owner's crash click).
+BG = (690, 130, 750, 180)
+b_outside = blacks(outside, BG)
 print(
     f"blob before: {b_before} black strokes on {w_before} white; selected: {b_sel} black; "
     f"after cut: {w_hole} white/{b_hole} black (the hole shows the dark background); "
@@ -158,10 +178,15 @@ assert b_hole < 300, (
 assert b_filled > 3000, (
     f"the fill inside the hole left only {b_filled} black pixels — the fill did not paint"
 )
+assert b_outside < 100, (
+    f"the fill click OUTSIDE the selection painted {b_outside} black pixels "
+    "in the background box — the confinement is broken"
+)
 print(
     "PROBE PASS: the cut emptied the selected blob (transparent hole), the fill click "
-    "inside the hole SURVIVED and painted the hole black, the wand click on the "
-    "transparent pixels survived too"
+    "inside the hole SURVIVED and painted the hole black, the fill click OUTSIDE "
+    "the selection painted nothing, the wand click on the transparent pixels "
+    "survived too"
 )
 PYEOF
 STATUS=$?

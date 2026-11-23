@@ -1,5 +1,39 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Fix:` the fill click on a cut hole killed the app — the all-masked flood overflowed the written-bbox arithmetic; the neighbor paths tested (owner bug report in chat)
+
+- **What:** after a select + cut the hole displays WHITE (the canvas paints the
+  background beneath transparent pixels), so a fill click aimed at the hole
+  can land on the surrounding background; the selection stays active, the
+  flood captures every background pixel, the mask skips ALL of them, and
+  `paint_flood_pixels` computed the bbox from the untouched
+  `i64::MIN/i64::MAX` sentinels — `i64::MIN - i64::MAX` overflowed →
+  debug `cargo run` died. The fix: a zero written-bbox sentinel `(0,0,0,0)`
+  + the caller's early return — no composite, no sync, NO history node
+  (an undo after such a click undoes the CUT, not a phantom fill).
+- **Neighbors tested** («протестируй другие возможные баги рядом»): the fill
+  inside the hole paints (headless + GUI), the wand click on the hole
+  selects (GUI), a translucent fill reaches transparent pixels — and the
+  investigation LOCKED the blend's space: egui's `Color32` stores
+  PREMULTIPLIED bytes (`from_rgba_unmultiplied(255,0,0,128)` gives
+  `r() == 128`), so the per-pixel src-over already blends premultiplied and
+  `from_rgba` can never reject a real color — a test pins it.
+- **Files:** `src/app/input.rs` (the guard + the early return + the premul
+  comment), `src/app/input/tests.rs` (+3: the in-hole fill paints, the
+  all-outside flood survives with a zero bbox, the translucent-over-
+  transparent lock), `scripts/gui_cut_fill_check.sh` (the new probe: the
+  blob → rect select → the ops-row Cut → the fill inside the hole → the
+  wand on the hole, the process-alive checks, the pixel asserts).
+- **Verified:** the overflow repro `should_panic` → the fixed code passes;
+  7 input tests + the FULL gate ALL GATES GREEN; the GUI probe PASS on the
+  fixed binary (the cut emptied the blob — 0 black in the box, the fill
+  inside the hole painted 5789 black, the wand click survived, the process
+  alive through both crash points); the shots LOOKED AT.
+- **Owner-checks:** V78 born (the fix's human pass). VERIFIED in chat:
+  V69 (the atlas sheets). Open: V78, V77, V76, V66 (X11), V46 (X11);
+  parked: V30, V8.
+- **Commit title:** `Fix: the fill click on a cut hole killed the app - the all-masked flood overflowed the written-bbox arithmetic; the neighbor paths tested`
+
 ### 2026-11-23 — `Feat:` the magic wand selects like Paint.NET, the Fill tool pours through the SAME flood core (the icon LAST in the Tools grid), Esc deselects from any tool (owner request in chat)
 
 - **What:** three orders in one round. (1) The MAGIC WAND: Select gained a

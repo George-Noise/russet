@@ -455,8 +455,11 @@ fn a_flood_entirely_outside_the_selection_paints_nothing_and_survives() {
     // click that lands on the surrounding white floods EVERY white pixel,
     // the mask skips them all, and the bbox arithmetic
     // `i64::MIN - i64::MAX` used to overflow → debug panic → the app
-    // died. The fix: a zero written-bbox (the sentinel (0, 0, 0, 0)) and
-    // the caller's early return — nothing painted, nothing recorded.
+    // died. Two layers of defense: the click gate
+    // ([`App::fill_click_inside_selection`]) now stops such a click before
+    // the flood, and this test pins the deeper layer — a zero written-bbox
+    // (the sentinel (0, 0, 0, 0)) plus the caller's early return — so a
+    // future regression cannot reintroduce the overflow.
     let mut app = App::new_headless();
     if let Some(black) = tiny_skia::PremultipliedColorU8::from_rgba(0, 0, 0, 255) {
         let layer = app.layers.active_mut().pixmap_mut();
@@ -495,4 +498,79 @@ fn a_flood_entirely_outside_the_selection_paints_nothing_and_survives() {
     );
     // The canvas is untouched: the square's pixels stay exactly as they were.
     assert_eq!(alpha_at(&app, 15, 15), 255, "the square survived");
+}
+
+#[test]
+fn a_fill_click_outside_an_active_selection_never_fires() {
+    // Owner request 2026-11-23: «если хоть один пиксель выделен то заливка
+    // должна нажиматься только внутри выделения». The gate rejects a click
+    // whose seed lies outside an active selection — before ANY flood runs,
+    // so a mis-click (the one that caused the cut-hole crash) neither
+    // paints nor records a node. No selection = the fill fires anywhere.
+    let mut app = App::new_headless();
+    if let Some(black) = tiny_skia::PremultipliedColorU8::from_rgba(0, 0, 0, 255) {
+        let layer = app.layers.active_mut().pixmap_mut();
+        let stride = layer.width() as usize;
+        for y in 10..30 {
+            for x in 10..30 {
+                layer.pixels_mut()[y as usize * stride + x as usize] = black;
+            }
+        }
+    }
+    app.selection.replace(
+        Some(Region::Rect {
+            a: pos2(10.0, 10.0),
+            b: pos2(30.0, 30.0),
+        }),
+        app.canvas.width,
+        app.canvas.height,
+    );
+    let clip = app.selection_clip();
+    let gate = |seed| App::fill_click_inside_selection(clip.as_ref(), seed);
+    assert!(
+        !gate((80, 80)),
+        "the background click is outside the selection"
+    );
+    assert!(
+        !gate((5, 5)),
+        "the corner click is outside the selection too"
+    );
+    assert!(gate((15, 15)), "the click inside the selected square fires");
+    assert!(
+        gate((25, 25)),
+        "the click on the selection's edge pixel fires"
+    );
+
+    // The handler-level outcome of a gated click: the app is untouched —
+    // no pixels change and NO history node is recorded (an undo after it
+    // still undoes the previous action).
+    let head_before = app.layers.head();
+    let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
+    // The handler returns BEFORE the flood — the pixels list is never even
+    // computed; here the flood is run anyway to prove the gated click
+    // leaves the canvas byte-identical.
+    let pixels = {
+        let pm = app.layers.active().pixmap();
+        crate::selection::flood_pixels(pm.width(), pm.height(), (80, 80), tolerance, |px, py| {
+            pick_color(pm, px as u32, py as u32)
+        })
+    };
+    let _ = app.paint_flood_pixels(&pixels, app.tools.primary, clip.as_ref());
+    assert_eq!(
+        app.layers.head(),
+        head_before,
+        "a gated click records no node"
+    );
+    assert_eq!(alpha_at(&app, 80, 80), 255, "the background stays white");
+    assert_eq!(alpha_at(&app, 15, 15), 255, "the square stays black");
+}
+
+#[test]
+fn a_fill_without_a_selection_fires_anywhere() {
+    // The gate's other half: no selection at all — every click fires, the
+    // fill behaves exactly as before the confinement existed.
+    let app = App::new_headless();
+    assert!(app.selection_clip().is_none());
+    assert!(App::fill_click_inside_selection(None, (80, 80)));
+    assert!(App::fill_click_inside_selection(None, (0, 0)));
 }

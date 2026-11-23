@@ -259,6 +259,18 @@ impl App {
         }
     }
 
+    /// The fill click's gate: `false` when an active selection does NOT
+    /// contain the seed pixel — the click then floods nothing (owner
+    /// request 2026-11-23: «если хоть один пиксель выделен то заливка
+    /// должна нажиматься только внутри выделения»). No selection = the
+    /// fill fires anywhere.
+    pub(super) fn fill_click_inside_selection(
+        clip: Option<&crate::selection::Mask>,
+        seed: (i64, i64),
+    ) -> bool {
+        clip.is_none_or(|mask| mask.get(seed.0, seed.1))
+    }
+
     /// The Fill tool (owner request 2026-11-23: «можно сделать заливку тем
     /// же методом что и выделение волшебной палочкой, там очень похожий
     /// метод»): a click floods the clicked color band on the ACTIVE LAYER
@@ -266,9 +278,13 @@ impl App {
     /// and paints the reached pixels with the frozen color: primary (LMB) or
     /// secondary (RMB), the same well policy the freehand strokes follow.
     /// The color bands are sampled on the layer itself (not the composite —
-    /// the layer is what the fill paints), the pixels an active selection
-    /// confines are skipped (the stroke-clip snapshot convention), and one
-    /// click = one [`ActionKind::Fill`] node with the post-fill snapshot.
+    /// the layer is what the fill paints), an active selection confines the
+    /// click itself (outside it the click floods NOTHING), the masked-out
+    /// pixels inside are skipped (the stroke-clip snapshot convention), and
+    /// one click = one [`ActionKind::Fill`] node with the post-fill snapshot
+    /// — unless NOTHING was written (a click outside an active selection, or
+    /// a flood entirely masked out: neither changes a pixel, so neither
+    /// records a node — owner bug report 2026-11-23, the cut-hole crash).
     pub(super) fn handle_fill_input(
         &mut self,
         ui: &egui::Ui,
@@ -297,14 +313,23 @@ impl App {
         }
         let pos = self.canvas_pos(rect, cursor);
         let seed = (pos.x.floor() as i64, pos.y.floor() as i64);
+        // The selection confines the CLICK itself: with an active
+        // selection a fill click outside it floods NOTHING (no pixels, no
+        // history node) — the mis-click that used to flood the whole
+        // background outside the mask cannot even start (owner request
+        // 2026-11-23; it is also the root of the cut-hole crash the zero
+        // written-bbox guard already stops one layer deeper).
+        let clip = self.selection_clip();
+        if !Self::fill_click_inside_selection(clip.as_ref(), seed) {
+            return;
+        }
         // The color freezes at the click (one gesture = one color, the
-        // stroke convention), the clip snapshot too.
+        // stroke convention).
         let color = if secondary_pressed {
             self.tools.secondary
         } else {
             self.tools.primary
         };
-        let clip = self.selection_clip();
         // The flood READS the layer (the borrow ends with the block); the
         // WRITE happens after, on the owned pixel set. The tolerance is the
         // panel's percent slider converted per channel (owner request
