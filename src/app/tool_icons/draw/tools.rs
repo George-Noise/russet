@@ -356,6 +356,79 @@ pub(in crate::app::tool_icons) fn rasterize_tool_icon(
         Tool::Line => draw_line(&mut pm, icon_transform(px, 0.0), text),
         Tool::Shape => draw_shape(&mut pm, icon_transform(px, 0.0), text),
         Tool::Text => draw_text(&mut pm, icon_transform(px, 0.0), text),
+        Tool::Fill => draw_fill(&mut pm, icon_transform(px, 0.0)),
     }
     Some(pm)
+}
+
+/// The Fill tool's bucket (owner request 2026-11-23: the icon joins the
+/// Tools grid LAST — «иконку заливки сделай самой последней»). A classic
+/// pour glyph: a metal pail with a dark rim, a liquid band and a round
+/// handle, plus a falling drop — the same blue the pipette's liquid uses,
+/// so the two "color-moving" tools rhyme.
+fn draw_fill(pm: &mut Pixmap, ts: Transform) {
+    // The body: a pail wider at the TOP, straight taper to the base.
+    fill(
+        pm,
+        ts,
+        &[(6.2, 11.4), (17.8, 11.4), (15.4, 20.2), (8.6, 20.2)],
+        Color32::from_rgb(168, 178, 188),
+    );
+    // The liquid band on the body's front (the pour's paint).
+    fill(
+        pm,
+        ts,
+        &[(7.0, 13.0), (17.0, 13.0), (16.6, 15.2), (7.4, 15.2)],
+        Color32::from_rgb(95, 168, 220),
+    );
+    // The rim: a dark band over the mouth.
+    fill(
+        pm,
+        ts,
+        &[(5.8, 9.2), (18.2, 9.2), (18.2, 11.6), (5.8, 11.6)],
+        Color32::from_rgb(94, 103, 112),
+    );
+    // The handle: a semicircular arc over the rim, open stroke.
+    stroke(
+        pm,
+        ts,
+        &arc_pts(12.0, 10.2, 6.6, 180.0, 360.0, 20),
+        false,
+        Color32::from_rgb(52, 58, 64),
+        OUTLINE_W,
+    );
+    // The outlines of body and rim (the silhouette the other tool icons
+    // trace).
+    stroke(
+        pm,
+        ts,
+        &[(5.8, 9.2), (18.2, 9.2), (18.2, 11.6), (5.8, 11.6)],
+        true,
+        Color32::from_rgb(52, 58, 64),
+        OUTLINE_W,
+    );
+    stroke(
+        pm,
+        ts,
+        &[(6.2, 11.4), (17.8, 11.4), (15.4, 20.2), (8.6, 20.2)],
+        true,
+        Color32::from_rgb(52, 58, 64),
+        OUTLINE_W,
+    );
+    // The falling drop at the lower right: a teardrop — the paint the
+    // bucket pours.
+    fill(
+        pm,
+        ts,
+        &[(21.4, 13.4), (23.0, 16.4), (21.4, 18.0), (19.8, 16.4)],
+        Color32::from_rgb(95, 168, 220),
+    );
+    stroke(
+        pm,
+        ts,
+        &[(21.4, 13.4), (23.0, 16.4), (21.4, 18.0), (19.8, 16.4)],
+        true,
+        Color32::from_rgb(52, 58, 64),
+        OUTLINE_W,
+    );
 }

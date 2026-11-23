@@ -4,7 +4,7 @@
 
 //! the tooltip labels, judged through the pure rasterization pipeline.
 
-use super::super::{label, rasterize_tool_icon};
+use super::super::{SelectIcon, label, rasterize_select_icon, rasterize_tool_icon};
 use super::*;
 use crate::tools::Tool;
 use eframe::egui::Color32;
@@ -197,5 +197,28 @@ fn colored_outlines_are_dark_in_both_themes() {
     assert!(
         !has_color(&eraser, (180, 90, 116), 10),
         "the old pink rim is gone"
+    );
+}
+
+#[test]
+fn fill_is_the_metal_pail_with_liquid_band_and_drop() {
+    // Owner request 2026-11-23: the bucket joins the Tools grid LAST —
+    // the pour glyph: gray body, dark rim, the pipette's liquid blue.
+    let pm = rasterize_tool_icon(Tool::Fill, 48, Color32::WHITE).expect("px is in 1..=256");
+    assert!(has_color(&pm, (168, 178, 188), 6), "the pail body missing");
+    assert!(has_color(&pm, (94, 103, 112), 6), "the dark rim missing");
+    assert!(has_color(&pm, (95, 168, 220), 6), "the liquid blue missing");
+    assert!(has_color(&pm, (52, 58, 64), 6), "the ink outline missing");
+}
+
+#[test]
+fn the_wand_mark_is_a_rod_with_a_four_point_sparkle() {
+    // The wand's panel row + the Select button's mode-aware mark —
+    // monochrome ink like the rest of the Select family.
+    let ink = Color32::from_gray(64);
+    let pm = rasterize_select_icon(SelectIcon::Wand, 48, ink).expect("px is in 1..=256");
+    assert!(
+        has_color(&pm, (64, 64, 64), 8),
+        "the ink rod/sparkle missing"
     );
 }

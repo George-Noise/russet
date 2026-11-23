@@ -180,6 +180,77 @@
   newest-first in the files.
 - **Commit title:** `Feat: the --atlas-test flag paints a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (the inset diagnostic)`
 
+### 2026-11-23 — `Feat:` eframe `persistence` compiled in, BOTH save channels deliberately off — nothing is saved (owner request in chat)
+
+- What: the owner asked to enable the framework's persistence while saving as
+  little as possible and to verify what it actually writes. eframe 0.37's
+  `persistence` cargo feature is ON (Cargo.toml) so the storage plumbing exists
+  ahead of a real settings decision (SPEC §6 keeps "saving application settings"
+  out of scope); the two automatic save channels are OFF: `NativeOptions::
+  persist_window = false` (main.rs — the OS window keeps its 1200×800 builder
+  default every launch) and `App::persist_egui_memory() -> false` + an explicit
+  empty `App::save` (app.rs — the future home of the first persisted setting,
+  e.g. the Mouse4/5 opt-in). Nothing calls `epi::set_value`, so the storage's
+  dirty flag stays false and eframe's 30-s autosave + the exit save write
+  NOTHING. The measured out-of-the-box content this config avoids (feature on,
+  defaults elsewhere, 35-s headless session with a stroke): `app.ron` 5 115 bytes
+  — the key `"window"` (OS-window geometry + scale factor) + the key `"egui"`
+  (the WHOLE egui Memory: every floating-window position/pivot/z-order, collapse
+  states, per-widget resize/scroll state, the theme preference, the input
+  options). The feature's one unavoidable side effect: the startup-created data
+  FOLDER (`~/.local/share/russet` / `%APPDATA%\Russet\data`) — empty by design;
+  the web lane writes nothing to localStorage (its only writes ride the same two
+  switches — eframe web source).
+- Files: Cargo.toml (+`persistence`; the lock gains `ron`/`enumn`/`typeid`),
+  Cargo.lock, src/main.rs, src/app.rs (+2 trait methods, `#[cfg(test)] mod
+  tests;`), NEW src/app/tests.rs (2 pinned tests: save_writes_nothing over a
+  recording Storage double, persist_egui_memory_is_off), src/app/mouse_side.rs
+  (doc now points at the wired-but-idle storage), SPEC.md §1 (persistence-policy
+  paragraph + the feature list), AGENTS.md (the `default_pos` quirk line),
+  DEBTS-verification.md (V74).
+- Verified: `bash scripts/verify.sh` ALL GATES GREEN in 148 s (fmt, rules,
+  clippy ×2, test ×2 — 325 default / 338 mcp, +2); wasm check green (Cargo.toml
+  touched — the wasm lane compiles eframe/persistence too); the storage probes
+  headless under Xvfb: with the opt-outs two 35-s sessions (strokes drawn) left
+  the data dir EMPTY and the restart screenshot shows the default layout
+  unchanged.
+- Owner-checks: V74 (Windows: the data folder exists EMPTY, restart restores
+  nothing; web: no `egui_memory_ron` in localStorage).
+- **Commit title:** `Feat: compile eframe persistence with both save channels off; persist_window false, persist_egui_memory false and an empty App::save keep app.ron unwritten`
+
+### 2026-11-23 — `Feat:` Mouse4/Mouse5 undo/redo behind a first-press opt-in modal (owner request in chat)
+
+- **What:** the owner's order: «Мне предложили добавить на Mouse4 и Mouse5
+  undo и redo… сделай как у других, НО нужно при первом нажатии … спросить
+  пользователя через модалку». The side buttons — winit `Back`/`Forward` →
+  egui `PointerButton::Extra1`/`Extra2` — follow the browser back/forward
+  mapping (Mouse4 = Undo, Mouse5 = Redo, the Ctrl+Z/Ctrl+Y twin). The FIRST
+  side press never acts: it opens the centered "Mouse Side Buttons" modal
+  (the shared dialog helpers); **Yes** enables for the session, **No**
+  disables, the ✕ decides nothing (the next press asks again — the
+  session-only choice lives in `App` and dies with the process, SPEC §6
+  keeps settings-saving out of scope; the framework's eframe
+  `persistence` route for the future is described in the chat reply, not
+  wired). Presses are consumed unconditionally and inert while the modal
+  is open, while declined, and during an active canvas gesture (stroke /
+  Line-Shape preview / Select region+move / Text entry — an undo
+  mid-gesture would corrupt the pending node); exhausted stacks are
+  silent no-ops (the redo-keys convention); the answer lands in the Tool
+  Log. SPEC §3.9 row added.
+- **Files:** `src/app/mouse_side.rs` (+`mouse_side/tests.rs`, 12 tests —
+  the pure state machine + the real press handler over the real history),
+  `src/app.rs` (module, field, init, the two frame-flow hooks),
+  `src/app/preview.rs` + `src/app/selection.rs` (`is_active` guards),
+  `scripts/gui_mouse_side_check.sh` (new probe), SPEC §3.9.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 323 default / 336
+  mcp, +12 tests); no wasm check (no web-facing paths); the new probe
+  PASS end-to-end under Xvfb: stroke painted → first Mouse4 press opened
+  the modal AND left the canvas alone → Yes click enabled → Mouse4 undid
+  the stroke → Mouse5 redid it.
+- **Owner-checks:** V73 (the real-mouse pass on Windows, incl. the ✕
+  re-ask behavior).
+- **Commit title:** `Feat: Mouse4/Mouse5 undo/redo opt-in - the first side press opens a yes/no modal, the session-only choice routes Mouse4 to undo and Mouse5 to redo, presses stay inert while unanswered, declined or mid-gesture`
+
 ### 2026-11-21 — `Refactor:` file_io.rs split under the ~500-line guard — the codecs move out (owner order in chat)
 
 - **What:** pure code motion, no behavior change: the pixel/byte codecs —

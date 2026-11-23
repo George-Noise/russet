@@ -12,14 +12,18 @@
 //! Gesture model (mirrors [`super::preview`]):
 //! - press OUTSIDE the selection (or with a modifier held) starts a region
 //!   drag — replace (no modifier), add (Shift), subtract (Alt), frozen at
-//!   press like the Shape tools freeze their colors;
+//!   press like the Shape tools freeze their colors; in the WAND mode
+//!   (owner request 2026-11-23: the Paint.NET click-select) there is no
+//!   drag — the press floods the clicked color band on the active layer
+//!   and applies the reached pixels as a [`Region::Wand`] at once;
 //! - press INSIDE the selection without modifiers starts a MOVE: the
 //!   selected pixels lift into a floating buffer (erased from the layer —
 //!   the layer's ONLY write until the release) and follow the pointer as
 //!   a GPU overlay ABOVE the canvas, visible past the canvas bounds
 //!   (owner redesign 2026-11-20); release commits the stamp at the final
 //!   offset with ONE move node, Esc / a tool switch / a pan restores the
-//!   backup;
+//!   backup (the wand mode re-wands instead — the move stays a Rect/Lasso
+//!   affordance);
 //! - release of a region gesture applies the region to the selection (a
 //!   plain lasso click — fewer than 3 points — deselects);
 //! - Esc with no pending gesture deselects.
@@ -255,7 +259,32 @@ impl App {
                     op,
                 };
             }
+            SelectMode::Wand => {
+                // The wand is instant (owner request 2026-11-23: the
+                // Paint.NET click-select): the flood runs AT PRESS, no drag
+                // state. Pressing inside the selection still re-wands (the
+                // move gesture stays a Rect/Lasso-mode affordance).
+                let region = self.wand_region(p);
+                self.apply_region(region, op);
+            }
         }
+    }
+
+    /// Floods the clicked color band on the ACTIVE LAYER (the layer the
+    /// fill paints — not the composite) and packs the reached pixels as a
+    /// [`Region::Wand`]. A click off the canvas or an empty flood yields an
+    /// empty pixel set — the same degenerate rule the lasso click follows
+    /// (a replace with it deselects).
+    fn wand_region(&self, p: Pos2) -> Region {
+        let seed = (p.x.floor() as i64, p.y.floor() as i64);
+        let pixels = {
+            let pm = self.layers.active().pixmap();
+            let (width, height) = (pm.width(), pm.height());
+            selection::flood_pixels(width, height, seed, |px, py| {
+                crate::tools::pick_color(pm, px as u32, py as u32)
+            })
+        };
+        Region::Wand { pixels }
     }
 
     /// Applies a finished region gesture to the selection. A replace with

@@ -237,9 +237,11 @@ fn stamp_blends_the_clip_at_the_integer_position() {
 #[test]
 fn the_select_mode_cycles_forward_and_backward() {
     assert_eq!(SelectMode::Rect.next(), SelectMode::Lasso);
-    assert_eq!(SelectMode::Lasso.next(), SelectMode::Rect);
+    assert_eq!(SelectMode::Lasso.next(), SelectMode::Wand);
+    assert_eq!(SelectMode::Wand.next(), SelectMode::Rect);
+    assert_eq!(SelectMode::Wand.prev(), SelectMode::Lasso);
     assert_eq!(SelectMode::Lasso.prev(), SelectMode::Rect);
-    assert_eq!(SelectMode::Rect.prev(), SelectMode::Lasso);
+    assert_eq!(SelectMode::Rect.prev(), SelectMode::Wand);
 }
 
 #[test]
@@ -478,4 +480,131 @@ fn masked_transfer_is_none_when_the_mask_misses_the_region() {
         )
         .is_none()
     );
+}
+
+// The flood-fill core (owner request 2026-11-23): the magic wand and the
+// Fill tool share ONE method — the tests pin its contract.
+
+#[test]
+fn the_flood_gathers_the_contiguous_band_and_stops_at_the_wall() {
+    // A 4×3 grid: two RED rows over one BLUE row — the flood from the top
+    // left takes the whole red band and never crosses the color wall.
+    let flood = |x: i64, y: i64| {
+        if (0..4).contains(&x) && (0..3).contains(&y) {
+            Some(if y < 2 { Color32::RED } else { Color32::BLUE })
+        } else {
+            None
+        }
+    };
+    let pixels = flood_pixels(4, 3, (0, 0), flood);
+    assert_eq!(
+        pixels,
+        vec![
+            (0, 0),
+            (0, 1),
+            (1, 0),
+            (1, 1),
+            (2, 0),
+            (2, 1),
+            (3, 0),
+            (3, 1)
+        ],
+        "the band, sorted and deduplicated"
+    );
+}
+
+#[test]
+fn the_flood_measures_against_the_seed_not_the_running_neighbor() {
+    // The Paint.NET rule: every matched pixel compares to the SEED's color
+    // (within FLOOD_TOLERANCE per channel), so a slow gradient walks off
+    // the seed's band and the flood stops — no unbounded chain-creep.
+    // Column 0 = the seed red; column 1 = one shade within tolerance;
+    // column 2 = far outside it (even though 1 and 2 are close to each
+    // other, a chain through 1 must NOT reach 2).
+    let flood = |x: i64, _y: i64| {
+        Some(match x {
+            0 => Color32::from_rgb(120, 0, 0),
+            1 => Color32::from_rgb(120 + i32::from(FLOOD_TOLERANCE) as u8, 0, 0), // exactly the edge
+            _ => Color32::from_rgb((120 + 2 * i32::from(FLOOD_TOLERANCE) + 10) as u8, 0, 0),
+        })
+    };
+    let pixels = flood_pixels(3, 1, (0, 0), flood);
+    assert_eq!(pixels, vec![(0, 0), (1, 0)], "column 2 stays out");
+}
+
+#[test]
+fn the_flood_off_grid_seed_and_single_pixel_match() {
+    assert!(flood_pixels(4, 3, (-1, 0), |_, _| Some(Color32::RED)).is_empty());
+    // A lone matching pixel still floods (itself).
+    assert_eq!(
+        flood_pixels(1, 1, (0, 0), |_, _| Some(Color32::RED)),
+        vec![(0, 0)]
+    );
+}
+
+#[test]
+fn a_wand_region_paints_contains_clips_and_translates() {
+    // Sorted (x, y) — the flood_pixels contract the variant documents.
+    let region = Region::Wand {
+        pixels: vec![(1, 0), (1, 1), (2, 1)],
+    };
+    assert_eq!(
+        region.pixel_rect(),
+        Some(IRect {
+            x: 1,
+            y: 0,
+            w: 2,
+            h: 2
+        }),
+        "the tight pixel bounds of the set"
+    );
+    // contains: the EXACT pixel semantics — the point lands in a selected
+    // pixel or not, no center rule.
+    assert!(region.contains(pos2(1.4, 0.6)));
+    assert!(region.contains(pos2(2.9, 1.9)));
+    assert!(!region.contains(pos2(2.4, 0.6)));
+    assert!(!region.contains(pos2(0.5, 0.5)));
+    // paint: the mask carries exactly the set.
+    let mut mask = Mask::new(0, 0, 4, 3);
+    region.paint(&mut mask, true);
+    assert!(mask.get(1, 0) && mask.get(1, 1) && mask.get(2, 1));
+    assert!(!mask.get(0, 0) && !mask.get(2, 0));
+    // clip: the pixels outside the canvas drop, the rest re-sort.
+    let clipped = region
+        .clone()
+        .clipped_to(2, 3)
+        .expect("pixels survive the clip");
+    assert_eq!(
+        clipped,
+        Region::Wand {
+            pixels: vec![(1, 0), (1, 1)]
+        }
+    );
+    // translate: the whole set shifts; the ants re-derive through refresh
+    // (the (1,1) shift keeps every pixel on the 4×3 canvas — the same
+    // canvas-clamped mask the rect/lasso refresh derives).
+    let mut selection = Selection::default();
+    selection.replace(Some(region), 4, 3);
+    assert_eq!(
+        selection.bounds(),
+        Some(IRect {
+            x: 1,
+            y: 0,
+            w: 2,
+            h: 2
+        })
+    );
+    selection.translate(1, 1, 4, 3);
+    assert_eq!(
+        selection.bounds(),
+        Some(IRect {
+            x: 2,
+            y: 1,
+            w: 2,
+            h: 2
+        })
+    );
+    assert!(selection.contains(pos2(2.5, 1.5)));
+    // An empty set selects nothing (the degenerate rule).
+    assert!(Region::Wand { pixels: Vec::new() }.pixel_rect().is_none());
 }

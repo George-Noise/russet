@@ -80,6 +80,10 @@ pub enum ActionKind {
     /// A move-selection commit (owner request 2026-11-20): the selected
     /// pixels lifted and stamped at the drag's integer offset.
     Move,
+    /// The flood fill (owner request 2026-11-23): the Fill tool's one-click
+    /// commit — the flooded color band painted on the active layer with one
+    /// color, one node with the post-fill snapshot.
+    Fill,
 }
 
 impl ActionKind {
@@ -101,6 +105,7 @@ impl ActionKind {
             ActionKind::Cut => "cut",
             ActionKind::Paste => "paste",
             ActionKind::Move => "move",
+            ActionKind::Fill => "fill",
         }
     }
 }

@@ -24,6 +24,10 @@ fn the_tools_grid_order_matches_the_2026_11_21_owner_pass() {
             // …leaving the Shape and the Line to close the grid in row 4.
             Tool::Shape,
             Tool::Line,
+            // The fill joins at the END (owner request 2026-11-23: «иконку
+            // заливки сделай самой последней чтобы не нарушить порядок
+            // инструментов в окошке Tools») — row 5's first cell.
+            Tool::Fill,
         ],
         "the grid is row-major over TOOLS: this array is the on-screen layout"
     );

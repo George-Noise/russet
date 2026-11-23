@@ -37,7 +37,7 @@
 //!   RIGHT, keeping the two touching loops separate.
 
 use crate::tools::{DirtyRect, blend_pixel};
-use eframe::egui::Pos2;
+use eframe::egui::{Color32, Pos2};
 use tiny_skia::{Pixmap, PixmapPaint, PremultipliedColorU8, Transform};
 
 /// An integer pixel rectangle (canvas space): columns `x .. x + w`,
@@ -94,6 +94,13 @@ pub enum Region {
     /// A freeform lasso path, auto-closed (the last point connects to the
     /// first). Fewer than 3 DISTINCT points select nothing.
     Lasso { points: Vec<Pos2> },
+    /// A magic-wand flood-fill region (owner request 2026-11-23: «выделение
+    /// волшебной палочкой как в Paint.Net»): the EXACT pixel set the flood
+    /// reached, sorted and deduplicated `(x, y)` pairs of canvas pixel
+    /// coordinates. The pixel semantics are EXACT integers — the wand
+    /// selected these pixels, no center rule involved. An empty set selects
+    /// nothing (the same degenerate rule the lasso's fewer-than-3 follow).
+    Wand { pixels: Vec<(i64, i64)> },
 }
 
 impl Region {
@@ -113,6 +120,17 @@ impl Region {
                 }
                 (min_x, max_x, min_y, max_y)
             }
+            Region::Wand { pixels } => {
+                let (mut min_x, mut min_y) = (i64::MAX, i64::MAX);
+                let (mut max_x, mut max_y) = (i64::MIN, i64::MIN);
+                for (x, y) in pixels {
+                    min_x = min_x.min(*x);
+                    max_x = max_x.max(*x + 1);
+                    min_y = min_y.min(*y);
+                    max_y = max_y.max(*y + 1);
+                }
+                (min_x as f32, max_x as f32, min_y as f32, max_y as f32)
+            }
         };
         IRect {
             x: min_x.floor() as i64,
@@ -131,6 +149,11 @@ impl Region {
         {
             return None;
         }
+        if let Region::Wand { pixels } = self
+            && pixels.is_empty()
+        {
+            return None;
+        }
         Some(self.integer_bounds())
     }
 
@@ -146,6 +169,13 @@ impl Region {
                 p.x >= min_x && p.x < max_x && p.y >= min_y && p.y < max_y
             }
             Region::Lasso { points } => point_in_polygon(p, points),
+            Region::Wand { pixels } => {
+                // The pixel UNDER the point (the exact-integer semantics):
+                // binary search over the sorted set.
+                pixels
+                    .binary_search(&(p.x.floor() as i64, p.y.floor() as i64))
+                    .is_ok()
+            }
         }
     }
 
@@ -163,6 +193,11 @@ impl Region {
                 }
             }
             Region::Lasso { points } => fill_polygon_scanline(mask, points, add),
+            Region::Wand { pixels } => {
+                for (x, y) in pixels {
+                    mask.set(*x, *y, add);
+                }
+            }
         }
     }
 
@@ -189,6 +224,16 @@ impl Region {
                 let clipped = clip_polygon_to_rect(&points, width as f32, height as f32);
                 // Fewer than 3 DISTINCT points select nothing (the module rule).
                 (distinct_points(&clipped).len() >= 3).then_some(Region::Lasso { points: clipped })
+            }
+            Region::Wand { pixels } => {
+                let mut clipped: Vec<(i64, i64)> = pixels
+                    .iter()
+                    .copied()
+                    .filter(|(x, y)| *x >= 0 && *y >= 0 && *x < width as i64 && *y < height as i64)
+                    .collect();
+                clipped.sort();
+                clipped.dedup();
+                (!clipped.is_empty()).then_some(Region::Wand { pixels: clipped })
             }
         }
     }
@@ -316,6 +361,76 @@ fn distinct_points(points: &[Pos2]) -> Vec<Pos2> {
             out.push(*p);
         }
     }
+    out
+}
+
+/// The color tolerance of the shared flood-fill core (the wand selection
+/// AND the Fill tool — owner request 2026-11-23: «можно сделать заливку
+/// тем же методом что и выделение волшебной палочкой, там очень похожий
+/// метод»): a pixel joins the flood when EVERY channel differs from the
+/// SEED's color by at most this much. Paint.NET's wand works the same way
+/// against the clicked pixel, with a fixed tolerance standing in for its
+/// slider — one knob to turn if the owner asks for one.
+pub const FLOOD_TOLERANCE: u8 = 32;
+
+/// The flood-fill core (owner request 2026-11-23: the magic-wand selection
+/// and the Fill tool share ONE method): a 4-neighborhood breadth-first walk
+/// from `seed` over the `(width × height)` pixel grid, gathering every
+/// pixel whose color is within [`FLOOD_TOLERANCE`] of the SEED's color
+/// (the reference is the seed, not the running neighbor — the same rule
+/// Paint.NET's wand follows, so a gradient floods in one tolerance band).
+/// The `sample` closure returns the straight-alpha color of a pixel (or
+/// `None` outside the grid). Returns the matched pixels sorted and
+/// deduplicated — the shape [`Region::Wand`] stores.
+pub fn flood_pixels(
+    width: u32,
+    height: u32,
+    seed: (i64, i64),
+    sample: impl Fn(i64, i64) -> Option<Color32>,
+) -> Vec<(i64, i64)> {
+    let Some(seed_color) = sample(seed.0, seed.1) else {
+        return Vec::new();
+    };
+    // The seed must sit ON the grid: the closure's bounds policy is the
+    // caller's, the visited grid's indexing is ours.
+    if seed.0 < 0 || seed.1 < 0 || seed.0 >= width as i64 || seed.1 >= height as i64 {
+        return Vec::new();
+    };
+    let matches = |c: Color32| -> bool {
+        let diff = |a: u8, b: u8| (i16::from(a) - i16::from(b)).abs();
+        diff(c.r(), seed_color.r()) <= i16::from(FLOOD_TOLERANCE)
+            && diff(c.g(), seed_color.g()) <= i16::from(FLOOD_TOLERANCE)
+            && diff(c.b(), seed_color.b()) <= i16::from(FLOOD_TOLERANCE)
+            && diff(c.a(), seed_color.a()) <= i16::from(FLOOD_TOLERANCE)
+    };
+    let mut visited = vec![false; width as usize * height as usize];
+    let mut queue = std::collections::VecDeque::new();
+    let mut out = Vec::new();
+    if matches(seed_color) {
+        visited[seed.1 as usize * width as usize + seed.0 as usize] = true;
+        queue.push_back(seed);
+    }
+    while let Some((x, y)) = queue.pop_front() {
+        out.push((x, y));
+        for (nx, ny) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)] {
+            if nx < 0 || ny < 0 || nx >= width as i64 || ny >= height as i64 {
+                continue;
+            }
+            let idx = ny as usize * width as usize + nx as usize;
+            if visited[idx] {
+                continue;
+            }
+            let Some(color) = sample(nx, ny) else {
+                continue;
+            };
+            if matches(color) {
+                visited[idx] = true;
+                queue.push_back((nx, ny));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
     out
 }
 
@@ -513,6 +628,12 @@ impl Selection {
                     for p in points {
                         p.x += dx as f32;
                         p.y += dy as f32;
+                    }
+                }
+                Region::Wand { pixels } => {
+                    for (x, y) in pixels {
+                        *x += dx;
+                        *y += dy;
                     }
                 }
             }

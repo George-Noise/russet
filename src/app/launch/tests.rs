@@ -217,7 +217,7 @@ fn help_flag_is_detected_alone() {
 
 #[test]
 fn tool_names_and_help_stay_in_sync() {
-    assert_eq!(TOOL_NAMES.len(), 7);
+    assert_eq!(TOOL_NAMES.len(), 8);
     for name in TOOL_NAMES {
         assert!(parse_tool(name).is_some(), "'{name}' must parse");
         assert!(USAGE.contains(name), "--help must list '{name}'");

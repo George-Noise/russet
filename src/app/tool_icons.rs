@@ -84,7 +84,7 @@ pub(super) const TREE_ICON_PT: f32 = 16.0;
 /// pass swapped two pairs for balance: the Eyedropper up beside the paint
 /// trio (it picks colors, so it reads paint-adjacent) and the Text up next
 /// to Select, leaving the Line to close the grid after the Shape.
-pub(super) const TOOLS: [Tool; 8] = [
+pub(super) const TOOLS: [Tool; 9] = [
     Tool::Pencil,
     Tool::Brush,
     Tool::Eraser,
@@ -93,6 +93,10 @@ pub(super) const TOOLS: [Tool; 8] = [
     Tool::Text,
     Tool::Shape,
     Tool::Line,
+    // The fill joins at the END (owner request 2026-11-23: «иконку заливки
+    // сделай самой последней чтобы не нарушить порядок инструментов в
+    // окошке Tools»).
+    Tool::Fill,
 ];
 
 /// The hover tooltip of a tool button: the name and the keyboard key
@@ -107,6 +111,7 @@ pub(super) fn label(tool: Tool) -> &'static str {
         Tool::Line => "Line (L)",
         Tool::Shape => "Shape (U)",
         Tool::Text => "Text (T)",
+        Tool::Fill => "Fill (F)",
     }
 }
 
@@ -196,10 +201,11 @@ pub(super) struct Atlas {
     /// as [`LINE_ICONS`] (owner request 2026-11-20; the same retain-count
     /// reason as `shape_icons` above).
     pub(super) line_icons: [TextureHandle; 2],
-    /// The uploaded textures of the Select family's six buttons (the two
-    /// mode marks + the four ops), same order as [`SELECT_ICONS`] (owner
-    /// request 2026-11-20; the same retain-count reason as `line_icons`).
-    pub(super) select_icons: [TextureHandle; 6],
+    /// The uploaded textures of the Select family's seven buttons (the
+    /// three mode marks + the four ops), same order as [`SELECT_ICONS`]
+    /// (owner requests 2026-11-20 and 2026-11-23 — the wand joined; the
+    /// same retain-count reason as `line_icons`).
+    pub(super) select_icons: [TextureHandle; 7],
     /// The SECOND, smaller atlas (owner request 2026-11-21): the History
     /// Tree row icons at [`TREE_ICON_PT`], one per [`Tool`], same order as
     /// [`TOOLS`]. Rasterized in the same `ensure` pass (the same key), just
@@ -299,8 +305,9 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, debug_border: boo
     let Ok(line_icons) = <[TextureHandle; 2]>::try_from(line_icons) else {
         return;
     };
-    // The Select family's six buttons (owner request 2026-11-20): the two
-    // mode marks + the four ops — the same fixed-drawing pipeline.
+    // The Select family's seven buttons (owner request 2026-11-20; the
+    // wand joined 2026-11-23): the three mode marks + the four ops — the
+    // same fixed-drawing pipeline.
     let mut select_icons = Vec::with_capacity(SELECT_ICONS.len());
     for icon in SELECT_ICONS {
         let Some(mut pm) = rasterize_select_icon(icon, px, text) else {
@@ -317,7 +324,7 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, debug_border: boo
             TextureOptions::LINEAR,
         ));
     }
-    let Ok(select_icons) = <[TextureHandle; 6]>::try_from(select_icons) else {
+    let Ok(select_icons) = <[TextureHandle; 7]>::try_from(select_icons) else {
         return;
     };
     // The History Tree's small set (owner request 2026-11-21): the same
@@ -467,6 +474,7 @@ pub(super) fn line_icon_label(icon: LineIcon) -> &'static str {
 pub(super) enum SelectIcon {
     Rect,
     Lasso,
+    Wand,
     Copy,
     Cut,
     Paste,
@@ -475,9 +483,10 @@ pub(super) enum SelectIcon {
 
 /// The Select icons' canonical order — the atlas and the panel's rows
 /// iterate this array, so the two always agree.
-pub(super) const SELECT_ICONS: [SelectIcon; 6] = [
+pub(super) const SELECT_ICONS: [SelectIcon; 7] = [
     SelectIcon::Rect,
     SelectIcon::Lasso,
+    SelectIcon::Wand,
     SelectIcon::Copy,
     SelectIcon::Cut,
     SelectIcon::Paste,
@@ -491,6 +500,9 @@ pub(super) fn select_icon_label(icon: SelectIcon) -> &'static str {
     match icon {
         SelectIcon::Rect => "Rectangle selection — drag replaces, Shift adds, Alt subtracts",
         SelectIcon::Lasso => "Lasso selection — drag replaces, Shift adds, Alt subtracts",
+        SelectIcon::Wand => {
+            "Magic wand — click floods a color band into the selection (Shift adds, Alt subtracts)"
+        }
         SelectIcon::Copy => "Copy (Ctrl+C)",
         SelectIcon::Cut => "Cut (Ctrl+X)",
         SelectIcon::Paste => "Paste (Ctrl+V)",

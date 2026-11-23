@@ -46,6 +46,7 @@ fn tool_name(tool: Tool) -> &'static str {
         Tool::Line => "line",
         Tool::Shape => "shape",
         Tool::Text => "text",
+        Tool::Fill => "fill",
     }
 }
 

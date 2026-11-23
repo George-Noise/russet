@@ -34,6 +34,16 @@ pub enum Tool {
     /// tool is already active, right-click cycles it backward); the
     /// sub-mode buttons and the ops live in the magnetized panel.
     Select,
+    /// The flood fill (owner request 2026-11-23: «можно сделать заливку тем
+    /// же методом что и выделение волшебной палочкой, там очень похожий
+    /// метод»): a click floods the clicked color band on the active layer
+    /// with the primary (LMB) or secondary (RMB) color — the same
+    /// [`crate::selection::flood_pixels`] core the magic wand uses. The
+    /// LAST variant on purpose: the Tools window's grid iterates the
+    /// [`crate::app::tool_icons::TOOLS`] array, and the owner asked for the
+    /// fill button to join at the END («иконку заливки сделай самой
+    /// последней чтобы не нарушить порядок инструментов в окошке Tools»).
+    Fill,
 }
 
 /// Sub-mode of the [`Tool::Select`] tool (owner request 2026-11-20).
@@ -47,12 +57,19 @@ pub enum SelectMode {
     Rect,
     /// A freeform lasso: the drag's pointer path, auto-closed on release.
     Lasso,
+    /// The magic wand (owner request 2026-11-23: «выделение волшебной
+    /// палочкой как в Paint.Net … нужен простой алгоритм»): a CLICK floods
+    /// the clicked color band on the active layer and selects the reached
+    /// pixels exactly — [`crate::selection::Region::Wand`], built by the
+    /// shared [`crate::selection::flood_pixels`] core. No drag: the wand
+    /// applies at press, the Shift/Alt modifiers still choose add/subtract.
+    Wand,
 }
 
 impl SelectMode {
     /// The canonical order — the cycle, the panel rows and the icon set
     /// iterate this array, so the three always agree.
-    pub const ALL: [SelectMode; 2] = [SelectMode::Rect, SelectMode::Lasso];
+    pub const ALL: [SelectMode; 3] = [SelectMode::Rect, SelectMode::Lasso, SelectMode::Wand];
 
     /// The NEXT mode in the cycle — the Tools button's left-click (owner
     /// request 2026-11-20: "по левой кнопке ... переключался выбор какой
@@ -252,8 +269,9 @@ pub fn draw_segment(
         Tool::Pencil => 1.0,
         Tool::Brush | Tool::Eraser => size.clamp(1.0, MAX_STROKE_SIZE),
         // Unreachable: the preview tools commit through `rasterize_polyline`
-        // / `rasterize_shape`, and Select never strokes.
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
+        // / `rasterize_shape`, Select never strokes, the Fill commits in one
+        // click through its own handler.
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select | Tool::Fill => {
             size.clamp(1.0, MAX_STROKE_SIZE)
         }
     };
@@ -340,7 +358,7 @@ pub fn draw_segment(
     let [r, g, b, a] = match tool {
         Tool::Eraser => [0, 0, 0, 255],
         Tool::Pencil | Tool::Brush => color.to_srgba_unmultiplied(),
-        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
+        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select | Tool::Fill => {
             color.to_srgba_unmultiplied()
         }
     };

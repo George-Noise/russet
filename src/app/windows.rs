@@ -205,6 +205,7 @@ impl App {
         let icon = match self.tools.select_mode {
             SelectMode::Rect => tool_icons::SelectIcon::Rect,
             SelectMode::Lasso => tool_icons::SelectIcon::Lasso,
+            SelectMode::Wand => tool_icons::SelectIcon::Wand,
         };
         let response = icon_button(
             ui,

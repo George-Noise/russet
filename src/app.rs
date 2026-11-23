@@ -777,6 +777,7 @@ impl App {
                 self.handle_stroke(ui, rect, &response, panning);
             }
             Tool::Eyedropper => self.handle_pick(ui, rect, &response, panning),
+            Tool::Fill => self.handle_fill_input(ui, rect, &response, panning),
             Tool::Line | Tool::Shape => self.handle_preview_input(ui, rect, &response, panning),
             Tool::Text => self.handle_text_input(ui, rect, &response, panning),
             Tool::Select => self.handle_select_input(ui, rect, &response, panning),

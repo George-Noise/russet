@@ -12,6 +12,7 @@
 //! owner request 2026-11-13.
 
 use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect};
+use tiny_skia::PremultipliedColorU8;
 
 use super::App;
 use crate::history_tree::ActionKind;
@@ -70,6 +71,28 @@ impl App {
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::T)) {
             self.tools.tool = Tool::Text;
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F)) {
+            self.tools.tool = Tool::Fill;
+        }
+        // Esc (owner request 2026-11-23: «На кнопку Esc нужно сделать
+        // убирание выделения») — the GLOBAL deselect: the selection is
+        // DOCUMENT state, not a Select-tool fixture, so any tool's Esc
+        // drops it. The pending gestures keep their own Esc meanings — the
+        // guards run BEFORE consume_key so the local consumers still see
+        // their key: a select drag cancels via the Select handler, a
+        // line/shape/text preview via preview.rs, the Text input window
+        // closes itself (and typing holds the keyboard, the early return
+        // above). Consuming the key also keeps the Select tool's own
+        // Esc branch from logging a second "Deselected".
+        if !self.select_gesture.is_active()
+            && matches!(self.preview, super::preview::PreviewState::None)
+            && self.text_edit.is_none()
+            && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
+            && !self.selection.is_empty()
+        {
+            self.selection.clear();
+            self.action_log.push("Deselected");
         }
         // The selection ops (owner request 2026-11-20): Ctrl+C/X/V mirror
         // the Edit menu and the Select panel's buttons. The egui-winit
@@ -169,8 +192,13 @@ impl App {
             // Unreachable in practice: the Line/Shape/Text tools freeze
             // their color when the gesture starts (see preview.rs /
             // text_tool.rs); the Eyedropper never paints; Select never
-            // strokes.
-            Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
+            // strokes; the Fill commits in one click (its own handler).
+            Tool::Eyedropper
+            | Tool::Line
+            | Tool::Shape
+            | Tool::Text
+            | Tool::Select
+            | Tool::Fill => {
                 if self.stroke_button == Some(PointerButton::Secondary) {
                     self.tools.secondary
                 } else {
@@ -229,6 +257,124 @@ impl App {
         } else if secondary_down {
             self.tools.secondary = color;
         }
+    }
+
+    /// The Fill tool (owner request 2026-11-23: «можно сделать заливку тем
+    /// же методом что и выделение волшебной палочкой, там очень похожий
+    /// метод»): a click floods the clicked color band on the ACTIVE LAYER
+    /// through [`crate::selection::flood_pixels`] — the wand's exact core —
+    /// and paints the reached pixels with the frozen color: primary (LMB) or
+    /// secondary (RMB), the same well policy the freehand strokes follow.
+    /// The color bands are sampled on the layer itself (not the composite —
+    /// the layer is what the fill paints), the pixels an active selection
+    /// confines are skipped (the stroke-clip snapshot convention), and one
+    /// click = one [`ActionKind::Fill`] node with the post-fill snapshot.
+    pub(super) fn handle_fill_input(
+        &mut self,
+        ui: &egui::Ui,
+        rect: Rect,
+        response: &egui::Response,
+        panning: bool,
+    ) {
+        if panning {
+            return;
+        }
+        let (cursor, primary_pressed, secondary_pressed) = ui.input(|i| {
+            (
+                i.pointer.latest_pos(),
+                i.pointer.button_pressed(PointerButton::Primary),
+                i.pointer.button_pressed(PointerButton::Secondary),
+            )
+        });
+        if !(primary_pressed || secondary_pressed) || !response.hovered() {
+            return;
+        }
+        let Some(cursor) = cursor else {
+            return;
+        };
+        if !rect.contains(cursor) {
+            return;
+        }
+        let pos = self.canvas_pos(rect, cursor);
+        let seed = (pos.x.floor() as i64, pos.y.floor() as i64);
+        // The color freezes at the click (one gesture = one color, the
+        // stroke convention), the clip snapshot too.
+        let color = if secondary_pressed {
+            self.tools.secondary
+        } else {
+            self.tools.primary
+        };
+        let clip = self.selection_clip();
+        // The flood READS the layer (the borrow ends with the block); the
+        // WRITE happens after, on the owned pixel set.
+        let pixels = {
+            let pm = self.layers.active().pixmap();
+            let (width, height) = (pm.width(), pm.height());
+            crate::selection::flood_pixels(width, height, seed, |px, py| {
+                pick_color(pm, px as u32, py as u32)
+            })
+        };
+        if pixels.is_empty() {
+            return;
+        }
+        let bounds = self.paint_flood_pixels(&pixels, color, clip.as_ref());
+        let (x, y) = (bounds.0.max(0) as u32, bounds.1.max(0) as u32);
+        let (w, h) = (bounds.2 as u32, bounds.3 as u32);
+        self.composite_dirty(x, y, w, h);
+        self.sync_texture(x, y, w, h);
+        self.dirty = true;
+        // One click = one node with the post-fill canvas (the stroke
+        // release's shape).
+        self.record_active_action(ActionKind::Fill, color, None);
+        self.action_log.push("Fill");
+        ui.ctx().request_repaint();
+    }
+
+    /// Writes the flooded pixels: an src-over stamp of `color` per pixel,
+    /// skipping the ones an active selection masks out. Returns the written
+    /// bbox `(x, y, w, h)` for the dirty-region sync.
+    fn paint_flood_pixels(
+        &mut self,
+        pixels: &[(i64, i64)],
+        color: Color32,
+        clip: Option<&crate::selection::Mask>,
+    ) -> (i64, i64, i64, i64) {
+        let (mut min_x, mut min_y) = (i64::MAX, i64::MAX);
+        let (mut max_x, mut max_y) = (i64::MIN, i64::MIN);
+        let (r, g, b, a) = (color.r(), color.g(), color.b(), color.a());
+        let pm = self.layers.active_mut().pixmap_mut();
+        let (stride, height) = (pm.width() as usize, pm.height() as i64);
+        let dst = pm.pixels_mut();
+        // src-over of a FULL-COVERAGE pixel of `color`: the color's alpha
+        // blends once over the destination (the same mix the stroke
+        // rasterizer runs — a translucent fill composites, an opaque one
+        // replaces).
+        let ia = 255 - a as u32;
+        let mix = |s: u32, d: u8| (s + (d as u32 * ia + 127) / 255) as u8;
+        for (x, y) in pixels {
+            if let Some(mask) = clip
+                && !mask.get(*x, *y)
+            {
+                continue;
+            }
+            if *x < 0 || *y < 0 || *x >= stride as i64 || *y >= height {
+                continue;
+            }
+            let d = dst[*y as usize * stride + *x as usize];
+            let out = PremultipliedColorU8::from_rgba(
+                mix(r as u32, d.red()),
+                mix(g as u32, d.green()),
+                mix(b as u32, d.blue()),
+                mix(a as u32, d.alpha()),
+            )
+            .unwrap_or(d);
+            dst[*y as usize * stride + *x as usize] = out;
+            min_x = min_x.min(*x);
+            min_y = min_y.min(*y);
+            max_x = max_x.max(*x + 1);
+            max_y = max_y.max(*y + 1);
+        }
+        (min_x, min_y, (max_x - min_x).max(0), (max_y - min_y).max(0))
     }
 
     fn paint_segment(&mut self, from: Pos2, to: Pos2) {
@@ -454,9 +600,12 @@ impl App {
                         Tool::Eraser => Some(ActionKind::Eraser),
                         // Unreachable for a freehand gesture (the frozen
                         // tool is always one of the painting trio).
-                        Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
-                            None
-                        }
+                        Tool::Eyedropper
+                        | Tool::Line
+                        | Tool::Shape
+                        | Tool::Text
+                        | Tool::Select
+                        | Tool::Fill => None,
                     };
                     if let Some(kind) = kind {
                         self.record_active_action(kind, color, None);
@@ -468,7 +617,8 @@ impl App {
                             | Tool::Line
                             | Tool::Shape
                             | Tool::Text
-                            | Tool::Select => "Stroke",
+                            | Tool::Select
+                            | Tool::Fill => "Stroke",
                         };
                         self.action_log.push(label);
                     }

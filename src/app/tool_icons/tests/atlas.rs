@@ -86,8 +86,8 @@ fn atlas_rebuilds_only_on_scale_change() {
     ensure(&mut atlas, &ctx, false);
     assert_eq!(
         pass(&ctx),
-        33,
-        "8 tool + 8 shape + 2 line + 6 select + 8 tree icons + egui's font atlas"
+        36,
+        "9 tool + 8 shape + 2 line + 7 select + 9 tree icons + egui's font atlas"
     );
     let first = atlas.as_ref().expect("the first ensure builds the atlas");
     assert_eq!(first.key, 1.0);
@@ -107,7 +107,7 @@ fn atlas_rebuilds_only_on_scale_change() {
     ensure(&mut atlas, &ctx, false);
     assert_eq!(
         pass(&ctx),
-        32,
+        35,
         "rebuilt after the scale change (the font atlas only uploads once)"
     );
     let scaled = atlas.as_ref().expect("rebuilt after the scale change");
@@ -122,11 +122,11 @@ fn atlas_rebuilds_only_on_scale_change() {
     // the icons theme-independent (owner v4: one drawing reads well in both
     // themes; the old theme re-raster died with its reason). The pass still
     // uploads ONE texture: egui's font atlas follows the theme too. OUR
-    // thirty-two icons would make it 33 — the count stays the "did the
+    // thirty-five icons would make it 36 — the count stays the "did the
     // atlas rebuild?" discriminator.
     ctx.set_theme(Theme::Light);
     ensure(&mut atlas, &ctx, false);
-    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 32 icons");
+    assert_eq!(pass(&ctx), 1, "only egui's font atlas, not our 35 icons");
     assert_eq!(atlas.as_ref().expect("kept").key, 2.0);
 }
 

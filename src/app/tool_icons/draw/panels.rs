@@ -16,6 +16,51 @@ use crate::tools::{ShapeKind, ShapeOutline};
 use eframe::egui::Color32;
 use tiny_skia::{Pixmap, Transform};
 
+/// The magic-wand mark (owner request 2026-11-23: the wand's panel row and
+/// the Select button's mode-aware mark — «выделение волшебной палочкой как
+/// в Paint.Net»). A diagonal rod ending in a FOUR-POINT sparkle, drawn in
+/// the monochrome ink the rest of the Select family uses; two satellite
+/// sparks echo the star at a smaller scale.
+fn draw_select_wand(pm: &mut Pixmap, ts: Transform, ink: Color32) {
+    // The rod: a thin parallelogram, half-width 0.64 perpendicular to the
+    // bottom-left → tip diagonal.
+    fill(
+        pm,
+        ts,
+        &[(5.14, 20.14), (16.14, 9.14), (14.86, 7.86), (3.86, 18.86)],
+        ink,
+    );
+    // The tip's star: four points with concave notches between them.
+    fill(
+        pm,
+        ts,
+        &[
+            (17.0, 3.4),
+            (18.6, 5.4),
+            (20.6, 7.0),
+            (18.6, 8.6),
+            (17.0, 10.6),
+            (15.4, 8.6),
+            (13.4, 7.0),
+            (15.4, 5.4),
+        ],
+        ink,
+    );
+    // The two satellite sparks.
+    fill(
+        pm,
+        ts,
+        &[(12.5, 3.1), (13.2, 4.5), (12.5, 5.9), (11.8, 4.5)],
+        ink,
+    );
+    fill(
+        pm,
+        ts,
+        &[(21.0, 10.3), (21.6, 11.5), (21.0, 12.7), (20.4, 11.5)],
+        ink,
+    );
+}
+
 /// The kind button: the shape as a NEUTRAL PREVIEW — the mid-gray fill plus
 /// the ink rim (the same 1.9 stroke the monochrome tool icons draw).
 fn draw_kind_preview(pm: &mut Pixmap, ts: Transform, kind: ShapeKind, mono: Color32) {
@@ -306,6 +351,7 @@ pub(in crate::app::tool_icons) fn rasterize_select_icon(
     match icon {
         SelectIcon::Rect => draw_select_rect(&mut pm, ts, text),
         SelectIcon::Lasso => draw_select_lasso(&mut pm, ts, text),
+        SelectIcon::Wand => draw_select_wand(&mut pm, ts, text),
         SelectIcon::Copy => draw_copy(&mut pm, ts, text),
         SelectIcon::Cut => draw_cut(&mut pm, ts, text),
         SelectIcon::Paste => draw_paste(&mut pm, ts, text),

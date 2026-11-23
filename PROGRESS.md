@@ -83,6 +83,63 @@ round's evidence).
 > the settings round's budget — the file rode past ~200 lines; three entries
 > stay in the Log).
 
+### 2026-11-23 — `Feat:` the magic wand selects like Paint.NET, the Fill tool pours through the SAME flood core (the icon LAST in the Tools grid), Esc deselects from any tool (owner request in chat)
+
+- **What:** three orders in one round. (1) The MAGIC WAND: Select gained a
+  third sub-mode (`SelectMode::Wand`) — a click floods the clicked color
+  band on the ACTIVE LAYER through the new shared `selection.rs::flood_pixels`
+  (4-neighborhood BFS against the SEED's color, per-channel tolerance
+  `FLOOD_TOLERANCE` = 32) and selects the reached pixels EXACTLY as a
+  `Region::Wand` (sorted pixel list; ants/ops/translate/clip ride the
+  existing mask machinery for free); it applies AT press, Shift/Alt still
+  add/subtract, a press inside the selection re-wands. (2) The FILL tool
+  (`Tool::Fill`, hotkey F, `--tool fill`): a click floods the same core and
+  paints the reached pixels src-over with the frozen primary (LMB) or
+  secondary (RMB), the selection confines it, one click = one
+  `ActionKind::Fill` node ("fill" tree row with its color chip); the icon
+  (a metal pail + a falling drop, the pipette's blue) joins the Tools grid
+  LAST («иконку заливки сделай самой последней чтобы не нарушить порядок
+  инструментов в окошке Tools»). (3) ESC deselects GLOBALLY
+  («На кнопку Esc нужно сделать убирание выделения») — the guards skip the
+  key while a select gesture/preview/Text entry is pending, so every local
+  consumer keeps its Esc.
+- **Files:** `src/selection.rs` (`Region::Wand` in all five match sites +
+  `flood_pixels` + `FLOOD_TOLERANCE`), `src/selection/tests.rs` (+4 tests:
+  the band flood, the seed-reference rule, the off-grid seed, the wand
+  region lifecycle), `src/tools.rs` (Fill + Wand + the unreachable stroke
+  arms), `src/app/input.rs` (F hotkey, the global Esc, `handle_fill_input`
+  + `paint_flood_pixels`), `src/app.rs` (the dispatch arm),
+  `src/app/selection.rs` (the wand routing + `wand_region` + the module
+  doc), `src/app/windows/select_panel.rs` (the wand row),
+  `src/app/windows.rs` (the button's mode mark), `src/history_tree.rs`
+  (ActionKind::Fill + the "fill" label), `src/app/tool_icons.rs` (TOOLS[9],
+  label "Fill (F)", SelectIcon::Wand, SELECT_ICONS[7], the atlas field/try_from
+  sizes), `src/app/tool_icons/draw/tools.rs` (draw_fill) +
+  `draw/panels.rs` (draw_select_wand) + the drawings tests (+2),
+  `src/app/launch.rs` + `src/main.rs` (`--tool fill` + USAGE) + the sync
+  test, `src/app/mcp/tools/queries.rs` (the tool_name arm), the probe
+  `scripts/gui_wand_fill_check.sh` (new), SANDBOX.md trap 13, TIMING.md.
+- **Verified:** FULL gate ALL GATES GREEN 20 s (346 default / 359 mcp,
+  clippy `-D warnings`, wasm, driver); the visual driver exit 0; the NEW
+  probe PASS on the same binary: six→eleven pencil strokes, F + one click
+  floods the white canvas BLACK (white 370561 → 60, the Tool Log "Fill",
+  the tree's fill row with its chip), Ctrl+Z restores, V + two Select-button
+  clicks reach the Wand mode (the panel row's wand mark active), one wand
+  click selects the background — the ants repaint the blob's contour
+  (1408 changed pixels vs the baseline), Esc drops it (0 changed). The
+  shots LOOKED AT: the 9-button grid with the bucket LAST, the wand mark
+  in the mode row, the ants. Probe findings recorded: the xdotool bundle
+  needs libxtst6+libxi6 (SANDBOX.md trap 13); a press+release in ONE frame
+  never applies a Rect/Lasso drag (an xdotool instant click) — the wand is
+  immune by design (press-time apply); three button clicks wrap the mode
+  cycle back to Rect (V pre-activates).
+- **Owner-checks:** V76 born (the wand/fill/Esc human pass). Open: V76,
+  V75, V74, V73, V72, V71, V70, V69, V68, V67, V66 (X11), V46 (X11);
+  parked: V30, V8. Debts: F22 born (the flood tolerance is a fixed const —
+  Paint.NET's slider is NOT implemented; a knob lands only on the owner's
+  word), F20, F18, F17, F16, F15, F14 newest-first in the files.
+- **Commit title:** `Feat: the magic wand selects a flooded color band (Paint.NET-style, Region::Wand) - the Fill tool pours through the same flood core with its icon LAST in the Tools grid - Esc deselects from any tool`
+
 ### 2026-11-23 — `Feat:` only the Mouse4/Mouse5 choice persists + the Settings window opens from a new menu-bar menu (owner request in chat)
 
 - **What:** two orders in one round: «только Mouse4/Mouse5 выбор
@@ -136,73 +193,3 @@ round's evidence).
   (the choice persists now — the restart-resets clause replaced).
 - **Commit title:** `Feat: the Mouse4/Mouse5 choice persists as the ONE saved setting (a plain string key that Ask removes for a zero-write default) and the Settings menu opens the settings window with the three-choice dropdown`
 
-### 2026-11-23 — `Feat:` eframe `persistence` compiled in, BOTH save channels deliberately off — nothing is saved (owner request in chat)
-
-- What: the owner asked to enable the framework's persistence while saving as
-  little as possible and to verify what it actually writes. eframe 0.37's
-  `persistence` cargo feature is ON (Cargo.toml) so the storage plumbing exists
-  ahead of a real settings decision (SPEC §6 keeps "saving application settings"
-  out of scope); the two automatic save channels are OFF: `NativeOptions::
-  persist_window = false` (main.rs — the OS window keeps its 1200×800 builder
-  default every launch) and `App::persist_egui_memory() -> false` + an explicit
-  empty `App::save` (app.rs — the future home of the first persisted setting,
-  e.g. the Mouse4/5 opt-in). Nothing calls `epi::set_value`, so the storage's
-  dirty flag stays false and eframe's 30-s autosave + the exit save write
-  NOTHING. The measured out-of-the-box content this config avoids (feature on,
-  defaults elsewhere, 35-s headless session with a stroke): `app.ron` 5 115 bytes
-  — the key `"window"` (OS-window geometry + scale factor) + the key `"egui"`
-  (the WHOLE egui Memory: every floating-window position/pivot/z-order, collapse
-  states, per-widget resize/scroll state, the theme preference, the input
-  options). The feature's one unavoidable side effect: the startup-created data
-  FOLDER (`~/.local/share/russet` / `%APPDATA%\Russet\data`) — empty by design;
-  the web lane writes nothing to localStorage (its only writes ride the same two
-  switches — eframe web source).
-- Files: Cargo.toml (+`persistence`; the lock gains `ron`/`enumn`/`typeid`),
-  Cargo.lock, src/main.rs, src/app.rs (+2 trait methods, `#[cfg(test)] mod
-  tests;`), NEW src/app/tests.rs (2 pinned tests: save_writes_nothing over a
-  recording Storage double, persist_egui_memory_is_off), src/app/mouse_side.rs
-  (doc now points at the wired-but-idle storage), SPEC.md §1 (persistence-policy
-  paragraph + the feature list), AGENTS.md (the `default_pos` quirk line),
-  DEBTS-verification.md (V74).
-- Verified: `bash scripts/verify.sh` ALL GATES GREEN in 148 s (fmt, rules,
-  clippy ×2, test ×2 — 325 default / 338 mcp, +2); wasm check green (Cargo.toml
-  touched — the wasm lane compiles eframe/persistence too); the storage probes
-  headless under Xvfb: with the opt-outs two 35-s sessions (strokes drawn) left
-  the data dir EMPTY and the restart screenshot shows the default layout
-  unchanged.
-- Owner-checks: V74 (Windows: the data folder exists EMPTY, restart restores
-  nothing; web: no `egui_memory_ron` in localStorage).
-- **Commit title:** `Feat: compile eframe persistence with both save channels off; persist_window false, persist_egui_memory false and an empty App::save keep app.ron unwritten`
-
-### 2026-11-23 — `Feat:` Mouse4/Mouse5 undo/redo behind a first-press opt-in modal (owner request in chat)
-
-- **What:** the owner's order: «Мне предложили добавить на Mouse4 и Mouse5
-  undo и redo… сделай как у других, НО нужно при первом нажатии … спросить
-  пользователя через модалку». The side buttons — winit `Back`/`Forward` →
-  egui `PointerButton::Extra1`/`Extra2` — follow the browser back/forward
-  mapping (Mouse4 = Undo, Mouse5 = Redo, the Ctrl+Z/Ctrl+Y twin). The FIRST
-  side press never acts: it opens the centered "Mouse Side Buttons" modal
-  (the shared dialog helpers); **Yes** enables for the session, **No**
-  disables, the ✕ decides nothing (the next press asks again — the
-  session-only choice lives in `App` and dies with the process, SPEC §6
-  keeps settings-saving out of scope; the framework's eframe
-  `persistence` route for the future is described in the chat reply, not
-  wired). Presses are consumed unconditionally and inert while the modal
-  is open, while declined, and during an active canvas gesture (stroke /
-  Line-Shape preview / Select region+move / Text entry — an undo
-  mid-gesture would corrupt the pending node); exhausted stacks are
-  silent no-ops (the redo-keys convention); the answer lands in the Tool
-  Log. SPEC §3.9 row added.
-- **Files:** `src/app/mouse_side.rs` (+`mouse_side/tests.rs`, 12 tests —
-  the pure state machine + the real press handler over the real history),
-  `src/app.rs` (module, field, init, the two frame-flow hooks),
-  `src/app/preview.rs` + `src/app/selection.rs` (`is_active` guards),
-  `scripts/gui_mouse_side_check.sh` (new probe), SPEC §3.9.
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 323 default / 336
-  mcp, +12 tests); no wasm check (no web-facing paths); the new probe
-  PASS end-to-end under Xvfb: stroke painted → first Mouse4 press opened
-  the modal AND left the canvas alone → Yes click enabled → Mouse4 undid
-  the stroke → Mouse5 redid it.
-- **Owner-checks:** V73 (the real-mouse pass on Windows, incl. the ✕
-  re-ask behavior).
-- **Commit title:** `Feat: Mouse4/Mouse5 undo/redo opt-in - the first side press opens a yes/no modal, the session-only choice routes Mouse4 to undo and Mouse5 to redo, presses stay inert while unanswered, declined or mid-gesture`

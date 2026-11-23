@@ -34,7 +34,7 @@ Launch arguments:
                        #RGB, RRGGBB or RRGGBBAA, e.g. FF0000 or #00FF00
   --secondary <hex>    the secondary color well, the same formats
   --tool <name>        the startup tool: pencil, brush, eraser, select,
-                       eyedropper, line, shape, text
+                       eyedropper, line, shape, text, fill
   --canvas-size <WxH>  the startup canvas in pixels, e.g. 1024x768
                        (1..=4096 per side)
   --atlas-test         paint a static 1 px black-and-white speckle ring on

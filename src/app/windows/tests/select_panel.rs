@@ -91,7 +91,7 @@ fn the_panel_rows_keep_the_group_gap_between_mode_and_ops() {
         &[],
     );
 
-    assert_eq!(rects.len(), 6, "2 mode + 4 ops buttons");
+    assert_eq!(rects.len(), 7, "3 mode + 4 ops buttons");
     assert!(
         !ops.copy && !ops.cut && !ops.paste && !ops.crop,
         "no clicks without interaction"
@@ -99,7 +99,7 @@ fn the_panel_rows_keep_the_group_gap_between_mode_and_ops() {
     // The rows: the mode row's buttons share a y; the ops row sits the
     // Shape panels' 12-pt step below (the group gap + egui's item spacing).
     let mode_y = rects[0].top();
-    let ops_y = rects[2].top();
+    let ops_y = rects[3].top();
     let gap = ops_y - (mode_y + TOOL_BUTTON_PT);
     assert!(
         (gap - SHAPE_GROUP_GAP - 3.0).abs() < 1.0,
@@ -121,7 +121,7 @@ fn disabled_ops_take_no_clicks_and_report_none() {
         &[],
     );
     assert!(!ops.copy && !ops.cut && !ops.paste && !ops.crop);
-    assert_eq!(rects.len(), 6, "the buttons still draw (grayed)");
+    assert_eq!(rects.len(), 7, "the buttons still draw (grayed)");
 }
 
 #[test]

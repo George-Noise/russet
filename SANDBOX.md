@@ -144,6 +144,14 @@ pkill -x Xvfb
     the file from the latest delivery zip (`unzip -p download/russet.zip
     russet/<path>`), which byte-compared to the tree at the last round. Watch the
     test count in every gate run — a silent drop means lost tests, not green.
+13. The xdotool DEB BUNDLE (/tmp/xdotool, rebuilt on every sandbox recycle) needs
+    THREE lib debs, not just libxdo3: `apt-get download xdotool libxdo3 libxtst6
+    libxi6` — xdotool links libXtst (the XTest extension it drives) and libXtst
+    pulls libXi (found 2026-11-23, the wand/fill probe: with only libxdo3
+    extracted every xdotool invocation died with «libXtst.so.6: cannot open
+    shared object file», the pointer never moved, and the probe's strokes
+    silently never happened — the screenshots showed the Xvfb-default pointer
+    parked at the screen center while everything else looked normal).
 
 
 ## What this unlocked, and what still belongs to the owner

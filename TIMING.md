@@ -56,3 +56,17 @@
 - Sleep chunk guidance: start with ~1/3 of the last measured duration, then
   poll in ~60–120 s chunks. Never poll more often than needed (every poll is a
   step).
+
+## 2026-11-23 — the wand/fill/Esc round (fresh sandbox: cold toolchain + cold target)
+
+| Command | Duration | Note |
+|---|---|---|
+| `cargo build` (cold target/, 9th tool + wand icons) | 1 m 41 s | the first full build after the clone |
+| `cargo test --profile gates` | 6.5 s | 346 tests |
+| `verify.sh` (clippy + tests + mcp + wasm + driver) | 20 s | ALL GATES GREEN |
+| `gui_wand_fill_check.sh` (3 runs: calibration + fixes) | ~45 s each | the wand/fill/Esc probe |
+
+Sandbox notes: the toolchain re-installed (rustup 1.99.1), `/tmp/xkbfix` rebuilt,
+`/tmp/xdotool` rebuilt — needs THREE lib debs now (libxtst6 + libxi6 joined libxdo3,
+SANDBOX.md trap 13: with only libxdo3 every xdotool call dies on libXtst and the
+probe's pointer never moves).

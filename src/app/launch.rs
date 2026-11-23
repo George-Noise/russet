@@ -37,7 +37,7 @@ use crate::tools::Tool;
 /// The valid `--tool` names, in the [`Tool`] enum's order. The `--tool`
 /// warnings print this list; the `--help` text (`main.rs`) stays in sync —
 /// pinned by a test.
-pub(crate) const TOOL_NAMES: [&str; 7] = [
+pub(crate) const TOOL_NAMES: [&str; 8] = [
     "pencil",
     "brush",
     "eraser",
@@ -45,6 +45,7 @@ pub(crate) const TOOL_NAMES: [&str; 7] = [
     "line",
     "shape",
     "text",
+    "fill",
 ];
 
 /// The parsed launch arguments of this process. Everything is `Option` —
@@ -321,6 +322,7 @@ pub(crate) fn parse_tool(value: &str) -> Option<Tool> {
         "line" => Some(Tool::Line),
         "shape" => Some(Tool::Shape),
         "text" => Some(Tool::Text),
+        "fill" => Some(Tool::Fill),
         _ => None,
     }
 }

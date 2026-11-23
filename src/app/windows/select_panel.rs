@@ -60,6 +60,7 @@ pub(super) fn select_settings_ui(
         for (mode, icon) in [
             (SelectMode::Rect, SelectIcon::Rect),
             (SelectMode::Lasso, SelectIcon::Lasso),
+            (SelectMode::Wand, SelectIcon::Wand),
         ] {
             let response = icon_button(
                 ui,

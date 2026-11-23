@@ -454,7 +454,10 @@ impl App {
                     ui.weak("Click the canvas to place text;");
                     ui.weak("font size is set in the Text window.");
                 }
-                Tool::Pencil | Tool::Brush | Tool::Eraser | Tool::Eyedropper => {}
+                // The Fill has no panel knobs (owner request 2026-11-23:
+                // the flood tolerance is the shared fixed FLOOD_TOLERANCE
+                // — a setting lands only if the owner asks).
+                Tool::Pencil | Tool::Brush | Tool::Eraser | Tool::Eyedropper | Tool::Fill => {}
             }
         });
         if let Some(response) = &shown {
