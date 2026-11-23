@@ -1,3 +1,26 @@
+### 2026-11-23 — `rustup target add` on the recycled sandbox failed twice before the wasm check could run
+
+- What happened: the persistence round's wasm check (`cargo check --target
+  wasm32-unknown-unknown`, needed because Cargo.toml gained the eframe
+  `persistence` feature) failed on a fresh recycled sandbox twice: first
+  E0463 "can't find crate for `std` — the wasm32 target may not be
+  installed" (the sandbox_check output had already shown rustup MISSING,
+  so the target was gone too), then the natural fix
+  `rustup target add wasm32-unknown-unknown` itself died with
+  "rustup could not choose a version of rustup to run" — with no default
+  toolchain, rustup cannot even run its own subcommands.
+- Expected vs actual: `sandbox_check.sh` flags the missing rustup, but the
+  restore recipe for the WASM TARGET was not written anywhere — the plain
+  `rustup target add` form (in every Rust doc on earth) is the wrong one
+  for this sandbox; `RUSTUP_TOOLCHAIN=1.99.1 rustup target add
+  wasm32-unknown-unknown` is the working form.
+- What it cost: one failed wasm-check run (~3 s, cheap) + one failed
+  target-add (~1 s) + the target download (~40 s). Minor, but the fix is
+  now in SANDBOX.md ("Rust:" bullet) so the next recycled sandbox skips it.
+- What could improve: the durable fact moved to its canonical home
+  (SANDBOX.md) in the same edit; nothing else — the trap is sandbox-local,
+  not repo-local.
+
 ### 2026-11-23 — Bare `cargo test --profile gates --features mcp` hung the tool call: the SANDBOX.md trap-10 stdin pipe, again
 
 - What happened: ran `cargo test --profile gates --features mcp` directly

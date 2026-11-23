@@ -927,4 +927,38 @@ impl eframe::App for App {
         self.mouse_side_dialog(&ctx);
         self.update_title(&ctx);
     }
+
+    // --- eframe `persistence` opt-outs (owner request 2026-11-23) ---
+    //
+    // The `persistence` feature is compiled in (Cargo.toml) so the storage
+    // plumbing exists — the startup data-dir creation, the `App::save` hook,
+    // the window-geometry and egui-memory switches — but BOTH automatic save
+    // channels are deliberately switched off: nothing is written, nothing is
+    // read back, and every launch stays fresh (SPEC §6 keeps "saving
+    // application settings" out of scope until a real settings decision).
+    // The verified framework behavior lives in the 2026-11-23 PROGRESS.md
+    // entry (what app.ron would hold: the "window" geometry + the whole egui
+    // Memory — every floating-window position, z-order and collapse state).
+
+    /// egui memory (ALL floating-window/dialog positions, z-orders, collapse
+    /// states, scroll offsets, the theme preference and the launch-time
+    /// input/interaction options) must NOT persist: windows would reopen
+    /// where they were closed and every launch would no longer be fresh —
+    /// the documented `Window::default_pos` / §3.11 placement behavior
+    /// (fresh session) depends on this. `false` keeps eframe from writing
+    /// (or loading) the "egui" key of app.ron — on web, the
+    /// `egui_memory_ron` localStorage entry.
+    fn persist_egui_memory(&self) -> bool {
+        false
+    }
+
+    /// The app's OWN storage hook: an explicit no-op for now. When the
+    /// first setting actually gets persisted (e.g. the Mouse4/Mouse5
+    /// opt-in — see `app/mouse_side.rs`), `epi::set_value` writes land
+    /// HERE and nowhere else; until then nothing may dirty the storage
+    /// (pinned by `app/tests.rs::save_writes_nothing`).
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {}
 }
+
+#[cfg(test)]
+mod tests;

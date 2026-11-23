@@ -4,9 +4,11 @@
 //! the user accepts the first-press modal, because not everyone likes
 //! that binding: the very first side press does not act, it asks. The
 //! choice is SESSION-ONLY (a field on `App`, never persisted — SPEC §6
-//! keeps "saving application settings" out of scope; the framework's
-//! `persistence` route is described in the PROGRESS.md entry of this
-//! round, not wired up).
+//! keeps "saving application settings" out of scope; eframe's
+//! `persistence` feature IS compiled in since 2026-11-23, but both its
+//! save channels are switched off — `persist_window: false` in main.rs,
+//! `persist_egui_memory` false + an empty `App::save` in app.rs — so
+//! nothing is written anywhere and this choice cannot leak to disk).
 //!
 //! Mapping (the browser back/forward convention the owner picked — "сделай
 //! как у других"): Mouse4 (back) = Undo, Mouse5 (forward) = Redo — one

@@ -120,6 +120,14 @@ fn main() -> eframe::Result {
         // own copy/cut/paste DOM events, which is the only correct channel
         // there; `handle_hotkeys` consumes both paths.
         clipboard_shortcuts: false,
+        // eframe `persistence` is compiled in (owner request 2026-11-23), but
+        // the native window's geometry must NOT be persisted: the OS window
+        // would reopen at its last position/size instead of the 1200x800
+        // default, and every launch would no longer be fresh (SPEC §3.11
+        // placement is self-managed). `false` keeps eframe from writing the
+        // "window" key of app.ron (or reading it) — the other save channel
+        // (egui memory) is switched off in `app.rs` (persist_egui_memory).
+        persist_window: false,
         ..Default::default()
     };
     eframe::run_native(

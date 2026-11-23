@@ -25,13 +25,35 @@ A single-window raster application **"Russet"**: a canvas with drawing via three
 
 | Crate | Version | Purpose |
 |---|---|---|
-| `eframe` (includes `egui`) | `0.37` | window (winit inside), event loop, all UI, rendering (glow — OpenGL, mipmap-capable) |
+| `eframe` (includes `egui`) | `0.37` | window (winit inside), event loop, all UI, rendering (glow — OpenGL, mipmap-capable); the `persistence` feature is compiled in (owner request 2026-11-23) with BOTH save channels deliberately off — see the persistence policy below |
 | `tiny-skia` | `0.11` | stroke rasterization into the `Pixmap` pixel buffer |
 | `image` | `0.25`, `default-features = false`, `features = ["png", "jpeg"]` | PNG and JPEG read/write |
 | `rfd` | `0.15` | open/save dialogs (native: synchronous; web: `AsyncFileDialog` only) |
 | `log` + `env_logger` (native) | `0.4` / `0.11` | logging (on web — `eframe::WebLogger`) |
 | `winit` (native, Unix) | `0.30.13`, feature `wayland-csd-adwaita` | the same crate eframe resolves (cargo unifies them); the feature switches the Wayland CSD frame from sctk's bare `FallbackFrame` (its `set_title` is a no-op, no double-click-to-maximize) to `AdwaitaFrame` — title text + double-click maximize on GNOME (owner-approved 2026-11-16) |
 | `wasm-bindgen-futures`, `web-sys` (web) | `0.4` / `0.3` | web entry-point plumbing |
+
+**Persistence policy — compiled in, saving NOTHING (owner request 2026-11-23).**
+eframe's `persistence` cargo feature is on so the storage plumbing exists ahead of a
+real settings decision (§6 keeps "saving application settings" out of scope), but every
+automatic save channel is deliberately disabled: `NativeOptions::persist_window = false`
+(main.rs) and `App::persist_egui_memory() -> false` + an empty `App::save` (app.rs).
+What the feature WOULD save with everything at its defaults (measured headlessly
+2026-11-23: eframe's 30-s autosave and the exit save both write the file; on web the
+same data lands in `localStorage` — key `egui_memory_ron` for the memory):
+- the key `"window"` — the OS window's normal geometry (position, size in points, scale
+  factor, maximized/fullscreen) under `persist_window`;
+- the key `"egui"` — the WHOLE egui `Memory` under `persist_egui_memory`: every
+  floating-window/dialog position + pivot + z-order (the `areas` map), collapse states,
+  per-widget resize/scroll state, the theme preference and the launch-time input
+  options (scroll speeds, click thresholds, modifier mappings);
+- anything `App::save` writes via `epi::set_value` (russet: nothing yet).
+With the opt-outs in place nothing is written at all — the pinned tests
+(`app/tests.rs::save_writes_nothing`, `app/tests.rs::persist_egui_memory_is_off`) force
+any future flip to be a deliberate settings decision. The feature's one unavoidable side
+effect: eframe creates the app data FOLDER at startup (Linux `~/.local/share/russet`,
+Windows `%APPDATA%\Russet\data`; app_id = the `run_native` title "Russet") — empty by
+design, no `app.ron` inside.
 
 Web build tool: **trunk** (installed once, §8). It is not a Cargo dependency.
 
@@ -50,10 +72,10 @@ rust-version = "1.95"
 # only renderer in egui 0.37 that supports TextureOptions::mipmap_mode (§3.4).
 eframe = { version = "0.37", default-features = false, features = [
   "glow",
-  "accesskit",
   "clipboard",
   "default_fonts",
   "links",
+  "persistence",
   "system_fonts",
   "wayland",
   "x11",

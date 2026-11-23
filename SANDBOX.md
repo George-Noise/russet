@@ -18,6 +18,10 @@ doubt; do not re-derive the steps below.
 - Rust: rustup has **no default toolchain** — `cargo`/`rustc` fail outside this repo
   with "rustup could not choose a version of rustc to run". Inside the repo
   `rust-toolchain.toml` pins 1.99.1 and rustup fetches it on the first cargo command.
+  The SAME trap hits `rustup target add wasm32-unknown-unknown` on a recycled sandbox
+  ("rustup could not choose a version of rustup to run" — the target subcommand needs a
+  chosen toolchain too): run it as `RUSTUP_TOOLCHAIN=1.99.1 rustup target add
+  wasm32-unknown-unknown` (caught 2026-11-23, the persistence round).
   `scripts/verify.sh` exports `PATH="$HOME/.cargo/bin:$PATH"` itself; for ad-hoc
   commands do the same.
 - `target/` persists with the project directory between sessions — builds stay warm;

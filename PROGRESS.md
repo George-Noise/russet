@@ -51,13 +51,16 @@
 | Extra: the History Tree rows go wordless for pencil, digitless for all (owner 2026-11-21) | done — gates + wasm + driver + new probe green, the icon dump and the tree screenshots looked at | the tree rows drop the node id EVERYWHERE ("pencil 7" → "pencil") and the PENCIL row draws the TOOL'S ICON — the same emblem the Tools button shows, from a SECOND, row-sized atlas (`tool_icons::TREE_ICON_PT` 12 pt, "по размеру заглавной буквы или чуть больше", the same `ensure` pass/key — a native small raster, not a downscaled 24 pt texture; the headless texture count 25 → 33); new tools join one row at a time; the digit removal EXPOSED a doubled kind word on crop rows ("crop crop …" — `CropInfo::summary` opens with "crop" itself, the id used to separate them) — the row now prints the summary alone; +4 tests (3 paint row-label/icon helpers in the new `paint/tests.rs`, 1 atlas row-size set); the new probe `scripts/gui_tree_icon_check.sh` PROBE PASS (two pencil drags: the rails' blue + the icon's warm-gold pixels on the screen's right side); V68 born |
 | Extra: the `--atlas-test` diagnostic — a 1 px speckle edge on every atlas picture (owner 2026-11-21) | done — gates + wasm + driver green, the flagged screenshot looked at | the owner sees a gap between the icon pictures' edges and their emblems and wants to SEE it before deciding: the new boolean flag `--atlas-test` (§3.12, no value; `apply_to` → `App::atlas_test` → `ensure(…, debug_border)`) repaints every raster's outermost pixel ring with a STATIC black-and-white speckle (`tool_icons::paint_debug_border` — a per-pixel coordinate hash, replayed byte-identically on every rebuild, so no animation) — exactly ONE PHYSICAL pixel thick at any scale (the ring lives in the raster: ppp and the icon size cannot stretch it), applied to all five icon sets AND the pipette cursor's source raster, painted OVER the emblem on purpose; +1 test (the ring is opaque black/white only, BOTH colors present, the interior byte-identical, the repaint deterministic); the new shot script `scripts/gui_atlas_test_shot.sh` PASS (364 adjacent pure-black/pure-white pairs on screen); the measured insets it exists to expose: the 24 pt emblems leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the diagonal drawing), the 12 pt tree icons ≤3 px; V69 born |
 | Extra: the History Tree row icons grow 12 → 16 pt, the row grows to fit (owner 2026-11-21) | done — gates + wasm + driver + probe green, the flagged before/after screenshots looked at | the rings made it visible: the first 12 pt row icons read «слишком маленькие — там ещё довольно много свободного места». The measured reality (ppp 1): row 15 px, backdrop 13, icon 12 — a mere +1 pt would fit WITHOUT growing the row, so the row grows too: `TREE_ICON_PT` 12 → 16 and `row_height = max(text line, TREE_ICON_PT + 4)` (tree_window.rs) — one height for every row (~15 → 20 pt; pitch 18 → 23 px measured), so the emblem becomes the row's tallest element and the backdrop/swatch/hit/scroll math all follow the one value; the probe's warm-gold count 18 → 42 (2.3× the emblem pixels on screen); the 16 px dump's insets: pencil 2/1/1/2, Text 2/4/2/3 (~80% filled); the dump test's third size now rides `TREE_ICON_PT` (it was pinned 12); the tree probe passes extra launch args through (`… russet --atlas-test` — how this round's evidence was shot); +0 new tests (the row-size test and the counts ride the constant); docs: SPEC §3.6 + §3.12 example, AGENTS tool_icons clause, paint.rs/tool_icons.rs docs, the probe's header; V70 born |
+| Extra: eframe `persistence` compiled in — saving deliberately NOTHING (owner 2026-11-23) | done — gates + wasm check + two headless storage probes green | the owner asked to enable the framework's persistence while saving as little as possible and to VERIFY what it writes: the feature is ON (Cargo.toml; the lock gains `ron`/`enumn`/`typeid` — three small pure-Rust crates), BOTH automatic channels OFF — `persist_window: false` (main.rs) and `App::persist_egui_memory() -> false` + an explicit empty `App::save` (app.rs, the future home of the first real persisted setting, e.g. the Mouse4/5 opt-in); the measured out-of-the-box content (what we just avoided): with the feature alone a 35-s headless session with a stroke wrote a 5 115-byte `app.ron` — the key `"window"` (OS-window geometry + scale factor) and the key `"egui"` (the WHOLE egui Memory: every floating-window position/pivot/z-order, collapse states, per-widget resize/scroll state, the theme preference, the input options); the shipped config: two 35-s sessions with strokes left the data dir EMPTY (only the startup-created folder remains — `~/.local/share/russet` / `%APPDATA%\Russet\data`, the feature's one unavoidable side effect); the restart probe shows the default layout unchanged; the web lane writes nothing to localStorage (the only writes are gated by the same two switches — eframe web source); +2 pinned tests (`app/tests.rs`: save_writes_nothing over a recording Storage, persist_egui_memory_is_off); docs: SPEC §1 persistence-policy paragraph, AGENTS.md quirk, mouse_side.rs doc; V74 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-23 (the
-mouse-side round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
-green on --all-targets (default + mcp), `cargo test --profile gates` 323
-default / 336 mcp green (+1 ignored), ALL GATES GREEN in 20 s; no wasm
-check per the economy rule (no web-facing paths touched); the new
-mouse-side GUI probe PASS (modal → Yes → Mouse4 undo → Mouse5 redo).
+persistence round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp), `cargo test --profile gates` 325
+default / 338 mcp green (+1 ignored), ALL GATES GREEN in 148 s (the gates
+lane rebuilt with the new eframe feature); wasm check green (Cargo.toml
+touched); the storage probes: with the opt-outs a 35-s session + restart
+writes NOTHING (empty data dir), with the feature alone it writes app.ron
+(window + egui Memory) — the round's evidence.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -76,6 +79,44 @@ mouse-side GUI probe PASS (modal → Yes → Mouse4 undo → Mouse5 redo).
 > PROGRESS-archive.md; the latest move: the 2026-11-21 "rows sit
 > back-to-back" Fix entry (during the mouse-side round's budget — the file
 > rode past ~200 lines; three entries stay in the Log).
+
+### 2026-11-23 — `Feat:` eframe `persistence` compiled in, BOTH save channels deliberately off — nothing is saved (owner request in chat)
+
+- What: the owner asked to enable the framework's persistence while saving as
+  little as possible and to verify what it actually writes. eframe 0.37's
+  `persistence` cargo feature is ON (Cargo.toml) so the storage plumbing exists
+  ahead of a real settings decision (SPEC §6 keeps "saving application settings"
+  out of scope); the two automatic save channels are OFF: `NativeOptions::
+  persist_window = false` (main.rs — the OS window keeps its 1200×800 builder
+  default every launch) and `App::persist_egui_memory() -> false` + an explicit
+  empty `App::save` (app.rs — the future home of the first persisted setting,
+  e.g. the Mouse4/5 opt-in). Nothing calls `epi::set_value`, so the storage's
+  dirty flag stays false and eframe's 30-s autosave + the exit save write
+  NOTHING. The measured out-of-the-box content this config avoids (feature on,
+  defaults elsewhere, 35-s headless session with a stroke): `app.ron` 5 115 bytes
+  — the key `"window"` (OS-window geometry + scale factor) + the key `"egui"`
+  (the WHOLE egui Memory: every floating-window position/pivot/z-order, collapse
+  states, per-widget resize/scroll state, the theme preference, the input
+  options). The feature's one unavoidable side effect: the startup-created data
+  FOLDER (`~/.local/share/russet` / `%APPDATA%\Russet\data`) — empty by design;
+  the web lane writes nothing to localStorage (its only writes ride the same two
+  switches — eframe web source).
+- Files: Cargo.toml (+`persistence`; the lock gains `ron`/`enumn`/`typeid`),
+  Cargo.lock, src/main.rs, src/app.rs (+2 trait methods, `#[cfg(test)] mod
+  tests;`), NEW src/app/tests.rs (2 pinned tests: save_writes_nothing over a
+  recording Storage double, persist_egui_memory_is_off), src/app/mouse_side.rs
+  (doc now points at the wired-but-idle storage), SPEC.md §1 (persistence-policy
+  paragraph + the feature list), AGENTS.md (the `default_pos` quirk line),
+  DEBTS-verification.md (V74).
+- Verified: `bash scripts/verify.sh` ALL GATES GREEN in 148 s (fmt, rules,
+  clippy ×2, test ×2 — 325 default / 338 mcp, +2); wasm check green (Cargo.toml
+  touched — the wasm lane compiles eframe/persistence too); the storage probes
+  headless under Xvfb: with the opt-outs two 35-s sessions (strokes drawn) left
+  the data dir EMPTY and the restart screenshot shows the default layout
+  unchanged.
+- Owner-checks: V74 (Windows: the data folder exists EMPTY, restart restores
+  nothing; web: no `egui_memory_ron` in localStorage).
+- **Commit title:** `Feat: compile eframe persistence with both save channels off; persist_window false, persist_egui_memory false and an empty App::save keep app.ron unwritten`
 
 ### 2026-11-23 — `Feat:` Mouse4/Mouse5 undo/redo behind a first-press opt-in modal (owner request in chat)
 

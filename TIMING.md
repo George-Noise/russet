@@ -23,6 +23,7 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-23 | detached gates-lane warm-up on the RECYCLED sandbox — rustup itself missing and reinstalled first (minimal, no default), then `cargo fetch` + `cargo check --profile gates` cold (1m 13s); the fetch also pulled the wasm toolchain pieces later | **≈ 2 min total** | the background log |
 | 2026-11-23 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets -- -D warnings` + `cargo test --profile gates --no-run`) on the FRESH GitHub clone — rustup + the pinned 1.99.1 toolchain installed first; the check's own first warm-up attempt silently no-op'd on the missing rustup (PROBLEMS.md 2026-11-23) and was restarted manually | **clippy 1m 32s ≈, test --no-run ≈ 1 min** | the warm-up log ≈ |
 | 2026-11-21 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets --features mcp` + `cargo test --profile gates --features mcp --no-run`): the whole lane COLD on the fresh GitHub clone — rustup + the pinned 1.99.1 toolchain installed first | **≈ 3 min total (clippy 1m 30s)** | the warm-up log's timestamps (started 07:29:25, finished 07:32:21) |
 | 2026-11-21 | `cargo check` (this round's quick loop — COLD dev-lane dep graph on the fresh clone) | **1m 20s** | cargo's print |
@@ -33,12 +34,12 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-23 | `bash scripts/verify.sh` (the persistence round's full gate — the gates lane rebuilt with the NEW eframe `persistence` feature: eframe/egui/egui-winit/serde + ron recompiled, then the whole gate) | **2m 28s** | `time`d exactly |
+| 2026-11-23 | `cargo check --target wasm32-unknown-unknown` (after the same feature change; wasm target had to be re-added to the fresh sandbox's toolchain first — the env-less `rustup target add` needs `RUSTUP_TOOLCHAIN=1.99.1` when no default toolchain exists) | **37 s** | `time`d exactly |
+| 2026-11-23 | `cargo build` (the dev GUI binary — the eframe `persistence` feature change rebuilt eframe/egui/egui-winit + ron + the crate) | **2m 01s** | `time`d exactly |
 | 2026-11-23 | `cargo build` (the dev GUI binary for the mouse-side probe; warm deps, the crate itself recompiled unoptimized) | **1m 32s** | `time`d exactly |
 | 2026-11-21 | `cargo build --features mcp` (the dev MCP binary for the driver; warm deps, the crate itself recompiled unoptimized) | **1m 35s** | cargo's print |
-| 2026-11-21 | `bash scripts/verify.sh` (the diameter-circle round's full gate — the gates lane warm from the detached warm-up) | **19.7 s** | time'd exactly |
 | 2026-11-21 | NOTE: THIS recycled sandbox KEPT the detached warm-up alive across tool calls (started in one call, finished ~3 min later, verified hot by the next call's targeted tests) — the 2026-11-20 NOTE below is per-sandbox; re-probe detached survival each session | — | the warm-up log |
-| 2026-11-20 | `bash scripts/verify.sh` (the V60-fixes round's full gate — rules + fmt + clippy ×2 + test ×2; warm deps) | **20 s** | the gate's own print |
-| 2026-11-20 | `cargo build --features mcp` (the dev MCP binary for the driver; warm deps) | **2 s** | cargo's print |
 | 2026-11-20 | NOTE: DETACHED `setsid` background processes do NOT survive between tool calls in THIS recycled sandbox — both the gates warm-up and a detached verify.sh died silently between commands; heavy commands must run SYNCHRONOUSLY here (the compiled fingerprints persist, so the sync re-run is hot) | — | observed twice |
 
 ## Reading the numbers

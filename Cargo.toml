@@ -8,11 +8,18 @@ rust-version = "1.95"
 # Renderer: default eframe features MINUS wgpu PLUS glow (OpenGL).
 # Rationale: no in-process Vulkan/D3D driver (~3-5x lower RAM), and glow is the
 # only renderer in egui 0.37 that supports TextureOptions::mipmap_mode.
+# `persistence` (owner request 2026-11-23) compiles in eframe's app-state
+# storage: the startup data-dir creation + the `App::save` hook + the
+# `persist_window`/`persist_egui_memory` switches (main.rs / app.rs). BOTH
+# automatic save channels are deliberately OFF there, so NOTHING is written
+# for now — the feature is wired up ahead of a real settings decision
+# (SPEC §6 keeps "saving application settings" out of scope).
 eframe = { version = "0.37", default-features = false, features = [
     "glow",
     "clipboard",
     "default_fonts",
     "links",
+    "persistence",
     "system_fonts",
     "wayland",
     "x11",
