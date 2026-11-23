@@ -83,6 +83,53 @@ round's evidence).
 > the settings round's budget — the file rode past ~200 lines; three entries
 > stay in the Log).
 
+### 2026-11-23 — `Add:` the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet (owner request in chat)
+
+- **What:** the owner reported dev-build fill slowness, asked for (1) the
+  optimization OPTIONS first (no implementation), (2) nanosecond measurements
+  in different cases, (3) a self-created log in the repo — the name from the
+  date+time down to the seconds, digits only, with the dev/release mode IN
+  the name and the sandbox specs inside, (4) the runs gated behind a special
+  flag outside the normal tests, (5) a lock so the AGENT cannot run it
+  without the owner's explicit permission. Delivered exactly that —
+  `src/app/fill_bench.rs` compiles ONLY under the `fill-bench` feature (the
+  mcp/diagnostics pattern), triggers on RUSSET_BENCH_FILL=1, refuses without
+  RUSSET_BENCH_ALLOWED=1 (exit 2, the message names the rule), writes
+  `benchmarks/fill_bench_<mode>_<YYYYMMDDHHMMSS>.log` (UTC, digits-only, the
+  mode in the name) with the machine specs (CPU/cores/RAM/kernel/rustc/git
+  HEAD) and min/median/mean/p95 nanosecond timings of the flood read
+  (`flood_pixels` + the click's own `pick_color` sampler) and the fill write
+  (the 1:1 mirror of `paint_flood_pixels`' src-over loop) over 10
+  deterministic (fixed-xorshift) canvases.
+- **Measurements** (this sandbox: 2 vCPU Xeon, 4 GB RAM; logs in
+  `benchmarks/`): dev full_click mean 2.65 ms (64x64), 376 ms (800x600),
+  1.72 s (1920x1080); release 248 µs / 50.1 ms / 238 ms — the gap ~7-10×;
+  per-pixel flood read ~727 ns/px dev, ~100 ns/px release; the write is only
+  ~7-8% of the click. The research file
+  `benchmarks/RESEARCH-fill-optimization.md` (in the repo, for re-verification
+  after any algorithm change) ranks the options: [profile.dev] opt-level=1 as
+  the immediate dev relief; then span/scanline flood (Wikipedia 2-8×, lodev
+  ~7×, imageproc and Krita use it) + a packed-u32 comparator without the
+  per-probe demultiply + marking unmatched pixels visited + run-ordered
+  output (no sort/dedup, direct span writes for the fill and the mask);
+  scratch-buffer reuse and a per-color comparison cache after; rejected:
+  rayon, SIMD-before-spans, 8-way. NO algorithm change implemented — waiting
+  for the owner's explicit go.
+- **Files:** `src/app/fill_bench.rs` (new), `src/app.rs` (the feature-gated
+  mod), `src/main.rs` (the pre-GUI call), `Cargo.toml` (`fill-bench = []`),
+  `scripts/verify.sh` (the clippy stage for the feature so it cannot rot),
+  `benchmarks/` (3 logs + the research file).
+- **Verified:** the refusal tested (RUSSET_BENCH_FILL=1 without the
+  permission → exit 2, the message printed); the dev suite ran twice (the
+  first log predates the rustc-lookup patch, rustc=unknown there), the
+  release suite ran once; the numbers are in the research table; the gates
+  run GREEN (the new clippy --features fill-bench stage included).
+- **Owner-checks:** V80 born (the bench's human pass — the owner will run
+  the release command on their machines and compare the logs). VERIFIED in
+  chat: V69 (the atlas sheets). Open: V80, V79, V78, V77, V76, V66 (X11),
+  V46 (X11); parked: V30, V8.
+- **Commit title:** `Add: the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet`
+
 ### 2026-11-23 — `Fix:` the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests (owner request in chat)
 
 - **What:** with at least one pixel selected a fill click whose seed lies
@@ -117,41 +164,4 @@ round's evidence).
   chat: V69 (the atlas sheets). Open: V79, V78, V77, V76, V66 (X11),
   V46 (X11); parked: V30, V8.
 - **Commit title:** `Fix: the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests`
-
-### 2026-11-23 — `Feat:` the flood threshold moves into the panels — ONE Tolerance slider (the Size block's look, in % for people) drives the wand AND the fill; F22 paid (owner request in chat)
-
-- **What:** the flood tolerance stopped being a fixed const: `ToolState::
-  flood_tolerance_pct` (0..=100, the startup 13 % — the percent form of the
-  old 32/255), converted per channel by `selection.rs::tolerance_from_percent`
-  (pct × 255 / 100; 13 % → 33). The panel block `tolerance_block_ui` mirrors
-  the Size slider's look (a label row, a 0..=100 slider, the number box with
-  a `%` suffix — the owner: «я бы выбрал не % но людям куда проще понимать
-  именно %») and shows in TWO places: the Select panel while the WAND mode
-  is active (between the mode row and the ops row) and the Fill panel
-  (its first knob). ONE value drives BOTH tools (the flood is one shared
-  method). `flood_pixels` takes the tolerance as a parameter now; the
-  wand's `wand_region` and the fill's `handle_fill_input` convert at call
-  time.
-- **Files:** `src/tools.rs` (the field + the const + the doc),
-  `src/selection.rs` (`tolerance_from_percent`, the `flood_pixels` signature),
-  `src/app/input.rs` + `src/app/selection.rs` (the conversion at the call
-  sites), `src/app/windows/settings_panel.rs` (`tolerance_block_ui` + the
-  Fill arm), `src/app/windows/select_panel.rs` (the wand-only row),
-  `src/selection/tests.rs` (+2: the 0 %/100 % flood gating, the mapping
-  contract), `src/app/windows/tests/{select_panel,settings_panel}.rs`
-  (+2: the wand-only presence, the Fill block's label/% suffix),
-  `scripts/gui_wand_fill_check.sh` (the 100 % pour-over step + the assert).
-- **Verified:** FULL gate ALL GATES GREEN (351 default / 364 mcp, clippy
-  `-D warnings`, wasm, driver); the probe PASS on the same binary — the
-  calibrated slider drag to the track's right sets 100 %, the next fill
-  pours over the blob (the blob box holds 0 white pixels — the white slits
-  flooded black), the wand panel shows the Tolerance row only in the wand
-  mode; the shots LOOKED AT (the Fill panel's slider at 13 %, the wand
-  panel's slider between the mode and ops rows).
-- **Owner-checks:** V77 born (the slider's human pass). VERIFIED by the
-  owner in chat the same day: V75, V74, V73, V72, V71, V70, V68, V67.
-  Open: V77, V76, V69, V66 (X11), V46 (X11); parked: V30, V8. Debts:
-  F22 PAID (the tolerance knob landed), F20, F18, F17, F16, F15, F14
-  newest-first in the files.
-- **Commit title:** `Feat: the flood threshold moves into the panels - ONE Tolerance slider (the Size block's look, in percent for people) drives the wand AND the fill - F22 paid`
 

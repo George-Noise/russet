@@ -82,6 +82,12 @@ pub(crate) mod launch;
 mod layers_window;
 #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
 mod mcp;
+// TEMPORARY fill/wand flood benchmark (owner request 2026-11-23): the same
+// feature pattern as `mcp` — the DEFAULT build compiles NONE of it, the
+// gates never run it, and at runtime it needs the owner's explicit
+// permission env (see the module doc for the rule).
+#[cfg(feature = "fill-bench")]
+pub mod fill_bench;
 mod menu;
 mod mouse_side;
 mod placement;

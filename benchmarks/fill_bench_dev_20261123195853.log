@@ -1,0 +1,21 @@
+russet fill/wand flood benchmark
+generated_utc=2026-11-23T19:58:53Z epoch_secs=1795463933
+mode=dev (debug_assertions=true; the dev build adds overflow checks and no inlining)
+os=linux family=unix kernel=5.10.134-013.15.kangaroo.al8.x86_64
+cpu_model=Intel(R) Xeon(R) Processor
+cpu_cores_available=2 mem_total_kb=4138564 kB
+rustc=rustc 1.99.1 (58cf8f9c3 2026-10-13) git_head=b9224b5397a29fd650528834cbb17edcef3cdc8c
+color_pipeline=premultiplied RGBA8 (tiny-skia); pick_color demultiplies per probe; the write is the src-over mix loop of App::paint_flood_pixels
+timer=Instant.elapsed().as_nanos(); per-case: warmup runs discarded, then min/median/mean/p95 over the measured runs; full_click_mean=flood_mean+write_mean
+
+solid_64x64_fill_all | 64x64 | seed=(32,32) | tol=0 | sel=none | 3/15 | flood 2305142 / 2411110 / 2376481 / 2452282 | write 237881 / 249048 / 249164 / 260874 | full_click_mean=2625645 | 4096 px | bbox=(0,0,64,64) | a tiny solid canvas: the flood covers everything
+solid_800x600_fill_all | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 345042052 / 347789564 / 347390163 / 348805304 | write 27089940 / 27425460 / 27417273 / 27632455 | full_click_mean=374807436 | 480000 px | bbox=(0,0,800,600) | a medium solid canvas: the flood covers everything
+solid_1920x1080_fill_all | 1920x1080 | seed=(960,540) | tol=0 | sel=none | 1/5 | flood 1590640908 / 1602025689 / 1604376420 / 1625687199 | write 117408872 / 119224871 / 118880940 / 120871195 | full_click_mean=1723257360 | 2073600 px | bbox=(0,0,1920,1080) | a full-HD solid canvas: the volume worst case (every pixel queued)
+noise_800x600_seed_center | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 20822 / 22956 / 28507 / 71925 | write 571 / 873 / 1337 / 3070 | full_click_mean=29844 | 4 px | bbox=(399,299,3,2) | a high-frequency 8-color noise: the flood is small, but every unmatched border pixel is re-sampled up to 4 times (the per-pixel BFS tax)
+stripes_800x600_seed_center | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 781134 / 831036 / 826172 / 846733 | write 68203 / 73853 / 74931 / 84154 | full_click_mean=901103 | 1200 px | bbox=(400,0,2,600) | 2px vertical stripes: many narrow runs — the shape a span algorithm would eat in one pass per stripe
+gradient_800x600_tol6_seed_mid | 800x600 | seed=(400,300) | tol=6 | sel=none | 2/10 | flood 693158 / 716256 / 712517 / 726399 | write 67767 / 73934 / 74618 / 83004 | full_click_mean=787135 | 1200 px | bbox=(380,285,40,30) | a smooth gradient with tolerance 6: long diagonal bands, like anti-aliased artwork
+blob_800x600_fill_inside | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 66844556 / 67091630 / 67066130 / 67400021 | write 5714485 / 5738954 / 5754293 / 5859221 | full_click_mean=72820423 | 101780 px | bbox=(220,120,360,360) | a black disc on white (the drawn-blob shape): the fill paints the disc
+hole_800x600_fill_inside | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 66809184 / 67107946 / 67073143 / 67260185 | write 5706077 / 5725335 / 5738086 / 5797683 | full_click_mean=72811229 | 101780 px | bbox=(220,120,360,360) | a transparent hole bounded by a white ring (the cut shape): the flood runs through transparent pixels — the crash scenario's shape
+all_masked_800x600_outside_sel | 800x600 | seed=(780,560) | tol=0 | sel=rect | 2/10 | flood 345645867 / 347000851 / 349159191 / 361167074 | write 2658942 / 2881704 / 2872104 / 3255413 | full_click_mean=352031295 | 480000 px | bbox=(300,280,30,30) | the flood covers the whole canvas while the selection masks it all out — the V78 crash path's cost (the write skips every pixel)
+dot_800x600_one_pixel | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 19687 / 24399 / 26481 / 62744 | write 381 / 605 / 1161 / 3073 | full_click_mean=27642 | 1 px | bbox=(400,300,1,1) | a single isolated pixel: the smallest possible fill
+wall_time_secs=21.0

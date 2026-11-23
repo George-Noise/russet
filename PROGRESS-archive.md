@@ -1,5 +1,42 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Feat:` the flood threshold moves into the panels — ONE Tolerance slider (the Size block's look, in % for people) drives the wand AND the fill; F22 paid (owner request in chat)
+
+- **What:** the flood tolerance stopped being a fixed const: `ToolState::
+  flood_tolerance_pct` (0..=100, the startup 13 % — the percent form of the
+  old 32/255), converted per channel by `selection.rs::tolerance_from_percent`
+  (pct × 255 / 100; 13 % → 33). The panel block `tolerance_block_ui` mirrors
+  the Size slider's look (a label row, a 0..=100 slider, the number box with
+  a `%` suffix — the owner: «я бы выбрал не % но людям куда проще понимать
+  именно %») and shows in TWO places: the Select panel while the WAND mode
+  is active (between the mode row and the ops row) and the Fill panel
+  (its first knob). ONE value drives BOTH tools (the flood is one shared
+  method). `flood_pixels` takes the tolerance as a parameter now; the
+  wand's `wand_region` and the fill's `handle_fill_input` convert at call
+  time.
+- **Files:** `src/tools.rs` (the field + the const + the doc),
+  `src/selection.rs` (`tolerance_from_percent`, the `flood_pixels` signature),
+  `src/app/input.rs` + `src/app/selection.rs` (the conversion at the call
+  sites), `src/app/windows/settings_panel.rs` (`tolerance_block_ui` + the
+  Fill arm), `src/app/windows/select_panel.rs` (the wand-only row),
+  `src/selection/tests.rs` (+2: the 0 %/100 % flood gating, the mapping
+  contract), `src/app/windows/tests/{select_panel,settings_panel}.rs`
+  (+2: the wand-only presence, the Fill block's label/% suffix),
+  `scripts/gui_wand_fill_check.sh` (the 100 % pour-over step + the assert).
+- **Verified:** FULL gate ALL GATES GREEN (351 default / 364 mcp, clippy
+  `-D warnings`, wasm, driver); the probe PASS on the same binary — the
+  calibrated slider drag to the track's right sets 100 %, the next fill
+  pours over the blob (the blob box holds 0 white pixels — the white slits
+  flooded black), the wand panel shows the Tolerance row only in the wand
+  mode; the shots LOOKED AT (the Fill panel's slider at 13 %, the wand
+  panel's slider between the mode and ops rows).
+- **Owner-checks:** V77 born (the slider's human pass). VERIFIED by the
+  owner in chat the same day: V75, V74, V73, V72, V71, V70, V68, V67.
+  Open: V77, V76, V69, V66 (X11), V46 (X11); parked: V30, V8. Debts:
+  F22 PAID (the tolerance knob landed), F20, F18, F17, F16, F15, F14
+  newest-first in the files.
+- **Commit title:** `Feat: the flood threshold moves into the panels - ONE Tolerance slider (the Size block's look, in percent for people) drives the wand AND the fill - F22 paid`
+
 ### 2026-11-23 — `Fix:` the fill click on a cut hole killed the app — the all-masked flood overflowed the written-bbox arithmetic; the neighbor paths tested (owner bug report in chat)
 
 - **What:** after a select + cut the hole displays WHITE (the canvas paints the

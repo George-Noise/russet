@@ -104,6 +104,15 @@ fn main() -> eframe::Result {
         print!("{USAGE}");
         return Ok(());
     }
+    // The fill/wand flood benchmark (owner request 2026-11-23): compiles
+    // ONLY under the `fill-bench` feature, refuses to run without the
+    // owner's explicit permission env (RUSSET_BENCH_ALLOWED=1), writes the
+    // benchmarks/ log and exits without a GUI. The normal gates never
+    // reach this.
+    #[cfg(feature = "fill-bench")]
+    if app::fill_bench::maybe_run() {
+        return Ok(());
+    }
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])

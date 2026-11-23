@@ -51,5 +51,10 @@ stage "cargo clippy --profile gates --features mcp --all-targets -- -D warnings"
     cargo clippy --profile gates --features mcp --all-targets -- -D warnings
 stage "cargo test --profile gates --features mcp" \
     cargo test --profile gates --features mcp
+# The fill/wand flood benchmark compiles under its feature so it cannot rot
+# (owner request 2026-11-23); it has no test surface (it refuses to run
+# without the owner's explicit permission), so clippy is the only stage.
+stage "cargo clippy --profile gates --features fill-bench --all-targets -- -D warnings" \
+    cargo clippy --profile gates --features fill-bench --all-targets -- -D warnings
 
 echo "verify.sh: ALL GATES GREEN ($(( $(date +%s) - T_TOTAL )) s total)"

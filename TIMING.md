@@ -86,3 +86,13 @@ probe's pointer never moves).
 | `cargo build` (cold target/) | 1 m 59 s | after the restore |
 | `verify.sh` | (see the round log) | the full gate before the delivery |
 | `gui_cut_fill_check.sh` | ~65 s | the extended probe: the outside-click step added, PASS |
+
+## 2026-11-23 — the fill-bench round (fifth recycle: full restore + rebuild)
+
+| Command | Duration | Note |
+|---|---|---|
+| restore + rustup + warm-up | ~6 min | background |
+| `cargo build --release --features fill-bench` | 5 m 45 s | cold release |
+| the dev bench suite | 21 s | 10 cases, the log in benchmarks/ |
+| the release bench suite | 2.9 s | the gap measurement |
+| `verify.sh` | (the round log) | the new fill-bench clippy stage |

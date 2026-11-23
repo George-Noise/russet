@@ -85,6 +85,16 @@ web-sys = { version = "0.3", features = [
 # serde_json in the dependency graph.
 mcp = ["dep:serde_json"]
 
+# TEMPORARY fill/wand flood benchmark (owner request 2026-11-23): compiles
+# `src/app/fill_bench.rs` — nanosecond measurements of the flood core +
+# the fill write on deterministic canvases, writing a log into
+# `benchmarks/`. The DEFAULT build compiles NONE of it and the gates never
+# run it; at runtime it needs RUSSET_BENCH_FILL=1 AND the owner's explicit
+# permission RUSSET_BENCH_ALLOWED=1 (the agent must not set it without the
+# owner's chat instruction — see the module doc):
+#   RUSSET_BENCH_FILL=1 RUSSET_BENCH_ALLOWED=1 cargo run --features fill-bench
+fill-bench = []
+
 # TEMPORARY cross-platform diagnostics (owner OK 2026-11-16, debts F12/F13):
 # compiles `[diagnostics]` stderr logging of (1) every wheel event — unit,
 # source, raw delta → notches → the applied pan step, the F12-B calibration
