@@ -345,3 +345,154 @@ fn a_stroke_without_a_selection_paints_everywhere() {
         "without a selection the press dot paints anywhere"
     );
 }
+
+#[test]
+fn a_fill_inside_the_cut_hole_survives_and_paints() {
+    // Owner bug report 2026-11-23: after a select + cut the hole's pixels
+    // are fully transparent, and a fill click inside it CRASHED the app.
+    // The exact steps: paint an opaque square, select it, cut, fill.
+    let mut app = App::new_headless();
+    if let Some(black) = tiny_skia::PremultipliedColorU8::from_rgba(0, 0, 0, 255) {
+        let layer = app.layers.active_mut().pixmap_mut();
+        let stride = layer.width() as usize;
+        for y in 10..30 {
+            for x in 10..30 {
+                layer.pixels_mut()[y as usize * stride + x as usize] = black;
+            }
+        }
+    }
+    app.selection.replace(
+        Some(Region::Rect {
+            a: pos2(10.0, 10.0),
+            b: pos2(30.0, 30.0),
+        }),
+        app.canvas.width,
+        app.canvas.height,
+    );
+    app.cut_selection();
+    assert_eq!(alpha_at(&app, 15, 15), 0, "the hole is fully transparent");
+
+    // The fill click inside the hole (the primary black): the same steps
+    // handle_fill_input runs.
+    let seed = (15i64, 15i64);
+    let color = app.tools.primary;
+    let clip = app.selection_clip();
+    let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
+    let pixels = {
+        let pm = app.layers.active().pixmap();
+        crate::selection::flood_pixels(pm.width(), pm.height(), seed, tolerance, |px, py| {
+            pick_color(pm, px as u32, py as u32)
+        })
+    };
+    assert!(!pixels.is_empty(), "the flood reaches the hole");
+    let bounds = app.paint_flood_pixels(&pixels, color, clip.as_ref());
+    let (x, y) = (bounds.0.max(0) as u32, bounds.1.max(0) as u32);
+    let (w, h) = (bounds.2 as u32, bounds.3 as u32);
+    app.composite_dirty(x, y, w, h);
+    app.sync_texture(x, y, w, h);
+    // The hole is now painted with the primary color (black, opaque).
+    assert_eq!(alpha_at(&app, 15, 15), 255, "the fill paints the hole");
+    let px = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(15, 15)
+        .expect("in bounds");
+    assert_eq!((px.red(), px.green(), px.blue()), (0, 0, 0));
+}
+
+#[test]
+fn a_translucent_fill_reaches_transparent_pixels() {
+    // The neighbor case the owner asked to test («протестируй другие
+    // возможные баги рядом»): a TRANSLUCENT fill over the fully
+    // transparent pixels a cut leaves. The blend runs in premultiplied
+    // space — egui's Color32 stores premultiplied bytes
+    // (from_rgba_unmultiplied(255, 0, 0, 128) gives r() = 128), so the
+    // half-alpha red lands as premultiplied (128, 0, 0, 128) and the
+    // `from_rgba` validation can never reject a real color. This locks
+    // the behavior in (a naive straight-space mix would double-blend it).
+    let mut app = App::new_headless();
+    app.tools.primary = eframe::egui::Color32::from_rgba_unmultiplied(255, 0, 0, 128);
+    // A fully transparent destination: the same state a cut leaves.
+    if let Some(clear) = tiny_skia::PremultipliedColorU8::from_rgba(0, 0, 0, 0) {
+        let layer = app.layers.active_mut().pixmap_mut();
+        let stride = layer.width() as usize;
+        for y in 5..25 {
+            for x in 5..25 {
+                layer.pixels_mut()[y as usize * stride + x as usize] = clear;
+            }
+        }
+    }
+    let seed = (15i64, 15i64);
+    let clip = app.selection_clip();
+    let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
+    let pixels = {
+        let pm = app.layers.active().pixmap();
+        crate::selection::flood_pixels(pm.width(), pm.height(), seed, tolerance, |px, py| {
+            pick_color(pm, px as u32, py as u32)
+        })
+    };
+    let bounds = app.paint_flood_pixels(&pixels, app.tools.primary, clip.as_ref());
+    assert!(bounds.2 > 0, "the flood wrote something");
+    let px = app
+        .layers
+        .active()
+        .pixmap()
+        .pixel(15, 15)
+        .expect("in bounds");
+    assert_eq!(
+        (px.red(), px.green(), px.blue(), px.alpha()),
+        (128, 0, 0, 128),
+        "half-alpha red lands premultiplied, not skipped"
+    );
+}
+
+#[test]
+fn a_flood_entirely_outside_the_selection_paints_nothing_and_survives() {
+    // THE OWNER'S CRASH: after a cut the selection stays around the hole,
+    // but the hole is INVISIBLE on screen (the canvas shows white beneath
+    // the transparent pixels — the same white as the background). A fill
+    // click that lands on the surrounding white floods EVERY white pixel,
+    // the mask skips them all, and the bbox arithmetic
+    // `i64::MIN - i64::MAX` used to overflow → debug panic → the app
+    // died. The fix: a zero written-bbox (the sentinel (0, 0, 0, 0)) and
+    // the caller's early return — nothing painted, nothing recorded.
+    let mut app = App::new_headless();
+    if let Some(black) = tiny_skia::PremultipliedColorU8::from_rgba(0, 0, 0, 255) {
+        let layer = app.layers.active_mut().pixmap_mut();
+        let stride = layer.width() as usize;
+        for y in 10..30 {
+            for x in 10..30 {
+                layer.pixels_mut()[y as usize * stride + x as usize] = black;
+            }
+        }
+    }
+    // The selection sits over the square; the fill click happens on the
+    // white background far away (e.g. (80, 80)) — the flood spreads over
+    // every white pixel, ALL of them outside the mask.
+    app.selection.replace(
+        Some(Region::Rect {
+            a: pos2(10.0, 10.0),
+            b: pos2(30.0, 30.0),
+        }),
+        app.canvas.width,
+        app.canvas.height,
+    );
+    let clip = app.selection_clip();
+    let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
+    let pixels = {
+        let pm = app.layers.active().pixmap();
+        crate::selection::flood_pixels(pm.width(), pm.height(), (80, 80), tolerance, |px, py| {
+            pick_color(pm, px as u32, py as u32)
+        })
+    };
+    assert!(!pixels.is_empty(), "the white flood is huge");
+    let bounds = app.paint_flood_pixels(&pixels, app.tools.primary, clip.as_ref());
+    assert_eq!(
+        bounds,
+        (0, 0, 0, 0),
+        "every pixel masked out — the sentinel zero bbox"
+    );
+    // The canvas is untouched: the square's pixels stay exactly as they were.
+    assert_eq!(alpha_at(&app, 15, 15), 255, "the square survived");
+}

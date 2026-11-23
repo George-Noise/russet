@@ -321,6 +321,12 @@ impl App {
             return;
         }
         let bounds = self.paint_flood_pixels(&pixels, color, clip.as_ref());
+        if bounds.2 == 0 || bounds.3 == 0 {
+            // Every flooded pixel was masked out by the selection: nothing
+            // changed, so no composite, no history node (the crash guard —
+            // owner bug report 2026-11-23).
+            return;
+        }
         let (x, y) = (bounds.0.max(0) as u32, bounds.1.max(0) as u32);
         let (w, h) = (bounds.2 as u32, bounds.3 as u32);
         self.composite_dirty(x, y, w, h);
@@ -335,7 +341,13 @@ impl App {
 
     /// Writes the flooded pixels: an src-over stamp of `color` per pixel,
     /// skipping the ones an active selection masks out. Returns the written
-    /// bbox `(x, y, w, h)` for the dirty-region sync.
+    /// bbox `(x, y, w, h)` for the dirty-region sync — `(0, 0, 0, 0)` when
+    /// NOT A SINGLE pixel was written (owner bug report 2026-11-23: a fill
+    /// click whose flood lies entirely outside the active selection — easy
+    /// after a cut, because the transparent hole displays white, the same
+    /// as the background — used to run the bbox arithmetic
+    /// `i64::MIN - i64::MAX` into an overflow panic that killed the app;
+    /// the caller now treats the zero bbox as "nothing painted").
     fn paint_flood_pixels(
         &mut self,
         pixels: &[(i64, i64)],
@@ -345,13 +357,19 @@ impl App {
         let (mut min_x, mut min_y) = (i64::MAX, i64::MAX);
         let (mut max_x, mut max_y) = (i64::MIN, i64::MIN);
         let (r, g, b, a) = (color.r(), color.g(), color.b(), color.a());
+        // egui's Color32 stores PREMULTIPLIED bytes (from_rgba_unmultiplied
+        // premultiplies at construction), and the pixmap buffer is
+        // premultiplied too — so the blend already runs in premultiplied
+        // space: `out = src + dst × (1 - src_a)`. The channels can never
+        // exceed the alpha (they are premultiplied BY CONSTRUCTION), so
+        // `from_rgba` below accepts every real color.
         let pm = self.layers.active_mut().pixmap_mut();
         let (stride, height) = (pm.width() as usize, pm.height() as i64);
         let dst = pm.pixels_mut();
-        // src-over of a FULL-COVERAGE pixel of `color`: the color's alpha
-        // blends once over the destination (the same mix the stroke
-        // rasterizer runs — a translucent fill composites, an opaque one
-        // replaces).
+        // src-over of a pixel of `color`: the premultiplied source is added
+        // to the destination scaled by the source's inverse alpha (the same
+        // blend the layer composite runs — a translucent fill composites,
+        // an opaque one replaces).
         let ia = 255 - a as u32;
         let mix = |s: u32, d: u8| (s + (d as u32 * ia + 127) / 255) as u8;
         for (x, y) in pixels {
@@ -376,6 +394,13 @@ impl App {
             min_y = min_y.min(*y);
             max_x = max_x.max(*x + 1);
             max_y = max_y.max(*y + 1);
+        }
+        if max_x == i64::MIN {
+            // Not a single pixel was written (everything masked out or off
+            // canvas): the sentinel zero bbox, so the caller skips the
+            // composite/sync/history — and the subtraction below can no
+            // longer see i64::MIN - i64::MAX.
+            return (0, 0, 0, 0);
         }
         (min_x, min_y, (max_x - min_x).max(0), (max_y - min_y).max(0))
     }

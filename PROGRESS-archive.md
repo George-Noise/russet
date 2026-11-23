@@ -1,5 +1,62 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Feat:` the magic wand selects like Paint.NET, the Fill tool pours through the SAME flood core (the icon LAST in the Tools grid), Esc deselects from any tool (owner request in chat)
+
+- **What:** three orders in one round. (1) The MAGIC WAND: Select gained a
+  third sub-mode (`SelectMode::Wand`) — a click floods the clicked color
+  band on the ACTIVE LAYER through the new shared `selection.rs::flood_pixels`
+  (4-neighborhood BFS against the SEED's color, per-channel tolerance
+  `FLOOD_TOLERANCE` = 32) and selects the reached pixels EXACTLY as a
+  `Region::Wand` (sorted pixel list; ants/ops/translate/clip ride the
+  existing mask machinery for free); it applies AT press, Shift/Alt still
+  add/subtract, a press inside the selection re-wands. (2) The FILL tool
+  (`Tool::Fill`, hotkey F, `--tool fill`): a click floods the same core and
+  paints the reached pixels src-over with the frozen primary (LMB) or
+  secondary (RMB), the selection confines it, one click = one
+  `ActionKind::Fill` node ("fill" tree row with its color chip); the icon
+  (a metal pail + a falling drop, the pipette's blue) joins the Tools grid
+  LAST («иконку заливки сделай самой последней чтобы не нарушить порядок
+  инструментов в окошке Tools»). (3) ESC deselects GLOBALLY
+  («На кнопку Esc нужно сделать убирание выделения») — the guards skip the
+  key while a select gesture/preview/Text entry is pending, so every local
+  consumer keeps its Esc.
+- **Files:** `src/selection.rs` (`Region::Wand` in all five match sites +
+  `flood_pixels` + `FLOOD_TOLERANCE`), `src/selection/tests.rs` (+4 tests:
+  the band flood, the seed-reference rule, the off-grid seed, the wand
+  region lifecycle), `src/tools.rs` (Fill + Wand + the unreachable stroke
+  arms), `src/app/input.rs` (F hotkey, the global Esc, `handle_fill_input`
+  + `paint_flood_pixels`), `src/app.rs` (the dispatch arm),
+  `src/app/selection.rs` (the wand routing + `wand_region` + the module
+  doc), `src/app/windows/select_panel.rs` (the wand row),
+  `src/app/windows.rs` (the button's mode mark), `src/history_tree.rs`
+  (ActionKind::Fill + the "fill" label), `src/app/tool_icons.rs` (TOOLS[9],
+  label "Fill (F)", SelectIcon::Wand, SELECT_ICONS[7], the atlas field/try_from
+  sizes), `src/app/tool_icons/draw/tools.rs` (draw_fill) +
+  `draw/panels.rs` (draw_select_wand) + the drawings tests (+2),
+  `src/app/launch.rs` + `src/main.rs` (`--tool fill` + USAGE) + the sync
+  test, `src/app/mcp/tools/queries.rs` (the tool_name arm), the probe
+  `scripts/gui_wand_fill_check.sh` (new), SANDBOX.md trap 13, TIMING.md.
+- **Verified:** FULL gate ALL GATES GREEN 20 s (346 default / 359 mcp,
+  clippy `-D warnings`, wasm, driver); the visual driver exit 0; the NEW
+  probe PASS on the same binary: six→eleven pencil strokes, F + one click
+  floods the white canvas BLACK (white 370561 → 60, the Tool Log "Fill",
+  the tree's fill row with its chip), Ctrl+Z restores, V + two Select-button
+  clicks reach the Wand mode (the panel row's wand mark active), one wand
+  click selects the background — the ants repaint the blob's contour
+  (1408 changed pixels vs the baseline), Esc drops it (0 changed). The
+  shots LOOKED AT: the 9-button grid with the bucket LAST, the wand mark
+  in the mode row, the ants. Probe findings recorded: the xdotool bundle
+  needs libxtst6+libxi6 (SANDBOX.md trap 13); a press+release in ONE frame
+  never applies a Rect/Lasso drag (an xdotool instant click) — the wand is
+  immune by design (press-time apply); three button clicks wrap the mode
+  cycle back to Rect (V pre-activates).
+- **Owner-checks:** V76 born (the wand/fill/Esc human pass). Open: V76,
+  V75, V74, V73, V72, V71, V70, V69, V68, V67, V66 (X11), V46 (X11);
+  parked: V30, V8. Debts: F22 born (the flood tolerance is a fixed const —
+  Paint.NET's slider is NOT implemented; a knob lands only on the owner's
+  word), F20, F18, F17, F16, F15, F14 newest-first in the files.
+- **Commit title:** `Feat: the magic wand selects a flooded color band (Paint.NET-style, Region::Wand) - the Fill tool pours through the same flood core with its icon LAST in the Tools grid - Esc deselects from any tool`
+
 ### 2026-11-23 — `Fix:` translucent brush strokes no longer darken at the joints — brush/eraser paint through a wet stroke layer (owner bug report in chat)
 
 - **What:** the owner's report: with a semi-transparent brush color the

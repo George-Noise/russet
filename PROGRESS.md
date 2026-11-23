@@ -83,6 +83,40 @@ round's evidence).
 > the settings round's budget — the file rode past ~200 lines; three entries
 > stay in the Log).
 
+### 2026-11-23 — `Fix:` the fill click on a cut hole killed the app — the all-masked flood overflowed the written-bbox arithmetic; the neighbor paths tested (owner bug report in chat)
+
+- **What:** after a select + cut the hole displays WHITE (the canvas paints the
+  background beneath transparent pixels), so a fill click aimed at the hole
+  can land on the surrounding background; the selection stays active, the
+  flood captures every background pixel, the mask skips ALL of them, and
+  `paint_flood_pixels` computed the bbox from the untouched
+  `i64::MIN/i64::MAX` sentinels — `i64::MIN - i64::MAX` overflowed →
+  debug `cargo run` died. The fix: a zero written-bbox sentinel `(0,0,0,0)`
+  + the caller's early return — no composite, no sync, NO history node
+  (an undo after such a click undoes the CUT, not a phantom fill).
+- **Neighbors tested** («протестируй другие возможные баги рядом»): the fill
+  inside the hole paints (headless + GUI), the wand click on the hole
+  selects (GUI), a translucent fill reaches transparent pixels — and the
+  investigation LOCKED the blend's space: egui's `Color32` stores
+  PREMULTIPLIED bytes (`from_rgba_unmultiplied(255,0,0,128)` gives
+  `r() == 128`), so the per-pixel src-over already blends premultiplied and
+  `from_rgba` can never reject a real color — a test pins it.
+- **Files:** `src/app/input.rs` (the guard + the early return + the premul
+  comment), `src/app/input/tests.rs` (+3: the in-hole fill paints, the
+  all-outside flood survives with a zero bbox, the translucent-over-
+  transparent lock), `scripts/gui_cut_fill_check.sh` (the new probe: the
+  blob → rect select → the ops-row Cut → the fill inside the hole → the
+  wand on the hole, the process-alive checks, the pixel asserts).
+- **Verified:** the overflow repro `should_panic` → the fixed code passes;
+  7 input tests + the FULL gate ALL GATES GREEN; the GUI probe PASS on the
+  fixed binary (the cut emptied the blob — 0 black in the box, the fill
+  inside the hole painted 5789 black, the wand click survived, the process
+  alive through both crash points); the shots LOOKED AT.
+- **Owner-checks:** V78 born (the fix's human pass). VERIFIED in chat:
+  V69 (the atlas sheets). Open: V78, V77, V76, V66 (X11), V46 (X11);
+  parked: V30, V8.
+- **Commit title:** `Fix: the fill click on a cut hole killed the app - the all-masked flood overflowed the written-bbox arithmetic; the neighbor paths tested`
+
 ### 2026-11-23 — `Feat:` the flood threshold moves into the panels — ONE Tolerance slider (the Size block's look, in % for people) drives the wand AND the fill; F22 paid (owner request in chat)
 
 - **What:** the flood tolerance stopped being a fixed const: `ToolState::
@@ -119,61 +153,4 @@ round's evidence).
   F22 PAID (the tolerance knob landed), F20, F18, F17, F16, F15, F14
   newest-first in the files.
 - **Commit title:** `Feat: the flood threshold moves into the panels - ONE Tolerance slider (the Size block's look, in percent for people) drives the wand AND the fill - F22 paid`
-
-### 2026-11-23 — `Feat:` the magic wand selects like Paint.NET, the Fill tool pours through the SAME flood core (the icon LAST in the Tools grid), Esc deselects from any tool (owner request in chat)
-
-- **What:** three orders in one round. (1) The MAGIC WAND: Select gained a
-  third sub-mode (`SelectMode::Wand`) — a click floods the clicked color
-  band on the ACTIVE LAYER through the new shared `selection.rs::flood_pixels`
-  (4-neighborhood BFS against the SEED's color, per-channel tolerance
-  `FLOOD_TOLERANCE` = 32) and selects the reached pixels EXACTLY as a
-  `Region::Wand` (sorted pixel list; ants/ops/translate/clip ride the
-  existing mask machinery for free); it applies AT press, Shift/Alt still
-  add/subtract, a press inside the selection re-wands. (2) The FILL tool
-  (`Tool::Fill`, hotkey F, `--tool fill`): a click floods the same core and
-  paints the reached pixels src-over with the frozen primary (LMB) or
-  secondary (RMB), the selection confines it, one click = one
-  `ActionKind::Fill` node ("fill" tree row with its color chip); the icon
-  (a metal pail + a falling drop, the pipette's blue) joins the Tools grid
-  LAST («иконку заливки сделай самой последней чтобы не нарушить порядок
-  инструментов в окошке Tools»). (3) ESC deselects GLOBALLY
-  («На кнопку Esc нужно сделать убирание выделения») — the guards skip the
-  key while a select gesture/preview/Text entry is pending, so every local
-  consumer keeps its Esc.
-- **Files:** `src/selection.rs` (`Region::Wand` in all five match sites +
-  `flood_pixels` + `FLOOD_TOLERANCE`), `src/selection/tests.rs` (+4 tests:
-  the band flood, the seed-reference rule, the off-grid seed, the wand
-  region lifecycle), `src/tools.rs` (Fill + Wand + the unreachable stroke
-  arms), `src/app/input.rs` (F hotkey, the global Esc, `handle_fill_input`
-  + `paint_flood_pixels`), `src/app.rs` (the dispatch arm),
-  `src/app/selection.rs` (the wand routing + `wand_region` + the module
-  doc), `src/app/windows/select_panel.rs` (the wand row),
-  `src/app/windows.rs` (the button's mode mark), `src/history_tree.rs`
-  (ActionKind::Fill + the "fill" label), `src/app/tool_icons.rs` (TOOLS[9],
-  label "Fill (F)", SelectIcon::Wand, SELECT_ICONS[7], the atlas field/try_from
-  sizes), `src/app/tool_icons/draw/tools.rs` (draw_fill) +
-  `draw/panels.rs` (draw_select_wand) + the drawings tests (+2),
-  `src/app/launch.rs` + `src/main.rs` (`--tool fill` + USAGE) + the sync
-  test, `src/app/mcp/tools/queries.rs` (the tool_name arm), the probe
-  `scripts/gui_wand_fill_check.sh` (new), SANDBOX.md trap 13, TIMING.md.
-- **Verified:** FULL gate ALL GATES GREEN 20 s (346 default / 359 mcp,
-  clippy `-D warnings`, wasm, driver); the visual driver exit 0; the NEW
-  probe PASS on the same binary: six→eleven pencil strokes, F + one click
-  floods the white canvas BLACK (white 370561 → 60, the Tool Log "Fill",
-  the tree's fill row with its chip), Ctrl+Z restores, V + two Select-button
-  clicks reach the Wand mode (the panel row's wand mark active), one wand
-  click selects the background — the ants repaint the blob's contour
-  (1408 changed pixels vs the baseline), Esc drops it (0 changed). The
-  shots LOOKED AT: the 9-button grid with the bucket LAST, the wand mark
-  in the mode row, the ants. Probe findings recorded: the xdotool bundle
-  needs libxtst6+libxi6 (SANDBOX.md trap 13); a press+release in ONE frame
-  never applies a Rect/Lasso drag (an xdotool instant click) — the wand is
-  immune by design (press-time apply); three button clicks wrap the mode
-  cycle back to Rect (V pre-activates).
-- **Owner-checks:** V76 born (the wand/fill/Esc human pass). Open: V76,
-  V75, V74, V73, V72, V71, V70, V69, V68, V67, V66 (X11), V46 (X11);
-  parked: V30, V8. Debts: F22 born (the flood tolerance is a fixed const —
-  Paint.NET's slider is NOT implemented; a knob lands only on the owner's
-  word), F20, F18, F17, F16, F15, F14 newest-first in the files.
-- **Commit title:** `Feat: the magic wand selects a flooded color band (Paint.NET-style, Region::Wand) - the Fill tool pours through the same flood core with its icon LAST in the Tools grid - Esc deselects from any tool`
 
