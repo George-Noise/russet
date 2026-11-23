@@ -83,6 +83,25 @@ round's evidence).
 > the settings round's budget — the file rode past ~200 lines; three entries
 > stay in the Log).
 
+### 2026-11-23 — `Docs:` the owner keeps dev slow on purpose (the early-warning sensor), rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change (owner request in chat)
+
+- **What:** the owner's follow-up decisions in chat. (1) The dev build is NOT
+  to be made faster — ON PURPOSE: dev slowness is the early-warning sensor for
+  algorithmic symptoms (it is exactly how the fill slowness was noticed), so
+  research option 7 (`[profile.dev] opt-level = 1`) is REJECTED;
+  `benchmarks/RESEARCH-fill-optimization.md` records the rejection and
+  reorders the plan: the span/scanline rewrite + the packed-color comparator +
+  marking unmatched pixels + span-driven writes (options 1+2+3+6) is the
+  starting point, scratch buffers / the comparison cache after. (2) The owner
+  asked for a plain-language explanation of the combined effect of 1+2+3+6 and
+  for the benchmark's commit title (both delivered in chat; the title was
+  already in the previous PROGRESS entry). No code changed in this round.
+- **Files:** `benchmarks/RESEARCH-fill-optimization.md` (the rejection + the
+  reordered plan), `AGENTS.md` (the dev-stays-slow directive).
+- **Owner-checks:** none born (no code, no behavior). Open: V80, V79, V78,
+  V77, V76, V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Docs: the owner keeps dev slow on purpose (the early-warning sensor) and rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change`
+
 ### 2026-11-23 — `Add:` the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet (owner request in chat)
 
 - **What:** the owner reported dev-build fill slowness, asked for (1) the
