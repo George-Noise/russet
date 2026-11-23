@@ -52,15 +52,17 @@
 | Extra: the `--atlas-test` diagnostic — a 1 px speckle edge on every atlas picture (owner 2026-11-21) | done — gates + wasm + driver green, the flagged screenshot looked at | the owner sees a gap between the icon pictures' edges and their emblems and wants to SEE it before deciding: the new boolean flag `--atlas-test` (§3.12, no value; `apply_to` → `App::atlas_test` → `ensure(…, debug_border)`) repaints every raster's outermost pixel ring with a STATIC black-and-white speckle (`tool_icons::paint_debug_border` — a per-pixel coordinate hash, replayed byte-identically on every rebuild, so no animation) — exactly ONE PHYSICAL pixel thick at any scale (the ring lives in the raster: ppp and the icon size cannot stretch it), applied to all five icon sets AND the pipette cursor's source raster, painted OVER the emblem on purpose; +1 test (the ring is opaque black/white only, BOTH colors present, the interior byte-identical, the repaint deterministic); the new shot script `scripts/gui_atlas_test_shot.sh` PASS (364 adjacent pure-black/pure-white pairs on screen); the measured insets it exists to expose: the 24 pt emblems leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the diagonal drawing), the 12 pt tree icons ≤3 px; V69 born |
 | Extra: the History Tree row icons grow 12 → 16 pt, the row grows to fit (owner 2026-11-21) | done — gates + wasm + driver + probe green, the flagged before/after screenshots looked at | the rings made it visible: the first 12 pt row icons read «слишком маленькие — там ещё довольно много свободного места». The measured reality (ppp 1): row 15 px, backdrop 13, icon 12 — a mere +1 pt would fit WITHOUT growing the row, so the row grows too: `TREE_ICON_PT` 12 → 16 and `row_height = max(text line, TREE_ICON_PT + 4)` (tree_window.rs) — one height for every row (~15 → 20 pt; pitch 18 → 23 px measured), so the emblem becomes the row's tallest element and the backdrop/swatch/hit/scroll math all follow the one value; the probe's warm-gold count 18 → 42 (2.3× the emblem pixels on screen); the 16 px dump's insets: pencil 2/1/1/2, Text 2/4/2/3 (~80% filled); the dump test's third size now rides `TREE_ICON_PT` (it was pinned 12); the tree probe passes extra launch args through (`… russet --atlas-test` — how this round's evidence was shot); +0 new tests (the row-size test and the counts ride the constant); docs: SPEC §3.6 + §3.12 example, AGENTS tool_icons clause, paint.rs/tool_icons.rs docs, the probe's header; V70 born |
 | Extra: eframe `persistence` compiled in — saving deliberately NOTHING (owner 2026-11-23) | done — gates + wasm check + two headless storage probes green | the owner asked to enable the framework's persistence while saving as little as possible and to VERIFY what it writes: the feature is ON (Cargo.toml; the lock gains `ron`/`enumn`/`typeid` — three small pure-Rust crates), BOTH automatic channels OFF — `persist_window: false` (main.rs) and `App::persist_egui_memory() -> false` + an explicit empty `App::save` (app.rs, the future home of the first real persisted setting, e.g. the Mouse4/5 opt-in); the measured out-of-the-box content (what we just avoided): with the feature alone a 35-s headless session with a stroke wrote a 5 115-byte `app.ron` — the key `"window"` (OS-window geometry + scale factor) and the key `"egui"` (the WHOLE egui Memory: every floating-window position/pivot/z-order, collapse states, per-widget resize/scroll state, the theme preference, the input options); the shipped config: two 35-s sessions with strokes left the data dir EMPTY (only the startup-created folder remains — `~/.local/share/russet` / `%APPDATA%\Russet\data`, the feature's one unavoidable side effect); the restart probe shows the default layout unchanged; the web lane writes nothing to localStorage (the only writes are gated by the same two switches — eframe web source); +2 pinned tests (`app/tests.rs`: save_writes_nothing over a recording Storage, persist_egui_memory_is_off); docs: SPEC §1 persistence-policy paragraph, AGENTS.md quirk, mouse_side.rs doc; V74 born |
+| Extra: only the Mouse4/Mouse5 choice persists + the Settings window (owner 2026-11-23) | done — gates + driver + the NEW storage probe green | the owner's two orders: «только Mouse4/Mouse5 выбор сохранялся» and a Settings item in the top panel opening a settings window with the choices described, the ONE dropdown with three options (спросить / использовать / не использовать — the wording ours, the meaning his). The mode is now the THREE-way persisted `MouseSideMode` (Ask = the startup default, Always, Never): the modal's Yes/No settle it PERMANENTLY (Yes → Always, No → Never), the ✕ still decides nothing, the dropdown re-opens the question at any time and closes an open modal when leaving Ask; a settled choice lands in the Tool Log. The NEW menu-bar menu **Settings** (after Theme, before Help — Help stays LAST, §3.1) carries ONE item "Settings…" opening the Settings window (SPEC §3.14, the About-window pattern: centered, non-resizable, ✕ + Close close it) — the strong setting label, the ComboBox dropdown (Ask every session / Use for Undo / Redo / Don't use), the CURRENT choice's live description + "The choice is saved between sessions."; new child module `app/settings_window.rs`. The storage (§1 policy): `App::save` writes EXACTLY ONE key `settings/mouse_side_buttons` = the plain string "always"/"never" (no serde — eframe does not re-export it; the zero-dependency hand encoding); choosing Ask back REMOVES the key and only when present (eframe's `remove_string` dirties the file unconditionally, `set_string` only on a value change), so an undecided user keeps a byte-empty storage — NO app.ron at all; `persist_window`/`persist_egui_memory` stay OFF; a missing/corrupt value loads as Ask; eframe calls `save` on its 30-s autosave (which fires from a FRAME — an idle app never saves) and at exit. +15 tests (mouse_side 12→21 split by topic into tests/{machine,persistence,app_routing}.rs per the 300-line guard; NEW app/settings_window/tests.rs ×3 — render + hidden + the log-once; app/tests.rs 2→5 — the save-hook writes exactly the one key, the Ask reset removes it, the startup load applies it); the NEW probe `scripts/gui_settings_check.sh` PASS (A: Yes → the autosave + the exit save write exactly one key "always"; B: restart undoes without re-asking; C: No → "never"; D: both buttons inert on Never; E: an untouched AND an unanswered-killed session write NOTHING; F: the Settings window opens); the visual driver ALL SCENARIOS GREEN; docs: SPEC §1/§3.1/§3.9/§3.14, AGENTS.md (quirk + module map), Cargo.toml comment; V75 born, V73 amended |
 
 **Verification stamp:** FULL gate re-verified 2026-11-23 (the
-persistence round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
-green on --all-targets (default + mcp), `cargo test --profile gates` 325
-default / 338 mcp green (+1 ignored), ALL GATES GREEN in 148 s (the gates
-lane rebuilt with the new eframe feature); wasm check green (Cargo.toml
-touched); the storage probes: with the opt-outs a 35-s session + restart
-writes NOTHING (empty data dir), with the feature alone it writes app.ron
-(window + egui Memory) — the round's evidence.
+settings round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp), `cargo test --profile gates` 340
+default / 353 mcp green (+1 ignored, +15 tests this round), ALL GATES
+GREEN in 24 s (hot lane); NO wasm check — no web-facing code touched
+(the AGENTS.md wasm-check economy rule); the visual driver ALL SCENARIOS
+GREEN (15 checks, the mcp binary) and the NEW storage probe
+`scripts/gui_settings_check.sh` PASS (six headless sessions — the
+round's evidence).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -75,10 +77,64 @@ writes NOTHING (empty data dir), with the feature alone it writes app.ron
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
-> under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the 2026-11-21 "rows sit
-> back-to-back" Fix entry (during the mouse-side round's budget — the file
-> rode past ~200 lines; three entries stay in the Log).
+> under which round's budget, 2026-11-18 → 2026-11-23) lives in
+> PROGRESS-archive.md; the latest move: the 2026-11-21 "the History Tree's
+> brush and eraser rows draw their icons like the pencil" Feat entry (during
+> the settings round's budget — the file rode past ~200 lines; three entries
+> stay in the Log).
+
+### 2026-11-23 — `Feat:` only the Mouse4/Mouse5 choice persists + the Settings window opens from a new menu-bar menu (owner request in chat)
+
+- **What:** two orders in one round: «только Mouse4/Mouse5 выбор
+  сохранялся» and a Settings item in the top panel opening a window with
+  the settings described, ONE dropdown, three options (спросить /
+  использовать / не использовать — the meaning his, the wording ours).
+  (1) The session-only `Option<Choice>` became the THREE-way persisted
+  `MouseSideMode` (Ask = the startup default / Always / Never): the
+  modal's Yes/No now settle the choice PERMANENTLY, the ✕ still decides
+  nothing, and the Settings dropdown re-opens the question at any time
+  (leaving Ask closes an open modal; a settled choice logs to the Tool
+  Log). (2) The new **Settings** menu (§3.1: after Theme, before Help —
+  Help stays LAST) carries one item "Settings…" opening the Settings
+  window (§3.14, NEW `app/settings_window.rs`, the About-window pattern:
+  centered on every open, ✕ + Close close it) — the strong setting
+  label, the ComboBox (Ask every session / Use for Undo / Redo / Don't
+  use) and the CURRENT choice's live description + "The choice is saved
+  between sessions." (3) The storage (§1 policy): `App::save` writes
+  EXACTLY ONE key `settings/mouse_side_buttons` = the plain string
+  "always"/"never" (NO serde — eframe does not re-export it; the
+  zero-dependency hand encoding); Ask REMOVES the key and only when
+  present (eframe's `remove_string` dirties the file unconditionally
+  while `set_string` dirties only on a value change), so an undecided
+  user keeps a byte-empty storage — NO app.ron at all; the automatic
+  channels stay OFF; a missing/corrupt value loads as Ask; the 30-s
+  autosave fires from a FRAME (an idle app never saves) and the exit
+  save always runs on a graceful quit.
+- **Files:** `src/app/mouse_side.rs` (+ its tests split by topic into
+  `tests/{machine,persistence,app_routing}.rs` — the 300-line guard),
+  NEW `src/app/settings_window.rs` (+ `tests/`), `src/app.rs` (the field,
+  the frame-flow call, `App::save` persist, `new_with` storage load),
+  `src/app/menu.rs`, `src/app/tests.rs`, `Cargo.toml` (comment),
+  SPEC §1/§3.1/§3.9/§3.14, AGENTS.md (the persistence quirk + the module
+  map), NEW `scripts/gui_settings_check.sh`.
+- **Verified:** FULL gate ALL GATES GREEN in 24 s (fmt, rules, clippy ×2,
+  test ×2 — 340 default / 353 mcp, +15 tests); the visual driver ALL
+  SCENARIOS GREEN (15 checks, the mcp binary); the storage probe
+  `gui_settings_check.sh` PASS (six headless sessions: A Yes → exactly
+  one key "always" via BOTH the autosave and the exit save; B restart
+  undoes without re-asking; C No → "never"; D both buttons inert on
+  Never; E an untouched AND an unanswered-killed session write NOTHING;
+  F the Settings window opens); NO wasm check — no web-facing code
+  touched (the AGENTS.md economy rule). The dropdown's own popup could
+  not be driven by synthetic xdotool clicks (the palette's popup opens
+  fine on the SAME binary) — its change path is pinned by the headless
+  tests and rides V75.
+- **Owner-checks:** V75 born (Windows `cargo run`: the first Mouse4 press
+  asks, Yes/No persist across restarts, the Settings menu opens the
+  window, the dropdown's three choices switch live, the Tool Log lines;
+  web: one localStorage entry after a choice, none without). V73 amended
+  (the choice persists now — the restart-resets clause replaced).
+- **Commit title:** `Feat: the Mouse4/Mouse5 choice persists as the ONE saved setting (a plain string key that Ask removes for a zero-write default) and the Settings menu opens the settings window with the three-choice dropdown`
 
 ### 2026-11-23 — `Feat:` eframe `persistence` compiled in, BOTH save channels deliberately off — nothing is saved (owner request in chat)
 
@@ -150,76 +206,3 @@ writes NOTHING (empty data dir), with the feature alone it writes app.ron
 - **Owner-checks:** V73 (the real-mouse pass on Windows, incl. the ✕
   re-ask behavior).
 - **Commit title:** `Feat: Mouse4/Mouse5 undo/redo opt-in - the first side press opens a yes/no modal, the session-only choice routes Mouse4 to undo and Mouse5 to redo, presses stay inert while unanswered, declined or mid-gesture`
-
-### 2026-11-23 — `Fix:` translucent brush strokes no longer darken at the joints — brush/eraser paint through a wet stroke layer (owner bug report in chat)
-
-- **What:** the owner's report: with a semi-transparent brush color the
-  joint circles turn less transparent («полупрозрачный цвет накладывает
-  отрезок на отрезок и в стыках отрезков кружочек становится менее
-  прозрачным»). Root cause: each frame stroked its smooth pieces onto the
-  layer directly — the next frame's start cap (and the press dot) sat on
-  the previous frame's end cap, and premultiplied source-over is not
-  idempotent, so the alpha stacked at every overlap (measured: 61/255 per
-  channel darker at the joint). Fix: brush/eraser gestures paint through
-  the WET STROKE LAYER `tools/wet.rs::StrokeWet` — the whole gesture's
-  coverage accumulates in a canvas-sized full-alpha scratch (opaque
-  source-over = a coverage union), and the layer is recomposited per
-  changed region from the gesture-start base with the stroke's alpha
-  applied ONCE (the eraser destination-outs by the coverage once — no
-  more over-erase at self-overlaps either); idempotent, history/undo
-  untouched, the selection clip rides the composite. The tool + color
-  freeze at stroke start (one gesture = one node = one tool; a mid-drag
-  hotkey switch no longer re-rasterizes with the new tool). Pencil
-  unchanged (its trail dedupe stays the translucency guard). SPEC §3.5
-  rewritten for all of it.
-- **Files:** `src/tools/wet.rs` (+`wet/tests.rs`, 5 tests), `src/tools.rs`,
-  `src/app.rs` (`stroke_wet`/`stroke_tool`), `src/app/input.rs` (the wet
-  paths, the freezes, the resets), `src/selection.rs`
-  (`tight_bounds` → `pub(crate)`), `src/tools/smooth.rs` (docs),
-  `scripts/gui_wet_joint_check.sh` (new probe).
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 311 default / 324
-  mcp, +6 tests; the app-level regression ran RED on the old path first —
-  joint (71,78,86) vs body (132,137,142) — then GREEN); the visual driver
-  exit 0; the wet-joint probe PASS (a translucent-red drag: 276 row
-  pixels ALL one color, deviation 0); no wasm check (no web-facing paths).
-- **Owner-checks:** V72 born (Windows `cargo run`: a translucent brush
-  stroke is uniform — joints and the press dot match the body; the eraser
-  as before; one node per gesture; a selection still confines). Open:
-  V72, V71, V70, V69 (the 4 newest); parked: V30, V8. Debts: F20, F18,
-  F17, F16 newest-first in the files.
-- **Commit title:** `Fix: translucent brush strokes no longer darken at the joints - brush/eraser paint through a wet stroke layer (StrokeWet)`
-
-### 2026-11-21 — `Feat:` the History Tree's brush and eraser rows draw their icons like the pencil — the eraser row drops its color chip and the icon rows pull the chip closer (owner request in chat)
-
-- **What:** three follow-ups on the tree's row format. (1) The icon-row
-  set grows to the three PAINTING tools: `row_icon` maps Brush and
-  Eraser too («как pencil давай в дереве истории сделаем и brush и
-  eraser») — the tree atlas already rasters one icon per `Tool`, so no
-  pipeline change. (2) The eraser row paints NO color chip — it erases,
-  it does not paint («у eraser почему-то есть цвет в дереве истории, так
-  не должно быть»): the swatch condition moved into a pure
-  `row_swatch` (Start, resize and now Eraser are chipless; the painting
-  tools keep theirs), and chipless rows stop reserving chip room in the
-  content width. (3) Icon rows pull the chip in to `ICON_CHIP_GAP` = 6 pt
-  after the emblem («чтобы между иконкой и цветом … стало чуть меньше
-  места» — word rows keep `LABEL_GAP` 10). Measured on the probe shot:
-  the gap 10 → 6 px, the eraser row chipless, the pitch still 17 px.
-- **Files:** `src/app/tree_window/paint.rs` (`row_icon` + the new
-  `row_swatch` + `ICON_CHIP_GAP`, the content-width reservation, the
-  swatch block, the doc comments), `src/app/tree_window.rs` (the module
-  doc), `src/app/tree_window/paint/tests.rs` (the icon-set test renamed
-  and extended + the new `the_eraser_row_paints_no_swatch`), the probe
-  script (brush + eraser strokes via the B/E hotkeys, the eraser stroke
-  crossing the first pencil line, the pink-emblem assertion, the header).
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 305 default / 318
-  mcp, +1 test: the chip policy is a code-level fact; clippy `-D
-  warnings` clean); the wasm `cargo check` green; the visual driver
-  exit 0; the tree probe PASS (gold 40 = pencil+brush emblems, pink 9 =
-  the eraser's pink body — a hue nothing else in the scan region has);
-  the flagged screenshot LOOKED AT (brush row: icon + chip in tight; the
-  eraser row: the pink emblem and NO chip; the chip border measured at
-  exactly 6 columns after the icon picture in all three chip rows).
-- **Owner-checks:** V71 born (brush/eraser icons, the 6 pt chip gap, the
-  chipless eraser row). Open: V71, V70, V69, V68, V67, V66 (X11);
-  parked: V30, V8. Debts: F20, F18, F17, F16 newest-first in the files.
-- **Commit title:** `Feat: the History Tree's brush and eraser rows draw their icons like the pencil - the eraser row drops its color chip and the icon rows pull the chip closer`

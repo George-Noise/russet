@@ -10,10 +10,10 @@ rust-version = "1.95"
 # only renderer in egui 0.37 that supports TextureOptions::mipmap_mode.
 # `persistence` (owner request 2026-11-23) compiles in eframe's app-state
 # storage: the startup data-dir creation + the `App::save` hook + the
-# `persist_window`/`persist_egui_memory` switches (main.rs / app.rs). BOTH
-# automatic save channels are deliberately OFF there, so NOTHING is written
-# for now — the feature is wired up ahead of a real settings decision
-# (SPEC §6 keeps "saving application settings" out of scope).
+# `persist_window`/`persist_egui_memory` switches (main.rs / app.rs). The
+# AUTOMATIC channels stay OFF; the app's own `App::save` writes exactly ONE
+# thing — the Mouse4/Mouse5 mode as a plain string under one key (SPEC
+# §3.14, the settings round the same day; no serde needed).
 eframe = { version = "0.37", default-features = false, features = [
     "glow",
     "clipboard",

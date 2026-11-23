@@ -33,27 +33,32 @@ A single-window raster application **"Russet"**: a canvas with drawing via three
 | `winit` (native, Unix) | `0.30.13`, feature `wayland-csd-adwaita` | the same crate eframe resolves (cargo unifies them); the feature switches the Wayland CSD frame from sctk's bare `FallbackFrame` (its `set_title` is a no-op, no double-click-to-maximize) to `AdwaitaFrame` — title text + double-click maximize on GNOME (owner-approved 2026-11-16) |
 | `wasm-bindgen-futures`, `web-sys` (web) | `0.4` / `0.3` | web entry-point plumbing |
 
-**Persistence policy — compiled in, saving NOTHING (owner request 2026-11-23).**
-eframe's `persistence` cargo feature is on so the storage plumbing exists ahead of a
-real settings decision (§6 keeps "saving application settings" out of scope), but every
-automatic save channel is deliberately disabled: `NativeOptions::persist_window = false`
-(main.rs) and `App::persist_egui_memory() -> false` + an empty `App::save` (app.rs).
-What the feature WOULD save with everything at its defaults (measured headlessly
-2026-11-23: eframe's 30-s autosave and the exit save both write the file; on web the
-same data lands in `localStorage` — key `egui_memory_ron` for the memory):
-- the key `"window"` — the OS window's normal geometry (position, size in points, scale
-  factor, maximized/fullscreen) under `persist_window`;
-- the key `"egui"` — the WHOLE egui `Memory` under `persist_egui_memory`: every
-  floating-window/dialog position + pivot + z-order (the `areas` map), collapse states,
-  per-widget resize/scroll state, the theme preference and the launch-time input
-  options (scroll speeds, click thresholds, modifier mappings);
-- anything `App::save` writes via `epi::set_value` (russet: nothing yet).
-With the opt-outs in place nothing is written at all — the pinned tests
-(`app/tests.rs::save_writes_nothing`, `app/tests.rs::persist_egui_memory_is_off`) force
-any future flip to be a deliberate settings decision. The feature's one unavoidable side
-effect: eframe creates the app data FOLDER at startup (Linux `~/.local/share/russet`,
-Windows `%APPDATA%\Russet\data`; app_id = the `run_native` title "Russet") — empty by
-design, no `app.ron` inside.
+**Persistence policy — ONE saved setting, everything else off (owner request
+2026-11-23).** eframe's `persistence` cargo feature is on. The two AUTOMATIC save
+channels stay disabled: `NativeOptions::persist_window = false` (main.rs) and
+`App::persist_egui_memory() -> false` (app.rs) — the OS-window geometry and the whole
+egui `Memory` (every floating-window/dialog position + pivot + z-order, collapse
+states, per-widget resize/scroll state, the theme preference, the launch-time input
+options — measured headlessly 2026-11-23: a 35-s session with a stroke writes a
+5 115-byte `app.ron` holding the keys `"window"` and `"egui"` under eframe's defaults;
+none of that may come back) are never written or read. What the app's OWN `App::save`
+writes is EXACTLY ONE thing — the Mouse4/Mouse5 mode (§3.14, owner request 2026-11-23:
+"только Mouse4/Mouse5 выбор сохранялся"): the plain string `"always"`/`"never"` under
+the key `"settings/mouse_side_buttons"` (no serde — eframe does not re-export it, so a
+hand-encoded string is the whole format); choosing `Ask` back REMOVES the key, and
+because eframe's `FileStorage::remove_string` marks the file dirty UNCONDITIONALLY
+(while `set_string` dirties only on a value change) the removal happens only when the
+key is actually present — the result: a user who never decided (or reset to Ask) keeps
+a byte-empty storage and NO `app.ron` is written at all; a user who picked a side gets
+one ~40-byte `app.ron` holding that one key and nothing else. eframe calls `save` on
+its 30-s autosave and at exit (there is no request-save API), so a change lands within
+that window. On web the same key becomes one `localStorage` entry (no
+`egui_memory_ron` — `persist_egui_memory` is off); `persist_window` does not exist on
+web. Unknown/corrupt stored values load as `Ask` (the fresh-session default). The
+feature's one unavoidable side effect stays: eframe creates the app data FOLDER at
+startup (Linux `~/.local/share/russet`, Windows `%APPDATA%\Russet\data`; app_id = the
+`run_native` title "Russet"). The pinned tests (`app/tests.rs`, `mouse_side/tests.rs`)
+force any future addition to `App::save` to be a deliberate settings decision.
 
 Web build tool: **trunk** (installed once, §8). It is not a Cargo dependency.
 
@@ -274,7 +279,8 @@ Page requirement: nothing scrolls (`overflow: hidden`), the canvas fills the scr
 - **Canvas**: Resize Canvas…
 - **View**: Zoom 100% (Ctrl+0), Fit to Window, separator, Tools, Palette, History Tree, Tool Log and Layers checkboxes (open/close the corresponding windows; the Tool Log checkbox was labeled "History" until 2026-11-13).
 - **Help**: About (owner request 2026-11-13 renamed the ITEM from "About Russet"; the window it opens keeps the "About Russet" title; owner request, 2026-11-09) — opens the non-resizable, non-collapsible "About Russet" window: name, version (`CARGO_PKG_VERSION`), one-line description ("A tiny bitmap paint program written in Rust with egui/eframe." — owner request 2026-11-18: the window must say the project is written in Rust), a GitHub repository hyperlink ("GitHub: George-Noise/russet" → `https://github.com/George-Noise/russet`, owner request 2026-11-18; `ui.hyperlink_to` opens the system browser on native builds through eframe's `links` feature and `window.open` on web), `Platform:` — one of Wayland (Linux), X11 (Linux), Windows, macOS, Web (WASM) — and `Renderer:` (OpenGL on native, WebGL on web). The platform string comes from `crate::platform_label()` in `main.rs`, which mirrors winit's Linux backend choice (`WINIT_UNIX_BACKEND` override, then `WAYLAND_DISPLAY`/`WAYLAND_SOCKET` → Wayland, else `DISPLAY` → X11); the window has a Close button and no `open` flag (same pattern as the Error dialog).
-- **Theme** (owner request 2026-11-18; v2 pass the same day): a menu-bar button BETWEEN View and Help, labeled just `Theme` — a menu with three radio options: Dark, Light and System (System follows the OS preference and is the STARTUP default). The plain labels are deliberate (owner v2 pass): no ": Dark" suffix on the button — the picked theme is visible by opening it — and no "(follow the OS)" explanation on the System option; Help ALWAYS stays the LAST menu item. The choice applies immediately through `App::apply_theme` → `Context::set_theme` (egui re-styles every widget the next pass; the icon atlas re-rasterizes through its `(pixels_per_point, theme)` key) and the Tool Log records it ("Theme: Dark" etc.). The MCP `set_theme` tool (dark/light/system) runs the SAME code path — the owner asked for the switcher in BOTH the top panel and MCP.
+- **Theme** (owner request 2026-11-18; v2 pass the same day): a menu-bar button BETWEEN View and Help, labeled just `Theme` — a menu with three radio options: Dark, Light and System (System follows the OS preference and is the STARTUP default). The plain labels are deliberate (owner v2 pass): no ": Dark" suffix on the button — the picked theme is visible by opening it — and no "(follow the OS)" explanation on the System option. The choice applies immediately through `App::apply_theme` → `Context::set_theme` (egui re-styles every widget the next pass; the icon atlas re-rasterizes through its `(pixels_per_point, theme)` key) and the Tool Log records it ("Theme: Dark" etc.). The MCP `set_theme` tool (dark/light/system) runs the SAME code path — the owner asked for the switcher in BOTH the top panel and MCP.
+- **Settings** (owner request 2026-11-23): a menu-bar button AFTER Theme and BEFORE Help (Help ALWAYS stays the LAST menu item) with ONE item, `Settings…`, that opens the Settings window (§3.14) — the same one-action shape the Canvas menu has with `Resize Canvas…`.
 
 ### 3.2 "Tools" window
 Floating `egui::Window` titled "Tools", open by default, movable, auto-sized (`Window::auto_sized`: the window hugs its content and the user cannot resize it). On its FIRST open it sits 0.5rem (8 pt) from the left edge and a bit ABOVE the vertical center: 40% of the FREE vertical space (the space not occupied by the window) is above the window and 60% below it (owner request 2026-11-11). `Window::pivot(Align2::LEFT_CENTER)` + `default_pos(ctx.content_rect().left_center() + vec2(0.5 * REM, 0.0))` set the left gap and a centered start (`REM = 16 pt` — egui 0.37 has no rem API; the constant is `app/placement.rs::FIRST_OPEN_GAP`); the exact 40/60 split is applied ONCE on the first frame, when the auto-sized height is first known, through the placement glue (`app/placement.rs::TOOLS_FIRST_OPEN_RATIO` + `first_open_ratio_pos`). `default_pos` is consumed only while the window has no stored area position — afterwards the user's placement (§3.11) always wins.
@@ -490,7 +496,7 @@ happened and the size model needs a decision.
 | `V` | Select (owner request 2026-11-20, §3.13) |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y`, `Ctrl+Shift+Z` | Redo (both keys) |
-| `Mouse4` / `Mouse5` | Undo / Redo — the mouse's SIDE buttons (winit `Back`/`Forward` → egui `PointerButton::Extra1`/`Extra2`; the browser back/forward mapping — Mouse4 "back" = Undo, Mouse5 "forward" = Redo). OPT-IN (owner request 2026-11-23): the FIRST side press does NOT undo/redo — it opens the "Mouse Side Buttons" modal (the shared dialog helpers, centered); **Yes** enables the binding for the session, **No** disables it, and closing the modal with the ✕ button decides NOTHING — the next press asks again (only the two explicit buttons settle it). The choice is SESSION-ONLY: it lives in `App` state and dies with the process (§6 keeps "saving application settings" out of scope). The presses are consumed unconditionally and swallowed while the modal is open, while the answer is No, and during an active canvas gesture (a freehand stroke, a Line/Shape preview drag, a Select region/move drag, an open Text entry) — an undo/redo mid-gesture would corrupt the pending history node. An exhausted stack is a no-op (the redo-keys convention), the buttons work anywhere in the window (nothing in egui consumes the extra buttons), the dialog answer lands in the Tool Log ("Mouse side buttons: Undo/Redo on" / "off"), and on web the browser may keep the side buttons for its own back/forward history navigation — not fought (the same stance as the web Ctrl combos) |
+| `Mouse4` / `Mouse5` | Undo / Redo — the mouse's SIDE buttons (winit `Back`/`Forward` → egui `PointerButton::Extra1`/`Extra2`; the browser back/forward mapping — Mouse4 "back" = Undo, Mouse5 "forward" = Redo). OPT-IN (owner request 2026-11-23; the choice PERSISTS since the same day's settings round — §3.14): the FIRST side press does NOT undo/redo — it opens the "Mouse Side Buttons" modal (the shared dialog helpers, centered); **Yes** settles the choice as "Use for Undo / Redo" and **No** as "Don't use" — BOTH persist through `App::save` (the §1 persistence policy) — and closing the modal with the ✕ button decides NOTHING — the next press asks again (only the two explicit buttons settle it). The dropdown in the Settings window (§3.14) can re-open the question at any time. The presses are consumed unconditionally and swallowed while the modal is open, while the answer is "Don't use", and during an active canvas gesture (a freehand stroke, a Line/Shape preview drag, a Select region/move drag, an open Text entry) — an undo/redo mid-gesture would corrupt the pending history node. An exhausted stack is a no-op (the redo-keys convention), the buttons work anywhere in the window (nothing in egui consumes the extra buttons), the dialog answer lands in the Tool Log ("Mouse side buttons: Undo/Redo on" / "off"; the Settings dropdown adds "ask every session"), and on web the browser may keep the side buttons for its own back/forward history navigation — not fought (the same stance as the web Ctrl combos) |
 | `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | Copy / Cut / Paste (the selection ops §3.13, owner request 2026-11-20) — the combos arrive as plain Key events: egui-winit's `clipboard_shortcuts` conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`, owner decision 2026-11-20 "я не согласен с разработчиками этой библиотеки" — with it ON, egui-winit intercepts the combos, turns them into dedicated `Event::Copy`/`Cut`/`Paste` and swallows the Key events). The Key event's `key` field is logical-or-physical (issue #3653), so the combos also match on non-Latin layouts. The DEDICATED events are consumed too as the WEB fallback (the browser synthesizes them from its own copy/cut/paste DOM events — the only channel there, not flag-controlled); a frame that already fired an op from a Key event does NOT repeat it for the dedicated twin (a web keydown AND a copy event can carry the same gesture — at most one op per frame). The `egui_wants_keyboard_input` guard keeps a focused text field (the Text tool window) its own OS-text copy/cut/paste semantics. A no-op when the selection or the clipboard is empty (never a fall-through; the redo-keys convention) |
 | `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S` | New / Open / Save / Save As. An accelerator modifier (Ctrl/⌘/Alt) SUPPRESSES the W/A/S/D pan (owner bug report 2026-11-20: Ctrl+S also panned on S — the pan reads the pressed state and the save's consume_key does not lift the key back up); Shift alone stays allowed |
 | `Ctrl+0` | Zoom 100% |
@@ -556,6 +562,20 @@ One "Select" tool (`V`, the hotkey row added to §3.9's list by the same request
 - **Move**: pressing INSIDE the selection without modifiers lifts the selected pixels — the layer is written exactly TWICE total: the ERASE at the lift, and the STAMP at the release (ONE `move` node records the post-move layer, the selection translates with the pixels). During the drag the pixels ride a SEPARATE overlay element ABOVE everything (`Order::Foreground`, the whole-viewport clip — owner redesign 2026-11-20: the dragged part must be visible PAST the canvas bounds until release, and the drag must paint nothing onto the canvas; the old per-frame restore/erase/stamp printed unclear artifacts). The dashed loops ride the overlay with the pixels; Esc, a tool switch or a pan restores the pre-drag pixels (the full-layer backup). A release that lands the region PARTIALLY off-canvas CLIPS the selection to the canvas (owner bug report 2026-11-20: the stamp destroys the off-canvas pixels, so the region list must shrink with them — rects intersect, lassos run a Sutherland–Hodgman polygon clip; a fully-off release deselects; the derived views were always canvas-clamped, only the op list needed the clip — otherwise the NEXT move healed the full shape over pixels that no longer exist). The cursor: a crosshair over empty canvas, the MOVE arrow over the selection.
 - **Copy/Cut/Paste**: the clipboard is IN-APP (not the OS image clipboard — a deliberate v1 simplification, see DEBTS-functional) and survives document switches. Copy records no history node; Cut erases the selected pixels and records ONE `cut` node (the selection stays, Paint.NET-style); Paste stamps the clipboard centered in the VIEWPORT (clamped inside the canvas), selects the pasted rect — the user moves it right away — and records ONE `paste` node; repeated pastes work.
 - **Crop**: the panel's Crop button makes the canvas (and EVERY layer) the selection's pixel bounds — the Resize machinery's per-layer top-left crop reused (`fit_copy_at`, owner request: "чтобы не было дублирования кода можно как-то это связать с тем кодом что делает resize"), ONE `crop` node per layer carrying the rect (the same per-layer shape a resize commit records), the display buffer rebuilds, the pending gestures drop and the selection clears; zoom and pan do not change (§3.8's rule). The History Tree row prints "crop 800×600→300×200 @(x,y)" and the hover explains it for THAT layer.
+
+### 3.14 Settings window (owner request 2026-11-23)
+
+The top menu bar's **Settings** button (§3.1: after Theme, before Help — Help stays LAST) carries ONE item, `Settings…`, opening the floating "Settings" window: the app's settings list WITH their descriptions. The window is built through the shared dialog helpers (`app/dialogs.rs::dialog_window`): non-collapsible, non-resizable, ARISES centered on the main window at every open (the About-window pattern — the same `forget_dialog_position` reset runs on every close path), draggable while open; the ✕ and the Close button both close it. It is opened on DEMAND (unlike the four §3.2/§3.3 windows it is NOT open by default and carries NO §3.11 placement state — the centered-on-open rule replaces placement).
+
+The window currently holds exactly ONE setting:
+
+- **Mouse side buttons (Undo / Redo)** — a dropdown (`egui::ComboBox`, the Save dialog's format-dropdown pattern, `app/settings_window.rs`; state machine in `app/mouse_side.rs`) with the THREE choices in the owner-approved meaning ask / use / don't use (the wording is the agent's):
+  - **Ask every session** — the STARTUP default: each launch starts undecided, the first Mouse4/Mouse5 press opens the §3.9 modal, answering it settles the choice (Yes → Use for Undo / Redo, No → Don't use) and the ✕ decides nothing.
+  - **Use for Undo / Redo** — Mouse4 (back) = Undo, Mouse5 (forward) = Redo (the browser back/forward convention), no modal ever.
+  - **Don't use** — the side buttons are inert, no modal ever.
+  Under the dropdown the CURRENT choice's description explains itself live (the owner asked for a window of settings WITH their descriptions), followed by the line "The choice is saved between sessions." A settled choice lands in the Tool Log ("Mouse side buttons: ask every session" / "Undo/Redo on" / "off"); picking the SAME mode again changes nothing and logs nothing; leaving `Ask` while the ask modal is on screen closes it (its question is settled by the pick).
+
+The choice is the app's ONE persisted setting: the §1 persistence policy carries the full storage rules (the key `"settings/mouse_side_buttons"`, the plain-string encoding, the `Ask`-removes-the-key zero-write default, the 30-s autosave + exit save timing, the corrupt-value-loads-as-Ask rule). `persist_window` (main.rs) and `persist_egui_memory` (app.rs) stay OFF.
 
 ## 4. Milestones — do them in order
 

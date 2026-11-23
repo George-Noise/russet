@@ -1,6 +1,6 @@
-//! The top menu bar (File / Edit / Canvas / View / Help — the exact
-//! strings and shortcut labels are SPEC §3.1) plus the MCP badge hook on
-//! the right end of the bar.
+//! The top menu bar (File / Edit / Canvas / View / Theme / Settings /
+//! Help — the exact strings and shortcut labels are SPEC §3.1) plus the
+//! MCP badge hook on the right end of the bar.
 //!
 //! Menu items only DISPATCH: the actions themselves live where they belong
 //! — document lifecycle in [`super::document`], undo/redo in the
@@ -154,6 +154,18 @@ impl App {
                             self.apply_theme(theme);
                             ui.close();
                         }
+                    }
+                });
+
+                // The Settings menu (owner request 2026-11-23, SPEC
+                // §3.14): ONE item opening the Settings window — the
+                // Canvas menu's "one action" shape. It sits AFTER Theme
+                // and BEFORE Help — Help ALWAYS stays the LAST item
+                // (SPEC §3.1).
+                ui.menu_button("Settings", |ui| {
+                    if ui.button("Settings…").clicked() {
+                        self.settings_window_open = true;
+                        ui.close();
                     }
                 });
 

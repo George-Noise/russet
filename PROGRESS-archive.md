@@ -1,5 +1,81 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Fix:` translucent brush strokes no longer darken at the joints — brush/eraser paint through a wet stroke layer (owner bug report in chat)
+
+- **What:** the owner's report: with a semi-transparent brush color the
+  joint circles turn less transparent («полупрозрачный цвет накладывает
+  отрезок на отрезок и в стыках отрезков кружочек становится менее
+  прозрачным»). Root cause: each frame stroked its smooth pieces onto the
+  layer directly — the next frame's start cap (and the press dot) sat on
+  the previous frame's end cap, and premultiplied source-over is not
+  idempotent, so the alpha stacked at every overlap (measured: 61/255 per
+  channel darker at the joint). Fix: brush/eraser gestures paint through
+  the WET STROKE LAYER `tools/wet.rs::StrokeWet` — the whole gesture's
+  coverage accumulates in a canvas-sized full-alpha scratch (opaque
+  source-over = a coverage union), and the layer is recomposited per
+  changed region from the gesture-start base with the stroke's alpha
+  applied ONCE (the eraser destination-outs by the coverage once — no
+  more over-erase at self-overlaps either); idempotent, history/undo
+  untouched, the selection clip rides the composite. The tool + color
+  freeze at stroke start (one gesture = one node = one tool; a mid-drag
+  hotkey switch no longer re-rasterizes with the new tool). Pencil
+  unchanged (its trail dedupe stays the translucency guard). SPEC §3.5
+  rewritten for all of it.
+- **Files:** `src/tools/wet.rs` (+`wet/tests.rs`, 5 tests), `src/tools.rs`,
+  `src/app.rs` (`stroke_wet`/`stroke_tool`), `src/app/input.rs` (the wet
+  paths, the freezes, the resets), `src/selection.rs`
+  (`tight_bounds` → `pub(crate)`), `src/tools/smooth.rs` (docs),
+  `scripts/gui_wet_joint_check.sh` (new probe).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 311 default / 324
+  mcp, +6 tests; the app-level regression ran RED on the old path first —
+  joint (71,78,86) vs body (132,137,142) — then GREEN); the visual driver
+  exit 0; the wet-joint probe PASS (a translucent-red drag: 276 row
+  pixels ALL one color, deviation 0); no wasm check (no web-facing paths).
+- **Owner-checks:** V72 born (Windows `cargo run`: a translucent brush
+  stroke is uniform — joints and the press dot match the body; the eraser
+  as before; one node per gesture; a selection still confines). Open:
+  V72, V71, V70, V69 (the 4 newest); parked: V30, V8. Debts: F20, F18,
+  F17, F16 newest-first in the files.
+- **Commit title:** `Fix: translucent brush strokes no longer darken at the joints - brush/eraser paint through a wet stroke layer (StrokeWet)`
+
+- **Owner-checks:** V71 born (brush/eraser icons, the 6 pt chip gap, the
+  chipless eraser row). Open: V71, V70, V69, V68, V67, V66 (X11);
+  parked: V30, V8. Debts: F20, F18, F17, F16 newest-first in the files.
+- **Commit title:** `Feat: the History Tree's brush and eraser rows draw their icons like the pencil - the eraser row drops its color chip and the icon rows pull the chip closer`
+
+
+### 2026-11-21 — `Feat:` the History Tree's brush and eraser rows draw their icons like the pencil — the eraser row drops its color chip and the icon rows pull the chip closer (owner request in chat)
+
+- **What:** three follow-ups on the tree's row format. (1) The icon-row
+  set grows to the three PAINTING tools: `row_icon` maps Brush and
+  Eraser too («как pencil давай в дереве истории сделаем и brush и
+  eraser») — the tree atlas already rasters one icon per `Tool`, so no
+  pipeline change. (2) The eraser row paints NO color chip — it erases,
+  it does not paint («у eraser почему-то есть цвет в дереве истории, так
+  не должно быть»): the swatch condition moved into a pure
+  `row_swatch` (Start, resize and now Eraser are chipless; the painting
+  tools keep theirs), and chipless rows stop reserving chip room in the
+  content width. (3) Icon rows pull the chip in to `ICON_CHIP_GAP` = 6 pt
+  after the emblem («чтобы между иконкой и цветом … стало чуть меньше
+  места» — word rows keep `LABEL_GAP` 10). Measured on the probe shot:
+  the gap 10 → 6 px, the eraser row chipless, the pitch still 17 px.
+- **Files:** `src/app/tree_window/paint.rs` (`row_icon` + the new
+  `row_swatch` + `ICON_CHIP_GAP`, the content-width reservation, the
+  swatch block, the doc comments), `src/app/tree_window.rs` (the module
+  doc), `src/app/tree_window/paint/tests.rs` (the icon-set test renamed
+  and extended + the new `the_eraser_row_paints_no_swatch`), the probe
+  script (brush + eraser strokes via the B/E hotkeys, the eraser stroke
+  crossing the first pencil line, the pink-emblem assertion, the header).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 305 default / 318
+  mcp, +1 test: the chip policy is a code-level fact; clippy `-D
+  warnings` clean); the wasm `cargo check` green; the visual driver
+  exit 0; the tree probe PASS (gold 40 = pencil+brush emblems, pink 9 =
+  the eraser's pink body — a hue nothing else in the scan region has);
+  the flagged screenshot LOOKED AT (brush row: icon + chip in tight; the
+  eraser row: the pink emblem and NO chip; the chip border measured at
+  exactly 6 columns after the icon picture in all three chip rows).
+
+
 ### 2026-11-21 — `Fix:` the History Tree rows sit back-to-back — the icon gap is exactly 0.0625rem; the pencil emblem nudges left-down (owner request in chat)
 
 - **What:** two refinements on top of the size pass. (1) The vertical gap

@@ -26,6 +26,11 @@
 //!   [`tool_log`]  — owner request 2026-11-10: the "Tool Log" window (the
 //!                   read-only action log, named "History" until 2026-11-13)
 //!                   — both were `app/panels.rs` until the 2026-11-17 split
+//!   [`mouse_side`] — owner request 2026-11-23: the Mouse4/Mouse5
+//!                   Undo/Redo setting (SPEC §3.9 + §3.14) — the persisted
+//!                   Ask/Always/Never mode, the first-press ask modal, the
+//!                   press routing; the app's ONE saved setting (via
+//!                   `App::save`)
 //!   [`placement`] — §3.11: floating-window edge anchoring + resize repositioning
 //!   [`preview`]   — owner request 2026-11-10: Line/Curve/Shape tools
 //!                   (press–drag–release and polyline gestures, overlay
@@ -38,6 +43,10 @@
 //!                   scenario suite (tests only — the automated counterpart
 //!                   of the owner's manual resize × history walkthrough;
 //!                   edit it ONLY with the owner's permission)
+//!   [`settings_window`] — owner request 2026-11-23: the "Settings" window
+//!                   (SPEC §3.14, opened from the menu bar's Settings
+//!                   menu) — the settings list with their descriptions;
+//!                   currently ONE dropdown: the Mouse4/Mouse5 choice
 //!   [`text_tool`] — owner request 2026-11-10: the Text tool input window
 //!   [`tree_window`] — owner request 2026-11-12: the visual "History Tree"
 //!                   windows (git-style graph per layer, node-dot click
@@ -80,6 +89,7 @@ mod preview;
 mod save_dialog;
 mod scenarios;
 mod selection;
+mod settings_window;
 mod text_tool;
 mod tool_icons;
 mod tool_log;
@@ -321,20 +331,32 @@ pub struct App {
     /// Applied through [`App::apply_theme`], which is also the MCP
     /// `set_theme` tool's code path.
     theme: egui::ThemePreference,
-    /// The Mouse4/Mouse5 Undo/Redo opt-in (owner request 2026-11-23,
-    /// SPEC §3.9): the session-only choice — `None` until the first
-    /// side press is answered through the modal — plus the modal's open
-    /// flag. State machine, press routing and the dialog in [`mouse_side`].
+    /// The Mouse4/Mouse5 Undo/Redo setting (owner request 2026-11-23,
+    /// SPEC §3.9 + §3.14): the persisted Ask/Always/Never mode (the
+    /// app's ONE saved setting — loaded in `new_with`, written in
+    /// `save`) plus the ask modal's open flag. State machine, press
+    /// routing and the dialog in [`mouse_side`].
     mouse_side: mouse_side::MouseSideButtons,
+    /// The "Settings" window (owner request 2026-11-23, SPEC §3.14):
+    /// opened from the menu bar's Settings menu; the window itself and
+    /// its one dropdown live in [`settings_window`].
+    settings_window_open: bool,
 }
 
 impl App {
     /// The eframe entry constructor: the REAL launch arguments of this
     /// process (`app/launch.rs`; empty on wasm — the web build takes no
     /// arguments) applied to a fresh `App`. Both entry points in `main.rs`
-    /// go through here.
+    /// go through here. The ONE persisted setting (the Mouse4/Mouse5 mode,
+    /// SPEC §3.14) is read from eframe's storage HERE — the only place
+    /// the creation context's storage is reachable; a missing or corrupt
+    /// value leaves the fresh-session default untouched.
     pub fn new_with(cc: &eframe::CreationContext<'_>, launch: &LaunchConfig) -> Self {
-        Self::build(cc.egui_ctx.clone(), launch)
+        let mut app = Self::build(cc.egui_ctx.clone(), launch);
+        if let Some(storage) = cc.storage {
+            app.mouse_side.load(storage);
+        }
+        app
     }
 
     /// Test-only constructor of the whole-app scenario suite
@@ -504,9 +526,11 @@ impl App {
             // The switcher's default: follow the OS preference (owner
             // request 2026-11-18 — "also the choice of the system color").
             theme: egui::ThemePreference::System,
-            // The side-button opt-in starts UNASKED: the first Mouse4/Mouse5
-            // press opens the modal (`mouse_side`).
+            // The side-button setting starts at its default (Ask: the
+            // first Mouse4/Mouse5 press opens the modal, `mouse_side`);
+            // `new_with` overrides it from eframe's storage.
             mouse_side: mouse_side::MouseSideButtons::default(),
+            settings_window_open: false,
         };
         // The parsed launch arguments land AFTER the literal (the config
         // tweaks existing fields; see `launch::LaunchConfig::apply_to`).
@@ -912,6 +936,7 @@ impl eframe::App for App {
         self.layers_window(&ctx);
         self.tree_windows(&ctx);
         self.text_tool_window(&ctx);
+        self.settings_window(&ctx);
         // Both windows must observe the resize before the tracker flips.
         #[cfg(feature = "diagnostics")]
         self.diagnostics_main_resize();
@@ -928,17 +953,18 @@ impl eframe::App for App {
         self.update_title(&ctx);
     }
 
-    // --- eframe `persistence` opt-outs (owner request 2026-11-23) ---
+    // --- eframe `persistence` (owner request 2026-11-23) ---
     //
-    // The `persistence` feature is compiled in (Cargo.toml) so the storage
-    // plumbing exists — the startup data-dir creation, the `App::save` hook,
-    // the window-geometry and egui-memory switches — but BOTH automatic save
-    // channels are deliberately switched off: nothing is written, nothing is
-    // read back, and every launch stays fresh (SPEC §6 keeps "saving
-    // application settings" out of scope until a real settings decision).
-    // The verified framework behavior lives in the 2026-11-23 PROGRESS.md
-    // entry (what app.ron would hold: the "window" geometry + the whole egui
-    // Memory — every floating-window position, z-order and collapse state).
+    // The `persistence` feature is compiled in (Cargo.toml). The two
+    // AUTOMATIC save channels stay off: `persist_window: false` in main.rs
+    // (the OS window's geometry) and `persist_egui_memory() -> false` below
+    // (the whole egui Memory — window positions, z-orders, collapse states,
+    // the theme preference). The app's OWN hook saves exactly ONE thing —
+    // the Mouse4/Mouse5 mode (`mouse_side`, SPEC §3.14): nothing else may
+    // dirty the storage (pinned by `app/tests.rs`), and the default (`Ask`)
+    // keeps the storage byte-empty — no `app.ron` at all. eframe calls
+    // `save` on its 30-s autosave and at exit; there is no request-save
+    // API (AGENTS.md quirk).
 
     /// egui memory (ALL floating-window/dialog positions, z-orders, collapse
     /// states, scroll offsets, the theme preference and the launch-time
@@ -952,12 +978,16 @@ impl eframe::App for App {
         false
     }
 
-    /// The app's OWN storage hook: an explicit no-op for now. When the
-    /// first setting actually gets persisted (e.g. the Mouse4/Mouse5
-    /// opt-in — see `app/mouse_side.rs`), `epi::set_value` writes land
-    /// HERE and nowhere else; until then nothing may dirty the storage
-    /// (pinned by `app/tests.rs::save_writes_nothing`).
-    fn save(&mut self, _storage: &mut dyn eframe::Storage) {}
+    /// The app's OWN storage hook (SPEC §3.14): the Mouse4/Mouse5 mode —
+    /// the app's ONE persisted setting — written by [`mouse_side`] as a
+    /// plain string under its key (`Ask` removes the key, so an undecided
+    /// user keeps an empty storage). Everything else stays out: the
+    /// automatic channels are off (above) and no other state may land
+    /// here without a deliberate settings decision (pinned by
+    /// `app/tests.rs::a_fresh_app_persists_nothing`).
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.mouse_side.persist(storage);
+    }
 }
 
 #[cfg(test)]
