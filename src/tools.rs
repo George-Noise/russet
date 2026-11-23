@@ -10,6 +10,9 @@ pub use smooth::{PencilTrail, SmoothPiece, SmoothStroke, pencil_pixel, rasterize
 mod shapes;
 
 pub(crate) use shapes::{dirty_rect_for, rasterize_polyline, rasterize_shape};
+mod wet;
+
+pub use wet::StrokeWet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {

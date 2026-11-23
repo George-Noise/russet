@@ -6,9 +6,13 @@
 //! tangent-continuous (C1) at every joint and never overshoots (a
 //! quadratic stays inside its control triangle). [`rasterize_smooth_pieces`]
 //! paints one frame's pieces in ONE tiny-skia stroke (brush/eraser — the
-//! pieces join at their shared midpoints, so no per-segment cap seams) or
-//! as the pencil's classic hard 1 px trail following the flattened
-//! centerline. The pencil walks a drifting pen ([`PencilTrail`], owner
+//! pieces join at their shared midpoints, so no per-segment cap seams)
+//! into the CALLER's pixmap — the gesture's wet scratch for brush/eraser
+//! ([`crate::tools::StrokeWet`]: the coverage unions there and the stroke's
+//! alpha applies once, so translucent colors never darken at the frame
+//! joints) or the layer directly for the pencil — or as the pencil's
+//! classic hard 1 px trail following the flattened centerline. The pencil
+//! walks a drifting pen ([`PencilTrail`], owner
 //! request 2026-11-20): unit steps along the chord-dominant axis, the
 //! minor coordinate carried as an EXACT float across the whole gesture —
 //! the same fractional phase a single long Bresenham run carries — so a
@@ -217,8 +221,12 @@ pub fn pencil_pixel(p: Pos2) -> (i64, i64) {
 
 /// Rasterizes one frame's smoothed pieces into the pixmap in a single
 /// pass and returns their UNION dirty rectangle. Brush/eraser: one
-/// continuous tiny-skia stroke (round caps, AA; the eraser
-/// `DestinationOut`) — `trail` and `pin` are ignored. Pencil: the 1 px
+/// continuous tiny-skia stroke (round caps, AA) — the wet-layer caller
+/// passes a FULL-ALPHA color (the scratch is coverage-only; the eraser's
+/// footprint rides the brush geometry too, its destination-out applies at
+/// composite time) and `clip = None` (the mask filters at composite);
+/// the direct callers keep the eraser `DestinationOut` + clip behavior.
+/// Pencil: the 1 px
 /// drifting-pen trail along the flattened centerline — quads subdivide
 /// into ~1 px steps, the pen walks unit grid steps with its exact minor
 /// phase carried across the whole gesture, consecutive duplicate pixels

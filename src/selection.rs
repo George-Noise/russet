@@ -361,7 +361,7 @@ impl Mask {
 
     /// The tight pixel bounds of the SELECTED bits (a subtract can shrink
     /// or empty the union box the grid was built with).
-    fn tight_bounds(&self) -> Option<IRect> {
+    pub(crate) fn tight_bounds(&self) -> Option<IRect> {
         let (mut min_x, mut min_y) = (i64::MAX, i64::MAX);
         let (mut max_x, mut max_y) = (i64::MIN, i64::MIN);
         for iy in 0..self.h as i64 {

@@ -1,3 +1,19 @@
+### 2026-11-23 — sandbox_check's detached warm-up fired without rustup and its verdict still said "verify.sh is now hot"
+
+- What: fresh recycled sandbox — `scripts/sandbox_check.sh --warm` printed
+  `[NO] rustup MISSING` but STARTED the detached gates warm-up anyway; the
+  background script died instantly on `cargo: command not found` while its
+  log still ended with "warm-up finished (exit 0) — verify.sh is now hot".
+  Expected vs actual: the warm-up should be skipped (and the verdict say
+  NOT hot / skipped) when rustup is absent; instead the exit-0 line lied.
+- How it showed up: the next warm-build-log check showed two
+  `cargo: command not found` lines; the warm-up had to be restarted
+  manually after `rustup` + the pinned toolchain were installed.
+- Cost: one wasted round-trip and a false "hot" belief for a minute; the
+  restarted warm-up ran fine (clippy 1m 32s cold — TIMING.md).
+- Could improve: gate the warm-up on rustup being present and print
+  "warm-up SKIPPED (no rustup)" in the verdict instead.
+
 2026-11-21 — the file-split round (5 files) — re-exports consumed ONLY by tests: clippy `-D warnings` flags them unused even with `--all-targets` (the bin view of the same lint also fires), so a re-export whose only consumers are test files cannot carry the round. The convention that actually passes the gate: the tests import the moved item from its OWNING module (`tools/tests.rs` → `super::shapes::outline_stroke_bounds`, `windows/tests/*` → `super::super::settings_panel::…`) and the parent keeps re-exports for BIN consumers only. AGENTS.md "Tests" rule 2 ("move the test, not the visibility", learned in the palette split) is the same law seen from the other side — worth a line in the split playbook.
 
 2026-11-21 — the file-split round (5 files) — impl-method visibility after a move into a CHILD module: `pub(super)` there means "visible in the child's parent" (= the old module's scope), NOT visible to `app.rs` — `app.rs:736 draw_preview_overlay` failed with E0624 twice until the method was widened to `pub(in crate::app)`. Rule of thumb that worked: match the visibility to the CALLER's module path, not to the old declaration.

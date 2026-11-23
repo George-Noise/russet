@@ -16,8 +16,8 @@ use eframe::egui::{self, Color32, Key, Modifiers, PointerButton, Pos2, Rect};
 use super::App;
 use crate::history_tree::ActionKind;
 use crate::tools::{
-    MAX_STROKE_SIZE, PencilTrail, SmoothPiece, SmoothStroke, Tool, draw_segment, pencil_pixel,
-    pick_color, rasterize_smooth_pieces,
+    MAX_STROKE_SIZE, PencilTrail, SmoothPiece, SmoothStroke, StrokeWet, Tool, draw_segment,
+    pencil_pixel, pick_color, rasterize_smooth_pieces,
 };
 
 /// Which platform clipboard combo egui-winit delivered as a dedicated
@@ -233,8 +233,17 @@ impl App {
 
     fn paint_segment(&mut self, from: Pos2, to: Pos2) {
         let color = self.stroke_color();
-        let tool = self.tools.tool;
+        let tool = self.stroke_tool.unwrap_or(self.tools.tool);
         let size = self.tools.size;
+        // Brush/eraser paint through the gesture's wet layer (owner bug
+        // fix 2026-11-23): the press dot lands in the scratch at full
+        // alpha, so a translucent color cannot double-blend under the
+        // first frame's start cap. The pencil keeps the direct path — its
+        // trail dedupes the dot's pixel instead.
+        if matches!(tool, Tool::Brush | Tool::Eraser) {
+            self.paint_wet_segment(from, to, color, tool, size);
+            return;
+        }
         // The gesture paints the ACTIVE layer's buffer; the display buffer
         // is re-blended for the same dirty region right after.
         let dirty = draw_segment(
@@ -253,19 +262,78 @@ impl App {
         }
     }
 
+    /// The press dot of a wet (brush/eraser) gesture: starts the wet layer
+    /// over the active layer's CURRENT pixels (the base every recomposite
+    /// blends against) and marks the dot's coverage in the scratch with
+    /// the brush geometry (the scratch is coverage-only — the eraser's
+    /// destination-out must not carve its own footprint out of it), then
+    /// recomposites the dot's region once.
+    fn paint_wet_segment(&mut self, from: Pos2, to: Pos2, color: Color32, tool: Tool, size: f32) {
+        let erase = matches!(tool, Tool::Eraser);
+        if self.stroke_wet.is_none()
+            && let Some(wet) = StrokeWet::start(self.layers.active().pixmap())
+        {
+            self.stroke_wet = Some(wet);
+        }
+        let Some(mut wet) = self.stroke_wet.take() else {
+            return;
+        };
+        let dirty = draw_segment(
+            wet.scratch_mut(),
+            Tool::Brush,
+            size,
+            full_alpha(color),
+            from,
+            to,
+            None,
+        );
+        self.composite_wet_region(&mut wet, dirty, color, erase);
+        self.stroke_wet = Some(wet);
+    }
+
+    /// Recomposites the wet layer's `dirty` region onto the active layer
+    /// and syncs the display buffer + texture for it (the wet path's tail
+    /// shared by the press dot and the frame pieces).
+    fn composite_wet_region(
+        &mut self,
+        wet: &mut StrokeWet,
+        dirty: Option<crate::tools::DirtyRect>,
+        color: Color32,
+        erase: bool,
+    ) {
+        let Some(dirty) = dirty else {
+            return;
+        };
+        let region = {
+            let layer = self.layers.active_mut().pixmap_mut();
+            wet.composite_region(layer, dirty, color, erase, self.stroke_clip.as_ref())
+        };
+        if let Some(region) = region {
+            self.composite_dirty(region.x, region.y, region.w, region.h);
+            self.sync_texture(region.x, region.y, region.w, region.h);
+            self.dirty = true;
+        }
+    }
+
     /// Rasterizes one frame's smoothed pieces into the ACTIVE layer's
     /// buffer in one batch (one dirty-rect composite + texture sync for
     /// the whole frame, however many pointer events it carried) and
     /// paints with the color captured at stroke START — the gesture's
-    /// single history-node color. A mid-gesture tool switch abandons the
-    /// paint (the pixels join the next node's snapshot, as before). `pin`
-    /// is the release hook (see [`tools::smooth::rasterize_smooth_pieces`]).
+    /// single history-node color. Brush/eraser route through the gesture's
+    /// wet layer instead (owner bug fix 2026-11-23 — see
+    /// [`Self::paint_wet_pieces`]); a mid-gesture tool switch re-rasterizes
+    /// nothing (the tool is frozen at stroke start). `pin` is the release
+    /// hook (see [`tools::smooth::rasterize_smooth_pieces`]).
     fn paint_smooth_pieces(&mut self, pieces: &[SmoothPiece], pin: Option<Pos2>) {
         let Some(color) = self.stroke_paint else {
             return;
         };
-        let tool = self.tools.tool;
+        let tool = self.stroke_tool.unwrap_or(self.tools.tool);
         let size = self.tools.size;
+        if matches!(tool, Tool::Brush | Tool::Eraser) {
+            self.paint_wet_pieces(pieces, pin, color, tool, size);
+            return;
+        }
         let dirty = rasterize_smooth_pieces(
             self.layers.active_mut().pixmap_mut(),
             tool,
@@ -281,6 +349,43 @@ impl App {
             self.sync_texture(dirty.x, dirty.y, dirty.w, dirty.h);
             self.dirty = true;
         }
+    }
+
+    /// One frame's pieces of a wet (brush/eraser) gesture: rasterizes them
+    /// into the wet scratch — one continuous FULL-ALPHA stroke (the pieces
+    /// join at their shared midpoints, so a frame adds no seams; overlaps
+    /// union instead of stacking) — and recomposites the changed region
+    /// from the gesture-start base. The layer therefore always shows the
+    /// one-shot result: the whole gesture's coverage blended with the
+    /// stroke's alpha exactly once, so the frame joints and the press dot
+    /// are indistinguishable from the stroke body even with a translucent
+    /// color (owner bug fix 2026-11-23). The eraser marks its footprint
+    /// with the brush geometry too (the scratch is coverage-only) and the
+    /// composite destination-outs by the coverage once.
+    fn paint_wet_pieces(
+        &mut self,
+        pieces: &[SmoothPiece],
+        pin: Option<Pos2>,
+        color: Color32,
+        tool: Tool,
+        size: f32,
+    ) {
+        let erase = matches!(tool, Tool::Eraser);
+        let Some(mut wet) = self.stroke_wet.take() else {
+            return;
+        };
+        let dirty = rasterize_smooth_pieces(
+            wet.scratch_mut(),
+            Tool::Brush,
+            size,
+            full_alpha(color),
+            pieces,
+            &mut self.stroke_trail,
+            pin,
+            None,
+        );
+        self.composite_wet_region(&mut wet, dirty, color, erase);
+        self.stroke_wet = Some(wet);
     }
 
     /// Rasterizes the smoothing window's closing piece (the last midpoint
@@ -310,6 +415,8 @@ impl App {
             self.stroke_trail = PencilTrail::default();
             self.stroke_button = None;
             self.stroke_paint = None;
+            self.stroke_tool = None;
+            self.stroke_wet = None;
             return;
         }
 
@@ -336,20 +443,24 @@ impl App {
                 // whole stroke.
                 self.flush_stroke_close();
                 if let Some(color) = self.stroke_paint.take() {
-                    let kind = match self.tools.tool {
+                    // One gesture = one node of ONE tool — the tool frozen
+                    // at stroke start, not whatever a hotkey switched to
+                    // mid-drag (the pixels were painted with the frozen
+                    // tool's wet layer).
+                    let gesture_tool = self.stroke_tool.unwrap_or(self.tools.tool);
+                    let kind = match gesture_tool {
                         Tool::Pencil => Some(ActionKind::Pencil),
                         Tool::Brush => Some(ActionKind::Brush),
                         Tool::Eraser => Some(ActionKind::Eraser),
-                        // A mid-gesture tool switch to a preview tool abandons
-                        // the record; the pixels join the next node's snapshot.
-                        // Select never freehand-strokes.
+                        // Unreachable for a freehand gesture (the frozen
+                        // tool is always one of the painting trio).
                         Tool::Eyedropper | Tool::Line | Tool::Shape | Tool::Text | Tool::Select => {
                             None
                         }
                     };
                     if let Some(kind) = kind {
                         self.record_active_action(kind, color, None);
-                        let label = match self.tools.tool {
+                        let label = match gesture_tool {
                             Tool::Pencil => "Pencil stroke",
                             Tool::Brush => "Brush stroke",
                             Tool::Eraser => "Eraser stroke",
@@ -369,6 +480,8 @@ impl App {
             self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
             self.stroke_trail = PencilTrail::default();
             self.stroke_button = None;
+            self.stroke_tool = None;
+            self.stroke_wet = None;
         }
 
         if !self.is_stroking && response.hovered() && !space {
@@ -383,6 +496,9 @@ impl App {
                 self.stroke_button = Some(button);
                 self.is_stroking = true;
                 self.stroke_paint = Some(self.stroke_color());
+                // One gesture = one tool: frozen here, used by every paint
+                // call and by the release's node kind.
+                self.stroke_tool = Some(self.tools.tool);
                 // The gesture's clip snapshot (owner request 2026-11-21): an
                 // active selection confines the stroke to its region. The
                 // selection cannot change mid-stroke (the OPS buttons need
@@ -418,6 +534,14 @@ impl App {
             }
         }
     }
+}
+
+/// The gesture's paint color with the alpha stripped: the wet scratch
+/// stores COVERAGE at full opacity — the stroke's alpha applies once at
+/// composite time ([`tools::StrokeWet::composite_region`]), never per
+/// rasterized overlap.
+fn full_alpha(color: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 255)
 }
 
 /// The frame's raw pointer stream: every `Event::PointerMoved` in event

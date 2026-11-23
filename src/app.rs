@@ -63,7 +63,7 @@ use crate::file_io::{FileTask, SaveFormat};
 use crate::history::ActionLog;
 use crate::history_tree::{ActionKind, NodeId, ResizeAnchor, ResizeFilter, ResizeMode};
 use crate::layers::LayerStack;
-use crate::tools::{PencilTrail, SmoothStroke, Tool, ToolState};
+use crate::tools::{PencilTrail, SmoothStroke, StrokeWet, Tool, ToolState};
 
 mod camera;
 mod dialogs;
@@ -201,6 +201,18 @@ pub struct App {
     /// (`tree_window`/`history_tree`; owner request 2026-11-13: a stroke
     /// has a single color, no primary/secondary pair).
     stroke_paint: Option<Color32>,
+    /// The tool frozen at stroke start — one gesture is one node of one
+    /// tool. A hotkey switching the tool mid-drag must not re-rasterize the
+    /// remaining pieces with the new tool (and the wet layer bakes the
+    /// gesture's blend and color in); the release records THIS tool.
+    stroke_tool: Option<Tool>,
+    /// The brush/eraser gesture's wet layer (owner bug fix 2026-11-23):
+    /// the whole stroke's coverage accumulates at full alpha and the
+    /// active layer is recomposited once per changed region
+    /// ([`tools::StrokeWet`]), so a translucent color cannot double-blend
+    /// at the frame joints. `None` for the pencil (the trail's dedupe is
+    /// its translucency guard) and outside gestures.
+    stroke_wet: Option<StrokeWet>,
     /// §3.11 placement state of the four floating windows (owner request
     /// 2026-11-11 added the Tool Log/Layers pair); the Tools one also carries
     /// the one-shot §3.2 first-open vertical ratio (40%/60%).
@@ -418,6 +430,8 @@ impl App {
             tree_views: vec![TreeView::main()],
             tree_clones: 0,
             stroke_paint: None,
+            stroke_tool: None,
+            stroke_wet: None,
             // The first-open gaps are DROPPED gaps (owner bug fix 2026-11-17:
             // a never-dragged window had free axes, so its first-open gaps
             // scaled with the free space and drifted off the magnet

@@ -270,6 +270,65 @@ fn the_press_dot_and_smoothed_pieces_confine_to_the_selection() {
     );
 }
 
+/// The owner's bug report 2026-11-23: with a semi-transparent brush color
+/// the stroke's joint circles turned LESS transparent than the stroke body.
+/// Every frame rasterizes its pieces as an independent tiny-skia stroke —
+/// the new frame's start cap and the press dot sat exactly on the previous
+/// frame's end cap, and premultiplied source-over stacked the alpha at
+/// every overlap (α 0.5 twice ≈ 0.75). The gesture must composite the whole
+/// stroke ONCE, so a joint pixel is indistinguishable from the body.
+#[test]
+fn translucent_brush_joints_match_the_stroke_body() {
+    let mut app = App::new_headless();
+    let color = Color32::from_rgba_unmultiplied(10, 20, 30, 128);
+    app.tools.tool = Tool::Brush;
+    app.tools.size = 8.0;
+    app.tools.primary = color;
+    app.stroke_button = Some(PointerButton::Primary);
+    app.is_stroking = true;
+    app.stroke_paint = Some(color);
+
+    // The gesture: the press dot, then two drag frames whose pieces share
+    // the midpoint (60, 50) — the second frame's start cap disc overlaps
+    // the first frame's end cap disc (and the dot) exactly.
+    app.paint_segment(pos2(50.0, 50.0), pos2(50.0, 50.0));
+    app.paint_smooth_pieces(
+        &[SmoothPiece::Line {
+            from: pos2(50.0, 50.0),
+            to: pos2(60.0, 50.0),
+        }],
+        None,
+    );
+    app.paint_smooth_pieces(
+        &[SmoothPiece::Line {
+            from: pos2(60.0, 50.0),
+            to: pos2(70.0, 50.0),
+        }],
+        None,
+    );
+
+    let layer = app.layers.active().pixmap();
+    let pixel = |x: i32, y: i32| {
+        layer
+            .pixel(x as u32, y as u32)
+            .expect("in bounds")
+            .demultiply()
+    };
+    let body = pixel(55, 50);
+    let joint = pixel(60, 50);
+    let press = pixel(50, 50);
+    assert_eq!(
+        (joint.red(), joint.green(), joint.blue(), joint.alpha()),
+        (body.red(), body.green(), body.blue(), body.alpha()),
+        "the joint circle must be indistinguishable from the stroke body"
+    );
+    assert_eq!(
+        (press.red(), press.green(), press.blue(), press.alpha()),
+        (body.red(), body.green(), body.blue(), body.alpha()),
+        "the press dot must not darken under the first frame's cap"
+    );
+}
+
 #[test]
 fn a_stroke_without_a_selection_paints_everywhere() {
     let (mut app, _) = stroking_app();

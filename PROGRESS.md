@@ -52,11 +52,12 @@
 | Extra: the `--atlas-test` diagnostic — a 1 px speckle edge on every atlas picture (owner 2026-11-21) | done — gates + wasm + driver green, the flagged screenshot looked at | the owner sees a gap between the icon pictures' edges and their emblems and wants to SEE it before deciding: the new boolean flag `--atlas-test` (§3.12, no value; `apply_to` → `App::atlas_test` → `ensure(…, debug_border)`) repaints every raster's outermost pixel ring with a STATIC black-and-white speckle (`tool_icons::paint_debug_border` — a per-pixel coordinate hash, replayed byte-identically on every rebuild, so no animation) — exactly ONE PHYSICAL pixel thick at any scale (the ring lives in the raster: ppp and the icon size cannot stretch it), applied to all five icon sets AND the pipette cursor's source raster, painted OVER the emblem on purpose; +1 test (the ring is opaque black/white only, BOTH colors present, the interior byte-identical, the repaint deterministic); the new shot script `scripts/gui_atlas_test_shot.sh` PASS (364 adjacent pure-black/pure-white pairs on screen); the measured insets it exists to expose: the 24 pt emblems leave 2–7 px of empty edge per side (the pencil 4/1/1/4 — the diagonal drawing), the 12 pt tree icons ≤3 px; V69 born |
 | Extra: the History Tree row icons grow 12 → 16 pt, the row grows to fit (owner 2026-11-21) | done — gates + wasm + driver + probe green, the flagged before/after screenshots looked at | the rings made it visible: the first 12 pt row icons read «слишком маленькие — там ещё довольно много свободного места». The measured reality (ppp 1): row 15 px, backdrop 13, icon 12 — a mere +1 pt would fit WITHOUT growing the row, so the row grows too: `TREE_ICON_PT` 12 → 16 and `row_height = max(text line, TREE_ICON_PT + 4)` (tree_window.rs) — one height for every row (~15 → 20 pt; pitch 18 → 23 px measured), so the emblem becomes the row's tallest element and the backdrop/swatch/hit/scroll math all follow the one value; the probe's warm-gold count 18 → 42 (2.3× the emblem pixels on screen); the 16 px dump's insets: pencil 2/1/1/2, Text 2/4/2/3 (~80% filled); the dump test's third size now rides `TREE_ICON_PT` (it was pinned 12); the tree probe passes extra launch args through (`… russet --atlas-test` — how this round's evidence was shot); +0 new tests (the row-size test and the counts ride the constant); docs: SPEC §3.6 + §3.12 example, AGENTS tool_icons clause, paint.rs/tool_icons.rs docs, the probe's header; V70 born |
 
-**Verification stamp:** FULL gate re-verified 2026-11-21 (the row-gap +
-pencil-nudge round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
-green on --all-targets (default + mcp), `cargo test --profile gates` 304
-default / 317 mcp green (+1 ignored), ALL GATES GREEN in 16 s; the wasm
-`cargo check` green; the visual driver exit 0.
+**Verification stamp:** FULL gate re-verified 2026-11-23 (the
+wet-stroke round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp), `cargo test --profile gates` 311
+default / 324 mcp green (+1 ignored), ALL GATES GREEN in 23 s; no wasm
+check per the economy rule (no web-facing paths touched); the visual
+driver exit 0; the new wet-joint GUI probe PASS.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -75,6 +76,44 @@ default / 317 mcp green (+1 ignored), ALL GATES GREEN in 16 s; the wasm
 > PROGRESS-archive.md; the latest move: the `--atlas-test` Feat entry
 > (during the brush/eraser round's budget — the file rode past ~200 lines;
 > three entries stay in the Log, all in the archive).
+
+### 2026-11-23 — `Fix:` translucent brush strokes no longer darken at the joints — brush/eraser paint through a wet stroke layer (owner bug report in chat)
+
+- **What:** the owner's report: with a semi-transparent brush color the
+  joint circles turn less transparent («полупрозрачный цвет накладывает
+  отрезок на отрезок и в стыках отрезков кружочек становится менее
+  прозрачным»). Root cause: each frame stroked its smooth pieces onto the
+  layer directly — the next frame's start cap (and the press dot) sat on
+  the previous frame's end cap, and premultiplied source-over is not
+  idempotent, so the alpha stacked at every overlap (measured: 61/255 per
+  channel darker at the joint). Fix: brush/eraser gestures paint through
+  the WET STROKE LAYER `tools/wet.rs::StrokeWet` — the whole gesture's
+  coverage accumulates in a canvas-sized full-alpha scratch (opaque
+  source-over = a coverage union), and the layer is recomposited per
+  changed region from the gesture-start base with the stroke's alpha
+  applied ONCE (the eraser destination-outs by the coverage once — no
+  more over-erase at self-overlaps either); idempotent, history/undo
+  untouched, the selection clip rides the composite. The tool + color
+  freeze at stroke start (one gesture = one node = one tool; a mid-drag
+  hotkey switch no longer re-rasterizes with the new tool). Pencil
+  unchanged (its trail dedupe stays the translucency guard). SPEC §3.5
+  rewritten for all of it.
+- **Files:** `src/tools/wet.rs` (+`wet/tests.rs`, 5 tests), `src/tools.rs`,
+  `src/app.rs` (`stroke_wet`/`stroke_tool`), `src/app/input.rs` (the wet
+  paths, the freezes, the resets), `src/selection.rs`
+  (`tight_bounds` → `pub(crate)`), `src/tools/smooth.rs` (docs),
+  `scripts/gui_wet_joint_check.sh` (new probe).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 311 default / 324
+  mcp, +6 tests; the app-level regression ran RED on the old path first —
+  joint (71,78,86) vs body (132,137,142) — then GREEN); the visual driver
+  exit 0; the wet-joint probe PASS (a translucent-red drag: 276 row
+  pixels ALL one color, deviation 0); no wasm check (no web-facing paths).
+- **Owner-checks:** V72 born (Windows `cargo run`: a translucent brush
+  stroke is uniform — joints and the press dot match the body; the eraser
+  as before; one node per gesture; a selection still confines). Open:
+  V72, V71, V70, V69 (the 4 newest); parked: V30, V8. Debts: F20, F18,
+  F17, F16 newest-first in the files.
+- **Commit title:** `Fix: translucent brush strokes no longer darken at the joints - brush/eraser paint through a wet stroke layer (StrokeWet)`
 
 ### 2026-11-21 — `Feat:` the History Tree's brush and eraser rows draw their icons like the pencil — the eraser row drops its color chip and the icon rows pull the chip closer (owner request in chat)
 
@@ -145,38 +184,3 @@ default / 317 mcp green (+1 ignored), ALL GATES GREEN in 16 s; the wasm
   open check). Open: V70, V69, V68, V67, V66, V46 (X11); parked: V30,
   V8. Debts: F20, F18, F17, F16 newest-first in the files.
 - **Commit title:** `Fix: the History Tree rows sit back-to-back - the icon gap is exactly 0.0625rem; the pencil emblem nudges a touch left-down`
-
-### 2026-11-21 — `Fix:` the History Tree row icons grow 12 → 16 pt and the row grows to fit them (owner request in chat)
-
-- **What:** the `--atlas-test` rings made the row icons' size readable and
-  the owner judged the first 12 pt emblems «слишком маленькими — там ещё
-  довольно много свободного места». Measured at ppp 1: the row is 15 px
-  tall, the opaque backdrop 13, the icon 12 — fitting a bigger icon INTO
-  the unchanged row buys only +1 pt, so the row grows WITH the icon:
-  `TREE_ICON_PT` 12 → 16 and `row_height =
-  max(text line, TREE_ICON_PT + 4 pt)` in `tree_window.rs` — one height
-  for every row (the rails' pitch, the dots, the hit rects and the scroll
-  fallback all divide it; measured pitch 18 → 23 px). The emblem is now
-  the row's tallest element; the swatch (row_height − 4) keeps matching
-  it; the backdrop still has its 1 px margins and the ring sits inside.
-- **Files:** `src/app/tool_icons.rs` (the constant + its doc),
-  `src/app/tree_window.rs` (the row-height floor + the import),
-  `src/app/tree_window/paint.rs` (the `row_icon` doc), the atlas tests'
-  comment, the dump test's third size (pinned 12 → rides
-  `TREE_ICON_PT`), `scripts/gui_tree_icon_check.sh` (extra launch args
-  pass through + the header), SPEC §3.6 + §3.12 (the example numbers),
-  AGENTS.md (the tool_icons clause).
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
-  mcp, no new tests: the row-size test and the texture counts ride the
-  constant); the wasm `cargo check` green; the visual driver exit 0; the
-  tree probe PASS (the warm-gold emblem pixels 18 → 42 — 2.3× more ink on
-  screen); the flagged before/after screenshots LOOKED AT (12 pt in an
-  18 px pitch vs 16 pt in a 23 px pitch — the ring inside the backdrop);
-  the 16 px dump measured (pencil 2/1/1/2, Text 2/4/2/3 — ~80% filled).
-- **Owner-checks:** V70 born (Windows `cargo run` + `--atlas-test`: the
-  pencil rows show the bigger emblem filling its picture, the rows are
-  taller and everything stays aligned on BOTH themes). Open: V70, V69,
-  V68, V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17, F16
-  newest-first in the files.
-- **Commit title:** `Fix: the History Tree row icons grow 12 -> 16 pt and the row grows to fit them (the atlas-test rings showed the room)`
-

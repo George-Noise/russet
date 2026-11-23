@@ -23,11 +23,11 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-23 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets -- -D warnings` + `cargo test --profile gates --no-run`) on the FRESH GitHub clone — rustup + the pinned 1.99.1 toolchain installed first; the check's own first warm-up attempt silently no-op'd on the missing rustup (PROBLEMS.md 2026-11-23) and was restarted manually | **clippy 1m 32s ≈, test --no-run ≈ 1 min** | the warm-up log ≈ |
 | 2026-11-21 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets --features mcp` + `cargo test --profile gates --features mcp --no-run`): the whole lane COLD on the fresh GitHub clone — rustup + the pinned 1.99.1 toolchain installed first | **≈ 3 min total (clippy 1m 30s)** | the warm-up log's timestamps (started 07:29:25, finished 07:32:21) |
 | 2026-11-21 | `cargo check` (this round's quick loop — COLD dev-lane dep graph on the fresh clone) | **1m 20s** | cargo's print |
 | 2026-11-21 | targeted `cargo test app::preview --profile gates` + `cargo test app::windows::tests::settings_panel --profile gates` (the first compiled the COLD gates test graph, the second ran hot) | **≈ 2–3 min total** | the tool-call wall clock ≈ (not time'd) |
 | 2026-11-20 | targeted `cargo test app::windows --profile gates` (the panel-spacing round: the gates test graph COLD in the fresh sandbox — first compile died on a fmt-broken signature, the hot re-run was instant) | **1m 59s** | time'd exactly |
-| 2026-11-20 | `cargo check` (this round's quick loop — COLD dep graph on the fresh clone; rustup + the pinned toolchain installed first) | **1m 25s** | time'd exactly |
 
 ## Hot
 

@@ -1,5 +1,39 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Fix:` the History Tree row icons grow 12 → 16 pt and the row grows to fit them (owner request in chat)
+
+- **What:** the `--atlas-test` rings made the row icons' size readable and
+  the owner judged the first 12 pt emblems «слишком маленькими — там ещё
+  довольно много свободного места». Measured at ppp 1: the row is 15 px
+  tall, the opaque backdrop 13, the icon 12 — fitting a bigger icon INTO
+  the unchanged row buys only +1 pt, so the row grows WITH the icon:
+  `TREE_ICON_PT` 12 → 16 and `row_height =
+  max(text line, TREE_ICON_PT + 4 pt)` in `tree_window.rs` — one height
+  for every row (the rails' pitch, the dots, the hit rects and the scroll
+  fallback all divide it; measured pitch 18 → 23 px). The emblem is now
+  the row's tallest element; the swatch (row_height − 4) keeps matching
+  it; the backdrop still has its 1 px margins and the ring sits inside.
+- **Files:** `src/app/tool_icons.rs` (the constant + its doc),
+  `src/app/tree_window.rs` (the row-height floor + the import),
+  `src/app/tree_window/paint.rs` (the `row_icon` doc), the atlas tests'
+  comment, the dump test's third size (pinned 12 → rides
+  `TREE_ICON_PT`), `scripts/gui_tree_icon_check.sh` (extra launch args
+  pass through + the header), SPEC §3.6 + §3.12 (the example numbers),
+  AGENTS.md (the tool_icons clause).
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
+  mcp, no new tests: the row-size test and the texture counts ride the
+  constant); the wasm `cargo check` green; the visual driver exit 0; the
+  tree probe PASS (the warm-gold emblem pixels 18 → 42 — 2.3× more ink on
+  screen); the flagged before/after screenshots LOOKED AT (12 pt in an
+  18 px pitch vs 16 pt in a 23 px pitch — the ring inside the backdrop);
+  the 16 px dump measured (pencil 2/1/1/2, Text 2/4/2/3 — ~80% filled).
+- **Owner-checks:** V70 born (Windows `cargo run` + `--atlas-test`: the
+  pencil rows show the bigger emblem filling its picture, the rows are
+  taller and everything stays aligned on BOTH themes). Open: V70, V69,
+  V68, V67, V66, V46 (X11); parked: V30, V8. Debts: F20, F18, F17, F16
+  newest-first in the files.
+- **Commit title:** `Fix: the History Tree row icons grow 12 -> 16 pt and the row grows to fit them (the atlas-test rings showed the room)`
+
 ### 2026-11-21 — `Feat:` the `--atlas-test` flag — a static 1 px black-and-white speckle ring on the outer edge of every icon-atlas picture (owner request in chat)
 
 - **What:** the owner observes that the icons are drawn with a gap between
