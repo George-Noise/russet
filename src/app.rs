@@ -74,6 +74,7 @@ mod layers_window;
 #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
 mod mcp;
 mod menu;
+mod mouse_side;
 mod placement;
 mod preview;
 mod save_dialog;
@@ -320,6 +321,11 @@ pub struct App {
     /// Applied through [`App::apply_theme`], which is also the MCP
     /// `set_theme` tool's code path.
     theme: egui::ThemePreference,
+    /// The Mouse4/Mouse5 Undo/Redo opt-in (owner request 2026-11-23,
+    /// SPEC §3.9): the session-only choice — `None` until the first
+    /// side press is answered through the modal — plus the modal's open
+    /// flag. State machine, press routing and the dialog in [`mouse_side`].
+    mouse_side: mouse_side::MouseSideButtons,
 }
 
 impl App {
@@ -498,6 +504,9 @@ impl App {
             // The switcher's default: follow the OS preference (owner
             // request 2026-11-18 — "also the choice of the system color").
             theme: egui::ThemePreference::System,
+            // The side-button opt-in starts UNASKED: the first Mouse4/Mouse5
+            // press opens the modal (`mouse_side`).
+            mouse_side: mouse_side::MouseSideButtons::default(),
         };
         // The parsed launch arguments land AFTER the literal (the config
         // tweaks existing fields; see `launch::LaunchConfig::apply_to`).
@@ -879,6 +888,7 @@ impl eframe::App for App {
         self.mcp_poll();
         self.poll_file_task();
         self.handle_hotkeys(&ctx);
+        self.handle_mouse_side_buttons(&ctx);
         // The icon atlas must exist before the canvas (the Eyedropper's
         // pipette cursor) and the Tools window (the icon buttons) draw. It
         // is scale-keyed only — theme-independent since the v4 pass and
@@ -914,6 +924,7 @@ impl eframe::App for App {
         self.save_dialog(&ctx);
         self.error_dialog(&ctx);
         self.about_dialog(&ctx);
+        self.mouse_side_dialog(&ctx);
         self.update_title(&ctx);
     }
 }

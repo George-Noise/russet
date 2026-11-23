@@ -33,11 +33,11 @@
 
 | Date | Command | Duration | Measured |
 |---|---|---|---|
+| 2026-11-23 | `cargo build` (the dev GUI binary for the mouse-side probe; warm deps, the crate itself recompiled unoptimized) | **1m 32s** | `time`d exactly |
 | 2026-11-21 | `cargo build --features mcp` (the dev MCP binary for the driver; warm deps, the crate itself recompiled unoptimized) | **1m 35s** | cargo's print |
 | 2026-11-21 | `bash scripts/verify.sh` (the diameter-circle round's full gate — the gates lane warm from the detached warm-up) | **19.7 s** | time'd exactly |
 | 2026-11-21 | NOTE: THIS recycled sandbox KEPT the detached warm-up alive across tool calls (started in one call, finished ~3 min later, verified hot by the next call's targeted tests) — the 2026-11-20 NOTE below is per-sandbox; re-probe detached survival each session | — | the warm-up log |
 | 2026-11-20 | `bash scripts/verify.sh` (the V60-fixes round's full gate — rules + fmt + clippy ×2 + test ×2; warm deps) | **20 s** | the gate's own print |
-| 2026-11-20 | `bash scripts/verify.sh` (the V59-fixes round's full gate — rules + fmt + clippy ×2 + test ×2; warm deps) | **21 s** | the gate's own print |
 | 2026-11-20 | `cargo build --features mcp` (the dev MCP binary for the driver; warm deps) | **2 s** | cargo's print |
 | 2026-11-20 | NOTE: DETACHED `setsid` background processes do NOT survive between tool calls in THIS recycled sandbox — both the gates warm-up and a detached verify.sh died silently between commands; heavy commands must run SYNCHRONOUSLY here (the compiled fingerprints persist, so the sync re-run is hot) | — | observed twice |
 

@@ -81,6 +81,16 @@ pub(super) enum SelectGesture {
     },
 }
 
+impl SelectGesture {
+    /// A region or move gesture is pending: the side-button undo/redo
+    /// guard ([`super::mouse_side`]) swallows its presses so a mid-drag
+    /// undo cannot corrupt the pending commit (a MoveDrag also holds the
+    /// lifted pixels' invariant).
+    pub(super) fn is_active(&self) -> bool {
+        !matches!(self, SelectGesture::None)
+    }
+}
+
 /// What the region gesture does to the existing selection at release —
 /// frozen at press from the modifiers (owner request: add MORE regions to
 /// the selection or remove regions, "также прямоугольником или лассо").

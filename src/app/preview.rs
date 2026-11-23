@@ -75,6 +75,15 @@ pub(super) enum PreviewState {
     },
 }
 
+impl PreviewState {
+    /// A preview gesture is pending (a drag or a polyline is live): the
+    /// side-button undo/redo guard ([`super::mouse_side`]) swallows its
+    /// presses so a mid-drag undo cannot corrupt the pending commit.
+    pub(super) fn is_active(&self) -> bool {
+        !matches!(self, PreviewState::None)
+    }
+}
+
 /// What a [`PreviewState::Drag`] is drawing.
 #[derive(Clone, Copy)]
 pub(super) enum DragKind {

@@ -53,11 +53,11 @@
 | Extra: the History Tree row icons grow 12 → 16 pt, the row grows to fit (owner 2026-11-21) | done — gates + wasm + driver + probe green, the flagged before/after screenshots looked at | the rings made it visible: the first 12 pt row icons read «слишком маленькие — там ещё довольно много свободного места». The measured reality (ppp 1): row 15 px, backdrop 13, icon 12 — a mere +1 pt would fit WITHOUT growing the row, so the row grows too: `TREE_ICON_PT` 12 → 16 and `row_height = max(text line, TREE_ICON_PT + 4)` (tree_window.rs) — one height for every row (~15 → 20 pt; pitch 18 → 23 px measured), so the emblem becomes the row's tallest element and the backdrop/swatch/hit/scroll math all follow the one value; the probe's warm-gold count 18 → 42 (2.3× the emblem pixels on screen); the 16 px dump's insets: pencil 2/1/1/2, Text 2/4/2/3 (~80% filled); the dump test's third size now rides `TREE_ICON_PT` (it was pinned 12); the tree probe passes extra launch args through (`… russet --atlas-test` — how this round's evidence was shot); +0 new tests (the row-size test and the counts ride the constant); docs: SPEC §3.6 + §3.12 example, AGENTS tool_icons clause, paint.rs/tool_icons.rs docs, the probe's header; V70 born |
 
 **Verification stamp:** FULL gate re-verified 2026-11-23 (the
-wet-stroke round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
-green on --all-targets (default + mcp), `cargo test --profile gates` 311
-default / 324 mcp green (+1 ignored), ALL GATES GREEN in 23 s; no wasm
-check per the economy rule (no web-facing paths touched); the visual
-driver exit 0; the new wet-joint GUI probe PASS.
+mouse-side round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp), `cargo test --profile gates` 323
+default / 336 mcp green (+1 ignored), ALL GATES GREEN in 20 s; no wasm
+check per the economy rule (no web-facing paths touched); the new
+mouse-side GUI probe PASS (modal → Yes → Mouse4 undo → Mouse5 redo).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -73,9 +73,42 @@ driver exit 0; the new wet-joint GUI probe PASS.
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-21) lives in
-> PROGRESS-archive.md; the latest move: the `--atlas-test` Feat entry
-> (during the brush/eraser round's budget — the file rode past ~200 lines;
-> three entries stay in the Log, all in the archive).
+> PROGRESS-archive.md; the latest move: the 2026-11-21 "rows sit
+> back-to-back" Fix entry (during the mouse-side round's budget — the file
+> rode past ~200 lines; three entries stay in the Log).
+
+### 2026-11-23 — `Feat:` Mouse4/Mouse5 undo/redo behind a first-press opt-in modal (owner request in chat)
+
+- **What:** the owner's order: «Мне предложили добавить на Mouse4 и Mouse5
+  undo и redo… сделай как у других, НО нужно при первом нажатии … спросить
+  пользователя через модалку». The side buttons — winit `Back`/`Forward` →
+  egui `PointerButton::Extra1`/`Extra2` — follow the browser back/forward
+  mapping (Mouse4 = Undo, Mouse5 = Redo, the Ctrl+Z/Ctrl+Y twin). The FIRST
+  side press never acts: it opens the centered "Mouse Side Buttons" modal
+  (the shared dialog helpers); **Yes** enables for the session, **No**
+  disables, the ✕ decides nothing (the next press asks again — the
+  session-only choice lives in `App` and dies with the process, SPEC §6
+  keeps settings-saving out of scope; the framework's eframe
+  `persistence` route for the future is described in the chat reply, not
+  wired). Presses are consumed unconditionally and inert while the modal
+  is open, while declined, and during an active canvas gesture (stroke /
+  Line-Shape preview / Select region+move / Text entry — an undo
+  mid-gesture would corrupt the pending node); exhausted stacks are
+  silent no-ops (the redo-keys convention); the answer lands in the Tool
+  Log. SPEC §3.9 row added.
+- **Files:** `src/app/mouse_side.rs` (+`mouse_side/tests.rs`, 12 tests —
+  the pure state machine + the real press handler over the real history),
+  `src/app.rs` (module, field, init, the two frame-flow hooks),
+  `src/app/preview.rs` + `src/app/selection.rs` (`is_active` guards),
+  `scripts/gui_mouse_side_check.sh` (new probe), SPEC §3.9.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 323 default / 336
+  mcp, +12 tests); no wasm check (no web-facing paths); the new probe
+  PASS end-to-end under Xvfb: stroke painted → first Mouse4 press opened
+  the modal AND left the canvas alone → Yes click enabled → Mouse4 undid
+  the stroke → Mouse5 redid it.
+- **Owner-checks:** V73 (the real-mouse pass on Windows, incl. the ✕
+  re-ask behavior).
+- **Commit title:** `Feat: Mouse4/Mouse5 undo/redo opt-in - the first side press opens a yes/no modal, the session-only choice routes Mouse4 to undo and Mouse5 to redo, presses stay inert while unanswered, declined or mid-gesture`
 
 ### 2026-11-23 — `Fix:` translucent brush strokes no longer darken at the joints — brush/eraser paint through a wet stroke layer (owner bug report in chat)
 
@@ -149,38 +182,3 @@ driver exit 0; the new wet-joint GUI probe PASS.
   chipless eraser row). Open: V71, V70, V69, V68, V67, V66 (X11);
   parked: V30, V8. Debts: F20, F18, F17, F16 newest-first in the files.
 - **Commit title:** `Feat: the History Tree's brush and eraser rows draw their icons like the pencil - the eraser row drops its color chip and the icon rows pull the chip closer`
-
-### 2026-11-21 — `Fix:` the History Tree rows sit back-to-back — the icon gap is exactly 0.0625rem; the pencil emblem nudges left-down (owner request in chat)
-
-- **What:** two refinements on top of the size pass. (1) The vertical gap
-  between two consecutive row icons is EXACTLY 0.0625rem (= 1 pt; the
-  repo's rem convention, `ICON_PT`/`FIRST_OPEN_GAP`): the rows now sit
-  BACK-TO-BACK — `row_height = max(text line, TREE_ICON_PT +
-  TREE_ICON_GAP)` in `tree_window.rs` (new `TREE_ICON_GAP` const) and
-  `paint.rs` cancels egui's default inter-row spacing after every row
-  allocation (`ui.add_space(-item_spacing.y)`) — the row height IS the
-  pitch, measured 23 → 17 px at ppp 1. (2) The pencil emblem moves a
-  touch «влево-вниз» relative to the icon's center: `PENCIL_NUDGE`
-  (-1, +1 design pt of the 24 pt emblem space) applied AFTER
-  `icon_transform` through the new `primitives.rs::nudged_icon_transform`
-  (the shift lands in the transform's translation column) — the direction
-  is screen-FIXED (the -45° rotation cannot turn it) and scales with the
-  raster; the dump confirms: 24 px insets 4/1/1/4 → 3/2/2/3.
-- **Files:** `src/app/tree_window.rs` (the `TREE_ICON_GAP` const + the
-  row-height rule), `src/app/tree_window/paint.rs` (the spacing cancel),
-  `src/app/tool_icons/draw.rs` (`PENCIL_NUDGE`),
-  `src/app/tool_icons/primitives.rs` (`nudged_icon_transform`),
-  `src/app/tool_icons/draw/tools.rs` (the pencil dispatcher), the
-  tool_icons re-export; SPEC §3.6, AGENTS.md (the tool_icons clause),
-  the `TREE_ICON_PT` doc.
-- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
-  mcp, clippy `-D warnings` clean, no new tests: the geometry rides the
-  consts and the probe); the wasm `cargo check` green; the visual driver
-  exit 0; the tree probe PASS with `--atlas-test`; the flagged screenshot
-  LOOKED AT (the two rings 1 px apart, nothing clipped, the pencil
-  off-center as ordered); the measured pitch 17 px and the 24/16 px dump
-  insets confirm both changes.
-- **Owner-checks:** V70 AMENDED (the refinements fold into the same
-  open check). Open: V70, V69, V68, V67, V66, V46 (X11); parked: V30,
-  V8. Debts: F20, F18, F17, F16 newest-first in the files.
-- **Commit title:** `Fix: the History Tree rows sit back-to-back - the icon gap is exactly 0.0625rem; the pencil emblem nudges a touch left-down`

@@ -1,3 +1,20 @@
+### 2026-11-23 — Bare `cargo test --profile gates --features mcp` hung the tool call: the SANDBOX.md trap-10 stdin pipe, again
+
+- What happened: ran `cargo test --profile gates --features mcp` directly
+  (not through verify.sh) to read off the mcp lane's test count; the tests
+  themselves passed (the same lane ran green inside verify.sh in 9 s), but
+  the cargo↔test-binary teardown hung and the 5-minute tool-call timeout
+  killed the command.
+- Expected vs actual: verify.sh's comment and SANDBOX.md trap 10 document
+  that every mcp test binary spawns an MCP stdin reader and the recycled
+  sandbox's session stdin is an open pipe/pty whose EOF never comes —
+  the run needs `</dev/null`. The agent ran the bare command anyway and
+  paid the timeout.
+- What it cost: one wasted 5-minute tool call + one re-run (hot, seconds).
+- What could improve: none beyond following the documented trap — the fix
+  is `cargo test --profile gates --features mcp </dev/null` (or reading
+  verify.sh's staging first). One-off.
+
 ### 2026-11-23 — sandbox_check's detached warm-up fired without rustup and its verdict still said "verify.sh is now hot"
 
 - What: fresh recycled sandbox — `scripts/sandbox_check.sh --warm` printed

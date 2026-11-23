@@ -1,5 +1,40 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-21 — `Fix:` the History Tree rows sit back-to-back — the icon gap is exactly 0.0625rem; the pencil emblem nudges left-down (owner request in chat)
+
+- **What:** two refinements on top of the size pass. (1) The vertical gap
+  between two consecutive row icons is EXACTLY 0.0625rem (= 1 pt; the
+  repo's rem convention, `ICON_PT`/`FIRST_OPEN_GAP`): the rows now sit
+  BACK-TO-BACK — `row_height = max(text line, TREE_ICON_PT +
+  TREE_ICON_GAP)` in `tree_window.rs` (new `TREE_ICON_GAP` const) and
+  `paint.rs` cancels egui's default inter-row spacing after every row
+  allocation (`ui.add_space(-item_spacing.y)`) — the row height IS the
+  pitch, measured 23 → 17 px at ppp 1. (2) The pencil emblem moves a
+  touch «влево-вниз» relative to the icon's center: `PENCIL_NUDGE`
+  (-1, +1 design pt of the 24 pt emblem space) applied AFTER
+  `icon_transform` through the new `primitives.rs::nudged_icon_transform`
+  (the shift lands in the transform's translation column) — the direction
+  is screen-FIXED (the -45° rotation cannot turn it) and scales with the
+  raster; the dump confirms: 24 px insets 4/1/1/4 → 3/2/2/3.
+- **Files:** `src/app/tree_window.rs` (the `TREE_ICON_GAP` const + the
+  row-height rule), `src/app/tree_window/paint.rs` (the spacing cancel),
+  `src/app/tool_icons/draw.rs` (`PENCIL_NUDGE`),
+  `src/app/tool_icons/primitives.rs` (`nudged_icon_transform`),
+  `src/app/tool_icons/draw/tools.rs` (the pencil dispatcher), the
+  tool_icons re-export; SPEC §3.6, AGENTS.md (the tool_icons clause),
+  the `TREE_ICON_PT` doc.
+- **Verified:** FULL gate ALL GATES GREEN (the stamp — 304 default / 317
+  mcp, clippy `-D warnings` clean, no new tests: the geometry rides the
+  consts and the probe); the wasm `cargo check` green; the visual driver
+  exit 0; the tree probe PASS with `--atlas-test`; the flagged screenshot
+  LOOKED AT (the two rings 1 px apart, nothing clipped, the pencil
+  off-center as ordered); the measured pitch 17 px and the 24/16 px dump
+  insets confirm both changes.
+- **Owner-checks:** V70 AMENDED (the refinements fold into the same
+  open check). Open: V70, V69, V68, V67, V66, V46 (X11); parked: V30,
+  V8. Debts: F20, F18, F17, F16 newest-first in the files.
+- **Commit title:** `Fix: the History Tree rows sit back-to-back - the icon gap is exactly 0.0625rem; the pencil emblem nudges a touch left-down`
+
 ### 2026-11-21 — `Fix:` the History Tree row icons grow 12 → 16 pt and the row grows to fit them (owner request in chat)
 
 - **What:** the `--atlas-test` rings made the row icons' size readable and
