@@ -70,3 +70,11 @@ Sandbox notes: the toolchain re-installed (rustup 1.99.1), `/tmp/xkbfix` rebuilt
 `/tmp/xdotool` rebuilt — needs THREE lib debs now (libxtst6 + libxi6 joined libxdo3,
 SANDBOX.md trap 13: with only libxdo3 every xdotool call dies on libXtst and the
 probe's pointer never moves).
+
+## 2026-11-23 — the tolerance-slider round (second recycle in one day: toolchain + /tmp rebuilt, tree restored from the delivery zip)
+
+| Command | Duration | Note |
+|---|---|---|
+| `cargo build` (cold target/) | 1 m 39 s | the slider round's first full build |
+| `verify.sh` | 82 s first / 15 s warm | ALL GATES GREEN (351 default / 364 mcp) |
+| `gui_wand_fill_check.sh` | ~45 s ×2 | the calibration run + the 100 % pour-over assert |

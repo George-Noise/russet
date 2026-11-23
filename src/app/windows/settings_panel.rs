@@ -391,6 +391,38 @@ pub(super) fn size_block_ui(ui: &mut egui::Ui, tools: &mut ToolState, tool: Tool
     }
 }
 
+/// The flood THRESHOLD block — the magic wand's and the Fill tool's shared
+/// tolerance slider (owner request 2026-11-23: «в приклеенную панельку к
+/// окошку Tools добавить для заливки в волшебной палочки добавить ползунок
+/// похожий на Size но выполняющий функцию порога срабатывания в %, я бы
+/// выбрал не % но людям куда проще понимать именно %»): the SAME look as
+/// [`size_block_ui`] (a label row, then a slider + a number box in one
+/// row), 0..=100 percent, the number box carrying a `%` suffix. ONE
+/// setting for both tools (the flood is one shared method): the Select
+/// panel shows it while the WAND mode is active, the Fill panel — always.
+pub(super) fn tolerance_block_ui(ui: &mut egui::Ui, tools: &mut ToolState) {
+    ui.label("Tolerance");
+    ui.horizontal(|ui| {
+        // The same slider-width pin the Size block uses (egui's Slider
+        // reads `spacing.slider_width` only).
+        ui.spacing_mut().item_spacing.x = TOOL_GRID_GAP;
+        ui.spacing_mut().slider_width = SIZE_SLIDER_W;
+        let mut pct = tools.flood_tolerance_pct;
+        if ui
+            .add(egui::Slider::new(&mut pct, 0..=100).show_value(false))
+            .changed()
+        {
+            tools.flood_tolerance_pct = pct;
+        }
+        ui.add(
+            egui::DragValue::new(&mut tools.flood_tolerance_pct)
+                .range(0..=100)
+                .speed(1.0)
+                .suffix("%"),
+        );
+    });
+}
+
 impl App {
     /// The magnetized settings panel of the "Tools" window (owner request
     /// 2026-11-17): the per-tool controls that used to sit below the tool
@@ -454,10 +486,13 @@ impl App {
                     ui.weak("Click the canvas to place text;");
                     ui.weak("font size is set in the Text window.");
                 }
-                // The Fill has no panel knobs (owner request 2026-11-23:
-                // the flood tolerance is the shared fixed FLOOD_TOLERANCE
-                // — a setting lands only if the owner asks).
-                Tool::Pencil | Tool::Brush | Tool::Eraser | Tool::Eyedropper | Tool::Fill => {}
+                Tool::Fill => {
+                    // The flood-threshold slider (owner request 2026-11-23:
+                    // «похожий на Size но выполняющий функцию порога
+                    // срабатывания в %») — the Fill panel's only knob.
+                    tolerance_block_ui(ui, &mut self.tools);
+                }
+                Tool::Pencil | Tool::Brush | Tool::Eraser | Tool::Eyedropper => {}
             }
         });
         if let Some(response) = &shown {

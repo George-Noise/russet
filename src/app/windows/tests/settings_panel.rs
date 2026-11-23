@@ -10,7 +10,7 @@ use super::super::settings_panel::{
     line_settings_ui, settings_panel_shown, shape_settings_ui, tool_has_settings, tool_uses_size,
 };
 use super::common::{SCREEN, show_once, show_tools_once};
-use crate::tools::{LineMode, ShapeKind, ShapeOutline, ShapePaint, Tool};
+use crate::tools::{LineMode, ShapeKind, ShapeOutline, ShapePaint, Tool, ToolState};
 use eframe::egui::{self, Pos2, Rect};
 
 /// Owner request 2026-11-19: while the Tools window is COLLAPSED to its
@@ -530,4 +530,47 @@ fn the_settings_panel_hugs_its_content() {
     // The default outer width is 340 pt; anything screen-wide means a
     // first-pass available-width leak.
     assert!(rect.width() < 400.0, "panel width {}", rect.width());
+}
+
+#[test]
+fn the_tolerance_block_is_the_fill_panels_knob() {
+    // Owner request 2026-11-23: the Fill panel's slider — the Size block's
+    // look, functioning as the flood threshold in percent (the users' unit).
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        ..egui::RawInput::default()
+    };
+    let mut tools = ToolState::new();
+    tools.flood_tolerance_pct = 40;
+    let mut labels = Vec::new();
+    for _ in 0..2 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            egui::Area::new(egui::Id::unique("fill_tolerance_probe"))
+                .fixed_pos(Pos2::ZERO)
+                .show(ctx, |ui| {
+                    super::super::settings_panel::tolerance_block_ui(ui, &mut tools);
+                });
+        });
+        labels = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => Some(text.galley.text().to_string()),
+                _ => None,
+            })
+            .collect();
+        output.textures_delta.clear();
+    }
+    assert!(
+        labels.iter().any(|t| t == "Tolerance"),
+        "the block labels itself, texts: {labels:?}"
+    );
+    // The number box carries the % suffix (the unit is FOR PEOPLE).
+    assert!(
+        labels.iter().any(|t| t.ends_with('%')),
+        "the value renders with the percent sign, texts: {labels:?}"
+    );
+    // The startup value survived the passes untouched.
+    assert_eq!(tools.flood_tolerance_pct, 40);
 }

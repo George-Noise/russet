@@ -27,6 +27,11 @@ LIB=/tmp/xkbfix/ext/usr/lib/x86_64-linux-gnu:/tmp/xdotool/ext/usr/lib/x86_64-lin
 XD=/tmp/xdotool/ext/usr/bin/xdotool
 OUT=/tmp/wand_fill_shots
 rm -rf "$OUT" && mkdir -p "$OUT"
+# The tolerance slider's track-right coordinates (calibrated on shot 2b:
+# the track spans x 16..115 at y 486, the handle rests at the 13 % mark,
+# the value box reads "13 %").
+TOL_X="${TOL_X:-114}"
+TOL_Y="${TOL_Y:-486}"
 
 pkill -x Xvfb 2>/dev/null; pkill -x russet 2>/dev/null; sleep 1
 
@@ -72,7 +77,30 @@ sleep 1
 
 shot 2_after_fill_background_black
 
+# The Fill panel's TOLERANCE slider (owner request 2026-11-23) — the
+# calibration shot shows where it sits magnetized under the Tools window.
+shot 2b_fill_panel_tolerance_slider
+
 # Undo restores the background (the fill node is undoable like a stroke).
+DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key ctrl+z
+sleep 1
+
+# The slider → 100 %: ONE click at the track's far right (egui's slider
+# jumps the value to the click point). At 100 % the flood matches EVERY
+# pixel — the next fill pours over the blob too (the canvas goes uniform
+# black, the white slits between the strokes included).
+DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove "$TOL_X" "$TOL_Y" mousedown 1
+DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mouseup 1
+sleep 0.5
+DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove 700 150 click 1
+sleep 1
+
+shot 2c_after_100pct_fill_floods_over_blob
+
+# Undo twice: the 100 % fill and the tolerance remain … the undo restores
+# the blob's canvas; the slider state is tool state (not history).
+DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key ctrl+z
+sleep 0.5
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key ctrl+z
 sleep 1
 
@@ -148,12 +176,23 @@ CANVAS = (200, 100, 860, 700)
 BLOB = (258, 264, 342, 334)
 w_before = whites(a, CANVAS)
 w_after = whites(b, CANVAS)
+over = whites(
+    Image.open(f"{out}/2c_after_100pct_fill_floods_over_blob.png").convert("RGB"),
+    BLOB,
+)
 ants = diffs(baseline, c, BLOB)
 gone = diffs(baseline, d, BLOB)
-print(f"white before fill={w_before} after fill={w_after}; ants diff={ants}, after esc diff={gone}")
+print(
+    f"white before fill={w_before} after fill={w_after}; at 100 % the blob box holds "
+    f"{over} white pixels; ants diff={ants}, after esc diff={gone}"
+)
 assert w_before > 30000, "the calibration canvas is not a white field"
 assert w_after < 4000, (
     f"the background flood did not paint (white {w_after}) — the Fill tool did not commit"
+)
+assert over < 100, (
+    f"the 100 % flood did not pour over the blob ({over} white pixels remain) — "
+    "the tolerance slider did not drive the flood"
 )
 assert ants >= 60, (
     f"no ants on the blob contour (diff {ants}) — the wand flood did not select"
@@ -163,7 +202,7 @@ assert gone <= 15, (
 )
 print(
     "PROBE PASS: the Fill flood painted the background black (one Fill node), "
-    "the wand flood-selected the background (the ants lit the blob's contour), "
-    "and Esc dropped the selection"
+    "the tolerance slider's 100 % poured over the blob, the wand flood-selected "
+    "the background (the ants lit the blob's contour), and Esc dropped the selection"
 )
 PYEOF

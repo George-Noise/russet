@@ -496,7 +496,7 @@ fn the_flood_gathers_the_contiguous_band_and_stops_at_the_wall() {
             None
         }
     };
-    let pixels = flood_pixels(4, 3, (0, 0), flood);
+    let pixels = flood_pixels(4, 3, (0, 0), 32, flood);
     assert_eq!(
         pixels,
         vec![
@@ -516,28 +516,55 @@ fn the_flood_gathers_the_contiguous_band_and_stops_at_the_wall() {
 #[test]
 fn the_flood_measures_against_the_seed_not_the_running_neighbor() {
     // The Paint.NET rule: every matched pixel compares to the SEED's color
-    // (within FLOOD_TOLERANCE per channel), so a slow gradient walks off
-    // the seed's band and the flood stops — no unbounded chain-creep.
+    // (within the tolerance per channel), so a slow gradient walks off the
+    // seed's band and the flood stops — no unbounded chain-creep.
     // Column 0 = the seed red; column 1 = one shade within tolerance;
     // column 2 = far outside it (even though 1 and 2 are close to each
     // other, a chain through 1 must NOT reach 2).
     let flood = |x: i64, _y: i64| {
         Some(match x {
             0 => Color32::from_rgb(120, 0, 0),
-            1 => Color32::from_rgb(120 + i32::from(FLOOD_TOLERANCE) as u8, 0, 0), // exactly the edge
-            _ => Color32::from_rgb((120 + 2 * i32::from(FLOOD_TOLERANCE) + 10) as u8, 0, 0),
+            1 => Color32::from_rgb(152, 0, 0), // exactly the 32 edge
+            _ => Color32::from_rgb(194, 0, 0), // outside the seed's band
         })
     };
-    let pixels = flood_pixels(3, 1, (0, 0), flood);
+    let pixels = flood_pixels(3, 1, (0, 0), 32, flood);
     assert_eq!(pixels, vec![(0, 0), (1, 0)], "column 2 stays out");
 }
 
 #[test]
+fn the_tolerance_slider_gates_the_flood_width() {
+    // The panel's percent threshold (owner request 2026-11-23) converted
+    // per channel: 0 % matches the EXACT color only, 100 % matches
+    // everything, and the same gradient splits accordingly.
+    let gradient = |x: i64, _y: i64| Some(Color32::from_rgb((60 + 4 * x) as u8, 0, 0));
+    assert_eq!(
+        flood_pixels(3, 1, (0, 0), tolerance_from_percent(0), gradient),
+        vec![(0, 0)],
+        "0 %: the exact color only"
+    );
+    let wide = flood_pixels(3, 1, (0, 0), tolerance_from_percent(100), gradient);
+    assert_eq!(wide, vec![(0, 0), (1, 0), (2, 0)], "100 %: everything");
+}
+
+#[test]
+fn the_percent_to_tolerance_mapping_is_the_panel_contract() {
+    assert_eq!(tolerance_from_percent(0), 0);
+    assert_eq!(
+        tolerance_from_percent(13),
+        33,
+        "the startup 13 % ≈ the old const 32"
+    );
+    assert_eq!(tolerance_from_percent(50), 127);
+    assert_eq!(tolerance_from_percent(100), 255);
+}
+
+#[test]
 fn the_flood_off_grid_seed_and_single_pixel_match() {
-    assert!(flood_pixels(4, 3, (-1, 0), |_, _| Some(Color32::RED)).is_empty());
+    assert!(flood_pixels(4, 3, (-1, 0), 32, |_, _| Some(Color32::RED)).is_empty());
     // A lone matching pixel still floods (itself).
     assert_eq!(
-        flood_pixels(1, 1, (0, 0), |_, _| Some(Color32::RED)),
+        flood_pixels(1, 1, (0, 0), 32, |_, _| Some(Color32::RED)),
         vec![(0, 0)]
     );
 }

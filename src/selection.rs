@@ -364,28 +364,31 @@ fn distinct_points(points: &[Pos2]) -> Vec<Pos2> {
     out
 }
 
-/// The color tolerance of the shared flood-fill core (the wand selection
-/// AND the Fill tool — owner request 2026-11-23: «можно сделать заливку
-/// тем же методом что и выделение волшебной палочкой, там очень похожий
-/// метод»): a pixel joins the flood when EVERY channel differs from the
-/// SEED's color by at most this much. Paint.NET's wand works the same way
-/// against the clicked pixel, with a fixed tolerance standing in for its
-/// slider — one knob to turn if the owner asks for one.
-pub const FLOOD_TOLERANCE: u8 = 32;
+/// Converts the panel's PERCENT threshold (the users' unit — owner request
+/// 2026-11-23: «людям куда проще понимать именно %») into the per-channel
+/// tolerance `flood_pixels` compares with: `pct × 255 / 100`, so 0 % = the
+/// exact color only, 100 % = every pixel matches. 13 % (the startup value)
+/// maps to 33 ≈ the pre-slider const 32.
+pub fn tolerance_from_percent(pct: u8) -> u8 {
+    ((pct as u32) * 255 / 100) as u8
+}
 
 /// The flood-fill core (owner request 2026-11-23: the magic-wand selection
 /// and the Fill tool share ONE method): a 4-neighborhood breadth-first walk
 /// from `seed` over the `(width × height)` pixel grid, gathering every
-/// pixel whose color is within [`FLOOD_TOLERANCE`] of the SEED's color
+/// pixel whose color is within `tolerance` per channel of the SEED's color
 /// (the reference is the seed, not the running neighbor — the same rule
 /// Paint.NET's wand follows, so a gradient floods in one tolerance band).
-/// The `sample` closure returns the straight-alpha color of a pixel (or
-/// `None` outside the grid). Returns the matched pixels sorted and
-/// deduplicated — the shape [`Region::Wand`] stores.
+/// `tolerance` comes from the panel's percent slider through
+/// [`tolerance_from_percent`]. The `sample` closure returns the
+/// straight-alpha color of a pixel (or `None` outside the grid). Returns
+/// the matched pixels sorted and deduplicated — the shape [`Region::Wand`]
+/// stores.
 pub fn flood_pixels(
     width: u32,
     height: u32,
     seed: (i64, i64),
+    tolerance: u8,
     sample: impl Fn(i64, i64) -> Option<Color32>,
 ) -> Vec<(i64, i64)> {
     let Some(seed_color) = sample(seed.0, seed.1) else {
@@ -398,10 +401,10 @@ pub fn flood_pixels(
     };
     let matches = |c: Color32| -> bool {
         let diff = |a: u8, b: u8| (i16::from(a) - i16::from(b)).abs();
-        diff(c.r(), seed_color.r()) <= i16::from(FLOOD_TOLERANCE)
-            && diff(c.g(), seed_color.g()) <= i16::from(FLOOD_TOLERANCE)
-            && diff(c.b(), seed_color.b()) <= i16::from(FLOOD_TOLERANCE)
-            && diff(c.a(), seed_color.a()) <= i16::from(FLOOD_TOLERANCE)
+        diff(c.r(), seed_color.r()) <= i16::from(tolerance)
+            && diff(c.g(), seed_color.g()) <= i16::from(tolerance)
+            && diff(c.b(), seed_color.b()) <= i16::from(tolerance)
+            && diff(c.a(), seed_color.a()) <= i16::from(tolerance)
     };
     let mut visited = vec![false; width as usize * height as usize];
     let mut queue = std::collections::VecDeque::new();

@@ -218,6 +218,59 @@
   nothing; web: no `egui_memory_ron` in localStorage).
 - **Commit title:** `Feat: compile eframe persistence with both save channels off; persist_window false, persist_egui_memory false and an empty App::save keep app.ron unwritten`
 
+### 2026-11-23 — `Feat:` only the Mouse4/Mouse5 choice persists + the Settings window opens from a new menu-bar menu (owner request in chat)
+
+- **What:** two orders in one round: «только Mouse4/Mouse5 выбор
+  сохранялся» and a Settings item in the top panel opening a window with
+  the settings described, ONE dropdown, three options (спросить /
+  использовать / не использовать — the meaning his, the wording ours).
+  (1) The session-only `Option<Choice>` became the THREE-way persisted
+  `MouseSideMode` (Ask = the startup default / Always / Never): the
+  modal's Yes/No now settle the choice PERMANENTLY, the ✕ still decides
+  nothing, and the Settings dropdown re-opens the question at any time
+  (leaving Ask closes an open modal; a settled choice logs to the Tool
+  Log). (2) The new **Settings** menu (§3.1: after Theme, before Help —
+  Help stays LAST) carries one item "Settings…" opening the Settings
+  window (§3.14, NEW `app/settings_window.rs`, the About-window pattern:
+  centered on every open, ✕ + Close close it) — the strong setting
+  label, the ComboBox (Ask every session / Use for Undo / Redo / Don't
+  use) and the CURRENT choice's live description + "The choice is saved
+  between sessions." (3) The storage (§1 policy): `App::save` writes
+  EXACTLY ONE key `settings/mouse_side_buttons` = the plain string
+  "always"/"never" (NO serde — eframe does not re-export it; the
+  zero-dependency hand encoding); Ask REMOVES the key and only when
+  present (eframe's `remove_string` dirties the file unconditionally
+  while `set_string` dirties only on a value change), so an undecided
+  user keeps a byte-empty storage — NO app.ron at all; the automatic
+  channels stay OFF; a missing/corrupt value loads as Ask; the 30-s
+  autosave fires from a FRAME (an idle app never saves) and the exit
+  save always runs on a graceful quit.
+- **Files:** `src/app/mouse_side.rs` (+ its tests split by topic into
+  `tests/{machine,persistence,app_routing}.rs` — the 300-line guard),
+  NEW `src/app/settings_window.rs` (+ `tests/`), `src/app.rs` (the field,
+  the frame-flow call, `App::save` persist, `new_with` storage load),
+  `src/app/menu.rs`, `src/app/tests.rs`, `Cargo.toml` (comment),
+  SPEC §1/§3.1/§3.9/§3.14, AGENTS.md (the persistence quirk + the module
+  map), NEW `scripts/gui_settings_check.sh`.
+- **Verified:** FULL gate ALL GATES GREEN in 24 s (fmt, rules, clippy ×2,
+  test ×2 — 340 default / 353 mcp, +15 tests); the visual driver ALL
+  SCENARIOS GREEN (15 checks, the mcp binary); the storage probe
+  `gui_settings_check.sh` PASS (six headless sessions: A Yes → exactly
+  one key "always" via BOTH the autosave and the exit save; B restart
+  undoes without re-asking; C No → "never"; D both buttons inert on
+  Never; E an untouched AND an unanswered-killed session write NOTHING;
+  F the Settings window opens); NO wasm check — no web-facing code
+  touched (the AGENTS.md economy rule). The dropdown's own popup could
+  not be driven by synthetic xdotool clicks (the palette's popup opens
+  fine on the SAME binary) — its change path is pinned by the headless
+  tests and rides V75.
+- **Owner-checks:** V75 born (Windows `cargo run`: the first Mouse4 press
+  asks, Yes/No persist across restarts, the Settings menu opens the
+  window, the dropdown's three choices switch live, the Tool Log lines;
+  web: one localStorage entry after a choice, none without). V73 amended
+  (the choice persists now — the restart-resets clause replaced).
+- **Commit title:** `Feat: the Mouse4/Mouse5 choice persists as the ONE saved setting (a plain string key that Ask removes for a zero-write default) and the Settings menu opens the settings window with the three-choice dropdown`
+
 ### 2026-11-23 — `Feat:` Mouse4/Mouse5 undo/redo behind a first-press opt-in modal (owner request in chat)
 
 - **What:** the owner's order: «Мне предложили добавить на Mouse4 и Mouse5

@@ -165,3 +165,63 @@ fn an_injected_click_on_a_mode_button_writes_select_mode() {
         "the lasso button's click wrote the mode"
     );
 }
+
+/// The TEXT galleys the panel painted (the labels a slider block adds —
+/// the button-rect helper only sees buttons).
+fn text_strings(shapes: &[egui::epaint::ClippedShape]) -> Vec<String> {
+    shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            Shape::Text(text) => Some(text.galley.text().to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_tolerance_slider_shows_only_while_the_wand_mode_is_active() {
+    // Owner request 2026-11-23: the threshold slider rides the WAND mode —
+    // the rect/lasso drags have no threshold to tune.
+    let mut tools = ToolState::new();
+    tools.select_mode = SelectMode::Wand;
+    let (_, wand_rects) = run_panel(&mut tools, SelectAvail::default(), &[]);
+    let wand_texts = wand_texts_of(&mut tools);
+    assert!(
+        wand_texts.iter().any(|t| t == "Tolerance"),
+        "the wand mode shows the tolerance slider, texts: {wand_texts:?}"
+    );
+    assert!(
+        wand_rects.len() >= 7,
+        "the mode row and the ops row still draw"
+    );
+
+    let mut tools = ToolState::new();
+    tools.select_mode = SelectMode::Rect;
+    let rect_texts = wand_texts_of(&mut tools);
+    assert!(
+        !rect_texts.iter().any(|t| t == "Tolerance"),
+        "the rect mode has no threshold row, texts: {rect_texts:?}"
+    );
+}
+
+/// Runs the panel for the shapes only (the text pass).
+fn wand_texts_of(tools: &mut ToolState) -> Vec<String> {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        ..egui::RawInput::default()
+    };
+    let mut out = Vec::new();
+    for _ in 0..2 {
+        let mut output = ctx.run_pass(input.clone(), |ctx| {
+            egui::Area::new(egui::Id::unique("select_panel_texts"))
+                .fixed_pos(Pos2::ZERO)
+                .show(ctx, |ui| {
+                    select_settings_ui(ui, tools, &None, &SelectAvail::default());
+                });
+        });
+        out = text_strings(&output.shapes);
+        output.textures_delta.clear();
+    }
+    out
+}

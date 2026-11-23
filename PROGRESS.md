@@ -83,6 +83,43 @@ round's evidence).
 > the settings round's budget — the file rode past ~200 lines; three entries
 > stay in the Log).
 
+### 2026-11-23 — `Feat:` the flood threshold moves into the panels — ONE Tolerance slider (the Size block's look, in % for people) drives the wand AND the fill; F22 paid (owner request in chat)
+
+- **What:** the flood tolerance stopped being a fixed const: `ToolState::
+  flood_tolerance_pct` (0..=100, the startup 13 % — the percent form of the
+  old 32/255), converted per channel by `selection.rs::tolerance_from_percent`
+  (pct × 255 / 100; 13 % → 33). The panel block `tolerance_block_ui` mirrors
+  the Size slider's look (a label row, a 0..=100 slider, the number box with
+  a `%` suffix — the owner: «я бы выбрал не % но людям куда проще понимать
+  именно %») and shows in TWO places: the Select panel while the WAND mode
+  is active (between the mode row and the ops row) and the Fill panel
+  (its first knob). ONE value drives BOTH tools (the flood is one shared
+  method). `flood_pixels` takes the tolerance as a parameter now; the
+  wand's `wand_region` and the fill's `handle_fill_input` convert at call
+  time.
+- **Files:** `src/tools.rs` (the field + the const + the doc),
+  `src/selection.rs` (`tolerance_from_percent`, the `flood_pixels` signature),
+  `src/app/input.rs` + `src/app/selection.rs` (the conversion at the call
+  sites), `src/app/windows/settings_panel.rs` (`tolerance_block_ui` + the
+  Fill arm), `src/app/windows/select_panel.rs` (the wand-only row),
+  `src/selection/tests.rs` (+2: the 0 %/100 % flood gating, the mapping
+  contract), `src/app/windows/tests/{select_panel,settings_panel}.rs`
+  (+2: the wand-only presence, the Fill block's label/% suffix),
+  `scripts/gui_wand_fill_check.sh` (the 100 % pour-over step + the assert).
+- **Verified:** FULL gate ALL GATES GREEN (351 default / 364 mcp, clippy
+  `-D warnings`, wasm, driver); the probe PASS on the same binary — the
+  calibrated slider drag to the track's right sets 100 %, the next fill
+  pours over the blob (the blob box holds 0 white pixels — the white slits
+  flooded black), the wand panel shows the Tolerance row only in the wand
+  mode; the shots LOOKED AT (the Fill panel's slider at 13 %, the wand
+  panel's slider between the mode and ops rows).
+- **Owner-checks:** V77 born (the slider's human pass). VERIFIED by the
+  owner in chat the same day: V75, V74, V73, V72, V71, V70, V68, V67.
+  Open: V77, V76, V69, V66 (X11), V46 (X11); parked: V30, V8. Debts:
+  F22 PAID (the tolerance knob landed), F20, F18, F17, F16, F15, F14
+  newest-first in the files.
+- **Commit title:** `Feat: the flood threshold moves into the panels - ONE Tolerance slider (the Size block's look, in percent for people) drives the wand AND the fill - F22 paid`
+
 ### 2026-11-23 — `Feat:` the magic wand selects like Paint.NET, the Fill tool pours through the SAME flood core (the icon LAST in the Tools grid), Esc deselects from any tool (owner request in chat)
 
 - **What:** three orders in one round. (1) The MAGIC WAND: Select gained a
@@ -139,57 +176,4 @@ round's evidence).
   Paint.NET's slider is NOT implemented; a knob lands only on the owner's
   word), F20, F18, F17, F16, F15, F14 newest-first in the files.
 - **Commit title:** `Feat: the magic wand selects a flooded color band (Paint.NET-style, Region::Wand) - the Fill tool pours through the same flood core with its icon LAST in the Tools grid - Esc deselects from any tool`
-
-### 2026-11-23 — `Feat:` only the Mouse4/Mouse5 choice persists + the Settings window opens from a new menu-bar menu (owner request in chat)
-
-- **What:** two orders in one round: «только Mouse4/Mouse5 выбор
-  сохранялся» and a Settings item in the top panel opening a window with
-  the settings described, ONE dropdown, three options (спросить /
-  использовать / не использовать — the meaning his, the wording ours).
-  (1) The session-only `Option<Choice>` became the THREE-way persisted
-  `MouseSideMode` (Ask = the startup default / Always / Never): the
-  modal's Yes/No now settle the choice PERMANENTLY, the ✕ still decides
-  nothing, and the Settings dropdown re-opens the question at any time
-  (leaving Ask closes an open modal; a settled choice logs to the Tool
-  Log). (2) The new **Settings** menu (§3.1: after Theme, before Help —
-  Help stays LAST) carries one item "Settings…" opening the Settings
-  window (§3.14, NEW `app/settings_window.rs`, the About-window pattern:
-  centered on every open, ✕ + Close close it) — the strong setting
-  label, the ComboBox (Ask every session / Use for Undo / Redo / Don't
-  use) and the CURRENT choice's live description + "The choice is saved
-  between sessions." (3) The storage (§1 policy): `App::save` writes
-  EXACTLY ONE key `settings/mouse_side_buttons` = the plain string
-  "always"/"never" (NO serde — eframe does not re-export it; the
-  zero-dependency hand encoding); Ask REMOVES the key and only when
-  present (eframe's `remove_string` dirties the file unconditionally
-  while `set_string` dirties only on a value change), so an undecided
-  user keeps a byte-empty storage — NO app.ron at all; the automatic
-  channels stay OFF; a missing/corrupt value loads as Ask; the 30-s
-  autosave fires from a FRAME (an idle app never saves) and the exit
-  save always runs on a graceful quit.
-- **Files:** `src/app/mouse_side.rs` (+ its tests split by topic into
-  `tests/{machine,persistence,app_routing}.rs` — the 300-line guard),
-  NEW `src/app/settings_window.rs` (+ `tests/`), `src/app.rs` (the field,
-  the frame-flow call, `App::save` persist, `new_with` storage load),
-  `src/app/menu.rs`, `src/app/tests.rs`, `Cargo.toml` (comment),
-  SPEC §1/§3.1/§3.9/§3.14, AGENTS.md (the persistence quirk + the module
-  map), NEW `scripts/gui_settings_check.sh`.
-- **Verified:** FULL gate ALL GATES GREEN in 24 s (fmt, rules, clippy ×2,
-  test ×2 — 340 default / 353 mcp, +15 tests); the visual driver ALL
-  SCENARIOS GREEN (15 checks, the mcp binary); the storage probe
-  `gui_settings_check.sh` PASS (six headless sessions: A Yes → exactly
-  one key "always" via BOTH the autosave and the exit save; B restart
-  undoes without re-asking; C No → "never"; D both buttons inert on
-  Never; E an untouched AND an unanswered-killed session write NOTHING;
-  F the Settings window opens); NO wasm check — no web-facing code
-  touched (the AGENTS.md economy rule). The dropdown's own popup could
-  not be driven by synthetic xdotool clicks (the palette's popup opens
-  fine on the SAME binary) — its change path is pinned by the headless
-  tests and rides V75.
-- **Owner-checks:** V75 born (Windows `cargo run`: the first Mouse4 press
-  asks, Yes/No persist across restarts, the Settings menu opens the
-  window, the dropdown's three choices switch live, the Tool Log lines;
-  web: one localStorage entry after a choice, none without). V73 amended
-  (the choice persists now — the restart-resets clause replaced).
-- **Commit title:** `Feat: the Mouse4/Mouse5 choice persists as the ONE saved setting (a plain string key that Ask removes for a zero-write default) and the Settings menu opens the settings window with the three-choice dropdown`
 

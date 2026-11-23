@@ -277,10 +277,11 @@ impl App {
     /// (a replace with it deselects).
     fn wand_region(&self, p: Pos2) -> Region {
         let seed = (p.x.floor() as i64, p.y.floor() as i64);
+        let tolerance = crate::selection::tolerance_from_percent(self.tools.flood_tolerance_pct);
         let pixels = {
             let pm = self.layers.active().pixmap();
             let (width, height) = (pm.width(), pm.height());
-            selection::flood_pixels(width, height, seed, |px, py| {
+            selection::flood_pixels(width, height, seed, tolerance, |px, py| {
                 crate::tools::pick_color(pm, px as u32, py as u32)
             })
         };

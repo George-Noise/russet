@@ -306,11 +306,14 @@ impl App {
         };
         let clip = self.selection_clip();
         // The flood READS the layer (the borrow ends with the block); the
-        // WRITE happens after, on the owned pixel set.
+        // WRITE happens after, on the owned pixel set. The tolerance is the
+        // panel's percent slider converted per channel (owner request
+        // 2026-11-23: the threshold knob drives both flood tools).
+        let tolerance = crate::selection::tolerance_from_percent(self.tools.flood_tolerance_pct);
         let pixels = {
             let pm = self.layers.active().pixmap();
             let (width, height) = (pm.width(), pm.height());
-            crate::selection::flood_pixels(width, height, seed, |px, py| {
+            crate::selection::flood_pixels(width, height, seed, tolerance, |px, py| {
                 pick_color(pm, px as u32, py as u32)
             })
         };

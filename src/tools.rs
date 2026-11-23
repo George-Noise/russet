@@ -177,6 +177,16 @@ pub struct ToolState {
     /// 2026-11-20): rectangle (the default) or lasso. The Tools button
     /// cycles it; the magnetized panel's mode row sets it explicitly.
     pub select_mode: SelectMode,
+    /// The flood THRESHOLD the magic wand's selection and the Fill tool's
+    /// pour share, in PERCENT 0..=100 (owner request 2026-11-23: «в
+    /// приклеенную панельку … добавить ползунок похожий на Size но
+    /// выполняющий функцию порога срабатывания в %, я бы выбрал не % но
+    /// людям куда проще понимать именно %» — the unit is % FOR PEOPLE, the
+    /// algorithm converts it per channel through
+    /// [`crate::selection::tolerance_from_percent`]). ONE setting for both
+    /// tools: the flood is one shared method («там очень похожий метод»),
+    /// so one knob drives it wherever it runs.
+    pub flood_tolerance_pct: u8,
     /// Font size (canvas pixels) used by the Text tool.
     pub font_size: f32,
 }
@@ -194,6 +204,7 @@ impl ToolState {
             shape_outline: ShapeOutline::Center,
             shape_diameter_circle: true,
             select_mode: SelectMode::Rect,
+            flood_tolerance_pct: DEFAULT_FLOOD_TOLERANCE_PCT,
             font_size: 24.0,
         }
     }
@@ -217,6 +228,13 @@ pub struct DirtyRect {
 /// 2026-11-20: a typed 200 still drew at 100 — the UI accepted the value,
 /// every draw path ignored it).
 pub const MAX_STROKE_SIZE: f32 = 10_000.0;
+
+/// The startup value of the flood-threshold slider ([`ToolState::
+/// flood_tolerance_pct`]): 13 % — the percent form of the previous fixed
+/// const `FLOOD_TOLERANCE` = 32/255 (≈ 12.5 %, rounded up to a whole
+/// percent the users can read; `tolerance_from_percent(13)` = 33, one step
+/// from the old 32).
+pub const DEFAULT_FLOOD_TOLERANCE_PCT: u8 = 13;
 
 /// The selection-clipped commit's shared pipeline (owner request 2026-11-21:
 /// an active selection confines every canvas-changing tool to its region).

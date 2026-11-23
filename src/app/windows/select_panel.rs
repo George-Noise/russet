@@ -14,6 +14,7 @@
 
 use eframe::egui;
 
+use super::settings_panel::tolerance_block_ui;
 use super::tool_icons::{self, SelectIcon};
 use super::{SHAPE_GROUP_GAP, TOOL_BUTTON_PT, TOOL_GRID_GAP, icon_button, icon_button_state};
 use crate::tools::{SelectMode, ToolState};
@@ -74,6 +75,14 @@ pub(super) fn select_settings_ui(
             }
         }
     });
+    // The wand's threshold slider (owner request 2026-11-23: «для заливки в
+    // волшебной палочки добавить ползунок похожий на Size но выполняющий
+    // функцию порога срабатывания в %») — shown ONLY while the wand mode is
+    // active (the rect/lasso drags have no threshold), the same shared
+    // setting the Fill panel shows.
+    if tools.select_mode == SelectMode::Wand {
+        tolerance_block_ui(ui, tools);
+    }
     ui.add_space(SHAPE_GROUP_GAP);
     let mut ops = SelectOps::default();
     ui.horizontal(|ui| {
