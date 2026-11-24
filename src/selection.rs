@@ -374,24 +374,55 @@ pub fn tolerance_from_percent(pct: u8) -> u8 {
 }
 
 /// The flood-fill core (owner request 2026-11-23: the magic-wand selection
-/// and the Fill tool share ONE method): a 4-neighborhood breadth-first walk
-/// from `seed` over the `(width × height)` pixel grid, gathering every
-/// pixel whose color is within `tolerance` per channel of the SEED's color
-/// (the reference is the seed, not the running neighbor — the same rule
-/// Paint.NET's wand follows, so a gradient floods in one tolerance band).
-/// `tolerance` comes from the panel's percent slider through
-/// [`tolerance_from_percent`]. The `sample` closure returns the
-/// straight-alpha color of a pixel (or `None` outside the grid). Returns
-/// the matched pixels sorted and deduplicated — the shape [`Region::Wand`]
-/// stores.
-pub fn flood_pixels(
+/// One horizontal run of flooded pixels on row `y`, `x0` and `x1` both
+/// inclusive. The span form of the flood output: the fill's write and the
+/// pixel-list derivation consume RUNS, so the per-pixel bookkeeping the old
+/// BFS paid never happens on the hot path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FloodSpan {
+    pub y: i64,
+    pub x0: i64,
+    pub x1: i64,
+}
+
+/// The flood core the magic wand and the Fill tool share (owner request
+/// 2026-11-23: «можно сделать заливку тем же методом что и выделение
+/// волшебной палочкой»), rewritten 2026-11-23 from a per-pixel BFS to the
+/// classic SPAN-SCANLINE fill (Wikipedia "Span filling", lodev's
+/// `floodFillScanlineStack` — the same family imageproc and Krita ship).
+/// What the rewrite buys (the benchmark logs in `benchmarks/` hold the
+/// before/after numbers):
+///
+/// 1. one stack entry per horizontal RUN instead of one per pixel — the
+///    row scan is a tight, cache-friendly loop;
+/// 2. a comparator over raw `[u8; 4]` bytes against per-channel lo/hi
+///    ranges precomputed once (the old one unpacked a `Color32` and did
+///    four i16 subtractions per probe; the app path used to demultiply per
+///    probe through `pick_color`);
+/// 3. EVERY tested pixel is marked visited — matched or not — so a border
+///    pixel is sampled exactly once instead of up to four times.
+///
+/// The 4-way semantics are unchanged: the claimed region is the same the
+/// old BFS claimed (`selection/tests.rs` pins it against a naive reference
+/// on random canvases). Runs may extend beyond the parent span's x range
+/// on both sides — a wider child run must not be orphaned — which is what
+/// keeps the scanline result identical to the per-pixel one.
+///
+/// `at` returns the pixel's COMPARATOR-SPACE bytes (`[r, g, b, a]`) or
+/// `None` off the grid. For the app path that is
+/// [`crate::tools::sample_bytes_of`] over the layer's premultiplied pixel
+/// (the exact bytes the old `pick_color`-based comparator saw, opaque and
+/// fully transparent pixels passing through without the demultiply math —
+/// translucent ones keep the same rounding chain). `tolerance` comes from
+/// the panel's percent slider through [`tolerance_from_percent`].
+pub fn flood_spans(
     width: u32,
     height: u32,
     seed: (i64, i64),
     tolerance: u8,
-    sample: impl Fn(i64, i64) -> Option<Color32>,
-) -> Vec<(i64, i64)> {
-    let Some(seed_color) = sample(seed.0, seed.1) else {
+    at: impl Fn(i64, i64) -> Option<[u8; 4]>,
+) -> Vec<FloodSpan> {
+    let Some(seed_bytes) = at(seed.0, seed.1) else {
         return Vec::new();
     };
     // The seed must sit ON the grid: the closure's bounds policy is the
@@ -399,42 +430,204 @@ pub fn flood_pixels(
     if seed.0 < 0 || seed.1 < 0 || seed.0 >= width as i64 || seed.1 >= height as i64 {
         return Vec::new();
     };
-    let matches = |c: Color32| -> bool {
-        let diff = |a: u8, b: u8| (i16::from(a) - i16::from(b)).abs();
-        diff(c.r(), seed_color.r()) <= i16::from(tolerance)
-            && diff(c.g(), seed_color.g()) <= i16::from(tolerance)
-            && diff(c.b(), seed_color.b()) <= i16::from(tolerance)
-            && diff(c.a(), seed_color.a()) <= i16::from(tolerance)
-    };
-    let mut visited = vec![false; width as usize * height as usize];
-    let mut queue = std::collections::VecDeque::new();
-    let mut out = Vec::new();
-    if matches(seed_color) {
-        visited[seed.1 as usize * width as usize + seed.0 as usize] = true;
-        queue.push_back(seed);
+    // The comparator: per-channel |byte - seed byte| <= tolerance, the same
+    // rule the old per-pixel comparator ran per probe, precomputed into
+    // inclusive ranges (|px - b| <= t ⟺ max(0, b - t) <= px <= min(255, b + t)
+    // for a u8 pixel). The alpha channel participates like the others —
+    // a translucent seed only matches pixels of near-equal alpha.
+    let mut lo = [0u8; 4];
+    let mut hi = [0u8; 4];
+    for ch in 0..4 {
+        let b = i16::from(seed_bytes[ch]);
+        let t = i16::from(tolerance);
+        lo[ch] = (b - t).max(0) as u8;
+        hi[ch] = (b + t).min(255) as u8;
     }
-    while let Some((x, y)) = queue.pop_front() {
-        out.push((x, y));
-        for (nx, ny) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)] {
-            if nx < 0 || ny < 0 || nx >= width as i64 || ny >= height as i64 {
+    let probe = FloodProbe { at: &at, lo, hi };
+    let w = width as usize;
+    let mut visited = vec![false; w * height as usize];
+    let mut runs = Vec::new();
+    let mut out = Vec::new();
+    let mut stack = Vec::new();
+    // The seed's own row run comes first (the classic scanline opens with
+    // the full run around the seed, not the seed pixel alone).
+    scan_row(&mut visited, w, seed.1, seed.0, seed.0, &probe, &mut runs);
+    for (x0, x1) in runs.drain(..) {
+        out.push(FloodSpan { y: seed.1, x0, x1 });
+        stack.push((seed.1, x0, x1));
+    }
+    while let Some((y, x0, x1)) = stack.pop() {
+        for ny in [y - 1, y + 1] {
+            if ny < 0 || ny >= height as i64 {
                 continue;
             }
-            let idx = ny as usize * width as usize + nx as usize;
-            if visited[idx] {
-                continue;
-            }
-            let Some(color) = sample(nx, ny) else {
-                continue;
-            };
-            if matches(color) {
-                visited[idx] = true;
-                queue.push_back((nx, ny));
+            scan_row(&mut visited, w, ny, x0, x1, &probe, &mut runs);
+            for (nx0, nx1) in runs.drain(..) {
+                out.push(FloodSpan {
+                    y: ny,
+                    x0: nx0,
+                    x1: nx1,
+                });
+                stack.push((ny, nx0, nx1));
             }
         }
     }
-    out.sort();
-    out.dedup();
     out
+}
+
+/// The flood's sampler + comparator in one place: `at` fetches the
+/// comparator-space bytes, `lo`/`hi` are the seed's per-channel tolerance
+/// ranges. What [`scan_row`] walks.
+struct FloodProbe<'a, F: Fn(i64, i64) -> Option<[u8; 4]>> {
+    at: &'a F,
+    lo: [u8; 4],
+    hi: [u8; 4],
+}
+
+impl<F: Fn(i64, i64) -> Option<[u8; 4]>> FloodProbe<'_, F> {
+    /// The per-channel range test — the same rule the old per-pixel
+    /// comparator ran per probe, now against precomputed bounds.
+    fn matches(&self, px: [u8; 4]) -> bool {
+        px[0] >= self.lo[0]
+            && px[0] <= self.hi[0]
+            && px[1] >= self.lo[1]
+            && px[1] <= self.hi[1]
+            && px[2] >= self.lo[2]
+            && px[2] <= self.hi[2]
+            && px[3] >= self.lo[3]
+            && px[3] <= self.hi[3]
+    }
+}
+
+/// Scans row `y` over the x range `from..=to`, claiming every maximal run
+/// of not-yet-visited matching pixels into `runs` as `(x0, x1)` pairs.
+/// Claimed runs may extend beyond the range on both sides (a wider child
+/// run must be claimed whole, or its far end would be orphaned). Every
+/// tested pixel is marked visited BEFORE the match verdict is used, so
+/// each pixel's color is sampled at most once no matter how many
+/// expansions walk over it (the rejected borders included).
+fn scan_row<F>(
+    visited: &mut [bool],
+    w: usize,
+    y: i64,
+    from: i64,
+    to: i64,
+    probe: &FloodProbe<'_, F>,
+    runs: &mut Vec<(i64, i64)>,
+) where
+    F: Fn(i64, i64) -> Option<[u8; 4]>,
+{
+    runs.clear();
+    let row = y as usize * w;
+    let mut x = from;
+    while x <= to {
+        let idx = row + x as usize;
+        if visited[idx] {
+            x += 1;
+            continue;
+        }
+        let Some(bytes) = (probe.at)(x, y) else {
+            visited[idx] = true;
+            x += 1;
+            continue;
+        };
+        visited[idx] = true;
+        if !probe.matches(bytes) {
+            x += 1;
+            continue;
+        }
+        // A match: extend the run left past `from` and right past `to`,
+        // claiming and marking every pixel on the way.
+        let mut x0 = x;
+        while x0 > 0 {
+            let nx = x0 - 1;
+            let nidx = row + nx as usize;
+            if visited[nidx] {
+                break;
+            }
+            let Some(nb) = (probe.at)(nx, y) else {
+                visited[nidx] = true;
+                break;
+            };
+            visited[nidx] = true;
+            if !probe.matches(nb) {
+                break;
+            }
+            x0 = nx;
+        }
+        let mut x1 = x;
+        while x1 + 1 < w as i64 {
+            let nx = x1 + 1;
+            let nidx = row + nx as usize;
+            if visited[nidx] {
+                break;
+            }
+            let Some(nb) = (probe.at)(nx, y) else {
+                visited[nidx] = true;
+                break;
+            };
+            visited[nidx] = true;
+            if !probe.matches(nb) {
+                break;
+            }
+            x1 = nx;
+        }
+        runs.push((x0, x1));
+        x = x1 + 1;
+    }
+}
+
+/// Flattens the spans into the sorted `(x, y)` pixel list — the contract
+/// [`Region::Wand`] documents. The spans are sorted row-major first (the
+/// stack emits them in expansion order), then a per-column count + prefix
+/// sums place every pixel in lexicographic `(x, y)` order in one linear
+/// pass — no comparison sort over the pixel list itself (the old code
+/// sorted up to millions of tuples per click).
+pub(crate) fn spans_to_sorted_pixels(width: u32, spans: &[FloodSpan]) -> Vec<(i64, i64)> {
+    let mut sorted: Vec<&FloodSpan> = spans.iter().collect();
+    sorted.sort_unstable_by_key(|s| (s.y, s.x0));
+    let w = width as usize;
+    let mut counts = vec![0usize; w];
+    let mut total = 0usize;
+    for s in &sorted {
+        for x in s.x0..=s.x1 {
+            counts[x as usize] += 1;
+        }
+        total += (s.x1 - s.x0 + 1) as usize;
+    }
+    let mut cursor = vec![0usize; w];
+    let mut sum = 0usize;
+    for x in 0..w {
+        cursor[x] = sum;
+        sum += counts[x];
+    }
+    let mut out = vec![(0i64, 0i64); total];
+    for s in &sorted {
+        for x in s.x0..=s.x1 {
+            let xi = x as usize;
+            out[cursor[xi]] = (x, s.y);
+            cursor[xi] += 1;
+        }
+    }
+    out
+}
+
+/// The pixel form of the flood: [`flood_spans`] flattened into the sorted
+/// `(x, y)` list — the shape [`Region::Wand`] stores. The `sample` closure
+/// returns the straight-alpha color of a pixel (or `None` outside the
+/// grid), exactly the contract the pre-rewrite BFS documented; the
+/// comparator space is the color's stored bytes.
+pub fn flood_pixels(
+    width: u32,
+    height: u32,
+    seed: (i64, i64),
+    tolerance: u8,
+    sample: impl Fn(i64, i64) -> Option<Color32>,
+) -> Vec<(i64, i64)> {
+    let spans = flood_spans(width, height, seed, tolerance, |x, y| {
+        sample(x, y).map(|c| [c.r(), c.g(), c.b(), c.a()])
+    });
+    spans_to_sorted_pixels(width, &spans)
 }
 
 /// A bbox-tight boolean grid: bit `(ix, iy)` is the pixel

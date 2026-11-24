@@ -335,17 +335,18 @@ impl App {
         // panel's percent slider converted per channel (owner request
         // 2026-11-23: the threshold knob drives both flood tools).
         let tolerance = crate::selection::tolerance_from_percent(self.tools.flood_tolerance_pct);
-        let pixels = {
+        let spans = {
             let pm = self.layers.active().pixmap();
             let (width, height) = (pm.width(), pm.height());
-            crate::selection::flood_pixels(width, height, seed, tolerance, |px, py| {
-                pick_color(pm, px as u32, py as u32)
+            crate::selection::flood_spans(width, height, seed, tolerance, |px, py| {
+                pm.pixel(px as u32, py as u32)
+                    .map(crate::tools::sample_bytes_of)
             })
         };
-        if pixels.is_empty() {
+        if spans.is_empty() {
             return;
         }
-        let bounds = self.paint_flood_pixels(&pixels, color, clip.as_ref());
+        let bounds = self.paint_flood_spans(&spans, color, clip.as_ref());
         if bounds.2 == 0 || bounds.3 == 0 {
             // Every flooded pixel was masked out by the selection: nothing
             // changed, so no composite, no history node (the crash guard —
@@ -364,7 +365,7 @@ impl App {
         ui.ctx().request_repaint();
     }
 
-    /// Writes the flooded pixels: an src-over stamp of `color` per pixel,
+    /// Writes the flooded SPANS: an src-over stamp of `color` per pixel,
     /// skipping the ones an active selection masks out. Returns the written
     /// bbox `(x, y, w, h)` for the dirty-region sync — `(0, 0, 0, 0)` when
     /// NOT A SINGLE pixel was written (owner bug report 2026-11-23: a fill
@@ -372,10 +373,19 @@ impl App {
     /// after a cut, because the transparent hole displays white, the same
     /// as the background — used to run the bbox arithmetic
     /// `i64::MIN - i64::MAX` into an overflow panic that killed the app;
-    /// the caller now treats the zero bbox as "nothing painted").
-    fn paint_flood_pixels(
+    /// the caller treats the zero bbox as "nothing painted").
+    ///
+    /// The span form (the 2026-11-23 flood rewrite): the runs come
+    /// in-canvas by construction (the core clamps to the grid), so there
+    /// are no per-pixel bounds checks — the loop indexes the span's row
+    /// slice directly; only the row index is defensively re-checked. The
+    /// bbox is still updated per WRITTEN pixel (a selection may cut a
+    /// span's ends off), the blend is the same src-over mix — a translucent
+    /// fill composites, an opaque one replaces — and the transparent-hole
+    /// case (a fill color over alpha-0 pixels) runs the identical math.
+    fn paint_flood_spans(
         &mut self,
-        pixels: &[(i64, i64)],
+        spans: &[crate::selection::FloodSpan],
         color: Color32,
         clip: Option<&crate::selection::Mask>,
     ) -> (i64, i64, i64, i64) {
@@ -397,37 +407,45 @@ impl App {
         // an opaque one replaces).
         let ia = 255 - a as u32;
         let mix = |s: u32, d: u8| (s + (d as u32 * ia + 127) / 255) as u8;
-        for (x, y) in pixels {
-            if let Some(mask) = clip
-                && !mask.get(*x, *y)
-            {
+        for span in spans {
+            debug_assert!(
+                span.x0 >= 0 && span.x1 < stride as i64,
+                "the flood core clamps spans to the grid"
+            );
+            if span.y < 0 || span.y >= height {
                 continue;
             }
-            if *x < 0 || *y < 0 || *x >= stride as i64 || *y >= height {
-                continue;
+            let row = &mut dst[span.y as usize * stride..];
+            for x in span.x0..=span.x1 {
+                if let Some(mask) = clip
+                    && !mask.get(x, span.y)
+                {
+                    continue;
+                }
+                let d = row[x as usize];
+                let out = PremultipliedColorU8::from_rgba(
+                    mix(r as u32, d.red()),
+                    mix(g as u32, d.green()),
+                    mix(b as u32, d.blue()),
+                    mix(a as u32, d.alpha()),
+                )
+                .unwrap_or(d);
+                row[x as usize] = out;
+                min_x = min_x.min(x);
+                min_y = min_y.min(span.y);
+                max_x = max_x.max(x + 1);
+                max_y = max_y.max(span.y + 1);
             }
-            let d = dst[*y as usize * stride + *x as usize];
-            let out = PremultipliedColorU8::from_rgba(
-                mix(r as u32, d.red()),
-                mix(g as u32, d.green()),
-                mix(b as u32, d.blue()),
-                mix(a as u32, d.alpha()),
-            )
-            .unwrap_or(d);
-            dst[*y as usize * stride + *x as usize] = out;
-            min_x = min_x.min(*x);
-            min_y = min_y.min(*y);
-            max_x = max_x.max(*x + 1);
-            max_y = max_y.max(*y + 1);
         }
         if max_x == i64::MIN {
-            // Not a single pixel was written (everything masked out or off
-            // canvas): the sentinel zero bbox, so the caller skips the
-            // composite/sync/history — and the subtraction below can no
-            // longer see i64::MIN - i64::MAX.
             return (0, 0, 0, 0);
         }
-        (min_x, min_y, (max_x - min_x).max(0), (max_y - min_y).max(0))
+        (
+            min_x,
+            min_y,
+            max_x.saturating_sub(min_x),
+            max_y.saturating_sub(min_y),
+        )
     }
 
     fn paint_segment(&mut self, from: Pos2, to: Pos2) {

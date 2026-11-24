@@ -83,6 +83,38 @@ round's evidence).
 > the settings round's budget — the file rode past ~200 lines; three entries
 > stay in the Log).
 
+### 2026-11-23 — `Perf:` the flood core becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans - pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests (owner request in chat: «делаем 1+2+3+запись из спанов»)
+
+- **What:** the research plan implemented: `flood_pixels`' per-pixel BFS
+  became `flood_spans` (one stack entry per horizontal RUN, runs grow past
+  the parent span so nothing is orphaned, every tested pixel marked visited
+  ONCE — rejected borders included), the comparator is per-channel lo/hi
+  ranges over raw bytes (`FloodProbe`), the app path reads the layer via
+  `tools::sample_bytes_of` — the EXACT bytes the old pick_color chain fed
+  the comparator (opaque/transparent fast paths; the translucent rounding
+  chain brute-forced equal in a dense sweep). The fill's write is
+  span-driven (`App::paint_flood_spans`, the same src-over mix, the
+  zero-bbox crash guard kept); the wand keeps the `Region::Wand` pixel
+  contract, fed row-ordered by an O(n) column-radix flatten — the old
+  `out.sort()` over up to millions of tuples is gone. The owner's alpha
+  warning is pinned by tests: the transparent-hole flood, the
+  alpha-in-tolerance gating, and the oracle (30 random grids × 4 seeds ×
+  4 tolerances vs the naive BFS kept verbatim).
+- **Numbers** (the same sandbox/canvases; `core=` marks the rewrite in the
+  log headers): dev FullHD click 1.72 s → 0.34 s, 800×600 376 → 84 ms;
+  release FullHD 238 → 13.1 ms, 800×600 50.1 → 3.08 ms — 12–21× release,
+  3–6× dev; small fills unchanged.
+- **Files:** `src/selection.rs` (FloodSpan/flood_spans/scan_row/
+  FloodProbe/spans_to_sorted_pixels), `src/tools.rs` (sample_bytes_of),
+  `src/app/input.rs` (the fill handler + paint_flood_spans), the three
+  test files (+4 tests), `src/app/fill_bench.rs` (the new path),
+  `benchmarks/` (the after-logs + the RESEARCH after-table).
+- **Verified:** ALL GATES GREEN (359 tests; the fill-bench clippy stage
+  caught a stale bench import — fixed); fresh dev+release bench logs.
+- **Owner-checks:** V81 born. VERIFIED in chat: V69 (the atlas sheets).
+  Open: V81, V80, V79, V78, V77, V76, V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Perf: the fill/wand flood becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans; pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests`
+
 ### 2026-11-23 — `Docs:` the owner keeps dev slow on purpose (the early-warning sensor), rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change (owner request in chat)
 
 - **What:** the owner's follow-up decisions in chat. (1) The dev build is NOT
@@ -148,39 +180,4 @@ round's evidence).
   chat: V69 (the atlas sheets). Open: V80, V79, V78, V77, V76, V66 (X11),
   V46 (X11); parked: V30, V8.
 - **Commit title:** `Add: the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet`
-
-### 2026-11-23 — `Fix:` the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests (owner request in chat)
-
-- **What:** with at least one pixel selected a fill click whose seed lies
-  outside the selection is GATED before the flood: no pixels change, no
-  history node (an undo after it still undoes the previous action). No
-  selection = the fill fires anywhere, as before. The gate lives in
-  `App::fill_click_inside_selection(clip, seed)` (the handler stops right
-  after the seed is computed — the flood never even starts) and removes
-  the mis-click path that fed the cut-hole crash; V78's zero written-bbox
-  guard stays as the second layer.
-- **Tests** (the owner asked to LOCK the no-crash behavior with tests):
-  `a_fill_click_outside_an_active_selection_never_fires` (the gate rejects
-  the outside seeds, accepts the inside ones, and a gated click leaves the
-  canvas byte-identical with NO node) and
-  `a_fill_without_a_selection_fires_anywhere`; the crash locks from the
-  previous round stay green (`a_flood_entirely_outside_the_selection_
-  paints_nothing_and_survives` — its comment now names both defense
-  layers, the in-hole fill, the translucent blend space). The full-click
-  "does it die" check stays in the GUI probe: the probe gained the
-  OWNER'S CRASH CLICK — a fill click on the background outside the active
-  selection with a process-alive check and the background-stays-white
-  pixel assert.
-- **Files:** `src/app/input.rs` (the gate helper + the handler guard +
-  the doc split), `src/app/input/tests.rs` (+2), `scripts/gui_cut_fill_check.sh`
-  (the outside-click step + the assert).
-- **Verified:** 9 input tests green; FULL gate ALL GATES GREEN; the GUI
-  probe PASS on the fixed binary (the cut emptied the blob, the fill
-  inside the hole painted 5789 black, the fill click OUTSIDE the selection
-  painted nothing and the process survived, the wand click on the hole
-  survived); the shots LOOKED AT.
-- **Owner-checks:** V79 born (the confinement's human pass). VERIFIED in
-  chat: V69 (the atlas sheets). Open: V79, V78, V77, V76, V66 (X11),
-  V46 (X11); parked: V30, V8.
-- **Commit title:** `Fix: the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests`
 

@@ -31,8 +31,7 @@
 //! (release for the owner's own machines: add `--release`).
 
 use crate::egui::{Color32, pos2};
-use crate::selection::{Region, flood_pixels};
-use crate::tools::pick_color;
+use crate::selection::{Region, flood_spans};
 use std::fmt::Write as _;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tiny_skia::{Pixmap, PremultipliedColorU8};
@@ -337,11 +336,12 @@ fn canvas_for(case: &Case) -> Pixmap {
 // ---------------------------------------------------------------------------
 
 /// The same src-over write the fill click does (the fill color, the
-/// selection skip, the bounds skip, the written bbox). The layer/history
-/// bookkeeping around it is app state, not algorithm — the bench measures
-/// the pixel work.
+/// selection skip, the written bbox) in its span form: the runs come
+/// in-canvas by construction, so the loop indexes the row slice directly.
+/// The layer/history bookkeeping around it is app state, not algorithm —
+/// the bench measures the pixel work.
 fn paint_flood(
-    pixels: &[(i64, i64)],
+    spans: &[crate::selection::FloodSpan],
     color: Color32,
     clip: Option<&crate::selection::Mask>,
     pm: &mut Pixmap,
@@ -353,34 +353,40 @@ fn paint_flood(
     let dst = pm.pixels_mut();
     let ia = 255 - a as u32;
     let mix = |s: u32, d: u8| (s + (d as u32 * ia + 127) / 255) as u8;
-    for (x, y) in pixels {
-        if let Some(mask) = clip
-            && !mask.get(*x, *y)
-        {
+    for span in spans {
+        if span.y < 0 || span.y >= height {
             continue;
         }
-        if *x < 0 || *y < 0 || *x >= stride as i64 || *y >= height {
-            continue;
+        let row = &mut dst[span.y as usize * stride..];
+        for x in span.x0..=span.x1 {
+            if let Some(mask) = clip
+                && !mask.get(x, span.y)
+            {
+                continue;
+            }
+            let d = row[x as usize];
+            let out = PremultipliedColorU8::from_rgba(
+                mix(r as u32, d.red()),
+                mix(g as u32, d.green()),
+                mix(b as u32, d.blue()),
+                mix(a as u32, d.alpha()),
+            )
+            .unwrap_or(d);
+            row[x as usize] = out;
+            min_x = min_x.min(x);
+            min_y = min_y.min(span.y);
+            max_x = max_x.max(x + 1);
+            max_y = max_y.max(span.y + 1);
         }
-        let d = dst[*y as usize * stride + *x as usize];
-        let out = PremultipliedColorU8::from_rgba(
-            mix(r as u32, d.red()),
-            mix(g as u32, d.green()),
-            mix(b as u32, d.blue()),
-            mix(a as u32, d.alpha()),
-        )
-        .unwrap_or(d);
-        dst[*y as usize * stride + *x as usize] = out;
-        min_x = min_x.min(*x);
-        min_y = min_y.min(*y);
-        max_x = max_x.max(*x);
-        max_y = max_y.max(*y);
+    }
+    if max_x == i64::MIN {
+        return (0, 0, 0, 0);
     }
     (
         min_x,
         min_y,
-        max_x.saturating_sub(min_x) + 1,
-        max_y.saturating_sub(min_y) + 1,
+        max_x.saturating_sub(min_x),
+        max_y.saturating_sub(min_y),
     )
 }
 
@@ -431,8 +437,9 @@ fn measure(case: &Case, color: Color32) -> CaseResult {
     for i in 0..case.warmup + case.measured {
         // The READ: the flood core with the SAME sampler the click uses.
         let t = Instant::now();
-        let flood = flood_pixels(case.w, case.h, case.seed, case.tolerance, |px, py| {
-            pick_color(&pm, px as u32, py as u32)
+        let flood = flood_spans(case.w, case.h, case.seed, case.tolerance, |px, py| {
+            pm.pixel(px as u32, py as u32)
+                .map(crate::tools::sample_bytes_of)
         });
         flood_ns.push(t.elapsed().as_nanos());
         // The WRITE: on a per-run copy (the clone is untimed — the bench
@@ -442,7 +449,7 @@ fn measure(case: &Case, color: Color32) -> CaseResult {
         let bb = paint_flood(&flood, color, mask.as_ref(), &mut pm_w);
         write_ns.push(t.elapsed().as_nanos());
         if i >= case.warmup {
-            pixels = flood.len();
+            pixels = flood.iter().map(|s| (s.x1 - s.x0 + 1) as usize).sum();
             bbox = bb;
         }
     }
@@ -578,8 +585,14 @@ fn run() {
     );
     let _ = writeln!(
         log,
-        "color_pipeline=premultiplied RGBA8 (tiny-skia); pick_color demultiplies per probe; \
-         the write is the src-over mix loop of App::paint_flood_pixels"
+        "core=span-scanline flood (the 2026-11-23 rewrite); the write is the src-over mix \
+         loop of App::paint_flood_spans; the pre-rewrite logs in benchmarks/ measured \
+         flood_pixels+pick_color (per-pixel BFS)"
+    );
+    let _ = writeln!(
+        log,
+        "color_pipeline=premultiplied RGBA8 (tiny-skia); the comparator sees \
+         tools::sample_bytes_of bytes (the pick_color chain, opaque/transparent fast paths)"
     );
     let _ = writeln!(
         log,

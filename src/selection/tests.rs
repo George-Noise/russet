@@ -559,6 +559,176 @@ fn the_percent_to_tolerance_mapping_is_the_panel_contract() {
     assert_eq!(tolerance_from_percent(100), 255);
 }
 
+// The span-rewrite suite (owner request 2026-11-23: «делаем 1+2+3+запись
+// из спанов… главное не забыть что пользователь может использовать и
+// полупрозрачные цвета и полностью прозрачные»): the scanline core must
+// claim EXACTLY the per-pixel BFS's region — on any alpha.
+
+/// The pre-rewrite per-pixel BFS, kept verbatim as the ORACLE: whatever
+/// the span core claims must be exactly this set (sorted `(x, y)`).
+fn naive_reference_flood(
+    width: u32,
+    height: u32,
+    seed: (i64, i64),
+    tolerance: u8,
+    at: &impl Fn(i64, i64) -> Option<[u8; 4]>,
+) -> Vec<(i64, i64)> {
+    let Some(seed_bytes) = at(seed.0, seed.1) else {
+        return Vec::new();
+    };
+    if seed.0 < 0 || seed.1 < 0 || seed.0 >= width as i64 || seed.1 >= height as i64 {
+        return Vec::new();
+    }
+    let matches = |c: [u8; 4]| -> bool {
+        let diff = |a: u8, b: u8| (i16::from(a) - i16::from(b)).abs();
+        diff(c[0], seed_bytes[0]) <= i16::from(tolerance)
+            && diff(c[1], seed_bytes[1]) <= i16::from(tolerance)
+            && diff(c[2], seed_bytes[2]) <= i16::from(tolerance)
+            && diff(c[3], seed_bytes[3]) <= i16::from(tolerance)
+    };
+    let mut visited = vec![false; width as usize * height as usize];
+    let mut queue = std::collections::VecDeque::new();
+    let mut out = Vec::new();
+    if matches(seed_bytes) {
+        visited[seed.1 as usize * width as usize + seed.0 as usize] = true;
+        queue.push_back(seed);
+    }
+    while let Some((x, y)) = queue.pop_front() {
+        out.push((x, y));
+        for (nx, ny) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)] {
+            if nx < 0 || ny < 0 || nx >= width as i64 || ny >= height as i64 {
+                continue;
+            }
+            let idx = ny as usize * width as usize + nx as usize;
+            if visited[idx] {
+                continue;
+            }
+            let Some(color) = at(nx, ny) else {
+                continue;
+            };
+            if matches(color) {
+                visited[idx] = true;
+                queue.push_back((nx, ny));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn xorshift(state: &mut u64) -> u64 {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state
+}
+
+#[test]
+fn the_span_core_claims_exactly_the_per_pixel_region_on_random_canvases() {
+    // Deterministic xorshift grids over a palette of opaque, translucent
+    // and fully transparent colors; several seeds and tolerance levels per
+    // grid; the scanline core must match the naive BFS pixel for pixel —
+    // with no pixel claimed twice and none missed (the span lengths sum to
+    // the region size).
+    let mut state = 0x5eed_5ca9_1123_u64;
+    let palette: Vec<[u8; 4]> = vec![
+        [255, 255, 255, 255],
+        [20, 20, 20, 255],
+        [200, 40, 40, 255],
+        [40, 200, 40, 128],
+        [40, 40, 200, 64],
+        [0, 0, 0, 0],
+        [128, 128, 128, 1],
+        [230, 230, 230, 254],
+    ];
+    for grid in 0..30u64 {
+        let width = 8 + (xorshift(&mut state) % 14) as u32;
+        let height = 6 + (xorshift(&mut state) % 10) as u32;
+        let mut grid_bytes = Vec::with_capacity((width * height) as usize);
+        for _ in 0..width * height {
+            grid_bytes.push(palette[(xorshift(&mut state) >> 33) as usize % palette.len()]);
+        }
+        let at = |x: i64, y: i64| -> Option<[u8; 4]> {
+            if x < 0 || y < 0 || x >= width as i64 || y >= height as i64 {
+                None
+            } else {
+                Some(grid_bytes[y as usize * width as usize + x as usize])
+            }
+        };
+        for _ in 0..4 {
+            let seed = (
+                (xorshift(&mut state) % width as u64) as i64,
+                (xorshift(&mut state) % height as u64) as i64,
+            );
+            for tol in [0u8, 8, 64, 255] {
+                let spans = flood_spans(width, height, seed, tol, at);
+                let span_total: usize = spans.iter().map(|s| (s.x1 - s.x0 + 1) as usize).sum();
+                let got = spans_to_sorted_pixels(width, &spans);
+                let want = naive_reference_flood(width, height, seed, tol, &at);
+                assert_eq!(
+                    got, want,
+                    "grid {grid} seed {seed:?} tol {tol}: the span core diverged from the BFS"
+                );
+                assert_eq!(
+                    span_total,
+                    want.len(),
+                    "grid {grid} seed {seed:?} tol {tol}: spans claim each pixel exactly once"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_flood_walks_transparent_and_translucent_colors() {
+    // A fully transparent interior (the cut-hole shape: alpha 0 everywhere
+    // between the opaque walls) floods as one region and stops at the
+    // walls; a translucent seed matches within the tolerance on EVERY
+    // channel including alpha, so a same-rgb opaque neighbor stays out.
+    let at = |x: i64, _y: i64| -> Option<[u8; 4]> {
+        (0..5).contains(&x).then_some(match x {
+            0 | 4 => [200, 0, 0, 255],
+            _ => [0, 0, 0, 0],
+        })
+    };
+    let got = spans_to_sorted_pixels(5, &flood_spans(5, 1, (2, 0), 0, at));
+    assert_eq!(
+        got,
+        vec![(1, 0), (2, 0), (3, 0)],
+        "the transparent hole floods, the opaque walls stop it"
+    );
+
+    let at = |x: i64, _y: i64| -> Option<[u8; 4]> {
+        (0..3).contains(&x).then_some(match x {
+            0 => [64, 0, 0, 128], // the seed
+            1 => [64, 0, 0, 140], // within 12 on alpha
+            _ => [64, 0, 0, 255], // same rgb, opaque — 127 apart on alpha
+        })
+    };
+    let got = spans_to_sorted_pixels(3, &flood_spans(3, 1, (0, 0), 12, at));
+    assert_eq!(
+        got,
+        vec![(0, 0), (1, 0)],
+        "the alpha channel gates the match"
+    );
+}
+
+#[test]
+fn the_span_core_emits_row_runs_not_pixel_tuples() {
+    // A 4×2 solid floods into two whole-row spans — the shape the fill's
+    // write consumes directly.
+    let at = |_, _| Some([255u8, 255, 255, 255]);
+    let spans = flood_spans(4, 2, (1, 0), 0, at);
+    assert_eq!(
+        spans,
+        vec![
+            FloodSpan { y: 0, x0: 0, x1: 3 },
+            FloodSpan { y: 1, x0: 0, x1: 3 },
+        ],
+    );
+}
+
 #[test]
 fn the_flood_off_grid_seed_and_single_pixel_match() {
     assert!(flood_pixels(4, 3, (-1, 0), 32, |_, _| Some(Color32::RED)).is_empty());

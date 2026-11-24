@@ -378,14 +378,15 @@ fn a_fill_inside_the_cut_hole_survives_and_paints() {
     let color = app.tools.primary;
     let clip = app.selection_clip();
     let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
-    let pixels = {
+    let spans = {
         let pm = app.layers.active().pixmap();
-        crate::selection::flood_pixels(pm.width(), pm.height(), seed, tolerance, |px, py| {
-            pick_color(pm, px as u32, py as u32)
+        crate::selection::flood_spans(pm.width(), pm.height(), seed, tolerance, |px, py| {
+            pm.pixel(px as u32, py as u32)
+                .map(crate::tools::sample_bytes_of)
         })
     };
-    assert!(!pixels.is_empty(), "the flood reaches the hole");
-    let bounds = app.paint_flood_pixels(&pixels, color, clip.as_ref());
+    assert!(!spans.is_empty(), "the flood reaches the hole");
+    let bounds = app.paint_flood_spans(&spans, color, clip.as_ref());
     let (x, y) = (bounds.0.max(0) as u32, bounds.1.max(0) as u32);
     let (w, h) = (bounds.2 as u32, bounds.3 as u32);
     app.composite_dirty(x, y, w, h);
@@ -426,13 +427,14 @@ fn a_translucent_fill_reaches_transparent_pixels() {
     let seed = (15i64, 15i64);
     let clip = app.selection_clip();
     let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
-    let pixels = {
+    let spans = {
         let pm = app.layers.active().pixmap();
-        crate::selection::flood_pixels(pm.width(), pm.height(), seed, tolerance, |px, py| {
-            pick_color(pm, px as u32, py as u32)
+        crate::selection::flood_spans(pm.width(), pm.height(), seed, tolerance, |px, py| {
+            pm.pixel(px as u32, py as u32)
+                .map(crate::tools::sample_bytes_of)
         })
     };
-    let bounds = app.paint_flood_pixels(&pixels, app.tools.primary, clip.as_ref());
+    let bounds = app.paint_flood_spans(&spans, app.tools.primary, clip.as_ref());
     assert!(bounds.2 > 0, "the flood wrote something");
     let px = app
         .layers
@@ -483,14 +485,15 @@ fn a_flood_entirely_outside_the_selection_paints_nothing_and_survives() {
     );
     let clip = app.selection_clip();
     let tolerance = crate::selection::tolerance_from_percent(app.tools.flood_tolerance_pct);
-    let pixels = {
+    let spans = {
         let pm = app.layers.active().pixmap();
-        crate::selection::flood_pixels(pm.width(), pm.height(), (80, 80), tolerance, |px, py| {
-            pick_color(pm, px as u32, py as u32)
+        crate::selection::flood_spans(pm.width(), pm.height(), (80, 80), tolerance, |px, py| {
+            pm.pixel(px as u32, py as u32)
+                .map(crate::tools::sample_bytes_of)
         })
     };
-    assert!(!pixels.is_empty(), "the white flood is huge");
-    let bounds = app.paint_flood_pixels(&pixels, app.tools.primary, clip.as_ref());
+    assert!(!spans.is_empty(), "the white flood is huge");
+    let bounds = app.paint_flood_spans(&spans, app.tools.primary, clip.as_ref());
     assert_eq!(
         bounds,
         (0, 0, 0, 0),
@@ -549,13 +552,14 @@ fn a_fill_click_outside_an_active_selection_never_fires() {
     // The handler returns BEFORE the flood — the pixels list is never even
     // computed; here the flood is run anyway to prove the gated click
     // leaves the canvas byte-identical.
-    let pixels = {
+    let spans = {
         let pm = app.layers.active().pixmap();
-        crate::selection::flood_pixels(pm.width(), pm.height(), (80, 80), tolerance, |px, py| {
-            pick_color(pm, px as u32, py as u32)
+        crate::selection::flood_spans(pm.width(), pm.height(), (80, 80), tolerance, |px, py| {
+            pm.pixel(px as u32, py as u32)
+                .map(crate::tools::sample_bytes_of)
         })
     };
-    let _ = app.paint_flood_pixels(&pixels, app.tools.primary, clip.as_ref());
+    let _ = app.paint_flood_spans(&spans, app.tools.primary, clip.as_ref());
     assert_eq!(
         app.layers.head(),
         head_before,

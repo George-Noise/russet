@@ -502,3 +502,45 @@ fn the_shape_paint_radio_names_its_wells() {
         );
     }
 }
+
+#[test]
+fn sample_bytes_of_matches_the_pick_color_chain() {
+    // The flood comparator must see EXACTLY the bytes the old
+    // pick_color-based comparator saw. The sweep walks every alpha with a
+    // dense channel grid plus the per-alpha cliffs (a-1, a/2, a, a+1), all
+    // VALID premultiplied inputs (the app never stores invalid ones —
+    // every write goes through from_rgba), and asserts byte equality with
+    // the real demultiply + premultiply chain pick_color runs.
+    let reference = |r: u8, g: u8, b: u8, a: u8| -> [u8; 4] {
+        let pixel =
+            PremultipliedColorU8::from_rgba(r, g, b, a).expect("a valid premultiplied color");
+        let d = pixel.demultiply();
+        let c = Color32::from_rgba_unmultiplied(d.red(), d.green(), d.blue(), d.alpha());
+        [c.r(), c.g(), c.b(), c.a()]
+    };
+    let table = [0u8, 1, 7, 64, 127, 128, 191, 254, 255];
+    let mut checked = 0usize;
+    for a in 0..=255u8 {
+        let mut vals: Vec<u8> = table.iter().copied().filter(|&c| c <= a).collect();
+        // The per-alpha cliffs, kept VALID (c <= a — the app never stores
+        // an invalid premultiplied pixel).
+        vals.extend([a.saturating_sub(1), a / 2, a]);
+        vals.sort_unstable();
+        vals.dedup();
+        for &r in &vals {
+            for &g in &vals {
+                for &b in &vals {
+                    let pixel = PremultipliedColorU8::from_rgba(r, g, b, a)
+                        .expect("a valid premultiplied color");
+                    assert_eq!(
+                        sample_bytes_of(pixel),
+                        reference(r, g, b, a),
+                        "r={r} g={g} b={b} a={a}"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+    }
+    assert!(checked > 100_000, "the sweep stayed dense: {checked}");
+}

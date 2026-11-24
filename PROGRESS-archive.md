@@ -1,5 +1,40 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Fix:` the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests (owner request in chat)
+
+- **What:** with at least one pixel selected a fill click whose seed lies
+  outside the selection is GATED before the flood: no pixels change, no
+  history node (an undo after it still undoes the previous action). No
+  selection = the fill fires anywhere, as before. The gate lives in
+  `App::fill_click_inside_selection(clip, seed)` (the handler stops right
+  after the seed is computed — the flood never even starts) and removes
+  the mis-click path that fed the cut-hole crash; V78's zero written-bbox
+  guard stays as the second layer.
+- **Tests** (the owner asked to LOCK the no-crash behavior with tests):
+  `a_fill_click_outside_an_active_selection_never_fires` (the gate rejects
+  the outside seeds, accepts the inside ones, and a gated click leaves the
+  canvas byte-identical with NO node) and
+  `a_fill_without_a_selection_fires_anywhere`; the crash locks from the
+  previous round stay green (`a_flood_entirely_outside_the_selection_
+  paints_nothing_and_survives` — its comment now names both defense
+  layers, the in-hole fill, the translucent blend space). The full-click
+  "does it die" check stays in the GUI probe: the probe gained the
+  OWNER'S CRASH CLICK — a fill click on the background outside the active
+  selection with a process-alive check and the background-stays-white
+  pixel assert.
+- **Files:** `src/app/input.rs` (the gate helper + the handler guard +
+  the doc split), `src/app/input/tests.rs` (+2), `scripts/gui_cut_fill_check.sh`
+  (the outside-click step + the assert).
+- **Verified:** 9 input tests green; FULL gate ALL GATES GREEN; the GUI
+  probe PASS on the fixed binary (the cut emptied the blob, the fill
+  inside the hole painted 5789 black, the fill click OUTSIDE the selection
+  painted nothing and the process survived, the wand click on the hole
+  survived); the shots LOOKED AT.
+- **Owner-checks:** V79 born (the confinement's human pass). VERIFIED in
+  chat: V69 (the atlas sheets). Open: V79, V78, V77, V76, V66 (X11),
+  V46 (X11); parked: V30, V8.
+- **Commit title:** `Fix: the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests`
+
 ### 2026-11-23 — `Feat:` the flood threshold moves into the panels — ONE Tolerance slider (the Size block's look, in % for people) drives the wand AND the fill; F22 paid (owner request in chat)
 
 - **What:** the flood tolerance stopped being a fixed const: `ToolState::

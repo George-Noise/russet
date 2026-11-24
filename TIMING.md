@@ -96,3 +96,13 @@ probe's pointer never moves).
 | the dev bench suite | 21 s | 10 cases, the log in benchmarks/ |
 | the release bench suite | 2.9 s | the gap measurement |
 | `verify.sh` | (the round log) | the new fill-bench clippy stage |
+
+## 2026-11-23 — the span-rewrite round (sixth recycle: full restore + rebuild)
+
+| Command | Duration | Note |
+|---|---|---|
+| restore + rustup + warm-up | ~7 min | background |
+| `cargo build --release --features fill-bench` | 5 m 47 s | cold release |
+| the dev bench after the rewrite | 4.3 s | was 21 s pre-rewrite |
+| the release bench after the rewrite | ~1 s | was 2.9 s |
+| `verify.sh` | 18 s | 359 tests green |

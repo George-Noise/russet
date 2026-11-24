@@ -1,0 +1,22 @@
+russet fill/wand flood benchmark
+generated_utc=2026-11-23T21:12:20Z epoch_secs=1795468340
+mode=dev (debug_assertions=true; the dev build adds overflow checks and no inlining)
+os=linux family=unix kernel=5.10.134-013.15.kangaroo.al8.x86_64
+cpu_model=Intel(R) Xeon(R) Processor
+cpu_cores_available=2 mem_total_kb=4138560 kB
+rustc=rustc 1.99.1 (58cf8f9c3 2026-10-13) git_head=b9224b5397a29fd650528834cbb17edcef3cdc8c
+core=span-scanline flood (the 2026-11-23 rewrite); the write is the src-over mix loop of App::paint_flood_spans; the pre-rewrite logs in benchmarks/ measured flood_pixels+pick_color (per-pixel BFS)
+color_pipeline=premultiplied RGBA8 (tiny-skia); the comparator sees tools::sample_bytes_of bytes (the pick_color chain, opaque/transparent fast paths)
+timer=Instant.elapsed().as_nanos(); per-case: warmup runs discarded, then min/median/mean/p95 over the measured runs; full_click_mean=flood_mean+write_mean
+
+solid_64x64_fill_all | 64x64 | seed=(32,32) | tol=0 | sel=none | 3/15 | flood 452294 / 537401 / 524785 / 570036 | write 214795 / 311447 / 280982 / 323795 | full_click_mean=805767 | 4096 px | bbox=(0,0,64,64) | a tiny solid canvas: the flood covers everything
+solid_800x600_fill_all | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 52401999 / 52834652 / 55348253 / 64941509 | write 25360963 / 25750614 / 28914640 / 39565590 | full_click_mean=84262893 | 480000 px | bbox=(0,0,800,600) | a medium solid canvas: the flood covers everything
+solid_1920x1080_fill_all | 1920x1080 | seed=(960,540) | tol=0 | sel=none | 1/5 | flood 226880733 / 227690424 / 229418775 / 237785388 | write 109809272 / 110418874 / 110569192 / 112479413 | full_click_mean=339987967 | 2073600 px | bbox=(0,0,1920,1080) | a full-HD solid canvas: the volume worst case (every pixel queued)
+noise_800x600_seed_center | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 17523 / 18803 / 22458 / 46151 | write 463 / 573 / 1137 / 4022 | full_click_mean=23595 | 4 px | bbox=(399,299,3,2) | a high-frequency 8-color noise: the flood is small, but every unmatched border pixel is re-sampled up to 4 times (the per-pixel BFS tax)
+stripes_800x600_seed_center | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 352063 / 375850 / 371477 / 418688 | write 77463 / 81689 / 84612 / 100486 | full_click_mean=456089 | 1200 px | bbox=(400,0,2,600) | 2px vertical stripes: many narrow runs — the shape a span algorithm would eat in one pass per stripe
+gradient_800x600_tol6_seed_mid | 800x600 | seed=(400,300) | tol=6 | sel=none | 2/10 | flood 167440 / 172820 / 178677 / 217735 | write 64026 / 65917 / 68196 / 79057 | full_click_mean=246873 | 1200 px | bbox=(380,285,40,30) | a smooth gradient with tolerance 6: long diagonal bands, like anti-aliased artwork
+blob_800x600_fill_inside | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 11332438 / 11370227 / 11395929 / 11661545 | write 5401269 / 5425451 / 5469250 / 5662834 | full_click_mean=16865179 | 101780 px | bbox=(220,120,360,360) | a black disc on white (the drawn-blob shape): the fill paints the disc
+hole_800x600_fill_inside | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 11325757 / 11396199 / 11410830 / 11644378 | write 5388956 / 5406953 / 5441102 / 5826161 | full_click_mean=16851932 | 101780 px | bbox=(220,120,360,360) | a transparent hole bounded by a white ring (the cut shape): the flood runs through transparent pixels — the crash scenario's shape
+all_masked_800x600_outside_sel | 800x600 | seed=(780,560) | tol=0 | sel=rect | 2/10 | flood 52447049 / 52505692 / 52539622 / 52762250 | write 2604855 / 2675497 / 2665471 / 2698541 | full_click_mean=55205093 | 480000 px | bbox=(300,280,30,30) | the flood covers the whole canvas while the selection masks it all out — the V78 crash path's cost (the write skips every pixel)
+dot_800x600_one_pixel | 800x600 | seed=(400,300) | tol=0 | sel=none | 2/10 | flood 18168 / 18899 / 21105 / 35787 | write 451 / 646 / 953 / 2371 | full_click_mean=22058 | 1 px | bbox=(400,300,1,1) | a single isolated pixel: the smallest possible fill
+wall_time_secs=4.3

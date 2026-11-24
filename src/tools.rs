@@ -449,6 +449,35 @@ pub fn pick_color(pixmap: &Pixmap, x: u32, y: u32) -> Option<Color32> {
     ))
 }
 
+/// The flood comparator-space bytes of a raw premultiplied pixel — the
+/// exact chain [`pick_color`] runs (tiny-skia `demultiply`, then egui's
+/// `from_rgba_unmultiplied` premultiply) with fast paths: an opaque pixel
+/// passes through unchanged (both steps are identities at alpha 255), a
+/// fully transparent one collapses to `[0, 0, 0, 0]` (premultiplied
+/// channels are 0 there, and demultiply's NaN cast yields 0), and only a
+/// PARTIALLY translucent pixel pays the float divide. The fill/wand flood
+/// compares THESE bytes — the same space the old `pick_color`-based
+/// comparator saw, so translucency semantics are preserved byte-for-byte
+/// (the equivalence is brute-forced in `tools/tests.rs`).
+pub fn sample_bytes_of(pixel: PremultipliedColorU8) -> [u8; 4] {
+    let (r, g, b, a) = (pixel.red(), pixel.green(), pixel.blue(), pixel.alpha());
+    if a == 255 {
+        return [r, g, b, a];
+    }
+    if a == 0 {
+        return [0, 0, 0, 0];
+    }
+    // tiny-skia's demultiply, verbatim (the f64 divide + 0.5 rounding).
+    let af = a as f64 / 255.0;
+    let demul = |c: u8| (c as f64 / af + 0.5) as u8;
+    // egui's premultiply (ecolor's `mul_frac_round`), verbatim.
+    let premul = |c: u8| {
+        let p = (c as u16) * (a as u16) + 128;
+        ((p + (p >> 8)) >> 8) as u8
+    };
+    [premul(demul(r)), premul(demul(g)), premul(demul(b)), a]
+}
+
 /// Integer Bresenham line, all quadrants, both endpoints inclusive; `plot`
 /// receives every pixel of the line, one pixel per step.
 fn bresenham_line(x0: i64, y0: i64, x1: i64, y1: i64, mut plot: impl FnMut(i64, i64)) {
