@@ -122,16 +122,33 @@ debug = false
 # (verify.sh, agent sandboxes, weak/cold machines). Same checks as CI. Since
 # owner decision 2026-11-18 the dev profile is fully unoptimized too, so the
 # two lanes compile at similar speed; gates keeps its separate `target/`
-# fingerprints (switching lanes rebuilds) and `incremental = false`.
+# fingerprints (switching lanes rebuilds).
 #   cargo clippy --profile gates --all-targets -- -D warnings
 #   cargo test --profile gates
+# Incremental is ON (owner decision 2026-11-24): the lane's cold cost lives
+# in the dependency graph and the test-binary link, which IC never touches —
+# incremental caches only the workspace crate itself (registry deps build
+# non-incrementally regardless of the flag). The old no-IC config is the
+# owner's personal [profile.gates-strict] lane below.
 [profile.gates]
 inherits = "dev"
 opt-level = 0
 debug = false
-incremental = false
+incremental = true
 
 [profile.gates.package."*"]
+opt-level = 0
+
+# GATES-STRICT LANE (owner decision 2026-11-24): the original 2026-11-11
+# no-incremental gates config, kept ONLY for the owner's personal
+# final-verification runs on his machine — the agent gate (verify.sh) and
+# the sandbox warm-up stay on `gates`:
+#   cargo test --profile gates-strict
+[profile.gates-strict]
+inherits = "gates"
+incremental = false
+
+[profile.gates-strict.package."*"]
 opt-level = 0
 
 # Do NOT run `cargo build --release` until the user explicitly asks for it.

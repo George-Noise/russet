@@ -713,6 +713,7 @@ rustup update                                   # keep rustup current; the repo 
 cargo run                                       # dev build; first run is long (deps once), then seconds
 cargo test --profile gates                      # unit tests, one file per module (src/<module>/tests.rs)
 cargo clippy --profile gates --all-targets -- -D warnings   # same lints, unoptimized fast lane — AGENTS.md "Repo facts"
+cargo test --profile gates-strict               # OWNER-only no-incremental final-check lane (the agent gate stays on `gates`)
 
 # --- Release: MANUALLY, when everything is ready (fat LTO, slow) ---
 cargo build --release
