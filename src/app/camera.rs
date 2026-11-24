@@ -1,8 +1,10 @@
 //! The main-canvas viewport (SPEC §3.4): where the canvas sits on screen,
 //! zooming (Paint.NET-style discrete steps, Ctrl+wheel toward the cursor,
 //! physical-pixel snapping) and panning (plain/Shift wheel, middle button,
-//! Space+LMB, W/A/S/D). A child module of `app`, so it can touch `App`'s
-//! private fields; `app.rs` stays the orchestrator.
+//! Space+LMB, W/A/S/D — with the combo latch, [`PanKeyLatch`], that keeps a
+//! letter pressed under an accelerator from panning). A child module of
+//! `app`, so it can touch `App`'s private fields; `app.rs` stays the
+//! orchestrator.
 
 use eframe::egui::{self, Key, MouseWheelUnit, PointerButton, Pos2, Rect, Vec2};
 
@@ -185,18 +187,27 @@ impl App {
     /// other layout. While a pan key is held, no stroke starts (the caller
     /// treats this as panning, same as Space+LMB).
     fn handle_key_pan(&mut self, ui: &egui::Ui) -> bool {
+        // The combo latch rides the RAW events (`i.raw.events`), which
+        // nothing consumes: the hotkeys' `consume_key` clears only
+        // `i.events` (egui 0.37 `count_and_consume_key`), so the Ctrl+A /
+        // Ctrl+S press that already fired a combo still reaches this scan
+        // with its modifiers intact. The update runs BEFORE the keyboard
+        // gate so release events are never missed while a text field holds
+        // the focus.
+        ui.input(|i| self.pan_key_latch.update(&i.raw.events));
         // Same gate as the hotkeys: keys must not pan while focus is in a
         // dialog input field.
         if ui.ctx().egui_wants_keyboard_input() {
             return false;
         }
+        let latch = self.pan_key_latch;
         let (dir, suppressed) = ui.input(|i| {
             (
                 key_pan_dir(
-                    i.key_down(Key::W),
-                    i.key_down(Key::A),
-                    i.key_down(Key::S),
-                    i.key_down(Key::D),
+                    i.key_down(Key::W) && !latch.blocks(Key::W),
+                    i.key_down(Key::A) && !latch.blocks(Key::A),
+                    i.key_down(Key::S) && !latch.blocks(Key::S),
+                    i.key_down(Key::D) && !latch.blocks(Key::D),
                 ),
                 pan_suppressed_by_modifiers(i.modifiers),
             )
@@ -296,6 +307,92 @@ fn key_pan_dir(w: bool, a: bool, s: bool, d: bool) -> Vec2 {
 /// apply to pointer drags only).
 fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
     m.ctrl || m.command || m.mac_cmd || m.alt
+}
+
+/// The W/A/S/D combo latch (owner bug report 2026-11-24: Ctrl+S with Ctrl
+/// RELEASED first — S still held — panned down, and Ctrl+A ditto for A;
+/// the owner asked for a ≥100 ms debounce so the combo's tail cannot move
+/// the view). A letter whose PRESS event arrives while an accelerator is
+/// held belongs to the hotkey layer: it pans NOTHING for that physical
+/// press, even after the modifier lifts — the suppression lives until the
+/// letter's own release event, which is strictly longer than any debounce
+/// window the hold can outlive. A release (or a press with no accelerator,
+/// i.e. a fresh deliberate pan) never latches. State is four flags, one
+/// per pan letter; `App` carries it next to `pan`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct PanKeyLatch {
+    w: bool,
+    a: bool,
+    s: bool,
+    d: bool,
+}
+
+impl PanKeyLatch {
+    /// Does this latched letter hold its key's pan contribution back?
+    /// Keys outside the pan set are never blocked.
+    fn blocks(self, key: Key) -> bool {
+        match key {
+            Key::W => self.w,
+            Key::A => self.a,
+            Key::S => self.s,
+            Key::D => self.d,
+            _ => false,
+        }
+    }
+
+    /// Consumes ONE frame's raw events in delivery order: a pan-letter
+    /// press under an accelerator latches the letter, the letter's release
+    /// clears it. Every `Event::Key` carries the modifier state of its own
+    /// moment (egui-winit stamps it), so no cross-frame modifier tracking
+    /// is needed. Repeats change nothing: the latch rides the physical
+    /// press, a repeat under the still-held accelerator re-sets an already
+    /// set flag, and a repeat after the modifier lifted carries no
+    /// accelerator, so it cannot set or clear anything.
+    fn update(&mut self, events: &[egui::Event]) {
+        for event in events {
+            let egui::Event::Key {
+                key,
+                pressed,
+                modifiers,
+                ..
+            } = event
+            else {
+                continue;
+            };
+            match key {
+                Key::W | Key::A | Key::S | Key::D => {
+                    if *pressed {
+                        if pan_suppressed_by_modifiers(*modifiers) {
+                            self.set(*key);
+                        }
+                    } else {
+                        self.clear(*key);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn set(&mut self, key: Key) {
+        match key {
+            Key::W => self.w = true,
+            Key::A => self.a = true,
+            Key::S => self.s = true,
+            Key::D => self.d = true,
+            _ => {}
+        }
+    }
+
+    fn clear(&mut self, key: Key) {
+        match key {
+            Key::W => self.w = false,
+            Key::A => self.a = false,
+            Key::S => self.s = false,
+            Key::D => self.d = false,
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]

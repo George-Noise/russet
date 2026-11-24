@@ -173,6 +173,11 @@ pub struct App {
     mcp: Option<mcp::McpServer>,
     zoom: f32,
     pan: Vec2,
+    /// The W/A/S/D combo latch ([`camera::PanKeyLatch`]): a letter pressed
+    /// under an accelerator (the Ctrl+A / Ctrl+S / Ctrl+Shift+S tail) pans
+    /// nothing until the letter is released — owner bug report 2026-11-24.
+    /// Updated from the frame's raw key events in `camera::handle_key_pan`.
+    pan_key_latch: camera::PanKeyLatch,
     is_stroking: bool,
     /// Smoothed-stroke emission window (owner request 2026-11-19): the
     /// midpoint-quadratic window every coalesced pointer move of the
@@ -448,6 +453,7 @@ impl App {
             mcp: mcp::McpServer::maybe_spawn(ctx.clone()),
             zoom: 1.0,
             pan: Vec2::ZERO,
+            pan_key_latch: camera::PanKeyLatch::default(),
             is_stroking: false,
             stroke_smooth: SmoothStroke::new(Pos2::ZERO),
             stroke_trail: PencilTrail::default(),

@@ -112,3 +112,7 @@ fn an_accelerator_modifier_suppresses_the_key_pan() {
         "Shift alone is no accelerator — the pan stays"
     );
 }
+
+// The combo-latch topic lives in its own file (AGENTS.md "Tests" rule 7:
+// split past the ~300-line guard — move the tests, not the visibility).
+mod latch;

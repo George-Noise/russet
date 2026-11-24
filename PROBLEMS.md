@@ -1,3 +1,9 @@
+### 2026-11-24 — the `--warm` warm-up verdict lies when cargo is missing
+- Expected: `sandbox_check.sh --warm` starts a detached gates-lane warm-up; "verify.sh is hot when the log says finished".
+- Actual: on the wiped sandbox rustup was MISSING; the warm-up's cargo calls died instantly ("cargo: command not found" twice) and the log STILL ended with "warm-up finished (exit 0) — verify.sh is now hot" — a green verdict with nothing compiled. The tell was the log's lifetime: 0 seconds.
+- Cost: the session-start probe read as "warm-up started"; the lie surfaced only when the first real cargo call failed. One wasted probe plus a SANDBOX.md re-read; the toolchain install itself was the accepted cold cost.
+- Could improve: the --warm branch could gate on the cargo presence it already reports ("[NO] rustup MISSING") and print a clear refusal instead of writing "finished (exit 0)". Same shape as the 2026-11-23 entry.
+
 ### 2026-11-24 — MCP stdio hangs twice in one session: the visual driver on a non-mcp binary, and direct `cargo test --features mcp` on the agent shell's open stdin
 
 - What happened (expected vs actual): (1) the done-gate's GUI probe —

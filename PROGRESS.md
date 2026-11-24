@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner 2026-11-24) | done — gates green, the regressions fail-first | the owner's bug report: Ctrl+S / Ctrl+A with Ctrl RELEASED first (the letter still held) panned — the 2026-11-20 modifier suppression keys on the CURRENT modifier state, so the hold's tail panned again; the owner asked for a ≥100 ms debounce. The fix is the camera's combo latch `PanKeyLatch` (`app/camera.rs`, state on `App` next to `pan`): a letter whose PRESS event arrives under an accelerator (Ctrl/⌘/Alt — the suppression's own set) is pan-dead for that physical press until the letter's own RELEASE — the suppression lives the whole remaining hold (strictly stronger than any time debounce; no point where the pan "escapes"), a fresh bare press pans instantly; generic over W/A/S/D and Ctrl/⌘/Alt (Ctrl+Shift+S and Ctrl+W/D covered the same way); Shift alone never latches (the 2026-11-20 rule). The latch scans the frame's RAW events (`i.raw.events` — nothing consumes them: the hotkeys' `consume_key` clears `i.events` only, egui 0.37 `count_and_consume_key`, verified against the installed 0.37.0 source), every `Event::Key` carries its own modifier stamp (no cross-frame tracking), the update runs before the `egui_wants_keyboard_input` gate so releases are never missed, repeats change nothing. +6 tests (NEW `app/camera/tests/latch.rs` — 4 pure + 2 integration through REAL `run_pass` frames in the app's order; `camera/tests.rs` split by topic per the 300-line guard); V83 born |
 | M0 Scaffold | done | |
 | M1 Canvas + zoom/pan | done | pan: wheel / Shift+wheel / middle / Space+LMB / WASD (physical keys) |
 | M2 Dirty-region texture updates | done | |
@@ -56,15 +57,14 @@
 | Extra: only the Mouse4/Mouse5 choice persists + the Settings window (owner 2026-11-23) | done — gates + driver + the NEW storage probe green | the owner's two orders: «только Mouse4/Mouse5 выбор сохранялся» and a Settings item in the top panel opening a settings window with the choices described, the ONE dropdown with three options (спросить / использовать / не использовать — the wording ours, the meaning his). The mode is now the THREE-way persisted `MouseSideMode` (Ask = the startup default, Always, Never): the modal's Yes/No settle it PERMANENTLY (Yes → Always, No → Never), the ✕ still decides nothing, the dropdown re-opens the question at any time and closes an open modal when leaving Ask; a settled choice lands in the Tool Log. The NEW menu-bar menu **Settings** (after Theme, before Help — Help stays LAST, §3.1) carries ONE item "Settings…" opening the Settings window (SPEC §3.14, the About-window pattern: centered, non-resizable, ✕ + Close close it) — the strong setting label, the ComboBox dropdown (Ask every session / Use for Undo / Redo / Don't use), the CURRENT choice's live description + "The choice is saved between sessions."; new child module `app/settings_window.rs`. The storage (§1 policy): `App::save` writes EXACTLY ONE key `settings/mouse_side_buttons` = the plain string "always"/"never" (no serde — eframe does not re-export it; the zero-dependency hand encoding); choosing Ask back REMOVES the key and only when present (eframe's `remove_string` dirties the file unconditionally, `set_string` only on a value change), so an undecided user keeps a byte-empty storage — NO app.ron at all; `persist_window`/`persist_egui_memory` stay OFF; a missing/corrupt value loads as Ask; eframe calls `save` on its 30-s autosave (which fires from a FRAME — an idle app never saves) and at exit. +15 tests (mouse_side 12→21 split by topic into tests/{machine,persistence,app_routing}.rs per the 300-line guard; NEW app/settings_window/tests.rs ×3 — render + hidden + the log-once; app/tests.rs 2→5 — the save-hook writes exactly the one key, the Ask reset removes it, the startup load applies it); the NEW probe `scripts/gui_settings_check.sh` PASS (A: Yes → the autosave + the exit save write exactly one key "always"; B: restart undoes without re-asking; C: No → "never"; D: both buttons inert on Never; E: an untouched AND an unanswered-killed session write NOTHING; F: the Settings window opens); the visual driver ALL SCENARIOS GREEN; docs: SPEC §1/§3.1/§3.9/§3.14, AGENTS.md (quirk + module map), Cargo.toml comment; V75 born, V73 amended |
 
 **Verification stamp:** FULL gate re-verified 2026-11-24 (the
-Ctrl+A round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+pan-tail round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
 green on --all-targets (default + mcp + fill-bench), `cargo test
---profile gates` 377 green in both lanes (+1 ignored, +5 tests this
-round), ALL GATES GREEN in 30 s (hot gates lane); NO wasm check — no
-web-facing code touched (the AGENTS.md wasm-check economy rule); the
-visual driver ALL SCENARIOS
-GREEN (15 checks, the mcp binary) and the NEW storage probe
-`scripts/gui_settings_check.sh` PASS (six headless sessions — the
-round's evidence).
+--profile gates --features mcp` 383 green (+1 ignored, +6 tests this
+round), ALL GATES GREEN in 29 s (hot gates lane); NO wasm check — no
+web-facing code touched (the AGENTS.md wasm-check economy rule); no
+visual-driver run — the round adds no UI surface and the driver cannot
+inject modifier key chords; the two REAL-pass integration tests are the
+behavior proof (both FAIL on the pre-fix code, see the Log).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -74,10 +74,50 @@ round's evidence).
 
 ## Log — newest first. Insert a new entry directly under this heading.
 
+### 2026-11-24 — `Fix:` Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner request in chat: «на Ctrl + A и Ctrl + S нужно добавить debounce на 100ms или больше чтобы если пользователь отожмёт Ctrl первым чтобы pan не двигался»)
+
+- **What:** owner bug report 2026-11-24: Ctrl+S / Ctrl+A with Ctrl
+  RELEASED first (the letter still held) panned — the 2026-11-20
+  suppression keys on the CURRENT modifier state, so the hold's tail
+  panned again. The owner asked for a ≥100 ms debounce; the fix is the
+  camera's combo latch `PanKeyLatch` (`app/camera.rs`, state on `App`):
+  a letter whose PRESS event arrives under an accelerator (Ctrl/⌘/Alt —
+  the suppression's own set) is pan-dead for that physical press until
+  the letter's own RELEASE event — the suppression lives the whole
+  remaining hold (strictly stronger than any time debounce, no point
+  where the pan "escapes"), and a fresh bare press pans instantly. The
+  latch scans the frame's RAW events (`i.raw.events` — nothing consumes
+  them: `consume_key` clears `i.events` only, egui 0.37
+  `count_and_consume_key`, verified against the installed 0.37.0
+  source); every `Event::Key` carries its own modifier stamp (no
+  cross-frame tracking); the update runs BEFORE the keyboard gate so
+  releases are never missed while a text field holds the focus; repeats
+  change nothing. Generic over W/A/S/D and Ctrl/⌘/Alt.
+- **Files:** `src/app/camera.rs` (the latch + the filtered dir),
+  `src/app.rs` (the `pan_key_latch` field), `src/app/camera/tests.rs`
+  (split by topic per the 300-line guard: `mod latch;`), NEW
+  `src/app/camera/tests/latch.rs` (4 pure + 2 integration tests through
+  REAL `run_pass` frames in the app's frame order), `SPEC.md`
+  §3.4 + §3.9 (two rows), `AGENTS.md` (module map), `TIMING.md`,
+  `DEBTS-verification.md` (V83).
+- **Verified:** regression discipline held: BOTH integration tests fail
+  on the pre-fix code with the exact reported pan (latch filter toggled
+  off for the probe — S tail panned to pan.y = −120, A tail to pan.x =
+  +120) and pass with the fix. FULL GATE: `scripts/verify.sh` ALL GATES
+  GREEN in 29 s (hot gates lane; fmt + clippy `-D warnings` on
+  --all-targets ×{default, mcp, fill-bench} + `cargo test --profile
+  gates --features mcp` 383 green +1 ignored). NO wasm check (no
+  web-facing code touched); NO visual-driver run — no new UI surface,
+  the driver cannot inject modifier key chords.
+- **Owner-checks:** V83 born. Open: V83, V82, V81, V80, V79, V78, V77,
+  V76, V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Fix: Ctrl+A and Ctrl+S leave no panning tail — the WASD combo latch keeps a letter pressed under an accelerator pan-dead until its release`
+
 > Budget: ≤ ~20 lines per entry, fixed fields (What / Files / Verified / Owner-checks /
 > Commit title); durable facts move to their canonical home in the same edit (AGENTS.md
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
-> PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
+> PROGRESS-archive.md (compacted 2026-11-24: the 2026-11-23 `Docs:` dev-stays-slow
+> entry moved). Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
 > under which round's budget, 2026-11-18 → 2026-11-24) lives in
 > PROGRESS-archive.md; the latest move: the 2026-11-23 "the fill/wand flood
@@ -145,22 +185,3 @@ round's evidence).
 - **Owner-checks:** V81 born. VERIFIED in chat: V69 (the atlas sheets).
   Open: V81, V80, V79, V78, V77, V76, V66 (X11), V46 (X11); parked: V30, V8.
 - **Commit title:** `Perf: the fill/wand flood becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans; pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests`
-
-### 2026-11-23 — `Docs:` the owner keeps dev slow on purpose (the early-warning sensor), rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change (owner request in chat)
-
-- **What:** the owner's follow-up decisions in chat. (1) The dev build is NOT
-  to be made faster — ON PURPOSE: dev slowness is the early-warning sensor for
-  algorithmic symptoms (it is exactly how the fill slowness was noticed), so
-  research option 7 (`[profile.dev] opt-level = 1`) is REJECTED;
-  `benchmarks/RESEARCH-fill-optimization.md` records the rejection and
-  reorders the plan: the span/scanline rewrite + the packed-color comparator +
-  marking unmatched pixels + span-driven writes (options 1+2+3+6) is the
-  starting point, scratch buffers / the comparison cache after. (2) The owner
-  asked for a plain-language explanation of the combined effect of 1+2+3+6 and
-  for the benchmark's commit title (both delivered in chat; the title was
-  already in the previous PROGRESS entry). No code changed in this round.
-- **Files:** `benchmarks/RESEARCH-fill-optimization.md` (the rejection + the
-  reordered plan), `AGENTS.md` (the dev-stays-slow directive).
-- **Owner-checks:** none born (no code, no behavior). Open: V80, V79, V78,
-  V77, V76, V66 (X11), V46 (X11); parked: V30, V8.
-- **Commit title:** `Docs: the owner keeps dev slow on purpose (the early-warning sensor) and rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change`

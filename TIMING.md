@@ -20,11 +20,11 @@
 > log ≈). One command per row; never merge rows.
 
 ## Cold
+| 2026-11-24 | `cargo test --profile gates --features mcp camera` — the gates-lane dep-graph CODEGEN cold on the wiped-sandbox fresh clone (`~/.cargo` AND `target/` were both wiped; rustup + the pinned 1.99.1 toolchain reinstalled first): the unoptimized codegen exceeded FOUR 10-min tool-call caps, cargo resuming each time, the final chunk linked the 61 MB test binary and ran the suite | **≈ 40 min wall across chunks** | the tool-call caps ≈ |
+| 2026-11-24 | `cargo check --profile gates --features mcp` — the dep-graph check COLD (the same wiped sandbox; the check artifacts do NOT feed the test codegen — the test build recompiled every dep) | **1m 26s** | cargo's print |
 | 2026-11-24 | `cargo build` (the dev GUI binary for the visual-driver run — the dev lane COLD on the fresh GitHub clone: rustup + the pinned 1.99.1 toolchain installed first, then the whole dep graph) | **1m 35s** | `time`d exactly |
 | 2026-11-24 | `cargo check` (this round's quick loop after the Ctrl+A edits — the dev-lane dep graph COLD, the crate itself compiled after) | **1m 16s** | cargo's print |
-| 2026-11-23 | `cargo check` (the settings round's first quick-loop check — the dev-lane dep graph was COLD in the fresh sandbox, the crate compiled after) | **1m 17s** | cargo's print |
 | 2026-11-23 | detached gates-lane warm-up on the RECYCLED sandbox — rustup itself missing and reinstalled first (minimal, no default), then `cargo fetch` + `cargo check --profile gates` cold (1m 13s); the fetch also pulled the wasm toolchain pieces later | **≈ 2 min total** | the background log |
-| 2026-11-23 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets -- -D warnings` + `cargo test --profile gates --no-run`) on the FRESH GitHub clone — rustup + the pinned 1.99.1 toolchain installed first; the check's own first warm-up attempt silently no-op'd on the missing rustup (PROBLEMS.md 2026-11-23) and was restarted manually | **clippy 1m 32s ≈, test --no-run ≈ 1 min** | the warm-up log ≈ |
 
 ## Hot
 | 2026-11-24 | `cargo test --profile gates --features mcp` run DIRECTLY in the agent shell — HANGS on the shell's open pipe stdin (killed at 320 s and at 100 s caps); with `< /dev/null` the same run finishes in ~50 s wall (the compile was cached by verify.sh, 377 tests in 7.5 s). verify.sh itself never hangs — run direct mcp-lane tests with stdin closed | **320 s + 100 s killed; ~50 s OK** | the tool-call wall clock ≈ |
