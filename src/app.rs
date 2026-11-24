@@ -572,6 +572,19 @@ impl App {
         }
     }
 
+    /// A canvas gesture is in flight (a freehand stroke, a Line/Shape
+    /// preview drag, a Select region/move drag or an open Text entry):
+    /// every consumer that would corrupt a pending commit under it
+    /// guards — the Mouse4/Mouse5 side buttons ([`mouse_side`]) must not
+    /// undo/redo mid-gesture, and the Select All hotkey ([`input`]) must
+    /// not replace the selection a move drag is carrying.
+    pub(super) fn canvas_gesture_active(&self) -> bool {
+        self.is_stroking
+            || self.preview.is_active()
+            || self.select_gesture.is_active()
+            || self.text_edit.is_some()
+    }
+
     /// The shared action behind the menu-bar theme switcher ([`menu`]) and
     /// the MCP `set_theme` tool (owner request 2026-11-18): applies
     /// immediately — egui re-styles every widget next pass, and the icon

@@ -20,25 +20,18 @@
 > log ≈). One command per row; never merge rows.
 
 ## Cold
-
-| Date | Command | Duration | Measured |
-|---|---|---|---|
+| 2026-11-24 | `cargo build` (the dev GUI binary for the visual-driver run — the dev lane COLD on the fresh GitHub clone: rustup + the pinned 1.99.1 toolchain installed first, then the whole dep graph) | **1m 35s** | `time`d exactly |
+| 2026-11-24 | `cargo check` (this round's quick loop after the Ctrl+A edits — the dev-lane dep graph COLD, the crate itself compiled after) | **1m 16s** | cargo's print |
 | 2026-11-23 | `cargo check` (the settings round's first quick-loop check — the dev-lane dep graph was COLD in the fresh sandbox, the crate compiled after) | **1m 17s** | cargo's print |
 | 2026-11-23 | detached gates-lane warm-up on the RECYCLED sandbox — rustup itself missing and reinstalled first (minimal, no default), then `cargo fetch` + `cargo check --profile gates` cold (1m 13s); the fetch also pulled the wasm toolchain pieces later | **≈ 2 min total** | the background log |
 | 2026-11-23 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets -- -D warnings` + `cargo test --profile gates --no-run`) on the FRESH GitHub clone — rustup + the pinned 1.99.1 toolchain installed first; the check's own first warm-up attempt silently no-op'd on the missing rustup (PROBLEMS.md 2026-11-23) and was restarted manually | **clippy 1m 32s ≈, test --no-run ≈ 1 min** | the warm-up log ≈ |
-| 2026-11-21 | detached gates-lane warm-up (`cargo clippy --profile gates --all-targets --features mcp` + `cargo test --profile gates --features mcp --no-run`): the whole lane COLD on the fresh GitHub clone — rustup + the pinned 1.99.1 toolchain installed first | **≈ 3 min total (clippy 1m 30s)** | the warm-up log's timestamps (started 07:29:25, finished 07:32:21) |
-| 2026-11-21 | `cargo check` (this round's quick loop — COLD dev-lane dep graph on the fresh clone) | **1m 20s** | cargo's print |
 
 ## Hot
-
-| Date | Command | Duration | Measured |
-|---|---|---|---|
+| 2026-11-24 | `cargo test --profile gates --features mcp` run DIRECTLY in the agent shell — HANGS on the shell's open pipe stdin (killed at 320 s and at 100 s caps); with `< /dev/null` the same run finishes in ~50 s wall (the compile was cached by verify.sh, 377 tests in 7.5 s). verify.sh itself never hangs — run direct mcp-lane tests with stdin closed | **320 s + 100 s killed; ~50 s OK** | the tool-call wall clock ≈ |
+| 2026-11-24 | `visual_driver.py ./target/debug/russet` against the WRONG build (no `--features mcp`) — the driver speaks MCP over piped stdin, a plain binary never handshakes: hung until the 240 s cap killed it (the mcp build ran the same probe in 3 s; SANDBOX.md now says the binary must be mcp-enabled) | **4m 0s (killed)** | `time`d exactly |
 | 2026-11-23 | `bash scripts/gui_settings_check.sh` (the settings round's storage probe — six headless sessions dominated by the two 30-s autosave waits and the launches; the gates binary) | **≈ 5 min** | the tool-call wall clock ≈ |
 | 2026-11-23 | `bash scripts/verify.sh` (the persistence round's full gate — the gates lane rebuilt with the NEW eframe `persistence` feature: eframe/egui/egui-winit/serde + ron recompiled, then the whole gate) | **2m 28s** | `time`d exactly |
 | 2026-11-23 | `cargo check --target wasm32-unknown-unknown` (after the same feature change; wasm target had to be re-added to the fresh sandbox's toolchain first — the env-less `rustup target add` needs `RUSTUP_TOOLCHAIN=1.99.1` when no default toolchain exists) | **37 s** | `time`d exactly |
-| 2026-11-23 | `cargo build` (the dev GUI binary — the eframe `persistence` feature change rebuilt eframe/egui/egui-winit + ron + the crate) | **2m 01s** | `time`d exactly |
-| 2026-11-23 | `cargo build` (the dev GUI binary for the mouse-side probe; warm deps, the crate itself recompiled unoptimized) | **1m 32s** | `time`d exactly |
-
 ## Reading the numbers
 
 - The done-gate (`verify.sh`) after an ACTUAL code change recompiles the

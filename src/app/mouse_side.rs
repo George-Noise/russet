@@ -288,16 +288,6 @@ impl App {
         }
     }
 
-    /// A canvas gesture is in flight (a freehand stroke, a Line/Shape
-    /// preview drag, a Select region/move drag or an open Text entry):
-    /// side-button presses must not undo/redo under it.
-    fn canvas_gesture_active(&self) -> bool {
-        self.is_stroking
-            || self.preview.is_active()
-            || self.select_gesture.is_active()
-            || self.text_edit.is_some()
-    }
-
     /// The app-level mode setter (SPEC §3.14): the Settings window's
     /// dropdown runs through it, and so does the ask modal's answer — one
     /// state move + one Tool Log line per settled choice. The log strings

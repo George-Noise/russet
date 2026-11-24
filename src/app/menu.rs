@@ -109,6 +109,15 @@ impl App {
                         self.paste_clipboard();
                         ui.close();
                     }
+                    // Select All (owner request 2026-11-24): the same
+                    // action the Ctrl+A hotkey runs — the whole canvas as
+                    // one Rect region. Always enabled (a plain button,
+                    // like the Canvas menu's item): a canvas always
+                    // exists to select.
+                    if ui.button("Select All (Ctrl+A)").clicked() {
+                        self.select_all();
+                        ui.close();
+                    }
                 });
 
                 ui.menu_button("Canvas", |ui| {

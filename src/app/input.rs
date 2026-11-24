@@ -148,6 +148,22 @@ impl App {
             Some(ClipboardOp::Paste) => self.paste_clipboard(),
             None => {}
         }
+        // Ctrl+A (owner request 2026-11-24: «Нужно на Ctrl+A выделение
+        // всего на текущем слое») — the GLOBAL Select All: one Rect
+        // region covering the whole canvas replaces the selection (the
+        // layers are always canvas-sized, so the full rect IS everything
+        // on the current layer — [`App::select_all`]). Like the side
+        // buttons, it stands down while a canvas gesture is pending —
+        // replacing the selection a MoveDrag is carrying would corrupt
+        // its commit (the commit translates the selection it finds).
+        // The key is consumed only when the action runs (the undo-key
+        // convention); no plain-key consumer exists for `A`, so an
+        // unconsumed press under a gesture falls through to nothing.
+        if !self.canvas_gesture_active()
+            && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::A))
+        {
+            self.select_all();
+        }
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::V)) {
             self.tools.tool = Tool::Select;
         }

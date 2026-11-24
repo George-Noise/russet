@@ -1,5 +1,52 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Add:` the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet (owner request in chat)
+
+- **What:** the owner reported dev-build fill slowness, asked for (1) the
+  optimization OPTIONS first (no implementation), (2) nanosecond measurements
+  in different cases, (3) a self-created log in the repo — the name from the
+  date+time down to the seconds, digits only, with the dev/release mode IN
+  the name and the sandbox specs inside, (4) the runs gated behind a special
+  flag outside the normal tests, (5) a lock so the AGENT cannot run it
+  without the owner's explicit permission. Delivered exactly that —
+  `src/app/fill_bench.rs` compiles ONLY under the `fill-bench` feature (the
+  mcp/diagnostics pattern), triggers on RUSSET_BENCH_FILL=1, refuses without
+  RUSSET_BENCH_ALLOWED=1 (exit 2, the message names the rule), writes
+  `benchmarks/fill_bench_<mode>_<YYYYMMDDHHMMSS>.log` (UTC, digits-only, the
+  mode in the name) with the machine specs (CPU/cores/RAM/kernel/rustc/git
+  HEAD) and min/median/mean/p95 nanosecond timings of the flood read
+  (`flood_pixels` + the click's own `pick_color` sampler) and the fill write
+  (the 1:1 mirror of `paint_flood_pixels`' src-over loop) over 10
+  deterministic (fixed-xorshift) canvases.
+- **Measurements** (this sandbox: 2 vCPU Xeon, 4 GB RAM; logs in
+  `benchmarks/`): dev full_click mean 2.65 ms (64x64), 376 ms (800x600),
+  1.72 s (1920x1080); release 248 µs / 50.1 ms / 238 ms — the gap ~7-10×;
+  per-pixel flood read ~727 ns/px dev, ~100 ns/px release; the write is only
+  ~7-8% of the click. The research file
+  `benchmarks/RESEARCH-fill-optimization.md` (in the repo, for re-verification
+  after any algorithm change) ranks the options: [profile.dev] opt-level=1 as
+  the immediate dev relief; then span/scanline flood (Wikipedia 2-8×, lodev
+  ~7×, imageproc and Krita use it) + a packed-u32 comparator without the
+  per-probe demultiply + marking unmatched pixels visited + run-ordered
+  output (no sort/dedup, direct span writes for the fill and the mask);
+  scratch-buffer reuse and a per-color comparison cache after; rejected:
+  rayon, SIMD-before-spans, 8-way. NO algorithm change implemented — waiting
+  for the owner's explicit go.
+- **Files:** `src/app/fill_bench.rs` (new), `src/app.rs` (the feature-gated
+  mod), `src/main.rs` (the pre-GUI call), `Cargo.toml` (`fill-bench = []`),
+  `scripts/verify.sh` (the clippy stage for the feature so it cannot rot),
+  `benchmarks/` (3 logs + the research file).
+- **Verified:** the refusal tested (RUSSET_BENCH_FILL=1 without the
+  permission → exit 2, the message printed); the dev suite ran twice (the
+  first log predates the rustc-lookup patch, rustc=unknown there), the
+  release suite ran once; the numbers are in the research table; the gates
+  run GREEN (the new clippy --features fill-bench stage included).
+- **Owner-checks:** V80 born (the bench's human pass — the owner will run
+  the release command on their machines and compare the logs). VERIFIED in
+  chat: V69 (the atlas sheets). Open: V80, V79, V78, V77, V76, V66 (X11),
+  V46 (X11); parked: V30, V8.
+- **Commit title:** `Add: the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet`
+
 ### 2026-11-23 — `Fix:` the fill fires only inside an active selection - a click outside it floods nothing; the no-crash paths locked with tests (owner request in chat)
 
 - **What:** with at least one pixel selected a fill click whose seed lies

@@ -578,3 +578,121 @@ fn a_fill_without_a_selection_fires_anywhere() {
     assert!(App::fill_click_inside_selection(None, (80, 80)));
     assert!(App::fill_click_inside_selection(None, (0, 0)));
 }
+
+#[test]
+fn a_ctrl_a_key_event_selects_the_whole_canvas() {
+    // Owner request 2026-11-24: «Нужно на Ctrl+A выделение всего на
+    // текущем слое» — the GLOBAL Select All, from ANY tool's frame (the
+    // selection is document state, the Esc-deselect convention).
+    let mut app = App::new_headless();
+    let (width, height) = (app.canvas.width, app.canvas.height);
+    app.tools.tool = Tool::Brush; // any tool — the combo is global
+    assert!(app.selection.is_empty(), "nothing selected yet");
+
+    let ctx = egui::Context::default();
+    let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+        ctx.input_mut(|i| {
+            i.events.push(egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: Some(egui::Key::A),
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            });
+        });
+        app.handle_hotkeys(ctx);
+    });
+    output.textures_delta.clear();
+
+    let bounds = app.selection.bounds().expect("the whole canvas selected");
+    assert_eq!(
+        (bounds.x, bounds.y, bounds.w, bounds.h),
+        (0, 0, width, height),
+        "the selection is the full-canvas rect"
+    );
+    assert_eq!(
+        app.action_log.items().last().map(|e| e.label.as_str()),
+        Some("Select all"),
+        "the Tool Log names the action"
+    );
+}
+
+#[test]
+fn a_plain_a_key_event_does_not_select() {
+    // The pan key A (§3.4's WASD hold) must never masquerade as Select
+    // All: only the Ctrl combo selects.
+    let mut app = App::new_headless();
+
+    let ctx = egui::Context::default();
+    let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+        ctx.input_mut(|i| {
+            i.events.push(egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: Some(egui::Key::A),
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            });
+        });
+        app.handle_hotkeys(ctx);
+    });
+    output.textures_delta.clear();
+
+    assert!(app.selection.is_empty(), "no selection without Ctrl");
+    assert!(
+        app.action_log.items().is_empty(),
+        "nothing landed in the Tool Log"
+    );
+}
+
+#[test]
+fn ctrl_a_stands_down_while_a_canvas_gesture_is_pending() {
+    // The side-button rule: a pending gesture owns the canvas — replacing
+    // the selection a MoveDrag is carrying would corrupt its commit (the
+    // commit translates the selection it finds at release).
+    use crate::app::selection::{RegionOp, SelectGesture};
+
+    let mut app = App::new_headless();
+    app.selection.replace(
+        Some(Region::Rect {
+            a: pos2(10.0, 10.0),
+            b: pos2(30.0, 30.0),
+        }),
+        100,
+        100,
+    );
+    app.select_gesture = SelectGesture::RectDrag {
+        start: pos2(15.0, 15.0),
+        current: pos2(20.0, 20.0),
+        op: RegionOp::Replace,
+    };
+
+    let ctx = egui::Context::default();
+    let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+        ctx.input_mut(|i| {
+            i.events.push(egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: Some(egui::Key::A),
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            });
+        });
+        app.handle_hotkeys(ctx);
+    });
+    output.textures_delta.clear();
+
+    let bounds = app.selection.bounds().expect("the old selection survives");
+    assert_eq!(
+        (bounds.x, bounds.y, bounds.w, bounds.h),
+        (10, 10, 20, 20),
+        "the pending gesture's selection is untouched"
+    );
+    assert!(
+        !app.action_log
+            .items()
+            .iter()
+            .any(|e| e.label == "Select all"),
+        "no Select All line while the gesture is pending"
+    );
+}

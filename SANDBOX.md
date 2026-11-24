@@ -83,6 +83,14 @@ LD_LIBRARY_PATH=/tmp/xkbfix/ext/usr/lib/x86_64-linux-gnu \
 pkill -x Xvfb
 ```
 
+The binary MUST be the mcp build (`cargo build --features mcp`): the driver
+speaks MCP over piped stdin (the header's "feature `mcp`" is load-bearing), and
+a plain binary never answers the handshake — the driver hangs forever (cost a
+240 s timeout kill 2026-11-24; the mcp build ran the same probe in 3 s). The
+same stdio rule hits DIRECT `cargo test --features mcp` runs in the agent
+shell: the open pipe stdin blocks the suite (killed at 320 s), `< /dev/null`
+finishes it — verify.sh never hangs.
+
 `--shots` additionally writes screenshots to `$RUSSET_DRIVER_OUT` (default
 `/home/z/my-project/download`) — only when the owner asks for them.
 

@@ -21,6 +21,7 @@
 | M7 Resize Canvas + New | done | |
 | M8 Web (WASM) | built + headless Firefox check (2026-11-09) | wasm32 check/clippy green; `trunk build --release` OK (wasm 5.0 MB + 77 KB JS; page `web/index.html` + `Trunk.toml`); `trunk serve` + Firefox: UI renders, canvas draws, WebGL2 — a headless smoke test, not a human pass. Owner must click through drawing/zoom/pan/Open/Save with a real mouse |
 | M9 Acceptance + release | pending (owner) | §7 checklist is manual, on the owner's Windows machine; `cargo build --release` is run by the owner |
+| Extra: Ctrl+A = Select All — the whole current layer in one selection (owner 2026-11-24) | done — gates + driver green | the GLOBAL hotkey (§3.9): one Rect region covering the WHOLE canvas replaces the selection (every layer is canvas-sized, so the full rect IS everything on the current layer — copy/cut/move read the ACTIVE layer through the mask); REPLACES, so a fresh Select All heals subtract holes; stands down while a canvas gesture is pending (the shared `canvas_gesture_active` — the side-button guard, now moved to app.rs for both consumers); a focused text field keeps its own Ctrl+A (the `egui_wants_keyboard_input` gate); the Edit menu gains the always-enabled "Select All (Ctrl+A)" after Paste (§3.1); Tool Log records "Select all"; +5 tests (2 in app/selection/tests.rs, 3 in app/input/tests.rs — the Key-event path, the plain-A negative and the pending-gesture stand-down) |
 | Extra: the docs-only gate exemption into AGENTS.md (owner 2026-11-20) | done — docs only | a `.md`-only diff runs `scripts/rules.sh` + the delivery byte-compares ONLY — no builds, no tests; the full gate stays for anything beyond `.md` (Rust, scripts, Cargo, flake, CI, web); comment-only `.rs` edits keep the `cargo check` quick loop |
 | Extra: the web save downloads directly — rfd's fallback window gone (owner 2026-11-20) | done — gates + wasm check + driver green | the web Save dialog's confirm no longer routes through `rfd::AsyncFileDialog::save_file()` (its wasm backend pops the "click here to download your file" Ok/Cancel window): `file_io.rs::web::download_image` encodes → Blob (the format's MIME type, new `SaveFormat::mime_type`) → object URL → one synthetic click on a detached `<a download>` with the composed name → the URL revoked on a 10 s grace timer; js-sys/wasm-bindgen ride wasm-bindgen-futures' public re-exports (zero manifest additions; the web-sys line gains 8 feature gates); rfd stays only on the Open path; V47 born |
 | Extra: the Save-dialog slider captions — the numbers explain themselves (owner 2026-11-20) | done — gates + wasm check + driver green | under EACH encoding knob a live caption names the CURRENT number's effect (the owner: the digits "were not obvious even to me"): PNG "<level> — stored raw / light packing / balanced packing / tight packing …" + the tail "The picture is identical at every level — the slider only trades file size against save speed."; JPEG "<quality> — near-perfect picture / high / medium / low quality …" + the tail "Lower = a smaller file, but the picture loses more detail."; pure bucket helpers exhaustively tested (every stop 0..=9 / 1..=100 names its own number), the two headless dialog render tests assert the captions; V49 born, closed verified in chat the same day |
@@ -54,12 +55,13 @@
 | Extra: eframe `persistence` compiled in — saving deliberately NOTHING (owner 2026-11-23) | done — gates + wasm check + two headless storage probes green | the owner asked to enable the framework's persistence while saving as little as possible and to VERIFY what it writes: the feature is ON (Cargo.toml; the lock gains `ron`/`enumn`/`typeid` — three small pure-Rust crates), BOTH automatic channels OFF — `persist_window: false` (main.rs) and `App::persist_egui_memory() -> false` + an explicit empty `App::save` (app.rs, the future home of the first real persisted setting, e.g. the Mouse4/5 opt-in); the measured out-of-the-box content (what we just avoided): with the feature alone a 35-s headless session with a stroke wrote a 5 115-byte `app.ron` — the key `"window"` (OS-window geometry + scale factor) and the key `"egui"` (the WHOLE egui Memory: every floating-window position/pivot/z-order, collapse states, per-widget resize/scroll state, the theme preference, the input options); the shipped config: two 35-s sessions with strokes left the data dir EMPTY (only the startup-created folder remains — `~/.local/share/russet` / `%APPDATA%\Russet\data`, the feature's one unavoidable side effect); the restart probe shows the default layout unchanged; the web lane writes nothing to localStorage (the only writes are gated by the same two switches — eframe web source); +2 pinned tests (`app/tests.rs`: save_writes_nothing over a recording Storage, persist_egui_memory_is_off); docs: SPEC §1 persistence-policy paragraph, AGENTS.md quirk, mouse_side.rs doc; V74 born |
 | Extra: only the Mouse4/Mouse5 choice persists + the Settings window (owner 2026-11-23) | done — gates + driver + the NEW storage probe green | the owner's two orders: «только Mouse4/Mouse5 выбор сохранялся» and a Settings item in the top panel opening a settings window with the choices described, the ONE dropdown with three options (спросить / использовать / не использовать — the wording ours, the meaning his). The mode is now the THREE-way persisted `MouseSideMode` (Ask = the startup default, Always, Never): the modal's Yes/No settle it PERMANENTLY (Yes → Always, No → Never), the ✕ still decides nothing, the dropdown re-opens the question at any time and closes an open modal when leaving Ask; a settled choice lands in the Tool Log. The NEW menu-bar menu **Settings** (after Theme, before Help — Help stays LAST, §3.1) carries ONE item "Settings…" opening the Settings window (SPEC §3.14, the About-window pattern: centered, non-resizable, ✕ + Close close it) — the strong setting label, the ComboBox dropdown (Ask every session / Use for Undo / Redo / Don't use), the CURRENT choice's live description + "The choice is saved between sessions."; new child module `app/settings_window.rs`. The storage (§1 policy): `App::save` writes EXACTLY ONE key `settings/mouse_side_buttons` = the plain string "always"/"never" (no serde — eframe does not re-export it; the zero-dependency hand encoding); choosing Ask back REMOVES the key and only when present (eframe's `remove_string` dirties the file unconditionally, `set_string` only on a value change), so an undecided user keeps a byte-empty storage — NO app.ron at all; `persist_window`/`persist_egui_memory` stay OFF; a missing/corrupt value loads as Ask; eframe calls `save` on its 30-s autosave (which fires from a FRAME — an idle app never saves) and at exit. +15 tests (mouse_side 12→21 split by topic into tests/{machine,persistence,app_routing}.rs per the 300-line guard; NEW app/settings_window/tests.rs ×3 — render + hidden + the log-once; app/tests.rs 2→5 — the save-hook writes exactly the one key, the Ask reset removes it, the startup load applies it); the NEW probe `scripts/gui_settings_check.sh` PASS (A: Yes → the autosave + the exit save write exactly one key "always"; B: restart undoes without re-asking; C: No → "never"; D: both buttons inert on Never; E: an untouched AND an unanswered-killed session write NOTHING; F: the Settings window opens); the visual driver ALL SCENARIOS GREEN; docs: SPEC §1/§3.1/§3.9/§3.14, AGENTS.md (quirk + module map), Cargo.toml comment; V75 born, V73 amended |
 
-**Verification stamp:** FULL gate re-verified 2026-11-23 (the
-settings round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
-green on --all-targets (default + mcp), `cargo test --profile gates` 340
-default / 353 mcp green (+1 ignored, +15 tests this round), ALL GATES
-GREEN in 24 s (hot lane); NO wasm check — no web-facing code touched
-(the AGENTS.md wasm-check economy rule); the visual driver ALL SCENARIOS
+**Verification stamp:** FULL gate re-verified 2026-11-24 (the
+Ctrl+A round): fmt clean, rules.sh HARD-green, clippy `-D warnings`
+green on --all-targets (default + mcp + fill-bench), `cargo test
+--profile gates` 377 green in both lanes (+1 ignored, +5 tests this
+round), ALL GATES GREEN in 30 s (hot gates lane); NO wasm check — no
+web-facing code touched (the AGENTS.md wasm-check economy rule); the
+visual driver ALL SCENARIOS
 GREEN (15 checks, the mcp binary) and the NEW storage probe
 `scripts/gui_settings_check.sh` PASS (six headless sessions — the
 round's evidence).
@@ -77,11 +79,40 @@ round's evidence).
 > "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
 > PROGRESS-archive.md. Open human checks live in DEBTS-verification.md — no entry is
 > ever pinned in place by a pending check. Compaction history (which entry moved
-> under which round's budget, 2026-11-18 → 2026-11-23) lives in
-> PROGRESS-archive.md; the latest move: the 2026-11-21 "the History Tree's
-> brush and eraser rows draw their icons like the pencil" Feat entry (during
-> the settings round's budget — the file rode past ~200 lines; three entries
-> stay in the Log).
+> under which round's budget, 2026-11-18 → 2026-11-24) lives in
+> PROGRESS-archive.md; the latest move: the 2026-11-23 "the fill/wand flood
+> benchmark" Add entry (during the Ctrl+A round's budget — the file rode past
+> ~200 lines; three entries stay in the Log). Earlier moves: the 2026-11-21
+> "the History Tree's brush and eraser rows draw their icons like the pencil"
+> Feat entry (during the settings round's budget).
+
+### 2026-11-24 — `Feat:` Ctrl+A selects everything on the current layer — the global Select All, the Edit menu item and the shared gesture guard (owner request in chat: «Нужно на Ctrl+A выделение всего на текущем слое»)
+
+- **What:** the §3.9 hotkey table gained `Ctrl+A`: one Rect region over the
+  WHOLE canvas replaces the selection (`App::select_all` in `app/selection.rs`
+  — the layers are always canvas-sized, so the full rect IS everything on the
+  current layer; the copy/cut/move ops read the ACTIVE layer through the
+  mask). A REPLACE (a fresh Select All heals subtract holes), the Tool Log
+  records "Select all". The combo runs through the shared
+  `canvas_gesture_active` guard (moved from `mouse_side.rs` to `app.rs` —
+  pure code motion, both consumers use it now): no selection edit while a
+  stroke/preview/select-drag/text-entry is pending (a MoveDrag's commit
+  translates the selection it finds — replacing it mid-move would corrupt
+  the commit). The Edit menu carries the always-enabled "Select All
+  (Ctrl+A)" after Paste. SPEC §3.1/§3.9/§3.13, AGENTS.md module map updated.
+- **Files:** `src/app/selection.rs` (+`select_all`), `src/app/input.rs` (the
+  hotkey block), `src/app/menu.rs` (the Edit item), `src/app.rs` (the guard
+  moved in), `src/app/mouse_side.rs` (the guard moved out), the two test
+  files, `SPEC.md`, `AGENTS.md`, `SANDBOX.md` (the driver needs the mcp
+  build), `TIMING.md`.
+- **Verified:** ALL GATES GREEN in 30 s (hot gates lane; `cargo test
+  --profile gates` 377 green (the mcp lane: the same 377, +5 tests this
+  round); the visual driver ALL SCENARIOS GREEN (the mcp dev build under
+  Xvfb — the driver speaks MCP over piped stdin, a plain binary hangs it). NO wasm
+  check — no web-facing code touched (the wasm-check economy rule).
+- **Owner-checks:** V82 born. Open: V82, V81, V80, V79, V78, V77, V76,
+  V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Feat: Ctrl+A selects the whole current layer — the global Select All replaces the selection, the Edit menu gains the always-enabled item, the gesture guard moves to App for both consumers`
 
 ### 2026-11-23 — `Perf:` the flood core becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans - pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests (owner request in chat: «делаем 1+2+3+запись из спанов»)
 
@@ -133,51 +164,3 @@ round's evidence).
 - **Owner-checks:** none born (no code, no behavior). Open: V80, V79, V78,
   V77, V76, V66 (X11), V46 (X11); parked: V30, V8.
 - **Commit title:** `Docs: the owner keeps dev slow on purpose (the early-warning sensor) and rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change`
-
-### 2026-11-23 — `Add:` the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet (owner request in chat)
-
-- **What:** the owner reported dev-build fill slowness, asked for (1) the
-  optimization OPTIONS first (no implementation), (2) nanosecond measurements
-  in different cases, (3) a self-created log in the repo — the name from the
-  date+time down to the seconds, digits only, with the dev/release mode IN
-  the name and the sandbox specs inside, (4) the runs gated behind a special
-  flag outside the normal tests, (5) a lock so the AGENT cannot run it
-  without the owner's explicit permission. Delivered exactly that —
-  `src/app/fill_bench.rs` compiles ONLY under the `fill-bench` feature (the
-  mcp/diagnostics pattern), triggers on RUSSET_BENCH_FILL=1, refuses without
-  RUSSET_BENCH_ALLOWED=1 (exit 2, the message names the rule), writes
-  `benchmarks/fill_bench_<mode>_<YYYYMMDDHHMMSS>.log` (UTC, digits-only, the
-  mode in the name) with the machine specs (CPU/cores/RAM/kernel/rustc/git
-  HEAD) and min/median/mean/p95 nanosecond timings of the flood read
-  (`flood_pixels` + the click's own `pick_color` sampler) and the fill write
-  (the 1:1 mirror of `paint_flood_pixels`' src-over loop) over 10
-  deterministic (fixed-xorshift) canvases.
-- **Measurements** (this sandbox: 2 vCPU Xeon, 4 GB RAM; logs in
-  `benchmarks/`): dev full_click mean 2.65 ms (64x64), 376 ms (800x600),
-  1.72 s (1920x1080); release 248 µs / 50.1 ms / 238 ms — the gap ~7-10×;
-  per-pixel flood read ~727 ns/px dev, ~100 ns/px release; the write is only
-  ~7-8% of the click. The research file
-  `benchmarks/RESEARCH-fill-optimization.md` (in the repo, for re-verification
-  after any algorithm change) ranks the options: [profile.dev] opt-level=1 as
-  the immediate dev relief; then span/scanline flood (Wikipedia 2-8×, lodev
-  ~7×, imageproc and Krita use it) + a packed-u32 comparator without the
-  per-probe demultiply + marking unmatched pixels visited + run-ordered
-  output (no sort/dedup, direct span writes for the fill and the mask);
-  scratch-buffer reuse and a per-color comparison cache after; rejected:
-  rayon, SIMD-before-spans, 8-way. NO algorithm change implemented — waiting
-  for the owner's explicit go.
-- **Files:** `src/app/fill_bench.rs` (new), `src/app.rs` (the feature-gated
-  mod), `src/main.rs` (the pre-GUI call), `Cargo.toml` (`fill-bench = []`),
-  `scripts/verify.sh` (the clippy stage for the feature so it cannot rot),
-  `benchmarks/` (3 logs + the research file).
-- **Verified:** the refusal tested (RUSSET_BENCH_FILL=1 without the
-  permission → exit 2, the message printed); the dev suite ran twice (the
-  first log predates the rustc-lookup patch, rustc=unknown there), the
-  release suite ran once; the numbers are in the research table; the gates
-  run GREEN (the new clippy --features fill-bench stage included).
-- **Owner-checks:** V80 born (the bench's human pass — the owner will run
-  the release command on their machines and compare the logs). VERIFIED in
-  chat: V69 (the atlas sheets). Open: V80, V79, V78, V77, V76, V66 (X11),
-  V46 (X11); parked: V30, V8.
-- **Commit title:** `Add: the fill/wand flood benchmark (feature-gated, permission-locked) with dev+release logs and the optimization-options research - no algorithm change yet`
-

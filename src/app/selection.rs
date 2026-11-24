@@ -535,6 +535,27 @@ impl App {
         self.action_log.push("Paste");
     }
 
+    /// Select All (owner request 2026-11-24, the Ctrl+A hotkey in
+    /// [`super::input`] and the Edit menu item): one Rect region covering
+    /// the WHOLE canvas replaces the selection. Every layer in russet is
+    /// canvas-sized (a resize re-fits all of them), so the full-canvas
+    /// rect IS "everything on the current layer" — the copy/cut/move ops
+    /// read the ACTIVE layer through the mask. A replace (not an add):
+    /// pressing Ctrl+A twice lands the same rect, never a doubled op
+    /// list.
+    pub(super) fn select_all(&mut self) {
+        let (width, height) = (self.canvas.width, self.canvas.height);
+        self.selection.replace(
+            Some(Region::Rect {
+                a: Pos2::new(0.0, 0.0),
+                b: Pos2::new(width as f32, height as f32),
+            }),
+            width,
+            height,
+        );
+        self.action_log.push("Select all");
+    }
+
     /// Crop: the canvas (and EVERY layer) becomes the selection's pixel
     /// bounds — the Resize machinery's per-layer crop (`crop_all`, one
     /// node per layer like a resize commit), then the display buffer

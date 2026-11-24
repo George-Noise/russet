@@ -1,3 +1,27 @@
+### 2026-11-24 — MCP stdio hangs twice in one session: the visual driver on a non-mcp binary, and direct `cargo test --features mcp` on the agent shell's open stdin
+
+- What happened (expected vs actual): (1) the done-gate's GUI probe —
+  `visual_driver.py ./target/debug/russet` per SANDBOX.md's verified block —
+  never produced a single scenario line and sat until the 240 s cap killed
+  it; the run needs the `--features mcp` build (the driver speaks MCP over
+  piped stdin; the SANDBOX.md recipe omits that, only the driver header's
+  "feature `mcp`" hints it). (2) Re-running `cargo test --profile gates
+  --features mcp` directly (to read the mcp test count for the PROGRESS
+  entry — verify.sh's tail had already shown the default count) hung twice:
+  killed at a 320 s cap and again at 100 s; the identical run with
+  `< /dev/null` finished in ~50 s (7.5 s of tests, the compile cached).
+  verify.sh runs the same command fine, so the blocker is the agent shell's
+  open pipe stdin reaching the suite.
+- How it showed up: a silent hang, no error output to grep; the exit came
+  only from the tool-call timeout, which looked like a stalled sandbox the
+  first time.
+- What it cost: ~10 min of wall clock across the two hangs plus the
+  rebuild-then-rerun cycle (~3 min).
+- What could improve: done — SANDBOX.md's driver block now states the
+  mcp-build requirement and the `< /dev/null` rule for direct mcp-lane test
+  runs (durable fix landed in the same edit as the round); TIMING.md rows
+  recorded. Nothing further — one-off doc gap.
+
 ### 2026-11-23 — `rustup target add` on the recycled sandbox failed twice before the wasm check could run
 
 - What happened: the persistence round's wasm check (`cargo check --target

@@ -381,3 +381,88 @@ fn a_move_fully_off_canvas_deselects() {
         "the move node still records"
     );
 }
+
+#[test]
+fn select_all_selects_the_whole_canvas() {
+    let mut app = App::new_headless();
+    let (width, height) = (app.canvas.width, app.canvas.height);
+    assert!(app.selection.is_empty(), "nothing selected at startup");
+
+    app.select_all();
+
+    let bounds = app.selection.bounds().expect("the whole canvas selected");
+    assert_eq!(
+        bounds,
+        IRect {
+            x: 0,
+            y: 0,
+            w: width,
+            h: height
+        },
+        "every pixel of the current layer's canvas is inside"
+    );
+    let mask = app
+        .selection
+        .build_mask(width, height)
+        .expect("the full-canvas mask builds");
+    let (last_x, last_y) = (width as i64 - 1, height as i64 - 1);
+    for (x, y) in [
+        (0, 0),
+        (last_x, 0),
+        (0, last_y),
+        (last_x, last_y),
+        (width as i64 / 2, height as i64 / 2),
+    ] {
+        assert!(
+            mask.get(x, y),
+            "the corner/center pixel ({x},{y}) is selected"
+        );
+    }
+    assert!(
+        !app.selection.ants().is_empty(),
+        "the boundary loops exist for the ants"
+    );
+    assert_eq!(
+        app.action_log.items().last().map(|e| e.label.as_str()),
+        Some("Select all"),
+        "the Tool Log names the action"
+    );
+}
+
+#[test]
+fn select_all_replaces_the_previous_selection() {
+    // The replace rule matters: with an ADD the second Select All would
+    // only union an identical rect over the old ops, and a subtract cut
+    // in between would keep its hole forever (the ops list never
+    // resets).
+    let mut app = app_with_square();
+    let (width, height) = (app.canvas.width, app.canvas.height);
+
+    app.select_all();
+    let bounds = app.selection.bounds().expect("the full selection");
+    assert_eq!(
+        bounds,
+        IRect {
+            x: 0,
+            y: 0,
+            w: width,
+            h: height
+        },
+        "the old square is gone — the whole canvas is the selection"
+    );
+
+    app.selection.subtract(
+        Region::Rect {
+            a: pos2(width as f32 / 2.0, height as f32 / 2.0),
+            b: pos2(width as f32 / 2.0 + 20.0, height as f32 / 2.0 + 20.0),
+        },
+        width,
+        height,
+    );
+    app.select_all();
+    assert!(
+        app.selection
+            .contains(pos2(width as f32 / 2.0 + 10.0, height as f32 / 2.0 + 10.0)),
+        "a fresh Select All heals the subtract hole — a REPLACE, not an add"
+    );
+}
