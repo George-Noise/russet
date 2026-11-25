@@ -1,5 +1,85 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-24 — `Fix:` Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner request in chat: "Ctrl+A and Ctrl+S need a debounce of 100 ms or more so that when the user releases Ctrl first the pan does not move")
+
+- **What:** owner bug report 2026-11-24: Ctrl+S / Ctrl+A with Ctrl
+  RELEASED first (the letter still held) panned — the 2026-11-20
+  suppression keys on the CURRENT modifier state, so the hold's tail
+  panned again. The owner asked for a ≥100 ms debounce; the fix is the
+  camera's combo latch `PanKeyLatch` (`app/camera.rs`, state on `App`):
+  a letter whose PRESS event arrives under an accelerator (Ctrl/⌘/Alt —
+  the suppression's own set) is pan-dead for that physical press until
+  the letter's own RELEASE event — the suppression lives the whole
+  remaining hold (strictly stronger than any time debounce, no point
+  where the pan "escapes"), and a fresh bare press pans instantly. The
+  latch scans the frame's RAW events (`i.raw.events` — nothing consumes
+  them: `consume_key` clears `i.events` only, egui 0.37
+  `count_and_consume_key`, verified against the installed 0.37.0
+  source); every `Event::Key` carries its own modifier stamp (no
+  cross-frame tracking); the update runs BEFORE the keyboard gate so
+  releases are never missed while a text field holds the focus; repeats
+  change nothing. Generic over W/A/S/D and Ctrl/⌘/Alt.
+- **Files:** `src/app/camera.rs` (the latch + the filtered dir),
+  `src/app.rs` (the `pan_key_latch` field), `src/app/camera/tests.rs`
+  (split by topic per the 300-line guard: `mod latch;`), NEW
+  `src/app/camera/tests/latch.rs` (4 pure + 2 integration tests through
+  REAL `run_pass` frames in the app's frame order), `SPEC.md`
+  §3.4 + §3.9 (two rows), `AGENTS.md` (module map), `TIMING.md`,
+  `DEBTS-verification.md` (V83).
+- **Verified:** regression discipline held: BOTH integration tests fail
+  on the pre-fix code with the exact reported pan (latch filter toggled
+  off for the probe — S tail panned to pan.y = −120, A tail to pan.x =
+  +120) and pass with the fix. FULL GATE: `scripts/verify.sh` ALL GATES
+  GREEN in 29 s (hot gates lane; fmt + clippy `-D warnings` on
+  --all-targets ×{default, mcp, fill-bench} + `cargo test --profile
+  gates --features mcp` 383 green +1 ignored). NO wasm check (no
+  web-facing code touched); NO visual-driver run — no new UI surface,
+  the driver cannot inject modifier key chords.
+- **Owner-checks:** V83 born. Open: V83, V82, V81, V80, V79, V78, V77,
+  V76, V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Fix: Ctrl+A and Ctrl+S leave no panning tail — the WASD combo latch keeps a letter pressed under an accelerator pan-dead until its release`
+
+> Budget: ≤ ~20 lines per entry, fixed fields (What / Files / Verified / Owner-checks /
+> Commit title); durable facts move to their canonical home in the same edit (AGENTS.md
+> "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
+> PROGRESS-archive.md (compacted 2026-11-24: the 2026-11-23 `Docs:` dev-stays-slow
+> entry moved). Open human checks live in DEBTS-verification.md — no entry is
+> ever pinned in place by a pending check. Compaction history (which entry moved
+> under which round's budget, 2026-11-18 → 2026-11-24) lives in
+> PROGRESS-archive.md; the latest move: the 2026-11-23 "the fill/wand flood
+> benchmark" Add entry (during the Ctrl+A round's budget — the file rode past
+> ~200 lines; three entries stay in the Log). Earlier moves: the 2026-11-21
+> "the History Tree's brush and eraser rows draw their icons like the pencil"
+> Feat entry (during the settings round's budget).
+
+### 2026-11-24 — `Feat:` Ctrl+A selects everything on the current layer — the global Select All, the Edit menu item and the shared gesture guard (owner request in chat: "Ctrl+A needs to select everything on the current layer")
+
+- **What:** the §3.9 hotkey table gained `Ctrl+A`: one Rect region over the
+  WHOLE canvas replaces the selection (`App::select_all` in `app/selection.rs`
+  — the layers are always canvas-sized, so the full rect IS everything on the
+  current layer; the copy/cut/move ops read the ACTIVE layer through the
+  mask). A REPLACE (a fresh Select All heals subtract holes), the Tool Log
+  records "Select all". The combo runs through the shared
+  `canvas_gesture_active` guard (moved from `mouse_side.rs` to `app.rs` —
+  pure code motion, both consumers use it now): no selection edit while a
+  stroke/preview/select-drag/text-entry is pending (a MoveDrag's commit
+  translates the selection it finds — replacing it mid-move would corrupt
+  the commit). The Edit menu carries the always-enabled "Select All
+  (Ctrl+A)" after Paste. SPEC §3.1/§3.9/§3.13, AGENTS.md module map updated.
+- **Files:** `src/app/selection.rs` (+`select_all`), `src/app/input.rs` (the
+  hotkey block), `src/app/menu.rs` (the Edit item), `src/app.rs` (the guard
+  moved in), `src/app/mouse_side.rs` (the guard moved out), the two test
+  files, `SPEC.md`, `AGENTS.md`, `SANDBOX.md` (the driver needs the mcp
+  build), `TIMING.md`.
+- **Verified:** ALL GATES GREEN in 30 s (hot gates lane; `cargo test
+  --profile gates` 377 green (the mcp lane: the same 377, +5 tests this
+  round); the visual driver ALL SCENARIOS GREEN (the mcp dev build under
+  Xvfb — the driver speaks MCP over piped stdin, a plain binary hangs it). NO wasm
+  check — no web-facing code touched (the wasm-check economy rule).
+- **Owner-checks:** V82 born. Open: V82, V81, V80, V79, V78, V77, V76,
+  V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Feat: Ctrl+A selects the whole current layer — the global Select All replaces the selection, the Edit menu gains the always-enabled item, the gesture guard moves to App for both consumers`
+
 ### 2026-11-23 — `Perf:` the flood core becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans - pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests (owner request in chat: "we do 1+2+3+writing from the spans")
 
 - **What:** the research plan implemented: `flood_pixels`' per-pixel BFS

@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: the English-only language whitelist promoted into AGENTS.md + the docs-only gate skip reconfirmed (owner 2026-11-25) | done — docs only | the whitelist rule that lived in the PROGRESS.md stamp (and fell out of it once) is now a durable AGENTS.md "Language" section — the repo/project whitelist has exactly ONE language, English (docs, code comments, scripts, log/debt entries, commit titles, app strings); the 2026-11-20 docs-only gate skip reconfirmed in Commands with the owner's 2026-11-25 wording: documentation-only work does NOT require building or testing; this round ran NO cargo command (owner: "no tests and no builds for now") — rules.sh green, the delivery byte-compares green; the Log compacted in the same edit (the two oldest entries moved verbatim to PROGRESS-archive.md, the heading carries the note) |
 | Extra: the language whitelist restored in the stamp + the non-English text translated to English repo-wide (owner 2026-11-24) | done — full gate green, zero non-English left (script-checked) | the whitelist line the 2026-11-18 rewording placed in the stamp had fallen out during later stamp updates — restored verbatim at the top of the stamp; every Russian owner quote across the docs, the src doc comments and the probe scripts' comments is English now (the «» → "…" attribution style kept), the whole `benchmarks/RESEARCH-fill-optimization.md` document translated; kept ON PURPOSE: `Bézier` (the standard English math term) and the `grüße.png` Unicode test fixture in `save_dialog/tests.rs` (it exercises non-ASCII byte handling — translating it would break the test); the µ/α/math symbols are symbols, not language; comment-only edits inside .rs (every changed line a comment line, diff-verified); zero Cyrillic + zero non-English letters repo-wide, script-checked |
 | Extra: Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner 2026-11-24) | done — gates green, the regressions fail-first | the owner's bug report: Ctrl+S / Ctrl+A with Ctrl RELEASED first (the letter still held) panned — the 2026-11-20 modifier suppression keys on the CURRENT modifier state, so the hold's tail panned again; the owner asked for a ≥100 ms debounce. The fix is the camera's combo latch `PanKeyLatch` (`app/camera.rs`, state on `App` next to `pan`): a letter whose PRESS event arrives under an accelerator (Ctrl/⌘/Alt — the suppression's own set) is pan-dead for that physical press until the letter's own RELEASE — the suppression lives the whole remaining hold (strictly stronger than any time debounce; no point where the pan "escapes"), a fresh bare press pans instantly; generic over W/A/S/D and Ctrl/⌘/Alt (Ctrl+Shift+S and Ctrl+W/D covered the same way); Shift alone never latches (the 2026-11-20 rule). The latch scans the frame's RAW events (`i.raw.events` — nothing consumes them: the hotkeys' `consume_key` clears `i.events` only, egui 0.37 `count_and_consume_key`, verified against the installed 0.37.0 source), every `Event::Key` carries its own modifier stamp (no cross-frame tracking), the update runs before the `egui_wants_keyboard_input` gate so releases are never missed, repeats change nothing. +6 tests (NEW `app/camera/tests/latch.rs` — 4 pure + 2 integration through REAL `run_pass` frames in the app's order; `camera/tests.rs` split by topic per the 300-line guard); V83 born |
 | M0 Scaffold | done | |
@@ -74,7 +75,31 @@ UI surface changed.
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading.
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25: the two oldest entries — the 2026-11-24 `Fix:` latch and `Feat:` Select All — moved to PROGRESS-archive.md verbatim, newest first.)
+
+### 2026-11-25 — `Docs:` the English-only language whitelist promoted into AGENTS.md; the docs-only gate skip reconfirmed — owner request
+
+- **What:** two owner requests. (1) Record in AGENTS.md that the language of the repository and
+  the project is a whitelist whose only entry is ENGLISH: the new "Language" section (right
+  after "Source of truth") carries the stamp's verbatim wording ("English-only repo-wide — a
+  language WHITELIST …, not a script blacklist") and the full scope (docs, code comments,
+  scripts, PROGRESS/DEBTS/PROBLEMS entries, commit titles, app strings). The rule had lived
+  only as a line in the PROGRESS.md verification stamp (owner request 2026-11-18) and fell out
+  during later stamp updates (restored 2026-11-24) — it now has a durable canonical home in
+  AGENTS.md. (2) Record that documentation-only work does NOT require building or testing: the
+  existing docs-only shortcut (owner request 2026-11-20) is reconfirmed with the owner's
+  2026-11-25 wording in the Commands bullet.
+- **Files:** `AGENTS.md` (the new "Language" section + the reconfirmation note in the docs-only
+  Commands bullet), `PROGRESS.md` (snapshot row + this entry + the Log compaction),
+  `PROGRESS-archive.md` (the two oldest Log entries moved there verbatim, newest first — the
+  rules.sh Log-budget note). Nothing else touched.
+- **Verified:** docs-only round (the diff touches only `.md` files) — the cargo gate SKIPPED per
+  the rule, and per the owner's same-day instruction ("for now run no tests and no builds") NO
+  cargo command ran at all; `scripts/rules.sh` HARD-green (grep-level, no toolchain); the
+  delivery byte-compares green (`scripts/deliver.sh origin/master` — patched clean base =
+  worktree = unpacked zip, all three byte-match).
+- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
+- **Commit title:** `State the English-only repo language whitelist in AGENTS.md; reconfirm the docs-only gate skip`
 
 ### 2026-11-24 — `Docs:` the language whitelist restored in the stamp; the non-English text translated to English repo-wide — owner request
 
@@ -135,83 +160,3 @@ UI surface changed.
 - **Owner-checks:** the owner's personal `cargo test --profile
   gates-strict` on Windows; the next CI run after push.
 - **Commit title:** `Let the gates lane build incrementally; split the no-incremental config into the owner's gates-strict profile`
-
-### 2026-11-24 — `Fix:` Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner request in chat: "Ctrl+A and Ctrl+S need a debounce of 100 ms or more so that when the user releases Ctrl first the pan does not move")
-
-- **What:** owner bug report 2026-11-24: Ctrl+S / Ctrl+A with Ctrl
-  RELEASED first (the letter still held) panned — the 2026-11-20
-  suppression keys on the CURRENT modifier state, so the hold's tail
-  panned again. The owner asked for a ≥100 ms debounce; the fix is the
-  camera's combo latch `PanKeyLatch` (`app/camera.rs`, state on `App`):
-  a letter whose PRESS event arrives under an accelerator (Ctrl/⌘/Alt —
-  the suppression's own set) is pan-dead for that physical press until
-  the letter's own RELEASE event — the suppression lives the whole
-  remaining hold (strictly stronger than any time debounce, no point
-  where the pan "escapes"), and a fresh bare press pans instantly. The
-  latch scans the frame's RAW events (`i.raw.events` — nothing consumes
-  them: `consume_key` clears `i.events` only, egui 0.37
-  `count_and_consume_key`, verified against the installed 0.37.0
-  source); every `Event::Key` carries its own modifier stamp (no
-  cross-frame tracking); the update runs BEFORE the keyboard gate so
-  releases are never missed while a text field holds the focus; repeats
-  change nothing. Generic over W/A/S/D and Ctrl/⌘/Alt.
-- **Files:** `src/app/camera.rs` (the latch + the filtered dir),
-  `src/app.rs` (the `pan_key_latch` field), `src/app/camera/tests.rs`
-  (split by topic per the 300-line guard: `mod latch;`), NEW
-  `src/app/camera/tests/latch.rs` (4 pure + 2 integration tests through
-  REAL `run_pass` frames in the app's frame order), `SPEC.md`
-  §3.4 + §3.9 (two rows), `AGENTS.md` (module map), `TIMING.md`,
-  `DEBTS-verification.md` (V83).
-- **Verified:** regression discipline held: BOTH integration tests fail
-  on the pre-fix code with the exact reported pan (latch filter toggled
-  off for the probe — S tail panned to pan.y = −120, A tail to pan.x =
-  +120) and pass with the fix. FULL GATE: `scripts/verify.sh` ALL GATES
-  GREEN in 29 s (hot gates lane; fmt + clippy `-D warnings` on
-  --all-targets ×{default, mcp, fill-bench} + `cargo test --profile
-  gates --features mcp` 383 green +1 ignored). NO wasm check (no
-  web-facing code touched); NO visual-driver run — no new UI surface,
-  the driver cannot inject modifier key chords.
-- **Owner-checks:** V83 born. Open: V83, V82, V81, V80, V79, V78, V77,
-  V76, V66 (X11), V46 (X11); parked: V30, V8.
-- **Commit title:** `Fix: Ctrl+A and Ctrl+S leave no panning tail — the WASD combo latch keeps a letter pressed under an accelerator pan-dead until its release`
-
-> Budget: ≤ ~20 lines per entry, fixed fields (What / Files / Verified / Owner-checks /
-> Commit title); durable facts move to their canonical home in the same edit (AGENTS.md
-> "Git & progress log"). Entries older than the newest 3–5 are moved verbatim to
-> PROGRESS-archive.md (compacted 2026-11-24: the 2026-11-23 `Docs:` dev-stays-slow
-> entry moved). Open human checks live in DEBTS-verification.md — no entry is
-> ever pinned in place by a pending check. Compaction history (which entry moved
-> under which round's budget, 2026-11-18 → 2026-11-24) lives in
-> PROGRESS-archive.md; the latest move: the 2026-11-23 "the fill/wand flood
-> benchmark" Add entry (during the Ctrl+A round's budget — the file rode past
-> ~200 lines; three entries stay in the Log). Earlier moves: the 2026-11-21
-> "the History Tree's brush and eraser rows draw their icons like the pencil"
-> Feat entry (during the settings round's budget).
-
-### 2026-11-24 — `Feat:` Ctrl+A selects everything on the current layer — the global Select All, the Edit menu item and the shared gesture guard (owner request in chat: "Ctrl+A needs to select everything on the current layer")
-
-- **What:** the §3.9 hotkey table gained `Ctrl+A`: one Rect region over the
-  WHOLE canvas replaces the selection (`App::select_all` in `app/selection.rs`
-  — the layers are always canvas-sized, so the full rect IS everything on the
-  current layer; the copy/cut/move ops read the ACTIVE layer through the
-  mask). A REPLACE (a fresh Select All heals subtract holes), the Tool Log
-  records "Select all". The combo runs through the shared
-  `canvas_gesture_active` guard (moved from `mouse_side.rs` to `app.rs` —
-  pure code motion, both consumers use it now): no selection edit while a
-  stroke/preview/select-drag/text-entry is pending (a MoveDrag's commit
-  translates the selection it finds — replacing it mid-move would corrupt
-  the commit). The Edit menu carries the always-enabled "Select All
-  (Ctrl+A)" after Paste. SPEC §3.1/§3.9/§3.13, AGENTS.md module map updated.
-- **Files:** `src/app/selection.rs` (+`select_all`), `src/app/input.rs` (the
-  hotkey block), `src/app/menu.rs` (the Edit item), `src/app.rs` (the guard
-  moved in), `src/app/mouse_side.rs` (the guard moved out), the two test
-  files, `SPEC.md`, `AGENTS.md`, `SANDBOX.md` (the driver needs the mcp
-  build), `TIMING.md`.
-- **Verified:** ALL GATES GREEN in 30 s (hot gates lane; `cargo test
-  --profile gates` 377 green (the mcp lane: the same 377, +5 tests this
-  round); the visual driver ALL SCENARIOS GREEN (the mcp dev build under
-  Xvfb — the driver speaks MCP over piped stdin, a plain binary hangs it). NO wasm
-  check — no web-facing code touched (the wasm-check economy rule).
-- **Owner-checks:** V82 born. Open: V82, V81, V80, V79, V78, V77, V76,
-  V66 (X11), V46 (X11); parked: V30, V8.
-- **Commit title:** `Feat: Ctrl+A selects the whole current layer — the global Select All replaces the selection, the Edit menu gains the always-enabled item, the gesture guard moves to App for both consumers`
