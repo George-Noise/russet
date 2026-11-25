@@ -13,12 +13,19 @@ the verdict. The agent never needs to LOOK at pixels:
 
 Usage: visual_driver.py <path-to-russet-binary> [--shots]
 Run under Xvfb (or any display): the binary opens a window; MCP comes through
-piped stdin (mcp_smoke.Russet). New scenario = a ~10-line function + one line
-in SCENARIOS.
+piped stdin (mcp_smoke.Russet). The binary MUST be the mcp build
+(`cargo build --features mcp`): before spawning the driver a startup probe
+speaks ONE initialize handshake with a ~5 s deadline and refuses a binary
+that cannot answer (loud line, exit code 3) — the old behavior hung silently
+against a non-MCP build until the tool-call cap killed it. Exit codes: 0
+green, 1 scenario failures, 2 usage, 3 the probe refused the binary.
+New scenario = a ~10-line function + one line in SCENARIOS.
 """
 import base64
 import io
+import json
 import os
+import select
 import subprocess
 import sys
 import time
@@ -35,6 +42,68 @@ from PIL import Image  # noqa: E402
 
 OUT = os.environ.get("RUSSET_DRIVER_OUT", "/home/z/my-project/download")
 DISPLAY = os.environ.get("DISPLAY", ":99")
+
+MCP_PROBE_TIMEOUT_S = 5.0
+
+
+def mcp_handshake_ok(binary, timeout=MCP_PROBE_TIMEOUT_S):
+    """True if <binary> answers one MCP initialize handshake within <timeout>.
+
+    Spawns its own throwaway instance (the driver spawns the real one after):
+    a binary built without --features mcp never replies — it is a plain GUI
+    app that ignores stdin — and the old driver sat in readline() until the
+    tool-call cap killed it (PROBLEMS.md 2026-11-20/24). Every failure mode
+    prints ONE loud line and returns False; exit code 3 follows in main().
+    """
+    proc = subprocess.Popen(
+        [binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        request = json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "russet-probe", "version": "0"},
+            },
+        }) + "\n"
+        proc.stdin.write(request.encode())
+        proc.stdin.flush()
+    except OSError as exc:
+        print(f"DRIVER PROBE: cannot write the MCP handshake to {binary}: {exc}",
+              flush=True)
+        return False
+    deadline = time.monotonic() + timeout
+    buf = b""
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print(f"DRIVER PROBE: no MCP handshake reply within {timeout:.0f} s — "
+                  f"is {binary} built with --features mcp? A plain GUI binary "
+                  "never answers; build it first (cargo build --features mcp).",
+                  flush=True)
+            return False
+        ready, _w, _x = select.select([proc.stdout], [], [], remaining)
+        if not ready:
+            continue  # re-checks the deadline on the next pass
+        chunk = os.read(proc.stdout.fileno(), 4096)
+        if not chunk:
+            print(f"DRIVER PROBE: {binary} closed stdout without an MCP "
+                  "handshake reply — wrong path or a non-MCP build?",
+                  flush=True)
+            return False
+        buf += chunk
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            try:
+                reply = json.loads(line)
+            except ValueError:
+                continue  # not JSON (an app printing to stdout) — keep waiting
+            if isinstance(reply, dict) and reply.get("id") == 1:
+                return True
+            # JSON but not our reply — keep waiting until the deadline
+    # (unreachable)
 
 
 class Driver(Russet):
@@ -197,11 +266,25 @@ SCENARIOS = [
 
 
 def main():
+    # Live output even when piped: the old silent hang kept stdout buffered —
+    # a 0-byte log for the whole Bash timeout made it look like a stalled
+    # sandbox instead of a driver talking to the wrong binary.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except AttributeError:  # non-CPython or a pre-3.7 stream without reconfigure
+        pass
     args = [a for a in sys.argv[1:] if a != "--shots"]
     shots = "--shots" in sys.argv[2:]
     if not args:
         print(__doc__)
         return 2
+    try:
+        speaks = mcp_handshake_ok(args[0])
+    except OSError as exc:  # FileNotFoundError for a wrong path
+        print(f"DRIVER PROBE: cannot spawn {args[0]}: {exc}", flush=True)
+        return 3
+    if not speaks:
+        return 3
     d = Driver(args[0])
     time.sleep(1.0)
     all_green = True

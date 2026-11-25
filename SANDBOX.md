@@ -159,7 +159,11 @@ finishes it — verify.sh never hangs.
     extracted every xdotool invocation died with «libXtst.so.6: cannot open
     shared object file», the pointer never moved, and the probe's strokes
     silently never happened — the screenshots showed the Xvfb-default pointer
-    parked at the screen center while everything else looked normal).
+    parked at the screen center while everything else looked normal). The same
+    trap hits `xdotool help`: the binary inits its xdo instance BEFORE
+    dispatching, so even `help` needs the lib dir on LD_LIBRARY_PATH AND a live
+    X server — without a display, unknown and known subcommands are
+    indistinguishable (found 2026-11-25, the windowfocus probe row).
 
 
 ## What this unlocked, and what still belongs to the owner

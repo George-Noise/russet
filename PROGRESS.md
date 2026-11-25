@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: the session-start tooling stops lying — the --warm toolchain gate + the honest verdict, the driver's MCP startup probe, the windowfocus row (owner-picked PROBLEMS.md script fixes 1+2+5) | done — full gate green + live branch tests | the three PROBLEMS.md-documented lies fixed in the two dev scripts: `sandbox_check.sh --warm` gates the detached warm-up on cargo/rustup ("[NO] warm-up SKIPPED…" instead of a doomed job whose log claimed "finished (exit 0)" — the lie reproduced live at this session's start) and its verdict captures each rc before any $(date) resets $? ("finished (clippy 0, test 0)" / "warm-up FAILED (…) — verify.sh is NOT hot"); `visual_driver.py` gained a startup MCP probe (one initialize handshake, 5 s deadline, a loud DRIVER PROBE line + exit 3 on no-reply/EOF/bad path — the old silent exit 0 or hang-to-cap is dead; stdout line-buffered; the usage line documents the --features mcp requirement and the exit codes; mcp_smoke.py untouched); the GUI lane gained the windowfocus row (with a display `xdotool help` must list the subcommand, without one a [--] reminder, a loader-broken binary its own trap-13 [NO]) |
 | Extra: the English-only language whitelist promoted into AGENTS.md + the docs-only gate skip reconfirmed (owner 2026-11-25) | done — docs only | the whitelist rule that lived in the PROGRESS.md stamp (and fell out of it once) is now a durable AGENTS.md "Language" section — the repo/project whitelist has exactly ONE language, English (docs, code comments, scripts, log/debt entries, commit titles, app strings); the 2026-11-20 docs-only gate skip reconfirmed in Commands with the owner's 2026-11-25 wording: documentation-only work does NOT require building or testing; this round ran NO cargo command (owner: "no tests and no builds for now") — rules.sh green, the delivery byte-compares green; the Log compacted in the same edit (the two oldest entries moved verbatim to PROGRESS-archive.md, the heading carries the note) |
 | Extra: the language whitelist restored in the stamp + the non-English text translated to English repo-wide (owner 2026-11-24) | done — full gate green, zero non-English left (script-checked) | the whitelist line the 2026-11-18 rewording placed in the stamp had fallen out during later stamp updates — restored verbatim at the top of the stamp; every Russian owner quote across the docs, the src doc comments and the probe scripts' comments is English now (the «» → "…" attribution style kept), the whole `benchmarks/RESEARCH-fill-optimization.md` document translated; kept ON PURPOSE: `Bézier` (the standard English math term) and the `grüße.png` Unicode test fixture in `save_dialog/tests.rs` (it exercises non-ASCII byte handling — translating it would break the test); the µ/α/math symbols are symbols, not language; comment-only edits inside .rs (every changed line a comment line, diff-verified); zero Cyrillic + zero non-English letters repo-wide, script-checked |
 | Extra: Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner 2026-11-24) | done — gates green, the regressions fail-first | the owner's bug report: Ctrl+S / Ctrl+A with Ctrl RELEASED first (the letter still held) panned — the 2026-11-20 modifier suppression keys on the CURRENT modifier state, so the hold's tail panned again; the owner asked for a ≥100 ms debounce. The fix is the camera's combo latch `PanKeyLatch` (`app/camera.rs`, state on `App` next to `pan`): a letter whose PRESS event arrives under an accelerator (Ctrl/⌘/Alt — the suppression's own set) is pan-dead for that physical press until the letter's own RELEASE — the suppression lives the whole remaining hold (strictly stronger than any time debounce; no point where the pan "escapes"), a fresh bare press pans instantly; generic over W/A/S/D and Ctrl/⌘/Alt (Ctrl+Shift+S and Ctrl+W/D covered the same way); Shift alone never latches (the 2026-11-20 rule). The latch scans the frame's RAW events (`i.raw.events` — nothing consumes them: the hotkeys' `consume_key` clears `i.events` only, egui 0.37 `count_and_consume_key`, verified against the installed 0.37.0 source), every `Event::Key` carries its own modifier stamp (no cross-frame tracking), the update runs before the `egui_wants_keyboard_input` gate so releases are never missed, repeats change nothing. +6 tests (NEW `app/camera/tests/latch.rs` — 4 pure + 2 integration through REAL `run_pass` frames in the app's order; `camera/tests.rs` split by topic per the 300-line guard); V83 born |
@@ -60,14 +61,13 @@
 
 **Verification stamp:** English-only repo-wide — a language WHITELIST (English
 is simply the only written language here: comments, docs, commit titles), not a
-script blacklist. FULL gate re-verified 2026-11-24 (the English-only
-translation round): fmt clean, rules.sh HARD-green, `cargo check
---all-features` green, clippy `-D warnings` green on --all-targets
-(default + mcp), `cargo test --profile gates` 370 green / with
-`--features mcp` 383 green (+1 ignored each); zero Cyrillic and zero
-non-English letters repo-wide (script-checked); NO wasm check — no
-web-facing code touched; no visual-driver run — comments/docs only, no
-UI surface changed.
+script blacklist. FULL gate re-verified 2026-11-25 (the script-fix round —
+scripts/ touched, so the full gate ran): fmt clean, rules.sh HARD-green,
+clippy `-D warnings` green on --all-targets (default + mcp + fill-bench),
+`cargo test --profile gates` 370 green / with `--features mcp` 383 green
+(+1 ignored each); the visual driver green through target/gates/russet under
+Xvfb (the new startup probe passes through, 15 checks, 3.6 s); NO wasm check —
+no web-facing code touched.
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -75,7 +75,47 @@ UI surface changed.
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25: the two oldest entries — the 2026-11-24 `Fix:` latch and `Feat:` Select All — moved to PROGRESS-archive.md verbatim, newest first.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25, twice: the oldest entries moved verbatim to PROGRESS-archive.md, newest first — the 2026-11-24 `Tooling:` gates-lane profile split, then the `Fix:` latch and `Feat:` Select All; the newest 3 entries stay.)
+
+### 2026-11-25 — `Tooling:` the session-start tooling stops lying — the --warm toolchain gate, the honest verdict, the driver's MCP startup probe, the windowfocus row — the owner-picked PROBLEMS.md script fixes (items 1+2+5)
+
+- **What:** the owner read PROBLEMS.md (his explicit order) and picked plan B's script fixes.
+  (1) `scripts/sandbox_check.sh` --warm gates the detached warm-up on the toolchain —
+  "[NO] warm-up SKIPPED…" instead of a doomed job (the lie reproduced live this session
+  start: rustup MISSING yet "warm-up started… verify.sh is hot"); the detached script
+  captures each rc BEFORE any $(date …) resets $? (that substitution is why the old line
+  printed "finished (exit 0)" over two "cargo: command not found" — PROBLEMS.md
+  2026-11-20/23/24, three entries, one bug) and ends "finished (clippy 0, test 0)" ONLY
+  when both stages exit 0, else "warm-up FAILED (clippy rc=X, test rc=Y) — verify.sh is
+  NOT hot" (rc=skipped when clippy failed first). (2) `scripts/visual_driver.py`: a
+  startup probe speaks ONE initialize handshake with a 5 s deadline (a throwaway
+  instance) — no reply / an EOF / an unspawnable path print ONE loud "DRIVER PROBE: …"
+  line and exit 3 (the old silent exit 0 against a non-MCP build and the hang-to-cap are
+  dead, PROBLEMS.md 2026-11-20/24); stdout is line-buffered (piped runs stream, no more
+  0-byte logs), the usage line documents the --features mcp requirement + the exit codes;
+  mcp_smoke.py untouched (the entry asked for the fix in the driver). (3) the GUI lane's
+  windowfocus row (the 2026-11-21 "could improve"): with a reachable display
+  `xdotool help` must list the windowfocus subcommand ([yes]); without one a [--]
+  reminder (help inits xdo before dispatching — a display-free probe is impossible); a
+  loader-broken binary gets its own trap-13 [NO]; the probe carries the /tmp bundle's
+  lib dir on LD_LIBRARY_PATH.
+- **Files:** `scripts/sandbox_check.sh`, `scripts/visual_driver.py`, `PROGRESS.md`,
+  `TIMING.md` (the cold warm-up row), `SANDBOX.md` (one trap-13 sentence:
+  help/windowfocus need the lib dir AND a live X server). No Rust touched.
+- **Verified:** the FULL gate ran (scripts/ are beyond-.md — NOT docs-only; the owner's
+  no-builds note was a one-round recommendation, not a standing ban):
+  `scripts/verify.sh` ALL GATES GREEN, 17 s hot — rules.sh HARD-green, fmt clean, clippy
+  `-D warnings` × default/mcp/fill-bench, `cargo test --profile gates` 370 green /
+  `--features mcp` 383 green (+1 ignored each). Branch tests live: the probe's EOF
+  (/bin/true) and 5 s timeout (a silent wrapper) modes exit 3 loudly; the pass-through
+  drives target/gates/russet under Xvfb — ALL VISUAL-DRIVER SCENARIOS GREEN (15 checks,
+  3.6 s); the skip branch prints [NO] warm-up SKIPPED (a fake HOME + a cargo-less PATH);
+  the started branch ends the hot log "finished (clippy 0, test 0)"; both windowfocus
+  states live ([--] without a display, [yes] with Xvfb); the branch tests caught the
+  first draft's own bug (a trap-13 loader error misreported as a missing subcommand) —
+  fixed and re-tested. NO wasm check (no web-facing code touched).
+- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
+- **Commit title:** `Gate the --warm warm-up on the toolchain; give visual_driver.py an MCP startup probe; probe the windowfocus path in sandbox_check`
 
 ### 2026-11-25 — `Docs:` the English-only language whitelist promoted into AGENTS.md; the docs-only gate skip reconfirmed — owner request
 
@@ -128,35 +168,3 @@ UI surface changed.
 - **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
 - **Commit title:** `Restore the English-only whitelist stamp and translate the repo's non-English text to English`
 
-### 2026-11-24 — `Tooling:` the gates lane builds incrementally; the no-IC config splits into the owner's `gates-strict` (owner request in chat)
-
-- **What:** owner order: "move incremental = false into a separate flag that I will run
-  personally on my PC — for all the tests to stay green,
-  incremental = true is enough". `[profile.gates]`
-  now sets `incremental = true`: the lane's cold cost was never IC's to
-  fix — IC caches only the workspace crate (~10–20 s of a build), the
-  272 registry deps build non-incrementally regardless of the flag, and
-  the 61 MB test-binary link is single-threaded either way; the flag
-  only bought disk bloat (the measured warm-target zip: 1.2 GiB = the
-  3.8 G `target/` MINUS the incremental dirs) and none of the speed the
-  sandbox needed (the real sandbox fix is the persistent cache). The
-  original no-IC config lives on as `[profile.gates-strict]` (the same
-  opt-level 0 / no debuginfo, `incremental = false`) for the OWNER's
-  personal final-verification runs; verify.sh and the sandbox warm-up
-  stay on `gates`, CI stays untouched (the dev lane).
-- **Files:** `Cargo.toml` (the split + the comments), `AGENTS.md`
-  (Repo facts), `SPEC.md` §8 (the owner's strict-lane command),
-  `PROGRESS.md`, `TIMING.md` (the flip's rebuild row).
-- **Verified:** the flip invalidated ONLY the workspace crate's units —
-  the dep graph stayed fresh (the post-flip check re-verified 1 unit,
-  0.99 s); `scripts/verify.sh` ALL GATES GREEN in 110 s: rules
-  HARD-green, fmt clean, clippy `-D warnings` on --all-targets
-  ×{default, mcp, fill-bench}, `cargo test --profile gates` 370 green
-  +1 ignored / `--features mcp` 383 green +1 ignored (0 failed);
-  `inherits = "gates"` custom-profile inheritance verified against the
-  pinned cargo 1.99.1 (`cargo metadata` clean). NO wasm check (no code
-  change — a build-config edit; the wasm lane compiles the DEV profile,
-  untouched).
-- **Owner-checks:** the owner's personal `cargo test --profile
-  gates-strict` on Windows; the next CI run after push.
-- **Commit title:** `Let the gates lane build incrementally; split the no-incremental config into the owner's gates-strict profile`

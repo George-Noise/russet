@@ -1,5 +1,38 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-24 — `Tooling:` the gates lane builds incrementally; the no-IC config splits into the owner's `gates-strict` (owner request in chat)
+
+- **What:** owner order: "move incremental = false into a separate flag that I will run
+  personally on my PC — for all the tests to stay green,
+  incremental = true is enough". `[profile.gates]`
+  now sets `incremental = true`: the lane's cold cost was never IC's to
+  fix — IC caches only the workspace crate (~10–20 s of a build), the
+  272 registry deps build non-incrementally regardless of the flag, and
+  the 61 MB test-binary link is single-threaded either way; the flag
+  only bought disk bloat (the measured warm-target zip: 1.2 GiB = the
+  3.8 G `target/` MINUS the incremental dirs) and none of the speed the
+  sandbox needed (the real sandbox fix is the persistent cache). The
+  original no-IC config lives on as `[profile.gates-strict]` (the same
+  opt-level 0 / no debuginfo, `incremental = false`) for the OWNER's
+  personal final-verification runs; verify.sh and the sandbox warm-up
+  stay on `gates`, CI stays untouched (the dev lane).
+- **Files:** `Cargo.toml` (the split + the comments), `AGENTS.md`
+  (Repo facts), `SPEC.md` §8 (the owner's strict-lane command),
+  `PROGRESS.md`, `TIMING.md` (the flip's rebuild row).
+- **Verified:** the flip invalidated ONLY the workspace crate's units —
+  the dep graph stayed fresh (the post-flip check re-verified 1 unit,
+  0.99 s); `scripts/verify.sh` ALL GATES GREEN in 110 s: rules
+  HARD-green, fmt clean, clippy `-D warnings` on --all-targets
+  ×{default, mcp, fill-bench}, `cargo test --profile gates` 370 green
+  +1 ignored / `--features mcp` 383 green +1 ignored (0 failed);
+  `inherits = "gates"` custom-profile inheritance verified against the
+  pinned cargo 1.99.1 (`cargo metadata` clean). NO wasm check (no code
+  change — a build-config edit; the wasm lane compiles the DEV profile,
+  untouched).
+- **Owner-checks:** the owner's personal `cargo test --profile
+  gates-strict` on Windows; the next CI run after push.
+- **Commit title:** `Let the gates lane build incrementally; split the no-incremental config into the owner's gates-strict profile`
+
 ### 2026-11-24 — `Fix:` Ctrl+A / Ctrl+S leave no panning tail — the WASD combo latch (owner request in chat: "Ctrl+A and Ctrl+S need a debounce of 100 ms or more so that when the user releases Ctrl first the pan does not move")
 
 - **What:** owner bug report 2026-11-24: Ctrl+S / Ctrl+A with Ctrl

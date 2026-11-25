@@ -83,6 +83,34 @@ else
 fi
 command -v xdotool > /dev/null 2>&1 || [ -x /tmp/xdotool/ext/usr/bin/xdotool ] \
   && ok "xdotool (drag probes)" || no "xdotool absent (optional; window drags need it)"
+# The pitfall-11 row (owner request 2026-11-21, PROBLEMS.md): a raw Xvfb has
+# no WM, so KEY/MODIFIER events need one explicit `xdotool windowfocus <id>`
+# per launch — probe that the subcommand is really available, alongside the
+# xdotool row above. `xdotool help` inits its xdo instance BEFORE dispatching,
+# so the probe needs a reachable X display; without one it degrades to a
+# reminder line instead of a false [NO].
+XBIN=""
+command -v xdotool > /dev/null 2>&1 && XBIN="$(command -v xdotool)"
+[ -z "$XBIN" ] && [ -x /tmp/xdotool/ext/usr/bin/xdotool ] && XBIN=/tmp/xdotool/ext/usr/bin/xdotool
+if [ -n "$XBIN" ]; then
+  # The /tmp bundle binary needs its own lib dir on LD_LIBRARY_PATH (SANDBOX.md
+  # trap 13) — without it every invocation dies in the loader and the probe
+  # below would misreport a healthy xdotool as broken.
+  XLDP="${LD_LIBRARY_PATH:-}"
+  [ -x /tmp/xdotool/ext/usr/bin/xdotool ] \
+    && XLDP="/tmp/xdotool/ext/usr/lib/x86_64-linux-gnu${XLDP:+:$XLDP}"
+  XHELP_DISPLAY="${DISPLAY:-:99}"
+  XHELP_OUT="$(DISPLAY="$XHELP_DISPLAY" LD_LIBRARY_PATH="$XLDP" "$XBIN" help 2>&1)"
+  if printf '%s\n' "$XHELP_OUT" | grep -qE '^[[:space:]]*windowfocus[[:space:]]*$'; then
+    ok "windowfocus subcommand (display $XHELP_DISPLAY) — the raw-Xvfb key-event fix (SANDBOX.md pitfall 11)"
+  elif printf '%s' "$XHELP_OUT" | grep -q 'loading shared libraries'; then
+    no "xdotool is BROKEN (its lib debs are missing — SANDBOX.md trap 13: apt-get download xdotool libxdo3 libxtst6 libxi6)"
+  elif printf '%s' "$XHELP_OUT" | grep -q "Can't open display"; then
+    say "  [--] windowfocus NOT probed (no X display $XHELP_DISPLAY — start Xvfb first; pitfall 11: one windowfocus per launch fixes key events)"
+  else
+    no "xdotool lacks the windowfocus subcommand — the pitfall-11 key-event fix cannot run with this xdotool"
+  fi
+fi
 
 say "Gates-lane warm-up:"
 if [ "$WARM" = "1" ]; then
@@ -96,15 +124,33 @@ if [ "$WARM" = "1" ]; then
     ok "warm-up build already running (pid $(cat /tmp/russet_warm_build.pid), log /tmp/russet_warm_build.log)"
   else
     rm -f /tmp/russet_warm_build.pid
-    setsid bash -c '
-      export PATH="$HOME/.cargo/bin:$PATH"
-      echo $$ > /tmp/russet_warm_build.pid
-      echo "russet warm-up (pid $$) started $(date +%T): clippy + test --no-run on the gates lane"
-      cargo clippy --profile gates --all-targets --features mcp -- -D warnings
-      cargo test --profile gates --features mcp --no-run
-      echo "warm-up finished $(date +%T) (exit $?) — verify.sh is now hot"
-    ' > /tmp/russet_warm_build.log 2>&1 < /dev/null &
-    ok "background warm-up started (log /tmp/russet_warm_build.log) — verify.sh is hot when the log says finished"
+    # Gate on the toolchain FIRST (PROBLEMS.md 2026-11-20/23/24 — the same lie
+    # three times): a warm-up without cargo died instantly while its log still
+    # claimed "finished (exit 0) — verify.sh is now hot". The verdict line
+    # below also captures each rc BEFORE any $(date ...) substitution resets
+    # $? (that substitution is what made the old line print exit 0).
+    if ! command -v cargo > /dev/null 2>&1 && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+      no "warm-up SKIPPED (no cargo on PATH and no ~/.cargo/bin/cargo — install rustup + the pinned toolchain first, then re-run --warm)"
+    else
+      setsid bash -c '
+        export PATH="$HOME/.cargo/bin:$PATH"
+        echo $$ > /tmp/russet_warm_build.pid
+        echo "russet warm-up (pid $$) started $(date +%T): clippy + test --no-run on the gates lane"
+        cargo clippy --profile gates --all-targets --features mcp -- -D warnings
+        rc_clippy=$?
+        rc_test=skipped
+        if [ "$rc_clippy" -eq 0 ]; then
+          cargo test --profile gates --features mcp --no-run
+          rc_test=$?
+        fi
+        if [ "$rc_clippy" -eq 0 ] && [ "$rc_test" -eq 0 ]; then
+          echo "warm-up finished $(date +%T) (clippy 0, test 0) — verify.sh is now hot"
+        else
+          echo "warm-up FAILED $(date +%T) (clippy rc=$rc_clippy, test rc=$rc_test) — verify.sh is NOT hot"
+        fi
+      ' > /tmp/russet_warm_build.log 2>&1 < /dev/null &
+      ok "background warm-up started (log /tmp/russet_warm_build.log) — the log ends 'finished' ONLY when both cargo stages exit 0; a 'warm-up FAILED' line means verify.sh is NOT hot"
+    fi
   fi
 else
   say "  [--] pass --warm to start a detached gates-lane warm-up (clippy + test --no-run:"
