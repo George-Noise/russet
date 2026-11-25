@@ -20,7 +20,7 @@ use eframe::egui::{self, Color32, Context, Vec2};
 
 use super::App;
 use super::dialogs::dialog_button_row;
-use super::placement::{FIRST_OPEN_GAP, LAYERS_FIRST_OPEN_LIFT, place_floating_window};
+use super::placement::{first_open_gap, layers_first_open_lift, place_floating_window};
 
 /// Stable ids, same idea as `windows.rs`: independent of the title text so
 /// placement / area state lookups stay stable.
@@ -94,13 +94,18 @@ impl App {
             })
             .collect();
         let mut request = LayerRequest::default();
+        // The smartphone compact rule (owner request 2026-11-25, SPEC
+        // §3.11): the first-open gaps go FLUSH 0 on a phone-sized web
+        // viewport — the window hugs the right and bottom edges (the
+        // 1.75rem zoom-label lift folds to 0 with the gap).
+        let smartphone = crate::is_smartphone_viewport(ctx.content_rect().width());
         let shown = egui::Window::new("Layers")
             .id(layers_window_id())
             .open(&mut open)
             .pivot(egui::Align2::RIGHT_BOTTOM)
             .default_pos(egui::pos2(
-                content.right() - FIRST_OPEN_GAP,
-                content.bottom() - FIRST_OPEN_GAP - LAYERS_FIRST_OPEN_LIFT,
+                content.right() - first_open_gap(smartphone),
+                content.bottom() - first_open_gap(smartphone) - layers_first_open_lift(smartphone),
             ))
             .default_width(LAYERS_DEFAULT_WIDTH)
             .resizable(false) // `.auto_sized()` was non-resizable too; see LAYERS_DEFAULT_WIDTH

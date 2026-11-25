@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: the web multitouch pan + the smartphone compact rules (the F20 web slice, owner 2026-11-25) + the RESTORED mouse drag-pan (the delta line lost in the 2026-11-13 split) | done — full gate green + the wasm check + the visual driver; +9 tests | two-plus fingers pan by the average movement (`camera.rs::TouchPan` via egui `multi_touch().translation_delta`; a second finger landing mid-stroke commits the stroke as its node first — `input.rs::commit_stroke_gesture`; the session stays pan-only until the last finger lifts); a phone-width WEB viewport (600 pt, `main.rs::is_smartphone_viewport`, cfg-only in main.rs per the Repo-facts rule) gets the compact rules — every floating window's first-open gap FLUSH 0 (`placement.rs::first_open_gap`/`layers_first_open_lift`, all five call sites: Tools/Palette/Layers/Tree+clones) and the Tool Log window + its View item hidden (the log keeps recording); `handle_pan` regains `self.pan += response.drag_delta()` — the middle/Space+LMB drag pans moved NOTHING since e8eb5d1 (2026-11-13); two new egui quirks recorded (the headless drag recipe: TWO warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a prior pointer pos) |
 | Extra: AGENTS.md compacted to the rulebook budget — every rule kept, the narratives moved to their canonical homes (docs round, owner-approved skeleton) | done — comment-only .rs edits → rules.sh + cargo check green | 323 lines/64.8 KB → 182 lines/32 KB; owner-request narratives, verbatim quotes and date-stamped backstories stripped — dates kept ONLY where the date is the rule's identity (the scenarios/tests.rs lock, the history_tree.rs split deferral, the app.rs guard exemption); the per-module Repo-facts facts verified already at home in the module doc comments (app.rs's map, input.rs, selection.rs, tool_icons.rs, tree_window/paint.rs, fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap patches (input.rs's doc gained the global Esc/Ctrl+A/fill-click facts, selection.rs's tolerance_from_percent gained the ONE-slider fact, windows.rs's doc names the select_panel child); the egui 0.37 quirks section moved VERBATIM (26 bullets byte-identical, diff-checked) to the new docs/agents/egui-quirks.md + the new Reading-routes row; the warm-target retirement, the CI description and the delivery mechanics each deduplicated to ONE canonical statement; the new "Maintenance" section states the ~150–200-line budget mirroring the log-entry budget |
 | Extra: the session-start tooling stops lying — the --warm toolchain gate + the honest verdict, the driver's MCP startup probe, the windowfocus row (owner-picked PROBLEMS.md script fixes 1+2+5) | done — full gate green + live branch tests | the three PROBLEMS.md-documented lies fixed in the two dev scripts: `sandbox_check.sh --warm` gates the detached warm-up on cargo/rustup ("[NO] warm-up SKIPPED…" instead of a doomed job whose log claimed "finished (exit 0)" — the lie reproduced live at this session's start) and its verdict captures each rc before any $(date) resets $? ("finished (clippy 0, test 0)" / "warm-up FAILED (…) — verify.sh is NOT hot"); `visual_driver.py` gained a startup MCP probe (one initialize handshake, 5 s deadline, a loud DRIVER PROBE line + exit 3 on no-reply/EOF/bad path — the old silent exit 0 or hang-to-cap is dead; stdout line-buffered; the usage line documents the --features mcp requirement and the exit codes; mcp_smoke.py untouched); the GUI lane gained the windowfocus row (with a display `xdotool help` must list the subcommand, without one a [--] reminder, a loader-broken binary its own trap-13 [NO]) |
 | Extra: the English-only language whitelist promoted into AGENTS.md + the docs-only gate skip reconfirmed (owner 2026-11-25) | done — docs only | the whitelist rule that lived in the PROGRESS.md stamp (and fell out of it once) is now a durable AGENTS.md "Language" section — the repo/project whitelist has exactly ONE language, English (docs, code comments, scripts, log/debt entries, commit titles, app strings); the 2026-11-20 docs-only gate skip reconfirmed in Commands with the owner's 2026-11-25 wording: documentation-only work does NOT require building or testing; this round ran NO cargo command (owner: "no tests and no builds for now") — rules.sh green, the delivery byte-compares green; the Log compacted in the same edit (the two oldest entries moved verbatim to PROGRESS-archive.md, the heading carries the note) |
@@ -62,13 +63,17 @@
 
 **Verification stamp:** English-only repo-wide — a language WHITELIST (English
 is simply the only written language here: comments, docs, commit titles), not a
-script blacklist. FULL gate re-verified 2026-11-25 (the script-fix round —
-scripts/ touched, so the full gate ran): fmt clean, rules.sh HARD-green,
-clippy `-D warnings` green on --all-targets (default + mcp + fill-bench),
-`cargo test --profile gates` 370 green / with `--features mcp` 383 green
-(+1 ignored each); the visual driver green through target/gates/russet under
-Xvfb (the new startup probe passes through, 15 checks, 3.6 s); NO wasm check —
-no web-facing code touched.
+script blacklist. FULL gate re-verified 2026-11-25 (the touch-pan/smartphone
+round — Rust + docs, the full gate): fmt clean, rules.sh HARD-green, clippy
+`-D warnings` green on --all-targets (default + mcp + fill-bench),
+`cargo test --profile gates` 392 green / with `--features mcp` 392 green
+(+1 ignored each; +9 tests of this round: the TouchPan machine, the
+two-finger integration through REAL run_pass frames, the middle-drag
+regression, the stroke-takeover commit, the smartphone gap helpers +
+threshold); the WASM check clean (`cargo check --target
+wasm32-unknown-unknown`, 39 s cold — the web-facing code path was touched);
+the visual driver green through target/gates/russet under Xvfb (all
+scenarios).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -76,7 +81,50 @@ no web-facing code touched.
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25, three times: the oldest entries moved verbatim to PROGRESS-archive.md, newest first — the 2026-11-24 `Tooling:` gates-lane profile split, then the `Fix:` latch and `Feat:` Select All, then the 2026-11-24 `Docs:` whitelist-restored entry; the newest 3 entries stay.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25, a fourth time: the oldest entry — the `Docs:` English-only whitelist round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+
+
+### 2026-11-25 — `Feat:` the web multitouch pan + the smartphone compact rules (the F20 web slice); the mouse drag-pan restored — owner request
+
+- **What:** three pieces. (1) The multitouch PAN (ordered "web, пока что только web", the
+  egui path is platform-neutral so it rides wherever touches arrive): two-plus fingers pan
+  by the AVERAGE movement of all touch points (`InputState::multi_touch().translation_delta`;
+  `camera.rs::TouchPan` + `App::handle_touch_pan`) — one finger keeps painting, a second
+  finger landing mid-stroke ENDS the stroke as its node first (`input.rs::commit_stroke_gesture`,
+  extracted from the release path; the painted pixels stay, undoable), and the touch session
+  stays pan-only until the frame NO finger is down (the leftover finger cannot resume
+  painting); pinch does NOT zoom (scope). (2) The SMARTPHONE compact rules for a
+  phone-width WEB viewport (600 pt gate, `main.rs::is_smartphone_viewport` — the platform
+  branch stays in main.rs per the Repo-facts rule; `App::is_smartphone`): every floating
+  window's first-open edge gap FLUSH 0 (`placement.rs::first_open_gap` /
+  `layers_first_open_lift`, applied at all five first-open sites — Tools, Palette, Layers
+  (the 1.75rem zoom-label lift folds to 0 too), History Tree + clones), and the Tool Log
+  window + its View-menu item hidden on phones (the log itself keeps recording). No native
+  Android build is planned (owner 2026-11-25). (3) A found-and-fixed REGRESSION:
+  `self.pan += response.drag_delta()` was LOST in the 2026-11-13 app.rs split (e8eb5d1) —
+  the middle-button and Space+LMB drag pans moved NOTHING since (the detection, cursor and
+  stroke suppression survived); restored in `handle_pan`, pinned by a regression test. Two
+  new egui quirks recorded in docs/agents/egui-quirks.md (the headless drag recipe — two
+  warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a
+  prior pointer position).
+- **Files:** `src/main.rs`, `src/app.rs`, `src/app/camera.rs` (+ `camera/tests.rs`, NEW
+  `camera/tests/touch_pan.rs`), `src/app/input.rs`, `src/app/placement.rs` (+
+  `placement/tests/first_open.rs`), `src/app/windows.rs`,
+  `src/app/windows/palette_window.rs`, `src/app/layers_window.rs`,
+  `src/app/tree_window.rs`, `src/app/tool_log.rs`, `src/app/menu.rs`, `SPEC.md` (§3.4 touch
+  pan; §3.11 smartphone paragraph), `docs/agents/egui-quirks.md`,
+  `DEBTS-verification.md` (V84 born; V83/V82/V79/V78/V77/V76 closed — owner-verified in
+  chat this round), `DEBTS-functional.md` (F20's web slice PAID — trackpads/pen tablets
+  remain open; F17 carries the BMP/WebP options note the owner asked for),
+  `TIMING.md`, `PROGRESS.md`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 32 s hot — rules.sh
+  HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
+  `cargo test --profile gates` 392 green / `--features mcp` 392 green (+1 ignored each;
+  +9 tests of this round); the WASM check clean (39 s cold — cfg-wasm paths touched); the
+  visual driver green through target/gates/russet under Xvfb (ALL scenarios).
+- **Owner-checks:** V84 born (the web pass on a real phone + the desktop/native legs,
+  incl. the restored drag pan). Open: V84, V81, V80, V66 (the 4 newest of 6 open).
+- **Commit title:** `Feat: web multitouch pan + smartphone compact windows; restore the lost mouse drag-pan`
 
 ### 2026-11-25 — `Docs:` AGENTS.md compacted to the rulebook budget — 323 lines/64.8 KB → 182 lines/32 KB; every rule survives, the narratives moved to their canonical homes
 
@@ -149,27 +197,3 @@ no web-facing code touched.
   fixed and re-tested. NO wasm check (no web-facing code touched).
 - **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
 - **Commit title:** `Gate the --warm warm-up on the toolchain; give visual_driver.py an MCP startup probe; probe the windowfocus path in sandbox_check`
-
-### 2026-11-25 — `Docs:` the English-only language whitelist promoted into AGENTS.md; the docs-only gate skip reconfirmed — owner request
-
-- **What:** two owner requests. (1) Record in AGENTS.md that the language of the repository and
-  the project is a whitelist whose only entry is ENGLISH: the new "Language" section (right
-  after "Source of truth") carries the stamp's verbatim wording ("English-only repo-wide — a
-  language WHITELIST …, not a script blacklist") and the full scope (docs, code comments,
-  scripts, PROGRESS/DEBTS/PROBLEMS entries, commit titles, app strings). The rule had lived
-  only as a line in the PROGRESS.md verification stamp (owner request 2026-11-18) and fell out
-  during later stamp updates (restored 2026-11-24) — it now has a durable canonical home in
-  AGENTS.md. (2) Record that documentation-only work does NOT require building or testing: the
-  existing docs-only shortcut (owner request 2026-11-20) is reconfirmed with the owner's
-  2026-11-25 wording in the Commands bullet.
-- **Files:** `AGENTS.md` (the new "Language" section + the reconfirmation note in the docs-only
-  Commands bullet), `PROGRESS.md` (snapshot row + this entry + the Log compaction),
-  `PROGRESS-archive.md` (the two oldest Log entries moved there verbatim, newest first — the
-  rules.sh Log-budget note). Nothing else touched.
-- **Verified:** docs-only round (the diff touches only `.md` files) — the cargo gate SKIPPED per
-  the rule, and per the owner's same-day instruction ("for now run no tests and no builds") NO
-  cargo command ran at all; `scripts/rules.sh` HARD-green (grep-level, no toolchain); the
-  delivery byte-compares green (`scripts/deliver.sh origin/master` — patched clean base =
-  worktree = unpacked zip, all three byte-match).
-- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
-- **Commit title:** `State the English-only repo language whitelist in AGENTS.md; reconfirm the docs-only gate skip`

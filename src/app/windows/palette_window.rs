@@ -27,7 +27,7 @@ use eframe::egui::{self, Color32, Context, Id, Rect, Sense};
 
 use crate::app::App;
 use crate::app::launch::parse_hex_components;
-use crate::app::placement::{FIRST_OPEN_GAP, place_floating_window};
+use crate::app::placement::{first_open_gap, place_floating_window};
 use crate::palette::{COLORS, COLS, GRID_WIDTH, ROWS, TILE};
 
 fn palette_window_id() -> Id {
@@ -40,16 +40,22 @@ impl App {
             return;
         }
         let mut open = true;
+        // The smartphone compact rule (owner request 2026-11-25, SPEC
+        // §3.11): FLUSH-0 first-open gaps on a phone-sized web viewport.
+        let smartphone = crate::is_smartphone_viewport(ctx.content_rect().width());
         let shown = egui::Window::new("Palette")
             .id(palette_window_id())
             .open(&mut open)
             // First open (§3.3): the window's bottom-left corner sits 0.5rem
             // from the main window's left and bottom edges (`Align2::LEFT_BOTTOM`
-            // pivot interprets `default_pos` as that corner's position).
+            // pivot interprets `default_pos` as that corner's position) —
+            // FLUSH 0 on a smartphone-sized web viewport (owner request
+            // 2026-11-25, SPEC §3.11).
             // As with Tools, the stored position wins after any move.
             .pivot(egui::Align2::LEFT_BOTTOM)
             .default_pos(
-                ctx.content_rect().left_bottom() + egui::vec2(FIRST_OPEN_GAP, -FIRST_OPEN_GAP),
+                ctx.content_rect().left_bottom()
+                    + egui::vec2(first_open_gap(smartphone), -first_open_gap(smartphone)),
             )
             .auto_sized() // size follows the content; no resize handles
             .show(ctx, |ui| {

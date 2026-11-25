@@ -42,8 +42,13 @@ impl App {
     /// The Tool Log window (owner request 2026-11-13 renamed it from
     /// "History"): the read-only action log, newest first. Entries are
     /// plain labels — clicking them does nothing yet by design.
+    /// HIDDEN on a smartphone-sized web viewport (owner request
+    /// 2026-11-25, SPEC §3.11's smartphone rule): a phone screen has no
+    /// room for a fifth floating window — the log itself keeps recording,
+    /// only the window never renders (and the View item is hidden with
+    /// it, so no dead toggle exists).
     pub(super) fn history_window(&mut self, ctx: &Context) {
-        if !self.history_window_open {
+        if !self.history_window_open || self.is_smartphone() {
             return;
         }
         let mut open = true;

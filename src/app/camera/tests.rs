@@ -116,3 +116,5 @@ fn an_accelerator_modifier_suppresses_the_key_pan() {
 // The combo-latch topic lives in its own file (AGENTS.md "Tests" rule 7:
 // split past the ~300-line guard — move the tests, not the visibility).
 mod latch;
+// The multi-touch pan + the restored drag-delta pan (same split rule).
+mod touch_pan;

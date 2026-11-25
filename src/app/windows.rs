@@ -24,7 +24,7 @@
 use eframe::egui::{self, Context, Id};
 
 use super::App;
-use super::placement::{FIRST_OPEN_GAP, place_floating_window};
+use super::placement::{first_open_gap, place_floating_window};
 use super::tool_icons;
 use crate::tools::{SelectMode, Tool};
 
@@ -77,6 +77,15 @@ fn tools_title_frame(ctx: &Context) -> egui::Frame {
     frame
 }
 
+/// The smartphone-viewport check of the first-open gaps (owner request
+/// 2026-11-25): the shared gate of every floating window's first-open
+/// position — a phone-narrow WEB viewport gets the FLUSH-0 compact rules
+/// (SPEC §3.11). Native tests always pass `false` (the wasm half of
+/// `crate::is_smartphone_viewport` is a compile-time `false` there).
+fn smartphone_view(ctx: &Context) -> bool {
+    crate::is_smartphone_viewport(ctx.content_rect().width())
+}
+
 /// The width of the Size block's slider: EXACTLY the Shape panel's widest
 /// button row (3 × [`TOOL_BUTTON_PT`] + 2 × [`TOOL_GRID_GAP`]) — the owner's
 /// 2026-11-20 pass moved the "Size" label ABOVE the slider and narrowed the
@@ -103,7 +112,9 @@ fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'
         // 2026-11-19, "variant A2"): without this the both-buttons strip paints
         // ~11 pt past the window's right edge and the ✕ lands half outside it.
         .title_frame(tools_title_frame(ctx))
-        // First open (§3.2): 0.5rem from the left edge; vertically a bit
+        // First open (§3.2): 0.5rem from the left edge (FLUSH 0 on a
+        // smartphone-sized web viewport — owner request 2026-11-25, SPEC
+        // §3.11); vertically a bit
         // ABOVE center — 40% of the free vertical space above the window
         // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
         // pivot + `default_pos` set the left gap and a centered start;
@@ -114,7 +125,10 @@ fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'
         // position — after any user move or §3.11 repositioning the
         // stored position always wins.
         .pivot(egui::Align2::LEFT_CENTER)
-        .default_pos(ctx.content_rect().left_center() + egui::vec2(FIRST_OPEN_GAP, 0.0))
+        .default_pos(
+            ctx.content_rect().left_center()
+                + egui::vec2(first_open_gap(smartphone_view(ctx)), 0.0),
+        )
         .auto_sized() // size follows the content; no resize handles
 }
 

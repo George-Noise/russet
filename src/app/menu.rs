@@ -140,7 +140,13 @@ impl App {
                     ui.checkbox(&mut self.tools_window_open, "Tools");
                     ui.checkbox(&mut self.palette_window_open, "Palette");
                     ui.checkbox(&mut self.tree_window_open, "History Tree");
-                    ui.checkbox(&mut self.history_window_open, "Tool Log");
+                    // The Tool Log's toggle is hidden together with the
+                    // window itself on a smartphone-sized web viewport (owner
+                    // request 2026-11-25, SPEC §3.11) — no dead control on a
+                    // phone; the log keeps recording underneath.
+                    if !self.is_smartphone() {
+                        ui.checkbox(&mut self.history_window_open, "Tool Log");
+                    }
                     ui.checkbox(&mut self.layers_window_open, "Layers");
                 });
 

@@ -647,6 +647,72 @@ impl App {
         }
     }
 
+    /// Commits an in-flight freehand gesture as its ONE history node —
+    /// the release path's body, shared by the pointer RELEASE
+    /// (`handle_stroke`) and the MULTI-TOUCH takeover (owner request
+    /// 2026-11-25: a two-finger gesture beginning mid-stroke ENDS the
+    /// stroke first — the painted pixels stay, undoable as one node,
+    /// instead of being orphaned by the gesture's stroke suppression).
+    /// The whole gesture state resets with it, so the leftover finger of
+    /// the touch session paints nothing until every finger has lifted.
+    pub(super) fn commit_stroke_gesture(&mut self) {
+        if self.is_stroking {
+            // The smoothing window holds a closing piece; rasterize it
+            // BEFORE the snapshot so the recorded canvas carries the whole
+            // stroke.
+            self.flush_stroke_close();
+            if let Some(color) = self.stroke_paint.take() {
+                // One gesture = one node of ONE tool — the tool frozen at
+                // stroke start, not whatever a hotkey switched to mid-drag
+                // (the pixels were painted with the frozen tool's wet
+                // layer).
+                let gesture_tool = self.stroke_tool.unwrap_or(self.tools.tool);
+                let kind = match gesture_tool {
+                    Tool::Pencil => Some(ActionKind::Pencil),
+                    Tool::Brush => Some(ActionKind::Brush),
+                    Tool::Eraser => Some(ActionKind::Eraser),
+                    // Unreachable for a freehand gesture (the frozen tool
+                    // is always one of the painting trio).
+                    Tool::Eyedropper
+                    | Tool::Line
+                    | Tool::Shape
+                    | Tool::Text
+                    | Tool::Select
+                    | Tool::Fill => None,
+                };
+                if let Some(kind) = kind {
+                    self.record_active_action(kind, color, None);
+                    let label = match gesture_tool {
+                        Tool::Pencil => "Pencil stroke",
+                        Tool::Brush => "Brush stroke",
+                        Tool::Eraser => "Eraser stroke",
+                        Tool::Eyedropper
+                        | Tool::Line
+                        | Tool::Shape
+                        | Tool::Text
+                        | Tool::Select
+                        | Tool::Fill => "Stroke",
+                    };
+                    self.action_log.push(label);
+                }
+            }
+        }
+        self.reset_stroke_state();
+    }
+
+    /// The freehand gesture state's ground zero (shared by the release
+    /// path, the panning abandon path and the touch-gesture takeover).
+    fn reset_stroke_state(&mut self) {
+        self.stroke_paint = None;
+        self.is_stroking = false;
+        self.stroke_clip = None;
+        self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
+        self.stroke_trail = PencilTrail::default();
+        self.stroke_button = None;
+        self.stroke_tool = None;
+        self.stroke_wet = None;
+    }
+
     pub(super) fn handle_stroke(
         &mut self,
         ui: &egui::Ui,
@@ -655,14 +721,7 @@ impl App {
         panning: bool,
     ) {
         if panning {
-            self.is_stroking = false;
-            self.stroke_clip = None;
-            self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
-            self.stroke_trail = PencilTrail::default();
-            self.stroke_button = None;
-            self.stroke_paint = None;
-            self.stroke_tool = None;
-            self.stroke_wet = None;
+            self.reset_stroke_state();
             return;
         }
 
@@ -682,56 +741,9 @@ impl App {
             // Owner request 2026-11-13: EVERY freehand tool records — pencil,
             // brush and eraser alike — on the active layer's tree. The color
             // was captured at stroke start — it is what the gesture painted
-            // with.
-            if self.is_stroking {
-                // The smoothing window holds a closing piece; rasterize it
-                // BEFORE the snapshot so the recorded canvas carries the
-                // whole stroke.
-                self.flush_stroke_close();
-                if let Some(color) = self.stroke_paint.take() {
-                    // One gesture = one node of ONE tool — the tool frozen
-                    // at stroke start, not whatever a hotkey switched to
-                    // mid-drag (the pixels were painted with the frozen
-                    // tool's wet layer).
-                    let gesture_tool = self.stroke_tool.unwrap_or(self.tools.tool);
-                    let kind = match gesture_tool {
-                        Tool::Pencil => Some(ActionKind::Pencil),
-                        Tool::Brush => Some(ActionKind::Brush),
-                        Tool::Eraser => Some(ActionKind::Eraser),
-                        // Unreachable for a freehand gesture (the frozen
-                        // tool is always one of the painting trio).
-                        Tool::Eyedropper
-                        | Tool::Line
-                        | Tool::Shape
-                        | Tool::Text
-                        | Tool::Select
-                        | Tool::Fill => None,
-                    };
-                    if let Some(kind) = kind {
-                        self.record_active_action(kind, color, None);
-                        let label = match gesture_tool {
-                            Tool::Pencil => "Pencil stroke",
-                            Tool::Brush => "Brush stroke",
-                            Tool::Eraser => "Eraser stroke",
-                            Tool::Eyedropper
-                            | Tool::Line
-                            | Tool::Shape
-                            | Tool::Text
-                            | Tool::Select
-                            | Tool::Fill => "Stroke",
-                        };
-                        self.action_log.push(label);
-                    }
-                }
-            }
-            self.stroke_paint = None;
-            self.is_stroking = false;
-            self.stroke_clip = None;
-            self.stroke_smooth = SmoothStroke::new(Pos2::ZERO);
-            self.stroke_trail = PencilTrail::default();
-            self.stroke_button = None;
-            self.stroke_tool = None;
-            self.stroke_wet = None;
+            // with. The same commit serves the multi-touch takeover
+            // ([`Self::commit_stroke_gesture`]).
+            self.commit_stroke_gesture();
         }
 
         if !self.is_stroking && response.hovered() && !space {

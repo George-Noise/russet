@@ -51,7 +51,7 @@ use eframe::egui::{self, Align2, Context, FontId, Id, Pos2, TextStyle};
 
 use super::App;
 use super::placement::{
-    AxisAnchor, FIRST_OPEN_GAP, WindowAnchor, WindowPlacement, place_floating_window,
+    AxisAnchor, WindowAnchor, WindowPlacement, first_open_gap, place_floating_window,
 };
 use crate::app::tool_icons;
 use crate::history_tree::{Change, NodeId, Removal};
@@ -161,6 +161,10 @@ struct ViewRequest {
 impl App {
     /// Renders the main History Tree window and every clone.
     pub(super) fn tree_windows(&mut self, ctx: &Context) {
+        // The smartphone compact rule (owner request 2026-11-25, SPEC
+        // §3.11): the first-open gap goes FLUSH 0 on a phone-sized web
+        // viewport (the main window and the clones alike).
+        let smartphone = crate::is_smartphone_viewport(ctx.content_rect().width());
         if self.tree_window_open {
             let mut view = self.tree_views[0];
             let mut open = true;
@@ -170,11 +174,12 @@ impl App {
                 .open(&mut open)
                 // First open (owner request 2026-11-12): exactly the OLD
                 // History window's spot — 0.5rem from the right edge, just
-                // below the menu bar; §3.11 takes over afterwards.
+                // below the menu bar; §3.11 takes over afterwards (FLUSH 0
+                // on a smartphone — owner request 2026-11-25).
                 .pivot(Align2::RIGHT_TOP)
                 .default_pos(egui::pos2(
-                    ctx.content_rect().right() - FIRST_OPEN_GAP,
-                    self.last_panel_rect.top() + FIRST_OPEN_GAP,
+                    ctx.content_rect().right() - first_open_gap(smartphone),
+                    self.last_panel_rect.top() + first_open_gap(smartphone),
                 ))
                 .default_width(TREE_WINDOW_WIDTH)
                 .show(ctx, |ui| tree_content(self, ui, &mut view, &mut request));
@@ -232,11 +237,15 @@ impl App {
 
     /// First-open position of a clone: the main window's first-open spot
     /// stepped down-left per clone number (the stored placement wins later,
-    /// like for every floating window).
+    /// like for every floating window). FLUSH 0 on a smartphone-sized web
+    /// viewport (owner request 2026-11-25, SPEC §3.11).
     fn clone_first_pos(&self, view: &TreeView) -> Pos2 {
+        let gap = first_open_gap(crate::is_smartphone_viewport(
+            self.ctx.content_rect().width(),
+        ));
         egui::pos2(
-            self.ctx.content_rect().right() - FIRST_OPEN_GAP - view.cascade,
-            self.last_panel_rect.top() + FIRST_OPEN_GAP + view.cascade,
+            self.ctx.content_rect().right() - gap - view.cascade,
+            self.last_panel_rect.top() + gap + view.cascade,
         )
     }
 

@@ -92,6 +92,35 @@ pub(crate) fn renderer_label() -> &'static str {
     }
 }
 
+/// The smartphone-viewport rule's width threshold (owner request
+/// 2026-11-25): in the WEB build a content area narrower than this many
+/// points counts as a smartphone, and the compact UI rules apply — the Tool
+/// Log window never shows and every floating window's first-open edge gap
+/// is FLUSH 0 instead of 0.5rem (SPEC §3.11). Phones sit at ~320-430 pt of
+/// viewport width; tablets (768+ pt) stay exempt, and every NATIVE window
+/// is exempt by construction (the 500 pt builder minimum is above the
+/// threshold — the rule is web-only by `cfg!`, the same one-code-path
+/// style as [`platform_label`]). A desktop browser window deliberately
+/// narrowed below the threshold gets the compact rules too: a viewport
+/// that small IS phone-sized. The value is a named constant so retuning it
+/// is a one-line edit.
+pub(crate) const SMARTPHONE_MAX_VIEWPORT_PT: f32 = 600.0;
+
+/// True when `width` is the content-rect width of a smartphone-sized
+/// viewport (see [`SMARTPHONE_MAX_VIEWPORT_PT`]). The threshold half is a
+/// separate pure function so tests exercise it on native builds; the wasm
+/// gate itself rides `cfg!` — one code path compiles for every target, and
+/// this file is the allowed home for platform branches (AGENTS.md "Repo
+/// facts").
+pub(crate) fn is_smartphone_viewport(width: f32) -> bool {
+    cfg!(target_arch = "wasm32") && viewport_is_phone_narrow(width)
+}
+
+/// The threshold test alone (see [`is_smartphone_viewport`]).
+pub(crate) fn viewport_is_phone_narrow(width: f32) -> bool {
+    width < SMARTPHONE_MAX_VIEWPORT_PT
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init();

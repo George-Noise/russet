@@ -11,10 +11,36 @@
 
 use super::common::{assert_close, rect};
 use crate::app::placement::{
-    AxisAnchor, WINDOW_SNAP_DISTANCE, WindowAnchor, first_open_ratio_pos, reposition_window_pos,
+    AxisAnchor, FIRST_OPEN_GAP, LAYERS_FIRST_OPEN_LIFT, WINDOW_SNAP_DISTANCE, WindowAnchor,
+    first_open_gap, first_open_ratio_pos, layers_first_open_lift, reposition_window_pos,
     window_anchor,
 };
 use eframe::egui::pos2;
+
+#[test]
+fn smartphone_viewports_go_flush_zero_on_first_open() {
+    // Owner request 2026-11-25 (SPEC §3.11's smartphone rule): every
+    // floating window's first-open edge gap is FLUSH 0 on a phone-sized
+    // web viewport, and the Layers window's zoom-label lift folds to 0
+    // with it; the desktop gaps keep their 0.5rem / 2.25rem values.
+    assert_eq!(first_open_gap(false), FIRST_OPEN_GAP);
+    assert_eq!(first_open_gap(true), 0.0);
+    assert_eq!(layers_first_open_lift(false), LAYERS_FIRST_OPEN_LIFT);
+    assert_eq!(layers_first_open_lift(true), 0.0);
+}
+
+#[test]
+fn the_smartphone_threshold_covers_phones_not_tablets() {
+    // The gate (main.rs): phones sit at ~320-430 pt of viewport width and
+    // tablets start at 768 pt — the 600 pt line sits between them. The
+    // native builds never trip it (the wasm half is a compile-time false
+    // there), so the threshold is all this test can pin on native.
+    assert!(crate::viewport_is_phone_narrow(320.0));
+    assert!(crate::viewport_is_phone_narrow(430.0));
+    assert!(crate::viewport_is_phone_narrow(599.9));
+    assert!(!crate::viewport_is_phone_narrow(600.0));
+    assert!(!crate::viewport_is_phone_narrow(768.0));
+}
 
 #[test]
 fn first_open_ratio_splits_the_free_vertical_space() {

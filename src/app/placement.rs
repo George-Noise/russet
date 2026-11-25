@@ -29,6 +29,27 @@ pub(super) const FIRST_OPEN_GAP: f32 = 0.5 * REM;
 /// bottom-right corner stays readable (owner request 2026-11-10).
 pub(super) const LAYERS_FIRST_OPEN_LIFT: f32 = 1.75 * REM;
 
+/// The FIRST-OPEN edge gap for the current viewport (owner request
+/// 2026-11-25): the usual 0.5rem, but FLUSH 0 on a smartphone-sized web
+/// viewport — every floating window sits edge-to-edge on phones (SPEC
+/// §3.11's smartphone rule). Pure so the rule is unit-testable; the
+/// smartphone flag comes from `App::is_smartphone`.
+pub(super) fn first_open_gap(smartphone: bool) -> f32 {
+    if smartphone { 0.0 } else { FIRST_OPEN_GAP }
+}
+
+/// The "Layers" window's first-open LIFT above the bottom edge for the
+/// current viewport: the usual 1.75rem (keeping the zoom % label clear),
+/// FLUSH 0 on a smartphone — the same smartphone rule as
+/// [`first_open_gap`]; with both at 0 the window hugs the bottom edge.
+pub(super) fn layers_first_open_lift(smartphone: bool) -> f32 {
+    if smartphone {
+        0.0
+    } else {
+        LAYERS_FIRST_OPEN_LIFT
+    }
+}
+
 /// Floating-window magnetism (§3.11): when a window is DROPPED with an
 /// edge closer than this distance to a main-window edge, that axis anchors
 /// to the edge at the dropped gap — the window is never pulled flush. 2rem;

@@ -2,6 +2,8 @@
 //! undo/redo, the canvas widget and the texture sync. Cohesive subsystems
 //! live in child modules (they can access `App`'s private fields):
 //!   [`camera`]    — §3.4: canvas rect, zoom (Paint.NET-style steps), pan
+//!                   (wheel, mouse drag, WASD, and the multi-touch
+//!                   `TouchPan` — owner request 2026-11-25)
 //!   [`dialogs`]   — §3.7/§3.8: New / Resize Canvas / unsaved-changes / Error
 //!   [`document`]  — owner request 2026-11-13: document lifecycle — New/
 //!                   Open/Save, the unsaved-changes gate, the window title
@@ -178,6 +180,12 @@ pub struct App {
     /// nothing until the letter is released — owner bug report 2026-11-24.
     /// Updated from the frame's raw key events in `camera::handle_key_pan`.
     pan_key_latch: camera::PanKeyLatch,
+    /// The multi-touch pan session ([`camera::TouchPan`], owner request
+    /// 2026-11-25): while a two-plus-finger gesture is underway the frame
+    /// pans by the touches' average movement, and the whole touch session
+    /// stays "panning" until the last finger lifts. Updated in
+    /// `camera::handle_touch_pan`.
+    touch_pan: camera::TouchPan,
     is_stroking: bool,
     /// Smoothed-stroke emission window (owner request 2026-11-19): the
     /// midpoint-quadratic window every coalesced pointer move of the
@@ -454,6 +462,7 @@ impl App {
             zoom: 1.0,
             pan: Vec2::ZERO,
             pan_key_latch: camera::PanKeyLatch::default(),
+            touch_pan: camera::TouchPan::default(),
             is_stroking: false,
             stroke_smooth: SmoothStroke::new(Pos2::ZERO),
             stroke_trail: PencilTrail::default(),
@@ -775,6 +784,17 @@ impl App {
         self.canvas_tex.set(image, self.canvas_texture_options());
     }
 
+    /// True while running in a WEB build on a SMARTPHONE-sized viewport
+    /// (owner request 2026-11-25): the content area narrower than
+    /// [`crate::SMARTPHONE_MAX_VIEWPORT_PT`] points. The compact UI rules
+    /// key on it — the Tool Log window stays hidden (and its View-menu item
+    /// with it), and every floating window's first-open edge gap is FLUSH 0
+    /// (see SPEC §3.11). Native builds are always `false` (the check's
+    /// wasm half is a `cfg!` in `main.rs`).
+    fn is_smartphone(&self) -> bool {
+        crate::is_smartphone_viewport(self.ctx.content_rect().width())
+    }
+
     fn draw_canvas(&mut self, ui: &mut egui::Ui, panel_rect: Rect) {
         self.last_panel_rect = panel_rect;
         let response = ui.interact(
@@ -795,7 +815,18 @@ impl App {
             // A mid-gesture tool switch abandons the pending visual node.
             self.stroke_paint = None;
         }
-        let panning = self.handle_pan(ui, &response);
+        // The multi-touch pan (owner request 2026-11-25, the F20 web
+        // slice): a two-plus-finger gesture pans by the touches' average
+        // movement, and the FIRST gesture frame ends any in-flight
+        // freehand stroke — committed as its node, the painted pixels
+        // staying — before the gesture owns the input. The session stays
+        // "panning" until the last finger lifts, so the leftover finger
+        // paints nothing.
+        let touch = self.handle_touch_pan(ui);
+        if touch.began {
+            self.commit_stroke_gesture();
+        }
+        let panning = self.handle_pan(ui, &response) || touch.session;
         let rect = self.canvas_rect(panel_rect);
         match self.tools.tool {
             Tool::Pencil | Tool::Brush | Tool::Eraser => {

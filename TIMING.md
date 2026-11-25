@@ -20,6 +20,8 @@
 > log ≈). One command per row; never merge rows.
 
 ## Cold
+| 2026-11-25 | `cargo check --target wasm32-unknown-unknown` (the touch-pan/smartphone round — the web-facing code check; the wasm triple added to the fresh sandbox's toolchain first, the whole wasm dep graph cold) | **39 s** | cargo's print |
+| 2026-11-25 | the whole dep-graph build of this session happened across the DETACHED background warm-up + the interactive test/check loop (rustup + the pinned toolchain installed at session start); verify.sh's own full gate then ran in 32 s hot | **not singly timed** | — |
 | 2026-11-25 | `cargo check` (the AGENTS.md-compaction round — comment-only .rs edits; the fresh sandbox had NO toolchain at all: rustup + the pinned 1.99.1 toolchain installed first, then the whole dep-graph check) | **1m 26s** | cargo's print |
 | 2026-11-25 | the detached gates warm-up COLD (the script-fix round's fresh sandbox: rustup + the pinned 1.99.1 toolchain installed first, then clippy + `cargo test --no-run`, mcp features — the whole dep graph; the lane it heats made verify.sh a 17 s run right after) | **≈ 6 min** (started ~07:35, the log's finish line 07:41:27) | observed from the background log ≈ |
 | 2026-11-24 | the gates profile flip (`incremental` false→true, owner order): the flip invalidated ONLY the workspace crate's units — the post-flip check re-verified 1 unit (0.99 s), the dep graph stayed fresh; the full gate incl. both test-binary relinks | **110 s** | verify.sh per-stage print |

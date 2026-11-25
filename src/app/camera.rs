@@ -2,7 +2,10 @@
 //! zooming (Paint.NET-style discrete steps, Ctrl+wheel toward the cursor,
 //! physical-pixel snapping) and panning (plain/Shift wheel, middle button,
 //! Space+LMB, W/A/S/D — with the combo latch, [`PanKeyLatch`], that keeps a
-//! letter pressed under an accelerator from panning). A child module of
+//! letter pressed under an accelerator from panning — and the MULTI-TOUCH
+//! pan, [`TouchPan`], owner request 2026-11-25: two or more fingers pan by
+//! the average movement of all touch points, egui's
+//! `InputState::multi_touch().translation_delta`). A child module of
 //! `app`, so it can touch `App`'s private fields; `app.rs` stays the
 //! orchestrator.
 
@@ -175,9 +178,43 @@ impl App {
             || (space && !self.is_stroking && response.dragged_by(PointerButton::Primary));
         let key_panning = self.handle_key_pan(ui);
         if drag_panning {
+            // The content follows the pointer (SPEC §3.4's mouse pan). This
+            // line was LOST in the 2026-11-13 app.rs split (e8eb5d1) — the
+            // detection, the Grabbing cursor and the stroke suppression
+            // survived, but the view never moved; restored 2026-11-25 with
+            // a regression test (camera/tests/touch_pan.rs). Same sign
+            // convention as the touch pan below: the canvas moves WITH the
+            // drag.
+            self.pan += response.drag_delta();
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         }
         drag_panning || key_panning
+    }
+
+    /// The MULTI-TOUCH pan step (owner request 2026-11-25, the F20 web
+    /// slice): while TWO OR MORE fingers are down egui reports a
+    /// multi-touch gesture whose `translation_delta` is the average
+    /// movement of all touch points — that delta pans the view, the content
+    /// following the fingers (the same convention as the mouse drag pan
+    /// above). The caller (`draw_canvas`) additionally treats the whole
+    /// touch session as "panning" from the gesture's first frame until the
+    /// last finger lifts ([`TouchPanFrame::session`]) — no stroke starts or
+    /// resumes on the leftover finger — and commits an in-flight freehand
+    /// stroke as its node on the gesture's FIRST frame
+    /// ([`TouchPanFrame::began`], `input::commit_stroke_gesture`): the
+    /// pixels the one finger already painted stay, undoable as one node.
+    /// egui itself zeroes the delta on the frames the finger COUNT changes
+    /// (finger add/remove re-baselines the average), so no debounce is
+    /// needed on this side either.
+    pub(super) fn handle_touch_pan(&mut self, ui: &egui::Ui) -> TouchPanFrame {
+        let multi = ui.input(|i| i.multi_touch()).map(|m| m.translation_delta);
+        let touches_down = ui.input(|i| i.any_touches());
+        let frame = self.touch_pan.step(multi, touches_down);
+        if frame.delta != Vec2::ZERO {
+            self.pan += frame.delta;
+            ui.ctx().request_repaint();
+        }
+        frame
     }
 
     /// W/A/S/D pan the viewport continuously (§3.4). `egui::Key` letter
@@ -307,6 +344,58 @@ fn key_pan_dir(w: bool, a: bool, s: bool, d: bool) -> Vec2 {
 /// apply to pointer drags only).
 fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
     m.ctrl || m.command || m.mac_cmd || m.alt
+}
+
+/// The multi-touch pan session (owner request 2026-11-25, the F20 web
+/// slice; the pure machine behind [`App::handle_touch_pan`]). egui's
+/// `multi_touch()` reports a gesture while two or more fingers are down;
+/// this state keeps the SESSION alive after the gesture proper ends (one
+/// finger still down): the whole rest of the touch session counts as
+/// "panning", so the leftover finger cannot resume painting until every
+/// finger has lifted (the standard paint-app convention). `began` flags
+/// the gesture's FIRST frame — the takeover moment, on which the caller
+/// commits any in-flight freehand stroke before the gesture owns the
+/// input. Pure so the convention is unit-testable without an egui
+/// context; App carries it next to `pan` (like [`PanKeyLatch`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct TouchPan {
+    session: bool,
+}
+
+/// What one frame of [`TouchPan::step`] decided.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct TouchPanFrame {
+    /// The pan delta to apply THIS frame — zero on every frame without an
+    /// active multi-touch gesture, including the finger-count-change
+    /// frames where egui itself zeroes the delta.
+    pub(super) delta: Vec2,
+    /// True on the FIRST frame of the gesture — the takeover moment.
+    pub(super) began: bool,
+    /// True while the gesture owns the touch session (from the first
+    /// gesture frame until the frame NO finger is down anymore) — the
+    /// caller treats it as "panning" (no stroke starts or resumes).
+    pub(super) session: bool,
+}
+
+impl TouchPan {
+    /// One frame's decision: `multi` is the frame's multi-touch
+    /// translation (`Some` exactly while a two-plus-finger gesture is
+    /// underway — egui's `translation_delta`, already zeroed on
+    /// finger-count-change frames), `touches_down` says whether ANY finger
+    /// is on the surface at all.
+    fn step(&mut self, multi: Option<Vec2>, touches_down: bool) -> TouchPanFrame {
+        let began = multi.is_some() && !self.session;
+        if multi.is_some() {
+            self.session = true;
+        } else if !touches_down {
+            self.session = false;
+        }
+        TouchPanFrame {
+            delta: multi.unwrap_or_default(),
+            began,
+            session: self.session,
+        }
+    }
 }
 
 /// The W/A/S/D combo latch (owner bug report 2026-11-24: Ctrl+S with Ctrl

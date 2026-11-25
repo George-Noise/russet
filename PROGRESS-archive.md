@@ -1,5 +1,29 @@
 # PROGRESS — archive (Russet)
 
+
+### 2026-11-25 — `Docs:` the English-only language whitelist promoted into AGENTS.md; the docs-only gate skip reconfirmed — owner request
+
+- **What:** two owner requests. (1) Record in AGENTS.md that the language of the repository and
+  the project is a whitelist whose only entry is ENGLISH: the new "Language" section (right
+  after "Source of truth") carries the stamp's verbatim wording ("English-only repo-wide — a
+  language WHITELIST …, not a script blacklist") and the full scope (docs, code comments,
+  scripts, PROGRESS/DEBTS/PROBLEMS entries, commit titles, app strings). The rule had lived
+  only as a line in the PROGRESS.md verification stamp (owner request 2026-11-18) and fell out
+  during later stamp updates (restored 2026-11-24) — it now has a durable canonical home in
+  AGENTS.md. (2) Record that documentation-only work does NOT require building or testing: the
+  existing docs-only shortcut (owner request 2026-11-20) is reconfirmed with the owner's
+  2026-11-25 wording in the Commands bullet.
+- **Files:** `AGENTS.md` (the new "Language" section + the reconfirmation note in the docs-only
+  Commands bullet), `PROGRESS.md` (snapshot row + this entry + the Log compaction),
+  `PROGRESS-archive.md` (the two oldest Log entries moved there verbatim, newest first — the
+  rules.sh Log-budget note). Nothing else touched.
+- **Verified:** docs-only round (the diff touches only `.md` files) — the cargo gate SKIPPED per
+  the rule, and per the owner's same-day instruction ("for now run no tests and no builds") NO
+  cargo command ran at all; `scripts/rules.sh` HARD-green (grep-level, no toolchain); the
+  delivery byte-compares green (`scripts/deliver.sh origin/master` — patched clean base =
+  worktree = unpacked zip, all three byte-match).
+- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
+- **Commit title:** `State the English-only repo language whitelist in AGENTS.md; reconfirm the docs-only gate skip`
 ### 2026-11-24 — `Docs:` the language whitelist restored in the stamp; the non-English text translated to English repo-wide — owner request
 
 - **What:** the owner asked to translate everything not written in English (owner quotes
