@@ -61,7 +61,7 @@ mod paint;
 use self::paint::{GraphMetrics, paint_graph};
 
 /// The vertical gap between two consecutive tree icons (owner request
-/// 2026-11-21: «между двумя иконками … 0.0625rem»). egui 0.37 has no rem
+/// 2026-11-21: "between two icons … 0.0625rem"). egui 0.37 has no rem
 /// API — one rem = 16 pt, the same convention as `tool_icons::ICON_PT`
 /// and `placement::FIRST_OPEN_GAP`.
 const TREE_ICON_GAP: f32 = 0.0625 * 16.0;

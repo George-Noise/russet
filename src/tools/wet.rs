@@ -3,7 +3,7 @@
 //! FRAME darkened every overlap — each frame's smooth-piece stroke carries
 //! round caps, the next frame's start cap (and the press dot) sat exactly
 //! on the previous frame's end cap, and the alpha stacked there
-//! («в стыках отрезков кружочек становится менее прозрачным»).
+//! ("at the segment joints the circle becomes less transparent").
 //!
 //! A brush/eraser gesture therefore paints through [`StrokeWet`]: the
 //! whole stroke accumulates its coverage into a full-alpha SCRATCH —

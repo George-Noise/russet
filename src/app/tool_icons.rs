@@ -66,8 +66,8 @@ use self::draw::{
 pub(super) const ICON_PT: f32 = 1.5 * 16.0;
 
 /// The SECOND atlas's icon size (owner request 2026-11-21, size pass the
-/// same day: the first 12 pt icons read «слишком маленькие — там ещё
-/// довольно много свободного места» once the `--atlas-test` rings made the
+/// same day: the first 12 pt icons read "too small — there is still
+/// quite a lot of free space there" once the `--atlas-test` rings made the
 /// picture's size visible): the History Tree rows GROW to fit the icon —
 /// `row_height = max(text line, TREE_ICON_PT + TREE_ICON_GAP)` in
 /// `tree_window.rs` with the rows BACK-TO-BACK, so two consecutive icons
@@ -93,9 +93,8 @@ pub(super) const TOOLS: [Tool; 9] = [
     Tool::Text,
     Tool::Shape,
     Tool::Line,
-    // The fill joins at the END (owner request 2026-11-23: «иконку заливки
-    // сделай самой последней чтобы не нарушить порядок инструментов в
-    // окошке Tools»).
+    // The fill joins at the END (owner request 2026-11-23: "make the fill icon the very last one
+    // so the tool order in the Tools window is not disturbed").
     Tool::Fill,
 ];
 
@@ -159,8 +158,8 @@ pub(super) const SHAPE_ICONS: [ShapeIcon; 8] = [
 ];
 
 /// The hover tooltip of a Shape-panel button: EXACTLY the words the old
-/// word radio / checkboxes showed (owner request 2026-11-20: "при наведении
-/// чтобы было написано то что сейчас написано в их надписях"); the third
+/// word radio / checkboxes showed (owner request 2026-11-20: "on hover, what their
+/// labels currently say should be written there"); the third
 /// radio — the explicit Fill+Outline choice the same request added — names
 /// both. The outline-placement radios name their mode (owner request
 /// 2026-11-20: outside the two points / centered as before / inside).
@@ -357,8 +356,8 @@ pub(super) fn ensure(atlas: &mut Option<Atlas>, ctx: &Context, debug_border: boo
     });
 }
 
-/// The `--atlas-test` diagnostic (owner request 2026-11-21: «чёрно-белая
-/// мурашка … в ровно 1 px вне зависимости от масштабирования»): repaints
+/// The `--atlas-test` diagnostic (owner request 2026-11-21: "a black-and-white
+/// speckle … exactly 1 px regardless of scaling"): repaints
 /// the pixmap's OUTERMOST pixel ring with a static black-and-white speckle.
 /// The ring lives in the RASTER, so it is exactly one physical pixel thick
 /// at any scale — neither `pixels_per_point` nor the icon size can stretch
@@ -438,8 +437,8 @@ pub(super) fn tree_texture_id(atlas: &Option<Atlas>, tool: Tool) -> Option<Textu
 
 /// One icon of the Line tool's settings panel (owner request 2026-11-20:
 /// the word "Mode" radio became icon buttons in the Tools window's style —
-/// the same pass that reshaped the Shape panel, "такие же по стилю и
-/// отступам"). Both buttons draw the LINE TOOL's emblem (the mark the
+/// the same pass that reshaped the Shape panel, "the same in style and
+/// spacing"). Both buttons draw the LINE TOOL's emblem (the mark the
 /// Tools window's Line button strokes — one geometry, the Shape MODE
 /// trio's principle): the Curve choice strokes it EXACTLY as the tool
 /// button does, the Straight choice draws the same stroke UNBENT — the

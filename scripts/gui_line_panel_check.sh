@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The LINE-PANEL PROBE (owner request 2026-11-20: the Line tool's word
-# "Mode" radio became icon buttons "такие же по стилю и отступам" as the
+# "Mode" radio became icon buttons "the same in style and spacing" as the
 # Shape panel's; the same day's SIZE-BLOCK pass is measured too). The
 # gui_magnet_check.sh template's drag/click probes are not needed here —
 # the tool comes from the CLI (`--tool line` / `--tool shape`); the
@@ -11,7 +11,7 @@
 #     own 6 px),
 #   - the SHAPE panel's in-row gaps (6 px) and its row gaps (12 px) on its
 #     own screenshot — the two panels' numbers must AGREE (the "same
-#     отступы" evidence) — plus the Tools window's own grid gap for
+#     spacing" evidence) — plus the Tools window's own grid gap for
 #     reference, and prints every number,
 #   - the SIZE BLOCK above the button rows (owner request 2026-11-20): the
 #     "Size" label glyphs sit ABOVE the slider's rail, the rail is ~96 px
@@ -235,8 +235,8 @@ for name, panel_rows in (("1_line_panel.png", [2]), ("2_shape_panel.png", [2, 3,
     # The Tools grid's own in-row gaps — the reference number.
     t_gaps = [g for r in grid for g in gaps(r)]
     print(f"   Tools grid in-row gaps: {t_gaps}")
-    # The panel: in-row gaps must equal the grid gap (6 px) — "ровно такой
-    # же" as the Tools window's, AND the same number the Shape panel shows
+    # The panel: in-row gaps must equal the grid gap (6 px) — "exactly the
+    # same" as the Tools window's, AND the same number the Shape panel shows
     # on ITS screenshot (both measured here).
     p_gaps = [g for r in panel for g in gaps(r)]
     print(f"   panel in-row gaps: {p_gaps}")

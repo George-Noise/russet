@@ -65,8 +65,8 @@ fn draw_line(pm: &mut Pixmap, ts: Transform, mono: Color32) {
 }
 
 /// The Shape TOOL's emblem, shared by the Tools window's Shape button and
-/// the panel's MODE radios (owner request 2026-11-20: "воспользуемся
-/// иконкой инструмента Shape" — one geometry, so the panel's radios and
+/// the panel's MODE radios (owner request 2026-11-20: "let's use the
+/// Shape tool's icon" — one geometry, so the panel's radios and
 /// the tool button draw the SAME mark): the rectangle + the circle
 /// `draw_shape` strokes.
 const EMBLEM_RECT: [(f32, f32); 4] = [(3.6, 9.2), (13.8, 9.2), (13.8, 19.4), (3.6, 19.4)];
@@ -98,8 +98,8 @@ fn draw_select_rect(pm: &mut Pixmap, ts: Transform, mono: Color32) {
 }
 
 /// The dashed LASSO selection mark: the same dashes around an irregular
-/// round BLOT (owner request 2026-11-20: "не кружочком, а в виде круглой
-/// кляксы"; the second take read as an upside-down PEAR — one smooth
+/// round BLOT (owner request 2026-11-20: "not a circle but a round
+/// blot"; the second take read as an upside-down PEAR — one smooth
 /// taper). Ten anchors: FIVE lobes (radii 9.3/7.6/8.8/7.2/9.0 at
 /// 0°/72°/144°/216°/288°) interleaved with FIVE deep WAISTS (5.0–6.2)
 /// pulled toward the center — pinched notches between the lumps, no

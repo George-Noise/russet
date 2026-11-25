@@ -559,9 +559,9 @@ fn the_percent_to_tolerance_mapping_is_the_panel_contract() {
     assert_eq!(tolerance_from_percent(100), 255);
 }
 
-// The span-rewrite suite (owner request 2026-11-23: «делаем 1+2+3+запись
-// из спанов… главное не забыть что пользователь может использовать и
-// полупрозрачные цвета и полностью прозрачные»): the scanline core must
+// The span-rewrite suite (owner request 2026-11-23: "we do 1+2+3+writing
+// from the spans… the main thing is not to forget that the user can
+// use translucent colors and fully transparent ones too"): the scanline core must
 // claim EXACTLY the per-pixel BFS's region — on any alpha.
 
 /// The pre-rewrite per-pixel BFS, kept verbatim as the ORACLE: whatever

@@ -30,7 +30,7 @@ use crate::tools::{
 /// Owner request 2026-11-20 (the spacing pass): WITHIN a row the buttons sit
 /// EXACTLY the Tools window's element gap apart ([`TOOL_GRID_GAP`], set via
 /// `item_spacing.x` in [`shape_settings_ui`]), and VERTICALLY the rows sit
-/// "чуть дальше" — a step further apart than that 6-pt horizontal gap.
+/// "a bit further" — a step further apart than that 6-pt horizontal gap.
 pub(super) const SHAPE_GROUP_GAP: f32 = 9.0;
 /// Stable id of the magnetized tool-settings panel (owner request
 /// 2026-11-17); needed to read and persist its area state, so it must not
@@ -175,21 +175,21 @@ pub(super) fn icon_button_state(
 }
 /// The Shape tool's settings rows (owner requests 2026-11-20): the KIND
 /// row — two icon buttons, the gray-filled square / circle previews — then,
-/// after a [`SHAPE_GROUP_GAP`], the MODE row — a THREE-way radio ("не 2
-/// выбора, а 3 и это уже будет radio") over [`ShapePaint`] — Fill, Outline,
+/// after a [`SHAPE_GROUP_GAP`], the MODE row — a THREE-way radio ("not 2
+/// choices but 3, and that is already a radio") over [`ShapePaint`] — Fill, Outline,
 /// Fill + Outline — then, after another [`SHAPE_GROUP_GAP`], the PLACEMENT
 /// row — a second THREE-way radio over [`ShapeOutline`] (the owner: three
 /// outline modes — outside the two mouse points / exactly as before /
-/// inside them; "делать их в виде угла квадратика вне зависимости от
-/// выбранной фигуры"). The MODE radios' icons draw the Shape TOOL's emblem
+/// inside them; "draw them as the corner of the square regardless of the
+/// selected shape"). The MODE radios' icons draw the Shape TOOL's emblem
 /// ([`tool_icons::ShapeIcon::Fill`] / [`Outline`] / [`FillOutline`]); the
 /// PLACEMENT radios' icons draw the corner composition
 /// ([`ShapeIcon::OutlineOutside`] / [`OutlineCenter`] / [`OutlineInside`]).
 /// The buttons are the Tools window's icon buttons ([`icon_button`]); the
 /// tooltips carry the words ([`tool_icons::shape_icon_label`]). The SPACING
 /// is the owner's 2026-11-20 pass: WITHIN a row the buttons sit EXACTLY the
-/// Tools window's element gap apart ([`TOOL_GRID_GAP`] — "ровно такой же,
-/// как в окошке Tools"; the row is laid out by egui's `item_spacing.x`, so
+/// Tools window's element gap apart ([`TOOL_GRID_GAP`] — "exactly the same
+/// as in the Tools window"; the row is laid out by egui's `item_spacing.x`, so
 /// it is set here once and the three rows inherit it), and the rows sit
 /// further apart vertically ([`SHAPE_GROUP_GAP`] above). While the
 /// diameter-circle feature is under test (owner request 2026-11-21) a FOURTH
@@ -276,8 +276,8 @@ pub(super) fn shape_settings_ui(
     // TESTING FEATURE (owner request 2026-11-21): the diameter-circle
     // toggle, bound straight to the tool state the gesture reads live — a
     // flip applies to the very next frame's geometry, mid-drag included.
-    // ELLIPSE KIND ONLY (the owner: "чтобы никто случайно не пытался её
-    // понять через прямоугольник"): with the Rectangle kind selected the
+    // ELLIPSE KIND ONLY (the owner: "so that nobody accidentally tries to make sense of it
+    // through the rectangle"): with the Rectangle kind selected the
     // row does not exist at all — not a disabled checkbox, the same
     // no-dead-controls rule the Size slider follows.
     if tools.shape_kind == ShapeKind::Ellipse {
@@ -291,8 +291,8 @@ pub(super) fn shape_settings_ui(
     }
 }
 /// The Line tool's settings panel (owner request 2026-11-20: the word
-/// "Mode" radio became icon buttons in the Tools window's style — "такие же
-/// по стилю и отступам" as the reshaped Shape panel): ONE row of two icon
+/// "Mode" radio became icon buttons in the Tools window's style — "the same
+/// in style and spacing" as the reshaped Shape panel): ONE row of two icon
 /// buttons — Straight and Curve — sitting EXACTLY the Tools window's
 /// element gap apart ([`TOOL_GRID_GAP`] via `item_spacing.x`, the same
 /// one-liner [`shape_settings_ui`] uses; the panel has a single button row,
@@ -355,8 +355,8 @@ pub(super) fn line_settings_ui(
 /// end while the entered size stays.) For Line and Shape a
 /// [`SHAPE_GROUP_GAP`] is added after the block, so it separates from the
 /// button rows by the same 12-pt step that separates the Shape panel's own
-/// button rows (owner request 2026-11-20: "такой же высоты что и между
-/// кнопками в Shape" — the 9-pt group gap + egui's 3-pt item spacing; the
+/// button rows (owner request 2026-11-20: "the same height as between
+/// the buttons in Shape" — the 9-pt group gap + egui's 3-pt item spacing; the
 /// Brush/Eraser panels have nothing below the slider, so no gap).
 ///
 /// Extracted as a free fn over [`ToolState`] so the regression tests run
@@ -392,10 +392,10 @@ pub(super) fn size_block_ui(ui: &mut egui::Ui, tools: &mut ToolState, tool: Tool
 }
 
 /// The flood THRESHOLD block — the magic wand's and the Fill tool's shared
-/// tolerance slider (owner request 2026-11-23: «в приклеенную панельку к
-/// окошку Tools добавить для заливки в волшебной палочки добавить ползунок
-/// похожий на Size но выполняющий функцию порога срабатывания в %, я бы
-/// выбрал не % но людям куда проще понимать именно %»): the SAME look as
+/// tolerance slider (owner request 2026-11-23: "in the panel glued to
+/// the Tools window, for the fill and the magic wand, add a slider like
+/// Size that serves as the trigger threshold in % — I would pick not %,
+/// but % is far easier for people to understand"): the SAME look as
 /// [`size_block_ui`] (a label row, then a slider + a number box in one
 /// row), 0..=100 percent, the number box carrying a `%` suffix. ONE
 /// setting for both tools (the flood is one shared method): the Select
@@ -488,8 +488,8 @@ impl App {
                 }
                 Tool::Fill => {
                     // The flood-threshold slider (owner request 2026-11-23:
-                    // «похожий на Size но выполняющий функцию порога
-                    // срабатывания в %») — the Fill panel's only knob.
+                    // "like Size but serving as the trigger
+                    // threshold in %") — the Fill panel's only knob.
                     tolerance_block_ui(ui, &mut self.tools);
                 }
                 Tool::Pencil | Tool::Brush | Tool::Eraser | Tool::Eyedropper => {}

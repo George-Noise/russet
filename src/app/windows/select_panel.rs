@@ -75,9 +75,8 @@ pub(super) fn select_settings_ui(
             }
         }
     });
-    // The wand's threshold slider (owner request 2026-11-23: «для заливки в
-    // волшебной палочки добавить ползунок похожий на Size но выполняющий
-    // функцию порога срабатывания в %») — shown ONLY while the wand mode is
+    // The wand's threshold slider (owner request 2026-11-23: "for the fill and the magic wand, add a
+    // slider like the Size one that serves as the trigger threshold in %") — shown ONLY while the wand mode is
     // active (the rect/lasso drags have no threshold), the same shared
     // setting the Fill panel shows.
     if tools.select_mode == SelectMode::Wand {

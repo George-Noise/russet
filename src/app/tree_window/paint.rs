@@ -33,8 +33,8 @@ const NODE_RADIUS: f32 = 3.5;
 const HEAD_RING_EXTRA: f32 = 2.0;
 const LABEL_GAP: f32 = 10.0;
 /// The icon row's tightened gap between the emblem and its color chip
-/// (owner request 2026-11-21: «чтобы между иконкой и цветом … стало чуть
-/// меньше места» — word rows keep [`LABEL_GAP`]).
+/// (owner request 2026-11-21: "so there is a bit less space between
+/// the icon and the color" — word rows keep [`LABEL_GAP`]).
 const ICON_CHIP_GAP: f32 = 6.0;
 /// Quarter-ellipse radius of a fork connector: half the lane step, so two
 /// adjacent arcs never overlap (owner request 2026-11-13: the fork path is
@@ -99,8 +99,8 @@ fn row_label(node: &TreeNode) -> String {
 /// 2026-11-21: the pencil row shows the tool's emblem from the small
 /// second atlas at [`tool_icons::TREE_ICON_PT`] — sized up from 12 pt the
 /// same day, the `--atlas-test` rings showing how much room the row had
-/// left; the same-day follow-up extends the set: «как pencil давай в
-/// дереве истории сделаем и brush и eraser»). `None` = print
+/// left; the same-day follow-up extends the set: "like pencil, let's have brush and
+/// eraser in the history tree too"). `None` = print
 /// [`row_label`]. New tools join one row at a time — the next on the
 /// owner's word.
 fn row_icon(node: &TreeNode) -> Option<Tool> {
@@ -115,8 +115,8 @@ fn row_icon(node: &TreeNode) -> Option<Tool> {
 /// Whether the row paints the stroke-color chip. The Start root carries
 /// no stroke color; a resize node's choices live in the label instead
 /// (owner request 2026-11-17); the ERASER shows none since 2026-11-21 —
-/// it erases, it does not paint (owner: «у eraser почему-то есть цвет в
-/// дереве истории, так не должно быть»).
+/// it erases, it does not paint (owner: "for some reason the eraser has a color
+/// in the history tree — that must not be").
 fn row_swatch(node: &TreeNode) -> bool {
     !matches!(node.kind, ActionKind::Start | ActionKind::Eraser) && node.resize.is_none()
 }
@@ -411,8 +411,8 @@ pub(super) fn paint_graph(
             // color), a resize node (the choices live in the label — owner
             // request 2026-11-17) and the ERASER (it erases, it does not
             // paint — owner request 2026-11-21). Icon rows pull the chip
-            // in to ICON_CHIP_GAP (owner request 2026-11-21: «чтобы между
-            // иконкой и цветом … чуть меньше места»); word rows keep the
+            // in to ICON_CHIP_GAP (owner request 2026-11-21: "a bit less space
+            // between the icon and the color"); word rows keep the
             // label gap.
             let chip_gap = if icon.is_some() {
                 ICON_CHIP_GAP

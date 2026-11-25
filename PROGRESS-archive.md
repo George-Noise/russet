@@ -1,5 +1,37 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-23 — `Perf:` the flood core becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans - pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests (owner request in chat: "we do 1+2+3+writing from the spans")
+
+- **What:** the research plan implemented: `flood_pixels`' per-pixel BFS
+  became `flood_spans` (one stack entry per horizontal RUN, runs grow past
+  the parent span so nothing is orphaned, every tested pixel marked visited
+  ONCE — rejected borders included), the comparator is per-channel lo/hi
+  ranges over raw bytes (`FloodProbe`), the app path reads the layer via
+  `tools::sample_bytes_of` — the EXACT bytes the old pick_color chain fed
+  the comparator (opaque/transparent fast paths; the translucent rounding
+  chain brute-forced equal in a dense sweep). The fill's write is
+  span-driven (`App::paint_flood_spans`, the same src-over mix, the
+  zero-bbox crash guard kept); the wand keeps the `Region::Wand` pixel
+  contract, fed row-ordered by an O(n) column-radix flatten — the old
+  `out.sort()` over up to millions of tuples is gone. The owner's alpha
+  warning is pinned by tests: the transparent-hole flood, the
+  alpha-in-tolerance gating, and the oracle (30 random grids × 4 seeds ×
+  4 tolerances vs the naive BFS kept verbatim).
+- **Numbers** (the same sandbox/canvases; `core=` marks the rewrite in the
+  log headers): dev FullHD click 1.72 s → 0.34 s, 800×600 376 → 84 ms;
+  release FullHD 238 → 13.1 ms, 800×600 50.1 → 3.08 ms — 12–21× release,
+  3–6× dev; small fills unchanged.
+- **Files:** `src/selection.rs` (FloodSpan/flood_spans/scan_row/
+  FloodProbe/spans_to_sorted_pixels), `src/tools.rs` (sample_bytes_of),
+  `src/app/input.rs` (the fill handler + paint_flood_spans), the three
+  test files (+4 tests), `src/app/fill_bench.rs` (the new path),
+  `benchmarks/` (the after-logs + the RESEARCH after-table).
+- **Verified:** ALL GATES GREEN (359 tests; the fill-bench clippy stage
+  caught a stale bench import — fixed); fresh dev+release bench logs.
+- **Owner-checks:** V81 born. VERIFIED in chat: V69 (the atlas sheets).
+  Open: V81, V80, V79, V78, V77, V76, V66 (X11), V46 (X11); parked: V30, V8.
+- **Commit title:** `Perf: the fill/wand flood becomes a span-scanline core with a raw-byte comparator; the fill paints straight from spans; pixel-for-pixel equal to the old BFS, translucent and transparent colors pinned by tests`
+
 ### 2026-11-23 — `Docs:` the owner keeps dev slow on purpose (the early-warning sensor), rejects the dev opt-level relief; the optimization plan starts at the span rewrite - no code change (owner request in chat)
 
 - **What:** the owner's follow-up decisions in chat. (1) The dev build is NOT
@@ -108,8 +140,7 @@
   old 32/255), converted per channel by `selection.rs::tolerance_from_percent`
   (pct × 255 / 100; 13 % → 33). The panel block `tolerance_block_ui` mirrors
   the Size slider's look (a label row, a 0..=100 slider, the number box with
-  a `%` suffix — the owner: «я бы выбрал не % но людям куда проще понимать
-  именно %») and shows in TWO places: the Select panel while the WAND mode
+  a `%` suffix — the owner: "I would pick not %, but % is far easier for people to understand") and shows in TWO places: the Select panel while the WAND mode
   is active (between the mode row and the ops row) and the Fill panel
   (its first knob). ONE value drives BOTH tools (the flood is one shared
   method). `flood_pixels` takes the tolerance as a parameter now; the
@@ -149,7 +180,7 @@
   debug `cargo run` died. The fix: a zero written-bbox sentinel `(0,0,0,0)`
   + the caller's early return — no composite, no sync, NO history node
   (an undo after such a click undoes the CUT, not a phantom fill).
-- **Neighbors tested** («протестируй другие возможные баги рядом»): the fill
+- **Neighbors tested** ("test the other possible bugs nearby"): the fill
   inside the hole paints (headless + GUI), the wand click on the hole
   selects (GUI), a translucent fill reaches transparent pixels — and the
   investigation LOCKED the blend's space: egui's `Color32` stores
@@ -187,9 +218,9 @@
   secondary (RMB), the selection confines it, one click = one
   `ActionKind::Fill` node ("fill" tree row with its color chip); the icon
   (a metal pail + a falling drop, the pipette's blue) joins the Tools grid
-  LAST («иконку заливки сделай самой последней чтобы не нарушить порядок
-  инструментов в окошке Tools»). (3) ESC deselects GLOBALLY
-  («На кнопку Esc нужно сделать убирание выделения») — the guards skip the
+  LAST ("make the fill icon the very last one so the tool order in the
+  Tools window is not disturbed"). (3) ESC deselects GLOBALLY
+  ("make the Esc button clear the selection") — the guards skip the
   key while a select gesture/preview/Text entry is pending, so every local
   consumer keeps its Esc.
 - **Files:** `src/selection.rs` (`Region::Wand` in all five match sites +
@@ -232,9 +263,8 @@
 ### 2026-11-23 — `Fix:` translucent brush strokes no longer darken at the joints — brush/eraser paint through a wet stroke layer (owner bug report in chat)
 
 - **What:** the owner's report: with a semi-transparent brush color the
-  joint circles turn less transparent («полупрозрачный цвет накладывает
-  отрезок на отрезок и в стыках отрезков кружочек становится менее
-  прозрачным»). Root cause: each frame stroked its smooth pieces onto the
+  joint circles turn less transparent ("a translucent color lays segment over segment and at the
+  segment joints the circle becomes less transparent"). Root cause: each frame stroked its smooth pieces onto the
   layer directly — the next frame's start cap (and the press dot) sat on
   the previous frame's end cap, and premultiplied source-over is not
   idempotent, so the alpha stacked at every overlap (measured: 61/255 per
@@ -277,16 +307,15 @@
 
 - **What:** three follow-ups on the tree's row format. (1) The icon-row
   set grows to the three PAINTING tools: `row_icon` maps Brush and
-  Eraser too («как pencil давай в дереве истории сделаем и brush и
-  eraser») — the tree atlas already rasters one icon per `Tool`, so no
+  Eraser too ("like pencil, let's have brush and eraser in the history tree too") — the tree atlas already rasters one icon per `Tool`, so no
   pipeline change. (2) The eraser row paints NO color chip — it erases,
-  it does not paint («у eraser почему-то есть цвет в дереве истории, так
-  не должно быть»): the swatch condition moved into a pure
+  it does not paint ("for some reason the eraser has a color in the history
+  tree — that must not be"): the swatch condition moved into a pure
   `row_swatch` (Start, resize and now Eraser are chipless; the painting
   tools keep theirs), and chipless rows stop reserving chip room in the
   content width. (3) Icon rows pull the chip in to `ICON_CHIP_GAP` = 6 pt
-  after the emblem («чтобы между иконкой и цветом … стало чуть меньше
-  места» — word rows keep `LABEL_GAP` 10). Measured on the probe shot:
+  after the emblem ("so there is a bit less space between the icon and the
+  color" — word rows keep `LABEL_GAP` 10). Measured on the probe shot:
   the gap 10 → 6 px, the eraser row chipless, the pitch still 17 px.
 - **Files:** `src/app/tree_window/paint.rs` (`row_icon` + the new
   `row_swatch` + `ICON_CHIP_GAP`, the content-width reservation, the
@@ -315,7 +344,7 @@
   `paint.rs` cancels egui's default inter-row spacing after every row
   allocation (`ui.add_space(-item_spacing.y)`) — the row height IS the
   pitch, measured 23 → 17 px at ppp 1. (2) The pencil emblem moves a
-  touch «влево-вниз» relative to the icon's center: `PENCIL_NUDGE`
+  touch "left-down" relative to the icon's center: `PENCIL_NUDGE`
   (-1, +1 design pt of the 24 pt emblem space) applied AFTER
   `icon_transform` through the new `primitives.rs::nudged_icon_transform`
   (the shift lands in the transform's translation column) — the direction
@@ -343,8 +372,7 @@
 ### 2026-11-21 — `Fix:` the History Tree row icons grow 12 → 16 pt and the row grows to fit them (owner request in chat)
 
 - **What:** the `--atlas-test` rings made the row icons' size readable and
-  the owner judged the first 12 pt emblems «слишком маленькими — там ещё
-  довольно много свободного места». Measured at ppp 1: the row is 15 px
+  the owner judged the first 12 pt emblems "too small — there is still quite a lot of free space there". Measured at ppp 1: the row is 15 px
   tall, the opaque backdrop 13, the icon 12 — fitting a bigger icon INTO
   the unchanged row buys only +1 pt, so the row grows WITH the icon:
   `TREE_ICON_PT` 12 → 16 and `row_height =
@@ -449,10 +477,8 @@
 
 ### 2026-11-23 — `Feat:` only the Mouse4/Mouse5 choice persists + the Settings window opens from a new menu-bar menu (owner request in chat)
 
-- **What:** two orders in one round: «только Mouse4/Mouse5 выбор
-  сохранялся» and a Settings item in the top panel opening a window with
-  the settings described, ONE dropdown, three options (спросить /
-  использовать / не использовать — the meaning his, the wording ours).
+- **What:** two orders in one round: "only the Mouse4/Mouse5 choice should persist" and a Settings item in the top panel opening a window with
+  the settings described, ONE dropdown, three options (ask / use / don't use — the meaning his, the wording ours).
   (1) The session-only `Option<Choice>` became the THREE-way persisted
   `MouseSideMode` (Ask = the startup default / Always / Never): the
   modal's Yes/No now settle the choice PERMANENTLY, the ✕ still decides
@@ -502,9 +528,9 @@
 
 ### 2026-11-23 — `Feat:` Mouse4/Mouse5 undo/redo behind a first-press opt-in modal (owner request in chat)
 
-- **What:** the owner's order: «Мне предложили добавить на Mouse4 и Mouse5
-  undo и redo… сделай как у других, НО нужно при первом нажатии … спросить
-  пользователя через модалку». The side buttons — winit `Back`/`Forward` →
+- **What:** the owner's order: "It was suggested to me to add undo and redo on Mouse4 and
+  Mouse5… do it like the others, BUT on the first press … ask the user
+  through a modal". The side buttons — winit `Back`/`Forward` →
   egui `PointerButton::Extra1`/`Extra2` — follow the browser back/forward
   mapping (Mouse4 = Undo, Mouse5 = Redo, the Ctrl+Z/Ctrl+Y twin). The FIRST
   side press never acts: it opens the centered "Mouse Side Buttons" modal
@@ -570,7 +596,7 @@
   (BOTH platforms — the web `AsyncFileDialog` rides it too; `WebTask`/
   `WebOutcome` folded into `FileTask`/`FileOutcome`) polled per frame
   (`document::poll_file_task`). The slot doubles as the SINGLE-DIALOG
-  GUARD (owner's pick of the two options: "не открываем новое"): while a
+  GUARD (owner's pick of the two options: "we do not open a new one"): while a
   chooser is open the Open… item and Browse… GRAY and a second request is
   rejected; the Save-click fallback CONTINUES BY ITSELF when its pick
   answers (`save_after_folder_pick` — the pre-F21 one-click save; a
@@ -601,11 +627,10 @@
   context; the dot's hover already carries the node); (2) the PENCIL row
   draws the TOOL'S ICON instead of the word — the same emblem the Tools
   window's button shows, from a SECOND, row-sized atlas: `TREE_ICON_PT`
-  12 pt («по размеру заглавной буквы или чуть больше» — the Body font's
+  12 pt ("the size of a capital letter or a bit bigger" — the Body font's
   capital is ~9 pt), rasterized in the same `ensure` pass and key as the
   button icons, a native small raster instead of a downscaled 24 pt
-  texture. New tools join the icon rows ONE AT A TIME (the owner's «пока
-  что сделаем только для pencil» — `row_icon` maps only the Pencil).
+  texture. New tools join the icon rows ONE AT A TIME (the owner's "for now we'll do it only for pencil" — `row_icon` maps only the Pencil).
   Side catch (exposed by the digit removal, fixed in the same edit): the
   crop row used to read "crop {id} crop …" — `CropInfo::summary` opens
   with its own kind word — and without the id the doubling became visible;
@@ -705,9 +730,9 @@
 
 - **What:** the owner's redraw recipe for the Shape panel's three
   OUTLINE-PLACEMENT icons (outside / centered / inside): the click dot
-  stays exactly as it was ("точечку оставить как есть"), the
+  stays exactly as it was ("leave the dot as it is"), the
   horizontal/vertical segments become ~2.5× thicker (`OUTLINE_BAND_W` 2.6 →
-  6.5 — "в 2-3 раза толще") and each segment's FAR end now leaves the
+  6.5 — "2-3 times thicker") and each segment's FAR end now leaves the
   24-pt icon space (`OUTLINE_BAND_LEN` 11 → 17; the bitmap crop = the
   segment visibly IS the outline line continuing beyond the corner
   window). The modes still differ ONLY by where the bands sit relative to
@@ -740,8 +765,7 @@
   §3.8 (the Select row's placement sentence).
 - **Verified:** FULL gate ALL GATES GREEN (see the stamp — 282 default /
   295 mcp). The visual probe and the MCP driver were SKIPPED — the owner
-  waived them for this round ("простенькая задачка… визуально не
-  проверять и mcp не использовать"); the on-screen layout is pinned by the
+  waived them for this round ("a simple little task… do not verify visually and do not use mcp"); the on-screen layout is pinned by the
   order test (the grid fills row-major over `TOOLS`). No wasm check — no
   web-facing code (the economy rule).
 - **Owner-checks:** V64 born (Windows + web: the grid reads
@@ -831,7 +855,7 @@
   the zbus/AT-SPI D-Bus bridge; the disable switch is a one-line feature
   removal; what breaks = only screen readers) and the whole trim-candidate
   audit recorded as DEBTS-functional F19 — NOTHING changed per the owner's
-  "пока думаем".
+  "for now we are thinking".
 - **Files:** `selection.rs` (+3 tests: `clipped_to`, the SH helpers,
   `clip_to_canvas`), `app/selection.rs` (the commit wiring), SPEC §3.13
   (the move row's clip rule), DEBTS-functional F19.
@@ -849,7 +873,7 @@
 
 - **What:** the owner's V59 findings: (1) the egui-winit `clipboard_shortcuts`
   conversion is DISABLED (`NativeOptions::clipboard_shortcuts = false`,
-  owner: "я не согласен с разработчиками этой библиотеки") — Ctrl+C/X/V now
+  owner: "I disagree with this library's developers") — Ctrl+C/X/V now
   arrive as plain Key events and `consume_key` sees them again; the dedicated
   `Event::Copy/Cut/Paste` stay consumed as the WEB fallback (the browser's
   copy/cut/paste DOM events are the only channel there) with a one-op guard
@@ -857,8 +881,8 @@
   Ctrl+Shift+S also PANNED on S (the pan reads `key_down` — the pressed
   state — and the save's consume_key does not lift it): an accelerator
   modifier (Ctrl/⌘/Alt) now suppresses the W/A/S/D pan, Shift stays allowed
-  (+ test); (3) the move drag REDESIGNED (owner: "отдельным элементом от
-  холста... видно за границами холста... при отпускании"): the layer is
+  (+ test); (3) the move drag REDESIGNED (owner: "a separate element from the canvas... visible past the
+  canvas bounds... on release"): the layer is
   written exactly TWICE — the erase at the lift, the stamp at the release —
   the drag rides a FOREGROUND overlay (the floating pixels as a GPU texture
   + the ants, whole-viewport clip, visible past the canvas bounds; the old
@@ -936,7 +960,7 @@
 
 - **What:** the owner's two spacing rules for the magnetized Shape panel:
   the buttons' HORIZONTAL gap must be EXACTLY the gap between the elements
-  in the Tools window, and VERTICALLY the rows sit "чуть дальше" — a bit
+  in the Tools window, and VERTICALLY the rows sit "a bit further" — a bit
   further apart. Done: `shape_settings_ui` sets `item_spacing.x =
   TOOL_GRID_GAP` (6 pt — the Tools grid's own gap; egui's default 8 pt
   applied before) so all three rows inherit it, and `SHAPE_GROUP_GAP`
@@ -1004,7 +1028,7 @@
 - **Owner-checks:** V52 born (the Windows + Web pass: the three radios on
   the tool's icon, exactly one active, the tooltips, a Fill+Outline shape
   painting both wells; the kind switch must NOT touch the MODE row). V51
-  closed verified in chat ("Проверил V51") and V48 too ("V48 проверил").
+  closed verified in chat ("Checked V51") and V48 too ("checked V48").
   Open: V52, V46; parked: V30, V8. Debts open: F17, F16, F15.
 - **Commit title:** `Shape panel: the Fill/Outline toggles become a three-way radio over the Shape tool's icon (solid Fill, hollow Outline, gray-under-the-rim Fill+Outline, the old words as tooltips, the atlas kind-independent again)`
 
@@ -1054,7 +1078,7 @@
 
 ### 2026-11-20 — `Feat:` the Shape panel's icon buttons — owner request
 
-- **What:** the owner reviewed V50 ("сейчас гораздо лучше") and reshaped the Shape
+- **What:** the owner reviewed V50 ("far better now") and reshaped the Shape
   tool's settings panel: the word radio and the Fill/Outline checkboxes became ICON
   BUTTONS in the Tools-window button style. The KIND row = two buttons — square /
   circle drawn as neutral previews (mid-gray fill + the fixed ink rim) selecting
@@ -1084,8 +1108,7 @@
   the toggles round, the "Rectangle" tooltip, an ellipse drawn on canvas.
 - **Owner-checks:** V51 born (the Windows + Web pass: the four buttons, the
   tooltips, the kind switch re-rounding the toggles, drawing from the panel state).
-  V50 closed verified in chat (the owner: "Проверил как выглядит окошко Save,
-  сейчас гораздо лучше"). Open: V51, V48, V46; parked: V30, V8. Debts open: F17,
+  V50 closed verified in chat (the owner: "checked how the Save window looks — far better now"). Open: V51, V48, V46; parked: V30, V8. Debts open: F17,
   F16, F15.
 - **Commit title:** `Shape panel: the Kind radio and the Fill/Outline checkboxes become Tools-style icon buttons (gray square/circle previews, solid/hollow toggles previewing the current kind, the old words as tooltips)`
 
@@ -3422,7 +3445,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-20 — `Feat:` the Save-dialog layout pass — owner request
 
-- **What:** the owner reviewed the V49 captions ("надписи посмотрел") and reshaped
+- **What:** the owner reviewed the V49 captions ("looked at the captions") and reshaped
   the dialog: (1) the composed-name preview "Saving as" moved ABOVE the File name
   field — the result reads first; (2) the Folder row (native) sits DIRECTLY under
   the name field — "what is it called" and "where does it go" read as one cluster;
@@ -3450,7 +3473,7 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
   real dropdown): the order, the dropdown and the group gap all visible.
 - **Owner-checks:** V50 born (the Windows + Web layout pass: the preview above the
   name, the folder under it, the dropdown picks both formats, the group reads as
-  one block). V49 closed verified in chat ("надписи посмотрел"). Open: V50, V48
+  one block). V49 closed verified in chat ("looked at the captions"). Open: V50, V48
   (+ the re-run-on-V50-build note), V46; parked: V30, V8. Debts open: F17, F16,
   F15.
 - **Commit title:** `Save dialog layout: the Saving-as preview above the file name, the folder row under it, the format dropdown instead of the radio, and the encoding group (Lossless above the knob) separated by distance`
@@ -3486,9 +3509,9 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-20 — `Feat:` the Line panel's icon buttons in the Shape panel's style — owner request
 
-- **What:** the owner verified V54 ("V54 проверил") and asked for the LINE
-  tool's panel the same pass: "сделаем также кнопочки как в Shape, то есть
-  такие же по стилю и отступам, вместо текущих радио Mode". Done: the word
+- **What:** the owner verified V54 ("checked V54") and asked for the LINE
+  tool's panel the same pass: "let's also make buttons like in Shape — the same in style and
+  spacing — instead of the current Mode radios". Done: the word
   "Mode" radio became ONE row of TWO icon buttons — Straight / Curve —
   extracted as `line_settings_ui` (the `shape_settings_ui` sibling): the
   shared `icon_button` (28-pt squares, the light-theme states), the row laid
@@ -3522,12 +3545,11 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-20 — `Feat:` the Size block — label above, narrowed slider, manual entry above 100 — owner request
 
-- **What:** the owner verified V55 («Отлично») with three follow-ups the same
-  message: (1) "в Shape и в Line сделать gap между слайдером size и кнопками,
-  такой же высоты что и между кнопками в Shape"; (2) "элемент size слишком
-  широкий, нужно саму надпись Size разместить над слайдером"; (3) "дать
-  возможность пользователю вручную ввести Size больше 100, а сам слайдер пусть
-  и дальше будет ограничен 100". Done: the shared Size block extracted as
+- **What:** the owner verified V55 ("Excellent") with three follow-ups the same
+  message: (1) "in Shape and in Line make the gap between the size slider and
+  the buttons the same height as between the buttons in Shape"; (2) "the size element is too wide — the Size label itself needs to
+  sit above the slider"; (3) "let the user enter a Size above 100 manually, while the slider
+  itself stays capped at 100". Done: the shared Size block extracted as
   `size_block_ui` (the `shape_settings_ui`/`line_settings_ui` sibling): the
   label ABOVE, the slider pinned to `SIZE_SLIDER_W` = 3 × 28 + 2 × 6 = 96 pt
   via `spacing.slider_width` (egui's `Slider` reads its width from the spacing
@@ -3561,10 +3583,10 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 - **What:** the owner re-read the AGENTS.md hand-over rule and traced its
   history: the "if the delivery covers several rounds, list every round's
   title" clause grew out of a ONE-TIME request that the agent mis-recorded as
-  a standing rule ("это была единичная просьба и агент решил записать это как
-  правило"). The rule now says the reply lists ONLY the newest delivery's
+  a standing rule ("it was a one-time request and the agent decided to record it
+  as a standing rule"). The rule now says the reply lists ONLY the newest delivery's
   title — one title per reply, backtick-wrapped as the last line (the owner
-  keeps the older titles' list himself — "я и так их записываю"); the
+  keeps the older titles' list himself — "I record them myself anyway"); the
   mechanism is unchanged (the `Commit title:` field in the PROGRESS entry +
   the reply's last line + rules.sh's rule-6 REMINDER). One sentence replaced
   in the Delivery ritual section — the only place the multi-title listing was
@@ -3581,8 +3603,8 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 
 ### 2026-11-20 — `Fix:` a manually entered size above 100 reaches the drawing — owner bug report
 
-- **What:** the owner's report: "я задаю вручную size 200 всё ещё рисуется с
-  радиусом 100". The UI was innocent (the DragValue writes `tools.size`
+- **What:** the owner's report: "I enter size 200 manually and it still draws with a
+  radius of 100". The UI was innocent (the DragValue writes `tools.size`
   directly; the size_block test proves no clamp-back) — the DRAW paths were
   the slider-era legacy: ALL FOUR rasterizers clamped the stroke width to
   1..=100 (`draw_segment`, `rasterize_smooth_pieces`, `rasterize_polyline`,

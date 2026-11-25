@@ -94,8 +94,8 @@ pub enum Region {
     /// A freeform lasso path, auto-closed (the last point connects to the
     /// first). Fewer than 3 DISTINCT points select nothing.
     Lasso { points: Vec<Pos2> },
-    /// A magic-wand flood-fill region (owner request 2026-11-23: «выделение
-    /// волшебной палочкой как в Paint.Net»): the EXACT pixel set the flood
+    /// A magic-wand flood-fill region (owner request 2026-11-23: "a magic-wand
+    /// selection like Paint.NET's"): the EXACT pixel set the flood
     /// reached, sorted and deduplicated `(x, y)` pairs of canvas pixel
     /// coordinates. The pixel semantics are EXACT integers — the wand
     /// selected these pixels, no center rule involved. An empty set selects
@@ -365,7 +365,7 @@ fn distinct_points(points: &[Pos2]) -> Vec<Pos2> {
 }
 
 /// Converts the panel's PERCENT threshold (the users' unit — owner request
-/// 2026-11-23: «людям куда проще понимать именно %») into the per-channel
+/// 2026-11-23: "% is far easier for people to understand") into the per-channel
 /// tolerance `flood_pixels` compares with: `pct × 255 / 100`, so 0 % = the
 /// exact color only, 100 % = every pixel matches. 13 % (the startup value)
 /// maps to 33 ≈ the pre-slider const 32.
@@ -386,8 +386,8 @@ pub struct FloodSpan {
 }
 
 /// The flood core the magic wand and the Fill tool share (owner request
-/// 2026-11-23: «можно сделать заливку тем же методом что и выделение
-/// волшебной палочкой»), rewritten 2026-11-23 from a per-pixel BFS to the
+/// 2026-11-23: "the fill can be made with the same method as the magic
+/// wand's selection"), rewritten 2026-11-23 from a per-pixel BFS to the
 /// classic SPAN-SCANLINE fill (Wikipedia "Span filling", lodev's
 /// `floodFillScanlineStack` — the same family imageproc and Krita ship).
 /// What the rewrite buys (the benchmark logs in `benchmarks/` hold the

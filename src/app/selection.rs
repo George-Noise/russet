@@ -6,8 +6,8 @@
 //! boundary loops, the pixel helpers) lives in [`crate::selection`], and
 //! the crop orchestration (one `crop` node per layer) in
 //! [`crate::layers::LayerStack::crop_all`] — the same per-layer shape the
-//! Resize dialog commits (owner request: "чтобы не было дублирования кода
-//! можно как-то это связать с тем кодом что делает resize").
+//! Resize dialog commits (owner request: "so there is no code duplication —
+//! tie it somehow to the code that does the resize").
 //!
 //! Gesture model (mirrors [`super::preview`]):
 //! - press OUTSIDE the selection (or with a modifier held) starts a region
@@ -97,7 +97,7 @@ impl SelectGesture {
 
 /// What the region gesture does to the existing selection at release —
 /// frozen at press from the modifiers (owner request: add MORE regions to
-/// the selection or remove regions, "также прямоугольником или лассо").
+/// the selection or remove regions, "also by rectangle or lasso").
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum RegionOp {
     /// No modifier — the new region replaces the selection.
@@ -667,7 +667,7 @@ impl App {
 
     /// The screen rect the floating pixels are drawn at for the CURRENT
     /// drag offset (a helper so the overlay geometry is unit-testable —
-    /// the owner's "видно за границами холста" promise). `Rect::NOTHING`
+    /// the owner's "visible past the canvas bounds" promise). `Rect::NOTHING`
     /// when no move drag is live.
     fn move_overlay_rect(&self, canvas_rect: Rect) -> Rect {
         let SelectGesture::MoveDrag { origin, offset, .. } = &self.select_gesture else {

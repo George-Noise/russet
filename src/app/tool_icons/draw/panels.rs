@@ -17,8 +17,8 @@ use eframe::egui::Color32;
 use tiny_skia::{Pixmap, Transform};
 
 /// The magic-wand mark (owner request 2026-11-23: the wand's panel row and
-/// the Select button's mode-aware mark — «выделение волшебной палочкой как
-/// в Paint.Net»). A diagonal rod ending in a FOUR-POINT sparkle, drawn in
+/// the Select button's mode-aware mark — "a magic-wand selection like
+/// Paint.NET's"). A diagonal rod ending in a FOUR-POINT sparkle, drawn in
 /// the monochrome ink the rest of the Select family uses; two satellite
 /// sparks echo the star at a smaller scale.
 fn draw_select_wand(pm: &mut Pixmap, ts: Transform, ink: Color32) {
@@ -99,18 +99,18 @@ fn draw_paint_mode(pm: &mut Pixmap, ts: Transform, both: bool, solid: bool, mono
 
 /// The OUTLINE-PLACEMENT radios' composition geometry (owner request
 /// 2026-11-20). Each icon shows ONE corner of a square — ALWAYS a square's
-/// corner, whatever kind is selected ("в виде угла квадратика вне
-/// зависимости от выбранной фигуры") — built from the elements the owner
-/// listed: the square's own corner as the gray FILL quadrant ("использовать
-/// Fill… чтобы мозгу было понятнее где сама фигура нарисована"), the click
-/// point as a contrasting dot at that corner ("точечка… кружочек правильной
-/// контрастности, размера и формы"), and two segments — horizontal and
-/// vertical — ALONG the outline's lines ("отрезки по горизонтали и по
-/// вертикали вдоль линий Outline"). The owner's 2026-11-21 pass made the
+/// corner, whatever kind is selected ("as the corner of the square regardless
+/// of the selected shape") — built from the elements the owner
+/// listed: the square's own corner as the gray FILL quadrant ("use
+/// Fill… so it is clearer to the mind where the shape itself is drawn"), the click
+/// point as a contrasting dot at that corner ("a dot… a circle of the right
+/// contrast, size and shape"), and two segments — horizontal and
+/// vertical — ALONG the outline's lines ("segments along the Outline's
+/// lines, horizontal and vertical"). The owner's 2026-11-21 pass made the
 /// segments read unmistakably as the OUTLINE: 2–3× thicker (6.5) and each
 /// one's far end running PAST the icon's edge (the bitmap crop says the
 /// outline line continues beyond the corner window), while the click dot
-/// stays exactly as it was ("точечку оставить как есть"). The bands'
+/// stays exactly as it was ("leave the dot as it is"). The bands'
 /// position relative to the corner IS the mode: fully beyond the dot =
 /// [`ShapeOutline::Outside`], straddling the dot = [`ShapeOutline::Center`]
 /// (the old look), fully inside the fill = [`ShapeOutline::Inside`].

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The WAND + FILL + ESC probe (owner request 2026-11-23: the magic-wand
-# selection «как в Paint.Net … простой алгоритм», the fill through the SAME
+# selection "like Paint.NET's … a simple algorithm", the fill through the SAME
 # flood core with the icon LAST in the Tools grid, and Esc deselecting from
 # any tool). Replays under Xvfb with xdotool (the drag-probe template per
 # SANDBOX.md) and measures PIXEL EVIDENCE on the SAME binary:
@@ -125,8 +125,8 @@ sleep 1
 
 shot 4_wand_selection_ants
 
-# Esc — the GLOBAL deselect (owner request 2026-11-23: «На кнопку Esc нужно
-# сделать убирание выделения»): the ants vanish.
+# Esc — the GLOBAL deselect (owner request 2026-11-23: "make the Esc button
+# clear the selection"): the ants vanish.
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" key Escape
 sleep 1
 

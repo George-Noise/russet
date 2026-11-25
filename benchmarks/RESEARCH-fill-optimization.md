@@ -1,224 +1,232 @@
-# RESEARCH: оптимизация заливки и волшебной палочки — варианты и замеры
+# RESEARCH: fill and magic-wand optimization — options and measurements
 
-Дата: 2026-11-23. Запрос владельца в чате: в `--release` быстро, в dev медленно в
-некоторых случаях; подсмотреть опыт open-source; **сначала описать варианты и
-сделать замеры, саму оптимизацию пока НЕ внедрять**. Файл лежит в репозитории,
-чтобы после изменения алгоритма сверить новые логи бенчмарка со старыми.
+Date: 2026-11-23. The owner's request in chat: fast in `--release`, slow in dev in
+some cases; look at the open-source experience; **first describe the options and
+take the measurements — do NOT land the optimization yet**. The file lives in the
+repository so that after the algorithm change the new benchmark logs can be
+compared against the old ones.
 
-## Методика замеров
+## Measurement methodology
 
-Бенчмарк: `src/app/fill_bench.rs` (cargo-фича `fill-bench`, по умолчанию не
-компилируется). Запуск — только с явного разрешения владельца:
+Benchmark: `src/app/fill_bench.rs` (the cargo feature `fill-bench`, NOT compiled
+by default). Running it requires the owner's explicit permission:
 
 ```
 RUSSET_BENCH_FILL=1 RUSSET_BENCH_ALLOWED=1 cargo run --features fill-bench        # dev
 RUSSET_BENCH_FILL=1 RUSSET_BENCH_ALLOWED=1 cargo run --release --features fill-bench  # release
 ```
 
-Без `RUSSET_BENCH_ALLOWED=1` процесс отказывается запускаться (exit 2). Правило
-для агента: не запускать бенч без явного указания владельца в чате (AGENTS.md,
-входная секция; PROGRESS.md, запись 2026-11-23).
+Without `RUSSET_BENCH_ALLOWED=1` the process refuses to start (exit 2). The rule
+for the agent: never run the bench without the owner's explicit instruction in
+chat (AGENTS.md, the input section; PROGRESS.md, the 2026-11-23 entry).
 
-Что меряется: `flood_pixels` (чтение, ядро и заливки, и палочки — тот же
-сэмплер `pick_color`, что и в клике) и запись заливки (цикл src-over из
-`App::paint_flood_pixels`, скопирован 1:1). `full_click_mean = flood_mean +
-write_mean`. Все числа в наносекундах: min/median/mean/p95 по измеренным
-прогонам после тёплых. Канвасы детерминированы (фиксированный xorshift), так что
-логи с разных машин и прогонов сравнимы. Логи складываются в `benchmarks/`,
-имя `fill_bench_<dev|release>_<ГГГГММДДЧЧММСС>.log` (дата-время — только цифры,
-до секунд, UTC; режим в имени). Заголовок лога несёт спеки машины (CPU, ядра,
-RAM, ядро ОС, rustc, git HEAD).
+What is measured: `flood_pixels` (the read — the core of BOTH the fill and the
+wand, the same `pick_color` sampler the click uses) and the fill's write (the
+src-over loop from `App::paint_flood_pixels`, copied 1:1). `full_click_mean =
+flood_mean + write_mean`. All numbers are nanoseconds: min/median/mean/p95 over
+the measured runs after the warm-ups. The canvases are deterministic (a fixed
+xorshift), so logs from different machines and runs are comparable. Logs go into
+`benchmarks/`, named `fill_bench_<dev|release>_<YYYYMMDDHHMMSS>.log` (the
+date-time is digits only, second precision, UTC; the mode is in the name). The
+log header carries the machine's specs (CPU, cores, RAM, OS kernel, rustc, git
+HEAD).
 
-Машина замеров этой таблицы: 2 vCPU Intel Xeon, 4 GB RAM, Linux 5.10.134 —
-абсолютные числа относятся к этой песочнице; отношения dev/release и
-кейс-к-кейсу переносимы.
+The measurement machine for this file's table: 2 vCPU Intel Xeon, 4 GB RAM,
+Linux 5.10.134 — the absolute numbers belong to this sandbox; the dev/release
+ratios and the case-to-case ratios transfer.
 
-## Замеры (mean full_click, один клик заливкой)
+## Measurements (mean full_click, one fill click)
 
-| Кейс | пикселей под заливкой | dev | release | зазор |
+| Case | pixels filled | dev | release | gap |
 |---|---|---|---|---|
 | solid_64x64_fill_all | 4 096 | 2.65 ms | 248 µs | ~10.7× |
 | solid_800x600_fill_all | 480 000 | 376 ms | 50.1 ms | ~7.5× |
 | solid_1920x1080_fill_all | 2 073 600 | 1.72 s | 238 ms | ~7.2× |
 | noise_800x600 (4 px) | 4 | 28 µs | 18 µs | ~1.6× |
-| stripes_800x600 (полоса 2×600) | 1 200 | 0.92 ms | 94 µs | ~9.8× |
+| stripes_800x600 (a 2×600 stripe) | 1 200 | 0.92 ms | 94 µs | ~9.8× |
 | gradient_800x600 tol=6 | 1 200 | 0.79 ms | 82 µs | ~9.7× |
-| blob_800x600 (диск) | 101 780 | 73 ms | 8.4 ms | ~8.7× |
-| hole_800x600 (дыра, кейс краша) | 101 780 | 79 ms | 8.6 ms | ~9.2× |
-| all_masked_800x600 (флуд всё, запись всё маской срезает) | 480 000 | 354 ms | 44.9 ms | ~7.9× |
+| blob_800x600 (a disk) | 101 780 | 73 ms | 8.4 ms | ~8.7× |
+| hole_800x600 (the hole, the crash case) | 101 780 | 79 ms | 8.6 ms | ~9.2× |
+| all_masked_800x600 (the flood covers everything, the write masks it all out) | 480 000 | 354 ms | 44.9 ms | ~7.9× |
 | dot_800x600 (1 px) | 1 | 29 µs | 17 µs | ~1.6× |
 
-Пер-пиксельная стоимость чтения флуда: ~727 нс/px в dev, ~100 нс/px в release
-(348 ms / 480 000). Исходные логи: `benchmarks/fill_bench_dev_20261123195804.log`,
+The per-pixel flood-read cost: ~727 ns/px in dev, ~100 ns/px in release
+(348 ms / 480 000). Source logs: `benchmarks/fill_bench_dev_20261123195804.log`,
 `fill_bench_dev_20261123195853.log`, `fill_bench_release_20261123200459.log`.
 
-Выводы из цифр: (1) боль владельца подтверждена количественно — 376 ms на клик
-800×600 и 1.72 s на FullHD в dev; (2) даже release для редактора нетороплив
-(50 ms на 800×600, 238 ms на FullHD) — алгоритмическое улучшение полезно обоим
-режимам; (3) маленькие заливки (~1 px–1 200 px) стоят 20–950 µs даже в dev —
-узкое место именно в больших площадях; (4) запись — лишь ~7–8% клика
-(119 ms из 1.72 s на FullHD в dev), основное время — чтение флуда.
+What the numbers say: (1) the owner's pain is confirmed quantitatively — 376 ms
+per 800×600 click and 1.72 s on FullHD in dev; (2) even release is unhurried for
+an editor (50 ms on 800×600, 238 ms on FullHD) — an algorithmic improvement
+helps BOTH modes; (3) small fills (~1 px–1 200 px) cost 20–950 µs even in dev —
+the bottleneck is exactly the large areas; (4) the write is only ~7–8% of the
+click (119 ms of 1.72 s on FullHD in dev) — the bulk of the time is the flood
+read.
 
-## Диагноз текущего кода (`src/selection.rs::flood_pixels` + `src/tools.rs::pick_color`)
+## Diagnosis of the current code (`src/selection.rs::flood_pixels` + `src/tools.rs::pick_color`)
 
-1. **Попиксельный BFS**: `VecDeque<(i64,i64)>` отдельных пикселей; на каждый
-   пиксель — push/pop очереди и 4 пробы соседей. Спан-подход кладёт в стек один
-   элемент на горизонтальный отрезок вместо одного на пиксель.
-2. **Сэмплер дорогой**: `pick_color` на КАЖДУЮ пробу делает `pixel(x, y)` (проверка
-   границ + Option) и `demultiply()` (деление на канал) — а компаратор потом
-   распаковывает 4 канала и делает 4 вычитания i16 + abs. Сырое сравнение
-   упакованного u32 с заранее посчитанной вилкой допуска снимает всё это.
-3. **Несовпавшие пиксели не помечаются**: граничный (не подходящий по цвету)
-   пиксель не получает `visited`, поэтому его пересэмплируют до 4 раз (по разу от
-   каждого соседа из очереди). На шумном/тонкострочном арте это до 4× лишних
-   вызовов сэмплера.
-4. **Аллокации на каждый клик**: `vec![false; w*h]` (FullHD = 2 MB) + выходной
-   `Vec<(i64,i64)>` (FullHD ≈ 32 MB при заливке всего холста) — никто не
-   переиспользуется.
-5. **`out.sort()` + `dedup()` на весь список**: полный список пикселей
-   сортируется O(n log n) при том, что флуд посещает каждый пиксель ровно один
-   раз — сортировка нужна только потому, что порядок обхода BFS хаотичен. Спан-
-   алгоритм выдаёт пиксели упорядоченно по строкам-отрезкам сам.
-6. **i64-пары в списке**: 16 байт на пиксель; спаны — 2-4 числа на отрезок.
+1. **A per-pixel BFS**: a `VecDeque<(i64,i64)>` of individual pixels; every
+   pixel pays a queue push/pop plus 4 neighbor probes. A span approach pushes
+   ONE stack element per horizontal run instead of one per pixel.
+2. **An expensive sampler**: on EVERY probe `pick_color` calls `pixel(x, y)`
+   (a bounds check + Option) and `demultiply()` (a division per channel) — and
+   the comparator then unpacks the 4 channels and does 4 i16 subtractions + abs.
+   A raw comparison of the packed u32 against a precomputed tolerance fork
+   removes all of that.
+3. **Non-matching pixels are not marked**: a boundary pixel (its color does not
+   match) never gets `visited`, so it is re-sampled up to 4 times (once from
+   each queued neighbor). On noisy/thin-stripe art that is up to 4× the needed
+   sampler calls.
+4. **Allocations on every click**: `vec![false; w*h]` (FullHD = 2 MB) + the
+   output `Vec<(i64,i64)>` (FullHD ≈ 32 MB when filling the whole canvas) —
+   neither is reused.
+5. **`out.sort()` + `dedup()` over the whole list**: the full pixel list is
+   sorted O(n log n) although the flood visits every pixel exactly once — the
+   sort exists only because the BFS traversal order is chaotic. A span
+   algorithm emits the pixels ordered by scanline runs on its own.
+6. **i64 pairs in the list**: 16 bytes per pixel; spans are 2-4 numbers per run.
 
-## Варианты оптимизации (по убыванию ожидаемого эффекта)
+## Optimization options (in descending expected effect)
 
-### 1. Span/scanline-флуд вместо попиксельного BFS
+### 1. A span/scanline flood instead of the per-pixel BFS
 
-Классика: один элемент стека = горизонтальный отрезок `(x1, x2, y, dy)`; залив
-строки — один плотный цикл по строке (кэш-дружелюбно), флаги
-`spanAbove`/`spanBelow` кладут в стек ровно один элемент на новый отрезок
-сверху/снизу. Результат совпадает с текущей 4-way семантикой.
+The classic: one stack element = a horizontal run `(x1, x2, y, dy)`; filling a
+row is one tight loop over the row (cache-friendly), the
+`spanAbove`/`spanBelow` flags push exactly one element per new run above/below.
+The result matches the current 4-way semantics.
 
-- Источники: lodev.org (floodFillScanlineStack; его бенчмарк 2004 года: 239 ms →
-  34 ms, ≈7×); Wikipedia «Flood fill» (span-семейство, «2–8× быстрее пиксельного
-  рекурсивного», «cache- and bitplane-friendly»); imageproc 0.27 (Rust)
-  реализует заливку именно по span-схеме из Wikipedia; Krita использует
-  «more optimized scanline fill».
-- Эффект: 2–8× на чтении (по источникам) + исчезает `out.sort()`/`dedup()` (выход
-  сам упорядочен по строкам) + в 100–1000 раз меньше элементов в стеке очереди.
-- Компромисс (из треда krita-artists): сканлайн-заливка «легко протекает дальше
-  по одной линии в 1 px» и с ней не стыкуется gap-closing MyPaint (тот оставил
-  классический флуд). Для russet несущественно: gap-closing у нас нет; 4-way
-  результат сохраняется.
+- Sources: lodev.org (floodFillScanlineStack; its 2004 benchmark: 239 ms →
+  34 ms, ≈7×); Wikipedia's "Flood fill" (the span family, "2–8× faster than the
+  pixel-wise recursive one", "cache- and bitplane-friendly"); imageproc 0.27
+  (Rust) implements the fill exactly by Wikipedia's span scheme; Krita uses a
+  "more optimized scanline fill".
+- Effect: 2–8× on the read (per the sources) + `out.sort()`/`dedup()` disappear
+  (the output is already ordered by rows) + 100–1000× fewer elements in the
+  queue's stack.
+- The trade-off (from the krita-artists thread): a scanline fill "easily leaks
+  further along a 1 px line" and does not compose with MyPaint's gap-closing
+  (which kept the classic flood). Immaterial for russet: we have no
+  gap-closing; the 4-way result is preserved.
 
-### 2. Дешёвый компаратор (сырой упакованный цвет + вилки допуска)
+### 2. A cheap comparator (raw packed color + tolerance forks)
 
-Посчитать seed-цвет и границы допуска ОДИН раз (4 пары lo/hi по каналам в
-premultiplied-байтах), дальше сравнивать сырой `u32` пикселя из среза
-`pm.data()` с одной проверкой границ на строку. Убирает `demultiply()` (деление
-на канал) и распаковку Color32 на каждую пробу; в dev ещё и убирает
-нев-инлайн-клоужн с Option. Ожидаемо 2–3× на чтении в обоих режимах. Внимание к
-семантике: сравнивать в тех же байтах, что сейчас после demultiply (RGBA
-unmultiplied), — т.е. либо хранить ключ демультиплицированным, либо
-перевести вилки в premultiplied-пространство и сравнивать сырые байты (дешевле,
-но требует аккуратной проверки эквивалентности на прозрачных пикселях).
+Compute the seed color and the tolerance bounds ONCE (4 lo/hi pairs, per
+channel, in premultiplied bytes), then compare the pixel's raw `u32` from the
+`pm.data()` slice with one bounds check per row. Removes `demultiply()` (the
+per-channel division) and the Color32 unpacking on every probe; in dev it also
+removes the non-inlined closure with an Option. Expect 2–3× on the read in both
+modes. Mind the semantics: compare in the same bytes the demultiply produces
+now (RGBA unmultiplied) — i.e. either keep the key demultiplied, or convert the
+forks into premultiplied space and compare raw bytes (cheaper, but needs a
+careful equivalence check on transparent pixels).
 
-### 3. Помечать несовпавшие пиксели как «проверенные»
+### 3. Mark non-matching pixels as "checked"
 
-Вторая карта посещений (или расширение текущей до 2 состояний), чтобы граничный
-пиксель сэмплировался ровно один раз. Дёшево делается и до спан-переписывания;
-на шумных канвасах экономит до половины вызовов сэмплера. На спан-версии
-частично поглощается самим алгоритмом (строка проходится одним циклом, повторные
-пробы не растут в 4 раза).
+A second visit map (or widening the current one to 2 states) so a boundary
+pixel is sampled exactly once. Cheap to do even before the span rewrite; on
+noisy canvases it saves up to half the sampler calls. On the span version it is
+partially absorbed by the algorithm itself (a row is walked in one loop, the
+repeated probes no longer grow 4×).
 
-### 4. Кэш результатов сравнения по уникальным цветам
+### 4. A comparison-result cache keyed by unique colors
 
-Идея из Krita (разница цветов считается в Lab с кэшированием результата для
-новых цветов): `HashMap<u32, bool>` цвет → подходит/нет. На плоских областях с
-малым числом уникальных цветов компаратор почти не работает. Допуск в russet
-по-канальный, так что ключом может быть упакованный цвет без демультипликации.
-Дополнительный плюс к варианту 2; на градиентах кэш бесполезен (все цвета
-уникальны) — комбинировать с 2/3, не заменять.
+The idea from Krita (the color difference is computed in Lab with the result
+cached for new colors): a `HashMap<u32, bool>` color → matches/does not. On
+flat areas with few unique colors the comparator almost never runs. russet's
+tolerance is per-channel, so the key can be the packed color without
+demultiplication. An extra gain on top of option 2; on gradients the cache is
+useless (every color is unique) — combine with 2/3, do not replace them.
 
-### 5. Переиспользование буферов (scratch в App)
+### 5. Buffer reuse (scratch in App)
 
-`visited`, стек спанов и выходной буфер держать в `App` и очищать (не
-перевыделать) на клик. Убирает 2 MB+ аллокаций на каждый клик FullHD; в dev
-аллокация заметна и сама по себе.
+Keep `visited`, the span stack and the output buffer in `App` and clear (not
+reallocate) them per click. Removes 2 MB+ of allocations per FullHD click; in
+dev the allocation itself is noticeable.
 
-### 6. Запись прямо из спанов без промежуточного `Vec<(i64,i64)>`
+### 6. Write straight from the spans, no intermediate `Vec<(i64,i64)>`
 
-Для заливки: писать пиксели (или весь src-over ран по строке) прямо при обходе
-спанов — исчезают мегабайтный выходной Vec, sort, dedup; bbox считать по спанам.
-Для палочки: спаны 1:1 ложатся в `Mask` (по строке помечать биты отрезком) —
-`build_mask` тоже перестаёт ходить по попиксельному списку. Ожидаемо ещё −20–35%
-полного клика поверх вариантов 1–3, и падение пикового потребления памяти.
+For the fill: write the pixels (or the whole src-over run per row) right while
+walking the spans — the megabyte output Vec, the sort and the dedup disappear;
+the bbox is computed from the spans. For the wand: the spans map 1:1 into the
+`Mask` (per row, mark bits with one run) — `build_mask` also stops walking the
+per-pixel list. Expect another −20–35% of the full click on top of options 1–3,
+plus a drop in peak memory.
 
-### 7. dev-профиль: `[profile.dev] opt-level = 1`
+### 7. The dev profile: `[profile.dev] opt-level = 1`
 
-Cargo-уровень, без изменения алгоритма: компиляция с базовой оптимизацией при
-сохранённых `debug_assertions`/overflow-checks. По соотношению из замеров
-(~7–10×) это приблизит dev к release на порядок в горячем цикле; цена — чуть
-долгая компиляция dev-сборки.
+A cargo-level knob, no algorithm change: compile with basic optimization while
+keeping `debug_assertions`/overflow-checks. By the measured ratios (~7–10×)
+this brings dev an order of magnitude closer to release in the hot loop; the
+price is a somewhat longer dev-build compile.
 
-**ОТКЛОНЕНО владельцем 2026-11-23 (чат):** dev мы облегчаем НЕ будем —
-замедление в dev это НАМЕРЕННЫЙ ранний датчик симптомов; именно на нём
-владелец и заметил тормоза заливки. Пункт остаётся в списке только для
-истории; предлагать его больше не нужно.
+**REJECTED by the owner 2026-11-23 (chat):** we will NOT lighten dev — the
+slowness in dev is a DELIBERATE early symptom sensor; it is exactly how the
+owner noticed the fill slowdown. The option stays in the list for the record
+only; do not propose it again.
 
-### Отвергнутые / отложенные
+### Rejected / deferred
 
-- **Многопоточная заливка (rayon/тайлы)**: запись — лишь ~7% клика; новая
-  зависимость; в Krita тайловую многопоточную версию заливки вливать не стали
-  (проблемы) — тред krita-artists. Отложено до реальной нужды.
-- **SIMD**: сравнение 8 упакованных u32 за раз возможно, но выигрыш ограничен
-  памятью/ветвлениями обхода; делать имеет смысл только ПОСЛЕ спан-переписывания
-  (вариант 1), иначе оптимизируем не то место.
-- **8-way соседство**: протекает сквозь диагональные линии толщиной 1 px (lodev)
-  — меняет семантику заливки, не вариант оптимизации.
+- **Multithreaded fill (rayon/tiles)**: the write is only ~7% of the click; a
+  new dependency; Krita chose not to merge a tiled multithreaded fill
+  (problems) — the krita-artists thread. Deferred until really needed.
+- **SIMD**: comparing 8 packed u32s at once is possible, but the gain is capped
+  by memory/the traversal's branching; worth doing only AFTER the span rewrite
+  (option 1), otherwise we optimize the wrong place.
+- **8-way neighborhood**: leaks through 1 px diagonal lines (lodev) — it
+  changes the fill's semantics, not an optimization option.
 
-## Рекомендуемый порядок (НЕ внедрять без явного разрешения владельца)
+## Recommended order (do NOT land without the owner's explicit permission)
 
-1. Целевой рефакторинг чтения и записи: варианты 1 + 2 + 3 (+6 для
-   записи/маски) — ожидаемо на порядок на больших площадях в ОБОИХ режимах,
-   с сохранением 4-way семантики и пиксельного результата (проверяется
-   существующими тестами заливки/палочки + повторным прогоном бенчмарка).
-   dev специально не облегчается — решение владельца 2026-11-23 (вариант 7
-   отклонён, см. выше).
-2. По остаточному принципу: 5 (scratch-буферы) и 4 (кэш сравнения) — если
-   профилирование после шага 1 покажет, что они ещё значимы.
+1. The targeted read/write refactor: options 1 + 2 + 3 (+6 for the
+   write/mask) — expected to be an order of magnitude on large areas in BOTH
+   modes, with the 4-way semantics and the pixel result preserved (checked by
+   the existing fill/wand tests + a benchmark re-run).
+   dev is deliberately NOT lightened — the owner's 2026-11-23 decision (option
+   7 rejected, see above).
+2. By the remainder: 5 (scratch buffers) and 4 (the comparison cache) — if the
+   profiling after step 1 shows they still matter.
 
-Контроль после внедрения: прогнать бенчмарк в dev и release, новые логи положить
-рядом со старыми в `benchmarks/`, сравнить кейс-в-кейс (особенно
-solid_1920x1080_fill_all, all_masked_800x600 и stripes — антикейсы спан-версии).
+Post-landing control: run the benchmark in dev and release, put the new logs
+next to the old ones in `benchmarks/`, compare case-by-case (especially
+solid_1920x1080_fill_all, all_masked_800x600 and stripes — the span version's
+anti-cases).
 
-## Источники (открыты 2026-11-23)
+## Sources (opened 2026-11-23)
 
-- https://en.wikipedia.org/wiki/Flood_fill — span-семейство, 2–8×, cache-friendly,
-  история алгоритма 1990 года.
-- https://lodev.org/cgtutor/floodfill.html — реализация floodFillScanlineStack,
-  флаги spanAbove/spanBelow, бенчмарк 239 ms → 34 ms, плоский Uint32-буфер.
+- https://en.wikipedia.org/wiki/Flood_fill — the span family, 2–8×,
+  cache-friendly, the algorithm's 1990 history.
+- https://lodev.org/cgtutor/floodfill.html — the floodFillScanlineStack
+  implementation, the spanAbove/spanBelow flags, the 239 ms → 34 ms benchmark,
+  a flat Uint32 buffer.
 - https://docs.rs/imageproc/latest/imageproc/drawing/fn.flood_fill.html — Rust
-  imageproc 0.27: заливка по span-схеме Wikipedia, строгое равенство цветов.
+  imageproc 0.27: the fill by Wikipedia's span scheme, strict color equality.
 - https://krita-artists.org/t/close-gap-in-fill-tool/32043/170 — Krita scanline
-  fill (Deif_Lou): горизонтальный перекос, несовместимость с gap-closing MyPaint,
-  кэш разницы цветов в Lab, отвергнутая тайловая многопоточность.
+  fill (Deif_Lou): a horizontal bias, the incompatibility with MyPaint's
+  gap-closing, the Lab color-difference cache, the rejected tiled
+  multithreading.
 
 
-## ИТОГ 2026-11-23: варианты 1+2+3+6 внедрены (тот же день, отдельный раунд)
+## RESULT 2026-11-23: options 1+2+3+6 landed (the same day, a separate round)
 
-Реализовано: спан-ядро `flood_spans` (одна запись стека на горизонтальный
-отрезок, отрезки дорастают за границы родительского спана — ничего не
-осиротевает), КАЖДЫЙ проверенный пиксель помечается (несовпавшие тоже —
-сэмплов ровно один на пиксель), компаратор — вилки lo/hi по каналам над
-сырыми байтами (`FloodProbe`), путь приложения читает слой через
-`tools::sample_bytes_of` — ТОЧНО те байты, что старая цепочка pick_color
-кормила компаратору (быстрые пути для opaque и alpha=0, полупрозрачные
-платят прежний округлительный конвейер — равенство забрутфорсено плотным
-свипом в tools/tests.rs). Запись заливки — из спанов
-(`App::paint_flood_spans`, тот же src-over, нулевой-bbox страж краша
-сохранён); палочка держит контракт `Region::Wand`, список пикселей
-собирается колонковым radix-проходом за O(n) — старый `out.sort()` на
-миллионах кортежей исчез. Вариант 7 (dev-профиль) не трогали — решение
-владельца (см. выше).
+Landed: the span core `flood_spans` (one stack entry per horizontal run, runs
+grow past the parent span's bounds — nothing is orphaned), EVERY probed pixel
+gets marked (non-matching ones too — exactly one sample per pixel), the
+comparator is per-channel lo/hi forks over raw bytes (`FloodProbe`), the app
+path reads the layer through `tools::sample_bytes_of` — EXACTLY the bytes the
+old pick_color chain fed the comparator (fast paths for opaque and alpha=0,
+translucent colors pay the former rounding pipeline — the equality was
+brute-forced by a dense sweep in tools/tests.rs). The fill writes from the
+spans (`App::paint_flood_spans`, the same src-over, the zero-bbox crash guard
+kept); the wand keeps the `Region::Wand` contract, its pixel list is assembled
+by a column-wise radix pass in O(n) — the old `out.sort()` over millions of
+tuples is gone. Option 7 (the dev profile) was not touched — the owner's
+decision (see above).
 
-Замеры ДО (этот файл, верх) против ПОСЛЕ (логи
+The BEFORE measurements (this file, top) against AFTER (the logs
 `fill_bench_dev_20261123211220.log` / `fill_bench_release_20261123211220.log`,
-та же песочница, те же канвасы; `core=` в шапке лога помечает переписанный
-алгоритм):
+the same sandbox, the same canvases; `core=` in the log header marks the
+rewritten algorithm):
 
-| Кейс | dev было → стало | release было → стало |
+| Case | dev before → after | release before → after |
 |---|---|---|
 | solid_64x64_fill_all | 2.65 ms → 0.81 ms | 248 µs → 27.7 µs |
 | solid_800x600_fill_all | 376 ms → 84 ms | 50.1 ms → 3.08 ms |
@@ -226,15 +234,15 @@ solid_1920x1080_fill_all, all_masked_800x600 и stripes — антикейсы �
 | stripes_800x600 | 0.92 ms → 0.46 ms | 94 µs → 53.7 µs |
 | gradient_800x600 tol6 | 0.79 ms → 0.25 ms | 82 µs → 34 µs |
 | blob_800x600 | 73 ms → 16.9 ms | 8.4 ms → 0.68 ms |
-| hole_800x600 (кейс краша) | 79 ms → 16.9 ms | 8.6 ms → 0.68 ms |
+| hole_800x600 (the crash case) | 79 ms → 16.9 ms | 8.6 ms → 0.68 ms |
 | all_masked_800x600 | 354 ms → 55.2 ms | 44.9 ms → 2.17 ms |
 | noise_800x600 (4 px) | 28 µs → 23.6 µs | 18 µs → 20.7 µs |
 | dot_800x600 (1 px) | 29 µs → 22 µs | 17 µs → 21.8 µs |
 
-Итого: release 12–21× на больших площадях (в верхней части прогноза
-«2–8× + компаратор»), dev 3–6×; маленькие заливки не деградировали.
-Корректность: 359 тестов зелёные, из них новые — оракул (спан-ядро против
-наивного BFS, сохранённого в тестах дословно, на 30 случайных канвасах ×
-4 сида × 4 допуска с палитрой из opaque/полупрозрачных/прозрачных цветов),
-прозрачная дыра, альфа-вход в допуск, форма спанов, плотный свип
-sample_bytes_of (~560k комбинаций против реальной цепочки pick_color).
+Totals: release 12–21× on large areas (the upper part of the "2–8× +
+comparator" forecast), dev 3–6×; the small fills did not regress.
+Correctness: 359 tests green, among them the new oracle (the span core against
+the naive BFS kept verbatim in the tests, over 30 random canvases × 4 seeds ×
+4 tolerances with a palette of opaque/translucent/transparent colors), the
+transparent hole, alpha entering the tolerance, the span shape, the dense
+sample_bytes_of sweep (~560k combinations against the real pick_color chain).

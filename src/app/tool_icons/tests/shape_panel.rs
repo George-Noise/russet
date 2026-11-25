@@ -4,9 +4,9 @@
 
 //! emblem drawings (the follow-up the same day made the MODE row a
 
-//! THREE-way radio over the Shape TOOL's icon — "не повторение выбранной
+//! THREE-way radio over the Shape TOOL's icon — "not a repetition of the selected shape but the
 
-//! фигуры, а иконка инструмента Shape": solid = Fill, hollow = Outline
+//! Shape tool's icon": solid = Fill, hollow = Outline
 
 //! (pixel-for-pixel the tool button), gray fill under the rim = both) and
 
@@ -190,7 +190,7 @@ const INSIDE_STRIP: (f32, f32, f32, f32) = (14.0, 14.0, 15.8, 20.0);
 const CENTER_BOX: (f32, f32, f32, f32) = (10.3, 12.6, 11.3, 13.4);
 
 /// The placement trio: ALWAYS a square corner (no circle anywhere — the
-/// owner: "в виде угла квадратика вне зависимости от выбранной фигуры"),
+/// owner: "as the corner of the square regardless of the selected shape"),
 /// the gray fill quadrant marks the shape, the click dot sits at the
 /// corner, and the bands' position tells the three modes apart.
 #[test]
@@ -269,8 +269,8 @@ fn the_placement_radios_draw_the_corner_composition() {
     assert_ne!(center.data(), inside.data());
 }
 
-/// The click dot is a CONTRASTING mark (owner: "кружочек правильной
-/// контрастности, размера и формы чтобы видно было"): a white core over
+/// The click dot is a CONTRASTING mark (owner: "a circle of the right
+/// contrast, size and shape so it is visible"): a white core over
 /// the gray fill AND over the ink bands — the Center radio's dot sits
 /// exactly on the band corner, so its white core must survive there.
 #[test]

@@ -75,8 +75,8 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F)) {
             self.tools.tool = Tool::Fill;
         }
-        // Esc (owner request 2026-11-23: «На кнопку Esc нужно сделать
-        // убирание выделения») — the GLOBAL deselect: the selection is
+        // Esc (owner request 2026-11-23: "make the Esc button clear
+        // the selection") — the GLOBAL deselect: the selection is
         // DOCUMENT state, not a Select-tool fixture, so any tool's Esc
         // drops it. The pending gestures keep their own Esc meanings — the
         // guards run BEFORE consume_key so the local consumers still see
@@ -148,8 +148,8 @@ impl App {
             Some(ClipboardOp::Paste) => self.paste_clipboard(),
             None => {}
         }
-        // Ctrl+A (owner request 2026-11-24: «Нужно на Ctrl+A выделение
-        // всего на текущем слое») — the GLOBAL Select All: one Rect
+        // Ctrl+A (owner request 2026-11-24: "Ctrl+A needs to select
+        // everything on the current layer") — the GLOBAL Select All: one Rect
         // region covering the whole canvas replaces the selection (the
         // layers are always canvas-sized, so the full rect IS everything
         // on the current layer — [`App::select_all`]). Like the side
@@ -277,8 +277,8 @@ impl App {
 
     /// The fill click's gate: `false` when an active selection does NOT
     /// contain the seed pixel — the click then floods nothing (owner
-    /// request 2026-11-23: «если хоть один пиксель выделен то заливка
-    /// должна нажиматься только внутри выделения»). No selection = the
+    /// request 2026-11-23: "if even one pixel is selected the fill
+    /// must only fire inside the selection"). No selection = the
     /// fill fires anywhere.
     pub(super) fn fill_click_inside_selection(
         clip: Option<&crate::selection::Mask>,
@@ -287,9 +287,9 @@ impl App {
         clip.is_none_or(|mask| mask.get(seed.0, seed.1))
     }
 
-    /// The Fill tool (owner request 2026-11-23: «можно сделать заливку тем
-    /// же методом что и выделение волшебной палочкой, там очень похожий
-    /// метод»): a click floods the clicked color band on the ACTIVE LAYER
+    /// The Fill tool (owner request 2026-11-23: "the fill can be made with the
+    /// same method as the magic wand's selection — the methods are very
+    /// similar"): a click floods the clicked color band on the ACTIVE LAYER
     /// through [`crate::selection::flood_pixels`] — the wand's exact core —
     /// and paints the reached pixels with the frozen color: primary (LMB) or
     /// secondary (RMB), the same well policy the freehand strokes follow.

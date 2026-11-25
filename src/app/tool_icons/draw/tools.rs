@@ -340,8 +340,8 @@ pub(in crate::app::tool_icons) fn rasterize_tool_icon(
         Tool::Pencil => draw_pencil(
             &mut pm,
             // The pencil's emblem reads a touch up-right of the icon's
-            // center (owner request 2026-11-21: nudge it "чуть-чуть
-            // влево-вниз"); the shift applies AFTER the rotate-about-
+            // center (owner request 2026-11-21: nudge it "a touch
+            // left-down"); the shift applies AFTER the rotate-about-
             // center — screen-fixed direction, scaled with the raster.
             nudged_icon_transform(px, TOOL_ANGLE, PENCIL_NUDGE.0, PENCIL_NUDGE.1),
         ),
@@ -362,7 +362,7 @@ pub(in crate::app::tool_icons) fn rasterize_tool_icon(
 }
 
 /// The Fill tool's bucket (owner request 2026-11-23: the icon joins the
-/// Tools grid LAST — «иконку заливки сделай самой последней»). A classic
+/// Tools grid LAST — "make the fill icon the very last one"). A classic
 /// pour glyph: a metal pail with a dark rim, a liquid band and a round
 /// handle, plus a falling drop — the same blue the pipette's liquid uses,
 /// so the two "color-moving" tools rhyme.

@@ -77,7 +77,7 @@ fn texts(shapes: &[egui::epaint::ClippedShape]) -> Vec<(String, Rect)> {
 }
 
 /// The pass's headline rule: the "Size" label sits fully ABOVE the slider's
-/// bar (the owner: "нужно саму надпись Size разместить над слайдером" — the
+/// bar (the owner: "the Size label itself needs to sit above the slider" — the
 /// label-to-the-left slider made the element the panel's widest row), the
 /// bar is narrowed to the button grid's row width ([`SIZE_SLIDER_W`]) and
 /// the whole block stays far narrower than the old stretch.
@@ -118,7 +118,7 @@ fn the_size_label_sits_above_a_slider_wide_as_the_button_grid() {
 
 /// Owner request 2026-11-20: between the Size block and the Line/Shape
 /// button rows the SAME 12-pt step that separates the Shape panel's own
-/// button rows ("такой же высоты что и между кнопками в Shape") — the
+/// button rows ("the same height as between the buttons in Shape") — the
 /// 9-pt [`SHAPE_GROUP_GAP`] plus egui's 3-pt item spacing. Measured as the
 /// full panel's height minus the block's and the rows' own heights (the
 /// widget-level gap, the same arithmetic the Shape rows' compact test

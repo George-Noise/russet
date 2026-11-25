@@ -404,8 +404,8 @@ fn a_fill_inside_the_cut_hole_survives_and_paints() {
 
 #[test]
 fn a_translucent_fill_reaches_transparent_pixels() {
-    // The neighbor case the owner asked to test («протестируй другие
-    // возможные баги рядом»): a TRANSLUCENT fill over the fully
+    // The neighbor case the owner asked to test ("test the other
+    // possible bugs nearby"): a TRANSLUCENT fill over the fully
     // transparent pixels a cut leaves. The blend runs in premultiplied
     // space — egui's Color32 stores premultiplied bytes
     // (from_rgba_unmultiplied(255, 0, 0, 128) gives r() = 128), so the
@@ -505,8 +505,8 @@ fn a_flood_entirely_outside_the_selection_paints_nothing_and_survives() {
 
 #[test]
 fn a_fill_click_outside_an_active_selection_never_fires() {
-    // Owner request 2026-11-23: «если хоть один пиксель выделен то заливка
-    // должна нажиматься только внутри выделения». The gate rejects a click
+    // Owner request 2026-11-23: "if even one pixel is selected the fill
+    // must only fire inside the selection". The gate rejects a click
     // whose seed lies outside an active selection — before ANY flood runs,
     // so a mis-click (the one that caused the cut-hole crash) neither
     // paints nor records a node. No selection = the fill fires anywhere.
@@ -581,8 +581,8 @@ fn a_fill_without_a_selection_fires_anywhere() {
 
 #[test]
 fn a_ctrl_a_key_event_selects_the_whole_canvas() {
-    // Owner request 2026-11-24: «Нужно на Ctrl+A выделение всего на
-    // текущем слое» — the GLOBAL Select All, from ANY tool's frame (the
+    // Owner request 2026-11-24: "Ctrl+A needs to select everything on
+    // the current layer" — the GLOBAL Select All, from ANY tool's frame (the
     // selection is document state, the Esc-deselect convention).
     let mut app = App::new_headless();
     let (width, height) = (app.canvas.width, app.canvas.height);

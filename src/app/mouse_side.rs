@@ -6,13 +6,13 @@
 //! modal). Not everyone likes such a binding, so it is OFF until the user
 //! settles the question one way or another.
 //!
-//! Mapping (the browser back/forward convention the owner picked — "сделай
-//! как у других"): Mouse4 (back) = Undo, Mouse5 (forward) = Redo — one
+//! Mapping (the browser back/forward convention the owner picked — "do it
+//! like the others"): Mouse4 (back) = Undo, Mouse5 (forward) = Redo — one
 //! node up/down the active layer's history tree, exactly like the
 //! Ctrl+Z / Ctrl+Y hotkeys (SPEC §3.9).
 //!
 //! The choice is the app's ONE persisted setting (owner request
-//! 2026-11-23: "только Mouse4/Mouse5 выбор сохранялся"; SPEC §3.14): the
+//! 2026-11-23: "only the Mouse4/Mouse5 choice should persist"; SPEC §3.14): the
 //! mode is written through [`App::save`] into eframe's storage as the
 //! plain string `"always"`/`"never"` under [`STORAGE_KEY`] — `Ask` REMOVES
 //! the key instead, so a user who never decided (or reset to Ask) keeps
@@ -64,7 +64,7 @@ impl MouseSideMode {
     pub(super) const ALL: [Self; 3] = [Self::Ask, Self::Always, Self::Never];
 
     /// The Settings dropdown label (owner request 2026-11-23: three
-    /// variants "типо спросить, использовать или не использовать" — the
+    /// variants "like, ask, use, or don't use" — the
     /// wording is ours, the meaning is his).
     pub(super) fn label(self) -> &'static str {
         match self {

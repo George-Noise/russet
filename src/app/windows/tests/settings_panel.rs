@@ -275,8 +275,8 @@ fn the_shape_panel_buttons_sit_a_tools_grid_gap_apart_horizontally_and_further_a
     assert_eq!(rows.len(), 3, "KIND, MODE and PLACEMENT rows: {rows:?}");
 
     // Horizontally: every in-row gap is EXACTLY the Tools window's grid
-    // gap (the owner: "ровно такой же, как gap между элементами в окошке
-    // Tools") — the 28-pt buttons and the shared TOOL_GRID_GAP.
+    // gap (the owner: "exactly the same as the gap between the elements in the
+    // Tools window") — the 28-pt buttons and the shared TOOL_GRID_GAP.
     for row in &rows {
         assert!(
             row.len() == 2 || row.len() == 3,
@@ -447,8 +447,8 @@ fn the_line_rows_render_compact_headless() {
     );
 }
 
-/// The Line panel's SPACING rule (owner request 2026-11-20 — "такие же по
-/// стилю и отступам" as the Shape panel): within the row the two buttons
+/// The Line panel's SPACING rule (owner request 2026-11-20 — "the same in
+/// style and spacing" as the Shape panel): within the row the two buttons
 /// sit EXACTLY the Tools window's element gap apart horizontally. Measured
 /// on the REAL rects `line_settings_ui` lays out — the 28×28 button squares
 /// the panel itself paints (headless, no atlas: geometry only, and egui

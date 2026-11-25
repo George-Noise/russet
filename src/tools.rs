@@ -34,21 +34,21 @@ pub enum Tool {
     /// tool is already active, right-click cycles it backward); the
     /// sub-mode buttons and the ops live in the magnetized panel.
     Select,
-    /// The flood fill (owner request 2026-11-23: «можно сделать заливку тем
-    /// же методом что и выделение волшебной палочкой, там очень похожий
-    /// метод»): a click floods the clicked color band on the active layer
+    /// The flood fill (owner request 2026-11-23: "the fill can be made with the
+    /// same method as the magic wand's selection — the methods are very
+    /// similar"): a click floods the clicked color band on the active layer
     /// with the primary (LMB) or secondary (RMB) color — the same
     /// [`crate::selection::flood_pixels`] core the magic wand uses. The
     /// LAST variant on purpose: the Tools window's grid iterates the
     /// [`crate::app::tool_icons::TOOLS`] array, and the owner asked for the
-    /// fill button to join at the END («иконку заливки сделай самой
-    /// последней чтобы не нарушить порядок инструментов в окошке Tools»).
+    /// fill button to join at the END ("make the fill icon the very
+    /// last one so the tool order in the Tools window is not disturbed").
     Fill,
 }
 
 /// Sub-mode of the [`Tool::Select`] tool (owner request 2026-11-20).
-/// MORE selection kinds are planned ("типов выделений потом будет больше
-/// чем 2"), so every consumer iterates [`SelectMode::ALL`] and cycles with
+/// MORE selection kinds are planned ("there will be more than 2 selection
+/// kinds later"), so every consumer iterates [`SelectMode::ALL`] and cycles with
 /// [`SelectMode::next`] / [`SelectMode::prev`] — a new variant lands in the
 /// array and every cycle and panel row picks it up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,8 +57,8 @@ pub enum SelectMode {
     Rect,
     /// A freeform lasso: the drag's pointer path, auto-closed on release.
     Lasso,
-    /// The magic wand (owner request 2026-11-23: «выделение волшебной
-    /// палочкой как в Paint.Net … нужен простой алгоритм»): a CLICK floods
+    /// The magic wand (owner request 2026-11-23: "a magic-wand selection
+    /// like Paint.NET's … the algorithm must stay simple"): a CLICK floods
     /// the clicked color band on the active layer and selects the reached
     /// pixels exactly — [`crate::selection::Region::Wand`], built by the
     /// shared [`crate::selection::flood_pixels`] core. No drag: the wand
@@ -72,15 +72,15 @@ impl SelectMode {
     pub const ALL: [SelectMode; 3] = [SelectMode::Rect, SelectMode::Lasso, SelectMode::Wand];
 
     /// The NEXT mode in the cycle — the Tools button's left-click (owner
-    /// request 2026-11-20: "по левой кнопке ... переключался выбор какой
-    /// конкретно это инструмент выделения").
+    /// request 2026-11-20: "the left button ... cycles which concrete
+    /// selection tool it is").
     pub fn next(self) -> Self {
         let i = Self::ALL.iter().position(|m| m == &self).unwrap_or(0);
         Self::ALL[(i + 1) % Self::ALL.len()]
     }
 
     /// The PREVIOUS mode in the cycle — the Tools button's right-click
-    /// ("по правой то же самое но в обратную сторону").
+    /// ("the right button does the same in reverse").
     pub fn prev(self) -> Self {
         let i = Self::ALL.iter().position(|m| m == &self).unwrap_or(0);
         Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()]
@@ -178,13 +178,12 @@ pub struct ToolState {
     /// cycles it; the magnetized panel's mode row sets it explicitly.
     pub select_mode: SelectMode,
     /// The flood THRESHOLD the magic wand's selection and the Fill tool's
-    /// pour share, in PERCENT 0..=100 (owner request 2026-11-23: «в
-    /// приклеенную панельку … добавить ползунок похожий на Size но
-    /// выполняющий функцию порога срабатывания в %, я бы выбрал не % но
-    /// людям куда проще понимать именно %» — the unit is % FOR PEOPLE, the
+    /// pour share, in PERCENT 0..=100 (owner request 2026-11-23: "in the glued panel … add a slider
+    /// like Size that serves as the trigger threshold in % — I would pick
+    /// not %, but % is far easier for people to understand" — the unit is % FOR PEOPLE, the
     /// algorithm converts it per channel through
     /// [`crate::selection::tolerance_from_percent`]). ONE setting for both
-    /// tools: the flood is one shared method («там очень похожий метод»),
+    /// tools: the flood is one shared method ("the methods are very similar there"),
     /// so one knob drives it wherever it runs.
     pub flood_tolerance_pct: u8,
     /// Font size (canvas pixels) used by the Text tool.
@@ -220,8 +219,8 @@ pub struct DirtyRect {
 
 /// The sanity ceiling of any stroke width entering the rasterizers — the
 /// same bound the Size block's manual-entry box enforces in the UI. Owner
-/// request 2026-11-20: sizes above 100 must be enterable ("а сам слайдер
-/// пусть и дальше будет ограничен 100"), the ceiling is "not a design
+/// request 2026-11-20: sizes above 100 must be enterable ("but let the slider
+/// itself stay capped at 100"), the ceiling is "not a design
 /// limit" and the owner set none — 10 000 only guards against absurd
 /// strokes. The rasterizers clamp to THIS, not to the slider-era 1..=100:
 /// that old clamp silently ate a manually entered size (owner bug report

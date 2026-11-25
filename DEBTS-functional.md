@@ -21,8 +21,8 @@
 
 | # | Opened | Debt | Why it exists | Pay when |
 |---|---|---|---|---|
-| F22 | 2026-11-23 | The wand/fill flood TOLERANCE is a FIXED shared const (`selection.rs::FLOOD_TOLERANCE` = 32, per-channel against the SEED's color) with NO user-facing control — Paint.NET's wand and bucket carry a tolerance slider (0–100%), russet's algorithm was ordered simple («нужен простой алгоритм») and shipped without a knob. A future knob = a settings row (the Select panel's wand cell or the Fill panel — currently the Fill panel shows NOTHING), a ToolState field, both tools reading it; the seed-reference rule and the 4-neighborhood stay unchanged. | The owner asked for the SIMPLE algorithm first; the slider is a scope choice recorded at birth, not an omission. | Status: paid 2026-11-23 (the owner asked: the tolerance slider in the magnetized panel, in %) |
-| F20 | 2026-11-21 | INPUT DEVICES BEYOND THE DESKTOP MOUSE (owner request 2026-11-21, born during the F12 closure, explicitly PARKED: «записать о том что нужно как-то обрабатывать смартфоны, планшеты, тачпад и графический планшет, но это в долгий ящик»): the now-final wheel-pan design covers the desktop wheel only; touch screens (phones/tablets — pan/zoom/paint gestures), trackpads (two-finger pan, pinch zoom) and pen/graphics tablets (pressure? eraser end? per-app mapping) are unhandled input surfaces. Nothing is broken today — the app is desktop-first; the owner will pick this up when the feature queue allows. | The owner's own words during the F12 final-design decision. | When the owner returns to input devices, or a mobile/touch build makes the surfaces real. |
+| F22 | 2026-11-23 | The wand/fill flood TOLERANCE is a FIXED shared const (`selection.rs::FLOOD_TOLERANCE` = 32, per-channel against the SEED's color) with NO user-facing control — Paint.NET's wand and bucket carry a tolerance slider (0–100%), russet's algorithm was ordered simple ("a simple algorithm is needed") and shipped without a knob. A future knob = a settings row (the Select panel's wand cell or the Fill panel — currently the Fill panel shows NOTHING), a ToolState field, both tools reading it; the seed-reference rule and the 4-neighborhood stay unchanged. | The owner asked for the SIMPLE algorithm first; the slider is a scope choice recorded at birth, not an omission. | Status: paid 2026-11-23 (the owner asked: the tolerance slider in the magnetized panel, in %) |
+| F20 | 2026-11-21 | INPUT DEVICES BEYOND THE DESKTOP MOUSE (owner request 2026-11-21, born during the F12 closure, explicitly PARKED: "note down that smartphones, tablets, a trackpad and a graphics tablet need handling somehow — but park it for later"): the now-final wheel-pan design covers the desktop wheel only; touch screens (phones/tablets — pan/zoom/paint gestures), trackpads (two-finger pan, pinch zoom) and pen/graphics tablets (pressure? eraser end? per-app mapping) are unhandled input surfaces. Nothing is broken today — the app is desktop-first; the owner will pick this up when the feature queue allows. | The owner's own words during the F12 final-design decision. | When the owner returns to input devices, or a mobile/touch build makes the surfaces real. |
 | F18 | 2026-11-20 | The selection's clipboard is IN-APP (not the OS image clipboard — Paint.NET can paste into other apps, russet cannot yet) AND paste stamps immediately (centered in the viewport) instead of leaving a FLOATING selection the user drags before committing. The selection itself is not part of history (undo restores the pixels of a move/cut/paste/crop, but the selection BOUNDS are plain tool state). All three are deliberate v1 simplifications of §3.13, recorded at birth. | The round's scope was the full select/move/copy/cut/paste/crop loop on the app's own canvas; the OS clipboard interop and the floating-paste state machine are separate pieces of machinery (platform APIs / an overlay pipeline) that would have doubled the round. | When the owner asks for OS-clipboard interop, drag-after-paste, or undoable selection bounds — each is an owner-gated follow-up. |
 | F17 | 2026-11-19 | CONSIDER other file formats for Open and Save beyond PNG/JPEG (owner request 2026-11-19, born WITH the Save Image dialog round — the round itself only moved the PNG/JPEG choice into the dialog and did not add formats). Rough candidate set the pinned `image` crate already reads without new dependencies: BMP, GIF (first frame), ICO, TGA, QOI, TIFF, WebP; the WRITABLE subset is smaller and needs a per-format settings decision (a new Save-dialog radio entry would also touch the extension rules of `save_dialog.rs::compose_file_name`, the Open filter list in `file_io.rs::open_image`, and — for the MCP export — the path-extension mapping). Which formats make the cut for OPEN, which for SAVE, and any per-save-format options row is an owner decision. | The owner asked to RECORD the consideration, not to add formats now; the Save dialog shipped with PNG/JPEG as its scope. | When the owner names the formats he wants (or says "evaluate and propose" — then a short options note comes back for a decision BEFORE any code). |
 | F16 | 2026-11-18 | CI rust-cache is NOT installed (owner decision 2026-11-18: not now — recorded as a POSSIBLE IMPROVEMENT for when CI speed matters): when the time comes, add ONE step `uses: Swatinem/rust-cache@v2` to the `native` job right after `actions/checkout` in `.github/workflows/ci.yml`. How it works: the runner is a CLEAN VM per push today, so cargo downloads and compiles every dependency each time (~3–4 min); the action restores `~/.cargo` (downloaded dependency sources) and `target/` keyed on `Cargo.lock` + `Cargo.toml` + the toolchain version — unchanged deps are instant, only the crate itself rebuilds (the full `native` job drops from ~4 min to ~1 min). Facts to know: the first run after adding it stays cold (the cache builds up after), cache ≤ 10 GB per repo (ours fits easily), an occasional eviction costs one cold run, no config beyond the one line (the action locates `~/.cargo` and `target/` itself). | Nothing is broken and CI latency does not hurt yet; the improvement only pays when it does. | When the owner says CI is too slow and approves the edit (a ci.yml change is build tooling — needs the owner's OK per AGENTS.md "Repo facts"; one-line diff, owner-reviewed). |
@@ -33,7 +33,7 @@
 | F3 | 2026-11-11 | CI has no wasm/trunk job. | Deliberately postponed by the owner "until the web build has something to be shown". | After M8 gets its human pass (V9) or the owner says so. |
 | F5 | 2026-11-10 | PERF.md decisions pending: P3 (region-based undo — rewrites SPEC §3.6) and P6 (canvas/history budgets on wasm). | Owner-gated backlog; this line is a POINTER, the details live in PERF.md §0/§6. | Owner decision 2026-11-13: parked for the long term ("long-term parking") — during active development these are not needed; the owner picks them from PERF.md when he says so. |
 
-Owner reconfirmation 2026-11-21: F5 reconfirmed parked («в долгий ящик, сначала нужно реализовать все фичи»).
+Owner reconfirmation 2026-11-21: F5 reconfirmed parked ("parked for later — all the features need implementing first").
 Owner reconfirmation 2026-11-13: F3, F8, F9, F10 stay open as is ("the rest — not now").
 Owner hand-check 2026-11-13: F10's behavior — undo/redo act on the ACTIVE layer only — was
 verified by the owner manually ("I verified this by hand"): it matches this documented
@@ -44,7 +44,7 @@ Paid / closed (kept until the next compaction, then dropped):
 
 - F21 (the native dialogs froze the window — the owner's GNOME screenshot
   «"Russet" Is Not Responding») — **paid 2026-11-21**: the owner picked
-  variant A in chat («Делаем Вариант A»). One correction to the debt's birth
+  variant A in chat ("We go with Variant A"). One correction to the debt's birth
   record: the pinned rfd 0.15.4 uses the xdg-portal backend on Linux (NOT a
   nested GTK loop) — the freeze was `pollster::block_on` running the portal
   round-trip ON the UI thread. The fix: both native pickers (File ▸ Open
@@ -57,21 +57,21 @@ Paid / closed (kept until the next compaction, then dropped):
   No task in flight = zero machinery. +4 tests; V67 born (the human pass).
 
 - F19 (the AccessKit trim decision) — **paid 2026-11-21**: the owner approved
-  and applied the trim («удаление AccessKit прошло успешно») — the `accesskit`
+  and applied the trim ("the AccessKit removal went smoothly") — the `accesskit`
   feature is OFF the eframe feature list (the owner's local commit "Build:
   AccessKit removed from the eframe feature list"; the sandbox tree already
   carries it). The audit's other candidates (`system_fonts` ≈126 edges ~16%,
   `links`) stay recorded in the archived entry for a future size round.
 - F12 (the wheel-pan parity final design) — **paid 2026-11-21**: the owner
-  closed the design («различия в разных системах есть, но незначительные,
-  оставляем как есть») — the interim constants ARE final, no retune owed.
+  closed the design ("there are differences across systems but they are minor —
+  we keep it as is") — the interim constants ARE final, no retune owed.
   The `diagnostics` feature's last consumer is gone; dropping it is now a
   possible cleanup on the owner's word (nothing scheduled). The input
   surfaces the owner asked to record during the closure (touch, tablets,
   touchpad, graphics tablet) opened as F20 below.
 - F10 (undo/redo act on the ACTIVE layer only) — **paid 2026-11-21**: the
-  owner accepts the active-layer behavior as the answer for now («уже
-  реализовано и пока что достаточно хорошо»); the design doc's open
+  owner accepts the active-layer behavior as the answer for now ("it is
+  already implemented and good enough for now"); the design doc's open
   question #3 stays a design note, not a tracked work item.
 
 - F13 (floating windows JITTER during main-window resize on Linux/Wayland and Web) —

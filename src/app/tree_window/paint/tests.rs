@@ -82,9 +82,9 @@ fn resize_and_crop_rows_keep_their_summary() {
 
 #[test]
 fn pencil_brush_eraser_rows_draw_an_icon() {
-    // Owner request 2026-11-21: «пока что сделаем только для pencil», then
-    // the same-day follow-up «как pencil давай в дереве истории сделаем
-    // и brush и eraser» — the three painting tools are icon rows, every
+    // Owner request 2026-11-21: "for now we'll do it only for pencil", then
+    // the same-day follow-up "like pencil, let's have brush and eraser
+    // in the history tree too" — the three painting tools are icon rows, every
     // other kind stays a word row (the next tool joins on the owner's
     // word).
     assert_eq!(row_icon(&node(ActionKind::Pencil)), Some(Tool::Pencil));
@@ -103,8 +103,8 @@ fn pencil_brush_eraser_rows_draw_an_icon() {
 
 #[test]
 fn the_eraser_row_paints_no_swatch() {
-    // Owner request 2026-11-21: «у eraser почему-то есть цвет в дереве
-    // истории, так не должно быть» — the eraser erases, it does not
+    // Owner request 2026-11-21: "for some reason the eraser has a color in the
+    // history tree — that must not be" — the eraser erases, it does not
     // paint. The Start root and the resize rows carry no color either
     // (the resize choices live in the label); the painting tools do.
     assert!(!row_swatch(&node(ActionKind::Eraser)));

@@ -2,9 +2,8 @@
 //! from the top menu bar's Settings menu ("Settings…" — the one item), it
 //! lists the app's settings WITH their descriptions. It currently holds
 //! exactly ONE — the Mouse4/Mouse5 Undo/Redo choice as a three-option
-//! dropdown (ask / use / don't use; the owner: "что конкретно будет
-//! написано в этой выпадайке реши самостоятельно, мне главное чтобы
-//! сохранился смысл").
+//! dropdown (ask / use / don't use; the owner: "decide yourself what exactly this
+//! dropdown says — what matters to me is that the meaning is preserved").
 //!
 //! The window is built through the shared [`dialog_window`] /
 //! [`dialog_button_row`] helpers (centered on the main window at open,

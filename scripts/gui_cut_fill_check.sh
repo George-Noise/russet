@@ -80,7 +80,7 @@ sleep 0.5
 DISPLAY=:99 LD_LIBRARY_PATH="$LIB" "$XD" mousemove 300 299 click 1
 sleep 1.5
 
-# The process must be ALIVE (the owner: «вылетает приложение»).
+# The process must be ALIVE (the owner: "the app crashes").
 if ! pgrep -x russet >/dev/null; then
   echo "APP CRASHED after the fill click on the cut hole; log tail:"
   tail -20 "$OUT/app.log"

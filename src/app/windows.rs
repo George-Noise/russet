@@ -176,7 +176,7 @@ impl App {
     /// request 2026-11-20) is mode-aware: its icon draws the CURRENT
     /// sub-mode's mark, and while the tool is ALREADY active a left-click
     /// cycles the sub-mode forward and a right-click cycles it backward
-    /// ("типов выделений потом будет больше чем 2" — the cycle runs over
+    /// ("there will be more than 2 selection kinds later" — the cycle runs over
     /// [`SelectMode::ALL`]).
     fn tool_button(&mut self, ui: &mut egui::Ui, tool: Tool) {
         if tool == Tool::Select {

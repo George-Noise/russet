@@ -119,8 +119,8 @@ fn main() -> eframe::Result {
             // Owner-set fixed minimum window size (not derived from the default).
             .with_min_inner_size([500.0, 400.0]),
         // egui-winit's clipboard-shortcut conversion is DISABLED (owner
-        // decision 2026-11-20: "я не согласен с разработчиками этой
-        // библиотеки"): with it ON, egui-winit intercepts Ctrl+C/X/V,
+        // decision 2026-11-20: "I disagree with this
+        // library's developers"): with it ON, egui-winit intercepts Ctrl+C/X/V,
         // turns them into dedicated `Event::Copy`/`Cut`/`Paste` events and
         // swallows the plain Key events. OFF, the combos arrive as normal
         // Key events (with egui-winit's logical-or-physical key fallback,
