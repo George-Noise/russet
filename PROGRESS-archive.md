@@ -1,5 +1,32 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-24 — `Docs:` the language whitelist restored in the stamp; the non-English text translated to English repo-wide — owner request
+
+- **What:** the owner asked to translate everything not written in English (owner quotes
+  included, meaning preserved) and to restore the English-only rule if lost. The rule WAS lost:
+  the stamp's "English-only repo-wide — a language WHITELIST …" line (the 2026-11-18 rewording)
+  had fallen out of the snapshot during later stamp updates — restored verbatim at the top of the
+  stamp. Every Russian owner quote across the docs, the src doc comments and the probe scripts'
+  comments is English now (the 2026-11-18 «» → "…" attribution style kept); the whole
+  `benchmarks/RESEARCH-fill-optimization.md` document (171 lines) translated. Zero Cyrillic and
+  zero non-English LETTERS repo-wide (script-checked). Kept on purpose: `Bézier` (the standard
+  English math term) and the `grüße.png` Unicode test fixture in `save_dialog/tests.rs` (it
+  exercises non-ASCII byte handling — translating it would distort the test); µ/α/math symbols
+  are symbols, not language.
+- **Files:** `PROGRESS.md` (snapshot row + stamp + entry), `AGENTS.md`, `SPEC.md`,
+  `DEBTS-functional.md`, `DEBTS-verification.md`, `PROGRESS-archive.md`,
+  `benchmarks/RESEARCH-fill-optimization.md`, `scripts/{gui_cut_fill,gui_line_panel,
+  gui_wand_fill}_check.sh` (comments), 24 src files — comment-only edits inside .rs (every
+  changed line is a comment line, diff-verified).
+- **Verified:** the FULL gate anyway (scripts/ touched — beyond-.md diffs are not docs-only):
+  rules.sh HARD-green, `cargo fmt --check` clean, `cargo check --all-features` green, clippy
+  `-D warnings` green on --all-targets (default + mcp), `cargo test --profile gates` 370 green /
+  `--features mcp` 383 green (+1 ignored each); the .rs edits are comment-only (the quick-loop
+  `cargo check` alone would have sufficed); NO wasm check (no web-facing code touched); the
+  zero-non-English re-scan after the round.
+- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
+- **Commit title:** `Restore the English-only whitelist stamp and translate the repo's non-English text to English`
+
 ### 2026-11-24 — `Tooling:` the gates lane builds incrementally; the no-IC config splits into the owner's `gates-strict` (owner request in chat)
 
 - **What:** owner order: "move incremental = false into a separate flag that I will run

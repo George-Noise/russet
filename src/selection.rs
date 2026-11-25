@@ -369,6 +369,12 @@ fn distinct_points(points: &[Pos2]) -> Vec<Pos2> {
 /// tolerance `flood_pixels` compares with: `pct × 255 / 100`, so 0 % = the
 /// exact color only, 100 % = every pixel matches. 13 % (the startup value)
 /// maps to 33 ≈ the pre-slider const 32.
+///
+/// The magic wand and the Fill tool use ONE method driven by ONE slider:
+/// both floods read `ToolState::flood_tolerance_pct` (the Select panel's
+/// wand row and the Fill settings share the percent threshold) and go
+/// through this one conversion into [`flood_pixels`]'s per-channel
+/// tolerance.
 pub fn tolerance_from_percent(pct: u8) -> u8 {
     ((pct as u32) * 255 / 100) as u8
 }

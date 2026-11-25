@@ -17,7 +17,9 @@
 //! channel editable, `Alpha::OnlyBlend`) and the hex field — moved VERBATIM
 //! to the child [`palette_window`]; the parent keeps the Tools window and
 //! the shared placement plumbing, and the `App` method call sites
-//! (`app.rs`) are unchanged.
+//! (`app.rs`) are unchanged. The Select panel's mode/ops rows live in the
+//! child [`select_panel`] (owner request 2026-11-20); the tests live in
+//! `windows/tests.rs` split by topic plus `palette_window/tests.rs`.
 
 use eframe::egui::{self, Context, Id};
 

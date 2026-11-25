@@ -37,7 +37,7 @@ fn layers_window_id() -> egui::Id {
 /// wide and grew ~one row-overflow per frame FOREVER, spilling past the
 /// main window (owner report 2026-11-13). A fixed `default_width` with
 /// fixed-width rows cannot feed itself — the quirk is recorded in
-/// AGENTS.md "eframe/egui 0.37 API quirks".
+/// `docs/agents/egui-quirks.md` (the former AGENTS.md quirks section).
 const LAYERS_DEFAULT_WIDTH: f32 = 240.0;
 
 /// Fixed width of a row's name click target — the former

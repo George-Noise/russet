@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: AGENTS.md compacted to the rulebook budget — every rule kept, the narratives moved to their canonical homes (docs round, owner-approved skeleton) | done — comment-only .rs edits → rules.sh + cargo check green | 323 lines/64.8 KB → 182 lines/32 KB; owner-request narratives, verbatim quotes and date-stamped backstories stripped — dates kept ONLY where the date is the rule's identity (the scenarios/tests.rs lock, the history_tree.rs split deferral, the app.rs guard exemption); the per-module Repo-facts facts verified already at home in the module doc comments (app.rs's map, input.rs, selection.rs, tool_icons.rs, tree_window/paint.rs, fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap patches (input.rs's doc gained the global Esc/Ctrl+A/fill-click facts, selection.rs's tolerance_from_percent gained the ONE-slider fact, windows.rs's doc names the select_panel child); the egui 0.37 quirks section moved VERBATIM (26 bullets byte-identical, diff-checked) to the new docs/agents/egui-quirks.md + the new Reading-routes row; the warm-target retirement, the CI description and the delivery mechanics each deduplicated to ONE canonical statement; the new "Maintenance" section states the ~150–200-line budget mirroring the log-entry budget |
 | Extra: the session-start tooling stops lying — the --warm toolchain gate + the honest verdict, the driver's MCP startup probe, the windowfocus row (owner-picked PROBLEMS.md script fixes 1+2+5) | done — full gate green + live branch tests | the three PROBLEMS.md-documented lies fixed in the two dev scripts: `sandbox_check.sh --warm` gates the detached warm-up on cargo/rustup ("[NO] warm-up SKIPPED…" instead of a doomed job whose log claimed "finished (exit 0)" — the lie reproduced live at this session's start) and its verdict captures each rc before any $(date) resets $? ("finished (clippy 0, test 0)" / "warm-up FAILED (…) — verify.sh is NOT hot"); `visual_driver.py` gained a startup MCP probe (one initialize handshake, 5 s deadline, a loud DRIVER PROBE line + exit 3 on no-reply/EOF/bad path — the old silent exit 0 or hang-to-cap is dead; stdout line-buffered; the usage line documents the --features mcp requirement and the exit codes; mcp_smoke.py untouched); the GUI lane gained the windowfocus row (with a display `xdotool help` must list the subcommand, without one a [--] reminder, a loader-broken binary its own trap-13 [NO]) |
 | Extra: the English-only language whitelist promoted into AGENTS.md + the docs-only gate skip reconfirmed (owner 2026-11-25) | done — docs only | the whitelist rule that lived in the PROGRESS.md stamp (and fell out of it once) is now a durable AGENTS.md "Language" section — the repo/project whitelist has exactly ONE language, English (docs, code comments, scripts, log/debt entries, commit titles, app strings); the 2026-11-20 docs-only gate skip reconfirmed in Commands with the owner's 2026-11-25 wording: documentation-only work does NOT require building or testing; this round ran NO cargo command (owner: "no tests and no builds for now") — rules.sh green, the delivery byte-compares green; the Log compacted in the same edit (the two oldest entries moved verbatim to PROGRESS-archive.md, the heading carries the note) |
 | Extra: the language whitelist restored in the stamp + the non-English text translated to English repo-wide (owner 2026-11-24) | done — full gate green, zero non-English left (script-checked) | the whitelist line the 2026-11-18 rewording placed in the stamp had fallen out during later stamp updates — restored verbatim at the top of the stamp; every Russian owner quote across the docs, the src doc comments and the probe scripts' comments is English now (the «» → "…" attribution style kept), the whole `benchmarks/RESEARCH-fill-optimization.md` document translated; kept ON PURPOSE: `Bézier` (the standard English math term) and the `grüße.png` Unicode test fixture in `save_dialog/tests.rs` (it exercises non-ASCII byte handling — translating it would break the test); the µ/α/math symbols are symbols, not language; comment-only edits inside .rs (every changed line a comment line, diff-verified); zero Cyrillic + zero non-English letters repo-wide, script-checked |
@@ -75,7 +76,39 @@ no web-facing code touched.
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25, twice: the oldest entries moved verbatim to PROGRESS-archive.md, newest first — the 2026-11-24 `Tooling:` gates-lane profile split, then the `Fix:` latch and `Feat:` Select All; the newest 3 entries stay.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25, three times: the oldest entries moved verbatim to PROGRESS-archive.md, newest first — the 2026-11-24 `Tooling:` gates-lane profile split, then the `Fix:` latch and `Feat:` Select All, then the 2026-11-24 `Docs:` whitelist-restored entry; the newest 3 entries stay.)
+
+### 2026-11-25 — `Docs:` AGENTS.md compacted to the rulebook budget — 323 lines/64.8 KB → 182 lines/32 KB; every rule survives, the narratives moved to their canonical homes
+
+- **What:** the docs-compaction round (the owner approved the skeleton up front). Rules kept,
+  history stripped — each rule keeps itself + at most one rationale line; dates survive ONLY
+  where the date is the rule's identity (the `scenarios/tests.rs` owner lock, the
+  `history_tree.rs` split deferral, the `app.rs` guard exemption). The per-module facts of the
+  "Repo facts" mega-bullets were verified ALREADY at home in the module doc comments
+  (app.rs's map, input.rs, selection.rs, tool_icons.rs/draw.rs, tree_window/paint.rs,
+  fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap
+  patches (input.rs's doc gained the global Esc / Ctrl+A / fill-click facts;
+  selection.rs's `tolerance_from_percent` gained the ONE-slider-ONE-method fact; windows.rs's
+  doc names the `select_panel` child). The "eframe/egui 0.37 API quirks" section moved VERBATIM
+  — 26 bullets, byte-identical, diff-checked — into the new `docs/agents/egui-quirks.md`; the
+  Reading routes gained the "UI / windows / egui work" row; `layers_window.rs`'s comment
+  citation re-pointed. Deduplicated to ONE canonical statement each: the warm-target retirement
+  (was 3 statements + a pointer), the CI description (was 2 — canonical in "Repo facts",
+  "Commands" keeps a pointer), the delivery mechanics (canonical in "Delivery ritual"). New
+  "Maintenance" section: the ~150–200-line budget, mirroring the log-entry budget.
+- **Files:** `AGENTS.md`, `docs/agents/egui-quirks.md` (new), `TIMING.md` (the cold cargo-check
+  row), `PROGRESS.md`, `src/app/input.rs`, `src/selection.rs`, `src/app/windows.rs`,
+  `src/app/layers_window.rs` — the four .rs diffs are DOC-COMMENT-ONLY (every changed line a
+  `//!`/`///` comment, diff-grep proven).
+- **Verified:** the gate case, stated per AGENTS.md "Commands": NOT docs-only (Rust comments
+  touched), but comment-only edits → `scripts/rules.sh` + `cargo check` is enough. `rules.sh`
+  HARD GREEN (report-only notes unchanged — the over-guard files were over the limit before
+  this round); `cargo check` clean (fresh sandbox: rustup + the pinned 1.99.1 toolchain
+  installed first, 1m 26s — the TIMING.md row added); `cargo fmt --check` clean.
+- **Owner-checks:** skim the mapping table in the chat reply (each trimmed/moved block → its
+  new location) to confirm nothing was lost; skim `docs/agents/egui-quirks.md` (the verbatim
+  move); the rules.sh over-guard report lines still await your split verdicts.
+- **Commit title:** `Docs: compact AGENTS.md to the rulebook budget — egui quirks moved verbatim to docs/agents/egui-quirks.md, per-module facts live in module doc comments`
 
 ### 2026-11-25 — `Tooling:` the session-start tooling stops lying — the --warm toolchain gate, the honest verdict, the driver's MCP startup probe, the windowfocus row — the owner-picked PROBLEMS.md script fixes (items 1+2+5)
 
@@ -140,31 +173,3 @@ no web-facing code touched.
   worktree = unpacked zip, all three byte-match).
 - **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
 - **Commit title:** `State the English-only repo language whitelist in AGENTS.md; reconfirm the docs-only gate skip`
-
-### 2026-11-24 — `Docs:` the language whitelist restored in the stamp; the non-English text translated to English repo-wide — owner request
-
-- **What:** the owner asked to translate everything not written in English (owner quotes
-  included, meaning preserved) and to restore the English-only rule if lost. The rule WAS lost:
-  the stamp's "English-only repo-wide — a language WHITELIST …" line (the 2026-11-18 rewording)
-  had fallen out of the snapshot during later stamp updates — restored verbatim at the top of the
-  stamp. Every Russian owner quote across the docs, the src doc comments and the probe scripts'
-  comments is English now (the 2026-11-18 «» → "…" attribution style kept); the whole
-  `benchmarks/RESEARCH-fill-optimization.md` document (171 lines) translated. Zero Cyrillic and
-  zero non-English LETTERS repo-wide (script-checked). Kept on purpose: `Bézier` (the standard
-  English math term) and the `grüße.png` Unicode test fixture in `save_dialog/tests.rs` (it
-  exercises non-ASCII byte handling — translating it would distort the test); µ/α/math symbols
-  are symbols, not language.
-- **Files:** `PROGRESS.md` (snapshot row + stamp + entry), `AGENTS.md`, `SPEC.md`,
-  `DEBTS-functional.md`, `DEBTS-verification.md`, `PROGRESS-archive.md`,
-  `benchmarks/RESEARCH-fill-optimization.md`, `scripts/{gui_cut_fill,gui_line_panel,
-  gui_wand_fill}_check.sh` (comments), 24 src files — comment-only edits inside .rs (every
-  changed line is a comment line, diff-verified).
-- **Verified:** the FULL gate anyway (scripts/ touched — beyond-.md diffs are not docs-only):
-  rules.sh HARD-green, `cargo fmt --check` clean, `cargo check --all-features` green, clippy
-  `-D warnings` green on --all-targets (default + mcp), `cargo test --profile gates` 370 green /
-  `--features mcp` 383 green (+1 ignored each); the .rs edits are comment-only (the quick-loop
-  `cargo check` alone would have sufficed); NO wasm check (no web-facing code touched); the
-  zero-non-English re-scan after the round.
-- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
-- **Commit title:** `Restore the English-only whitelist stamp and translate the repo's non-English text to English`
-

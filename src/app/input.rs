@@ -6,6 +6,19 @@
 //! the `tools::smooth` window — fast strokes are smooth, the pencil stays
 //! a 1 px Bresenham line).
 //!
+//! GLOBAL keys owned here: the GLOBAL Esc deselect — a DOCUMENT-state
+//! deselect, not a Select-tool fixture, so any tool's Esc drops it; the
+//! guards skip the key while a select gesture / preview / Text entry is
+//! pending, so every local consumer keeps its Esc meanings. The GLOBAL
+//! Select All (Ctrl+A): the full-canvas Rect replace through
+//! [`App::select_all`], guarded by the shared `canvas_gesture_active`.
+//! The FILL tool's flood click uses the wand's `flood_pixels` core with
+//! the primary/secondary well policy and the selection clip: one click =
+//! one `ActionKind::Fill` node, but ONLY when the flood wrote something
+//! (a zero written-bbox returns early with no node), and the click itself
+//! is GATED by the selection — a click outside an active selection never
+//! fires (`fill_click_inside_selection`).
+//!
 //! Tool-bound gestures (Line/Curve/Shape/Text) live in [`super::preview`]
 //! and [`super::text_tool`]; the per-frame dispatch happens in the
 //! orchestrator's `draw_canvas` ([`super`]). Split off `app.rs` by the
