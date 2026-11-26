@@ -189,6 +189,17 @@ pub struct App {
     /// until the last finger lifts. Updated in
     /// `camera::handle_touch_gesture`.
     touch_gesture: camera::TouchGesture,
+    /// The touch-session BASELINE for the gesture takeover (owner bug
+    /// report 2026-11-26: "when trying to use zoom or pan on a smartphone
+    /// in web, the selected tool is still used" — the attempt must leave
+    /// no tool marks): the active layer + its history head latched on the
+    /// touch session's FIRST pass (`camera::handle_touch_gesture`), before
+    /// the same pass's tool dispatch can paint (eframe-web's emulated
+    /// primary press makes the first finger paint through the pointer
+    /// path). When the multi-touch gesture begins,
+    /// [`input::touch_takeover`] reverts the active layer's history to
+    /// this baseline; cleared when the last finger lifts.
+    touch_baseline: Option<(usize, Option<NodeId>)>,
     /// The session's STARTUP smartphone latch (owner request 2026-11-26,
     /// amending the 2026-11-25 compact rules): `is_smartphone_viewport`
     /// evaluated exactly ONCE, on the session's FIRST frame
@@ -478,6 +489,7 @@ impl App {
             pan: Vec2::ZERO,
             pan_key_latch: camera::PanKeyLatch::default(),
             touch_gesture: camera::TouchGesture::default(),
+            touch_baseline: None,
             smartphone_session: None,
             is_stroking: false,
             stroke_smooth: SmoothStroke::new(Pos2::ZERO),
@@ -850,14 +862,17 @@ impl App {
         // The multi-touch gesture (owner requests 2026-11-25/2026-11-26,
         // the F20 web slices): a two-plus-finger gesture pans by the
         // touches' average movement and pinch-zooms by the spreading
-        // ratio, and the FIRST gesture frame ends any in-flight freehand
-        // stroke — committed as its node, the painted pixels staying —
-        // before the gesture owns the input. The session stays "panning"
-        // until the last finger lifts, so the leftover finger paints
-        // nothing.
+        // ratio, and the gesture's FIRST frame REVERTS everything the
+        // touch session has painted so far ([`input::touch_takeover`],
+        // owner bug report 2026-11-26: eframe-web's emulated primary
+        // press makes the session's first finger paint before the
+        // gesture can engage — a zoom/pan attempt must leave no tool
+        // marks; the reverted nodes stay as ordinary tree forks). The
+        // session stays "panning" until the last finger lifts, so the
+        // leftover finger paints nothing.
         let touch = self.handle_touch_gesture(ui, panel_rect);
         if touch.began {
-            self.commit_stroke_gesture();
+            self.touch_takeover();
         }
         let panning = self.handle_pan(ui, &response) || touch.session;
         let rect = self.canvas_rect(panel_rect);

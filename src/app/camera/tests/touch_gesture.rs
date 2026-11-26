@@ -137,3 +137,50 @@ fn a_pinch_frame_carries_its_factor_and_the_previous_center() {
     let fresh = pan.step(Some(gesture(Vec2::ZERO, 1.0, Pos2::new(40.0, 40.0))), true);
     assert_eq!(fresh.anchor, None, "a fresh session starts centerless");
 }
+
+#[test]
+fn the_sessions_birth_pass_flags_first_touch_once() {
+    // The baseline latch's carrier (owner bug report 2026-11-26): the pass
+    // where touches went from NONE to any is the touch session's birth —
+    // the flag fires there and only there, so the caller latches the
+    // history baseline exactly once per session, BEFORE the same pass's
+    // tool dispatch can paint.
+    let mut pan = TouchGesture::default();
+
+    let birth = pan.step(None, true);
+    assert!(birth.first_touch, "no touches -> one finger is the birth");
+    assert!(!birth.session, "one finger is no gesture");
+
+    let same = pan.step(None, true);
+    assert!(!same.first_touch, "the flag fires once per session");
+
+    let takeover = pan.step(Some(gesture(Vec2::new(3.0, 3.0), 1.0, Pos2::ZERO)), true);
+    assert!(takeover.began);
+    assert!(
+        !takeover.first_touch,
+        "the takeover pass needs no new latch — the birth pass already ran"
+    );
+
+    // The last finger lifts; a NEW session's first pass flags again.
+    pan.step(None, false);
+    let fresh = pan.step(None, true);
+    assert!(fresh.first_touch, "a fresh session's birth pass flags");
+}
+
+#[test]
+fn a_simultaneous_landing_births_and_begins_in_one_pass() {
+    // Both fingers landing in ONE pass (the fresh-session simultaneous
+    // landing on a phone): the birth flag STILL fires on that same pass —
+    // the baseline latch precedes the takeover's revert, which reads the
+    // latched (pre-touch) head.
+    let mut pan = TouchGesture::default();
+
+    let frame = pan.step(
+        Some(gesture(Vec2::ZERO, 1.0, Pos2::new(150.0, 150.0))),
+        true,
+    );
+
+    assert!(frame.first_touch, "the simultaneous landing is a birth");
+    assert!(frame.began, "and a takeover at once");
+    assert!(frame.session);
+}

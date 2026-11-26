@@ -317,3 +317,41 @@ fn single_color_nodes_carry_one_color_and_two_color_ones_both() {
     assert_eq!(node.color, Color32::from_rgb(0xaa, 0x00, 0x00));
     assert_eq!(node.color2, Some(Color32::from_rgb(0x00, 0x00, 0xbb)));
 }
+
+#[test]
+fn head_descends_from_covers_the_line_and_rejects_the_ancestor() {
+    // The touch-gesture takeover's revert guard (owner bug report
+    // 2026-11-26): the head, its children, its grandchildren descend from
+    // the baseline — a user UNDO mid-touch-session moves the head to the
+    // baseline's PARENT (an ancestor), where a blind "undo until the
+    // baseline" loop would eat nodes that predate the touch.
+    let mut tree = fresh_tree();
+    stroke(&mut tree, 2);
+    stroke(&mut tree, 3);
+    let baseline = tree.head();
+
+    assert!(tree.head_descends_from(baseline));
+    stroke(&mut tree, 4);
+    assert!(
+        tree.head_descends_from(baseline),
+        "a grandchild still descends from the baseline"
+    );
+
+    tree.undo();
+    assert!(
+        tree.head_descends_from(baseline),
+        "the baseline itself descends from itself"
+    );
+
+    // The user's own undo walks PAST the baseline: the head is now the
+    // baseline's parent — an ancestor, not a descendant.
+    tree.undo();
+    assert!(
+        !tree.head_descends_from(baseline),
+        "an ancestor of the baseline is no descendant — the revert must not run"
+    );
+    assert!(
+        !tree.head_descends_from(None),
+        "no head-to-None path exists either"
+    );
+}

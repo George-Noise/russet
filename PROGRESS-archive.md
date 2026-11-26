@@ -1,5 +1,37 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-25 — `Docs:` AGENTS.md compacted to the rulebook budget — 323 lines/64.8 KB → 182 lines/32 KB; every rule survives, the narratives moved to their canonical homes
+
+- **What:** the docs-compaction round (the owner approved the skeleton up front). Rules kept,
+  history stripped — each rule keeps itself + at most one rationale line; dates survive ONLY
+  where the date is the rule's identity (the `scenarios/tests.rs` owner lock, the
+  `history_tree.rs` split deferral, the `app.rs` guard exemption). The per-module facts of the
+  "Repo facts" mega-bullets were verified ALREADY at home in the module doc comments
+  (app.rs's map, input.rs, selection.rs, tool_icons.rs/draw.rs, tree_window/paint.rs,
+  fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap
+  patches (input.rs's doc gained the global Esc / Ctrl+A / fill-click facts;
+  selection.rs's `tolerance_from_percent` gained the ONE-slider-ONE-method fact; windows.rs's
+  doc names the `select_panel` child). The "eframe/egui 0.37 API quirks" section moved VERBATIM
+  — 26 bullets, byte-identical, diff-checked — into the new `docs/agents/egui-quirks.md`; the
+  Reading routes gained the "UI / windows / egui work" row; `layers_window.rs`'s comment
+  citation re-pointed. Deduplicated to ONE canonical statement each: the warm-target retirement
+  (was 3 statements + a pointer), the CI description (was 2 — canonical in "Repo facts",
+  "Commands" keeps a pointer), the delivery mechanics (canonical in "Delivery ritual"). New
+  "Maintenance" section: the ~150–200-line budget, mirroring the log-entry budget.
+- **Files:** `AGENTS.md`, `docs/agents/egui-quirks.md` (new), `TIMING.md` (the cold cargo-check
+  row), `PROGRESS.md`, `src/app/input.rs`, `src/selection.rs`, `src/app/windows.rs`,
+  `src/app/layers_window.rs` — the four .rs diffs are DOC-COMMENT-ONLY (every changed line a
+  `//!`/`///` comment, diff-grep proven).
+- **Verified:** the gate case, stated per AGENTS.md "Commands": NOT docs-only (Rust comments
+  touched), but comment-only edits → `scripts/rules.sh` + `cargo check` is enough. `rules.sh`
+  HARD GREEN (report-only notes unchanged — the over-guard files were over the limit before
+  this round); `cargo check` clean (fresh sandbox: rustup + the pinned 1.99.1 toolchain
+  installed first, 1m 26s — the TIMING.md row added); `cargo fmt --check` clean.
+- **Owner-checks:** skim the mapping table in the chat reply (each trimmed/moved block → its
+  new location) to confirm nothing was lost; skim `docs/agents/egui-quirks.md` (the verbatim
+  move); the rules.sh over-guard report lines still await your split verdicts.
+- **Commit title:** `Docs: compact AGENTS.md to the rulebook budget — egui quirks moved verbatim to docs/agents/egui-quirks.md, per-module facts live in module doc comments`
+
 
 ### 2026-11-25 — `Docs:` the English-only language whitelist promoted into AGENTS.md; the docs-only gate skip reconfirmed — owner request
 

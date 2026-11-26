@@ -218,6 +218,14 @@ impl LayerStack {
         self.layers[self.active].tree.undo()
     }
 
+    /// Does the ACTIVE layer's head descend from `baseline`? See
+    /// [`crate::history_tree::LayerTree::head_descends_from`] — the
+    /// touch-gesture takeover's revert guard (owner bug report
+    /// 2026-11-26).
+    pub fn head_descends_from(&self, baseline: Option<NodeId>) -> bool {
+        self.layers[self.active].tree.head_descends_from(baseline)
+    }
+
     /// Redo on the ACTIVE layer (the "last left branch" rule). The caller
     /// restores the pixels from the new head's snapshot.
     pub fn redo(&mut self) -> bool {

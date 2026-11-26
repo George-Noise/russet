@@ -11,7 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
-| Extra: the touch PINCH zoom + the smartphone rules latched at STARTUP + BMP in open and save (owner 2026-11-26) | done — full gate green + the wasm check + the visual driver; +6 tests | the pinch zoom rides the same two-finger gesture as the pan (continuous, anchored at the previous frame's gesture center — `camera.rs::TouchGesture`, renamed from `TouchPan`; the pan applies AFTER the anchored zoom so the content follows the fingers exactly; `set_zoom` re-uploads only on crisp/smooth sampling flips); the smartphone compact rules are decided ONCE on the first frame (`app.rs::latch_smartphone_session`) — a phone rotation never shows/hides a window, the Tool Log starts hidden with its View item LIVE; BMP = the `bmp` feature flag on the pinned image crate, zero new dependencies (the lock untouched), 32-bit RGBA saves, the locked-ON Lossless row with NO knob |
+| Extra: the touch-gesture TAKEOVER revert — a zoom/pan attempt leaves NO tool marks (owner bug report 2026-11-26) | done — full gate green; +5 tests | eframe-web emulates a primary POINTER press on EVERY touchstart (`eframe/src/web/events.rs::install_touchstart`) and egui's multi-touch gesture only engages on the frame AFTER the second finger lands, so the first finger of every attempt painted (a dot, a short stroke, a fill) — the takeover at the gesture's first frame now REVERTS it all: an in-flight stroke is committed as its node FIRST (pixels become a real node — the revert restores through snapshots only), then the active layer's history is undone back to the baseline latched on the touch session's BIRTH pass (`app.rs::touch_baseline`, `camera.rs::TouchGestureFrame::first_touch` — the 0→any-touches transition; a simultaneous landing births AND begins in one pass, the latch runs first), the pending Line/Shape/Text/Select states are cancelled, the Tool Log stays QUIET (the net effect: nothing happened); the reverted nodes stay as ordinary tree forks (redoable), and the revert only runs while the head still descends from the baseline (`history_tree.rs::LayerTree::head_descends_from` — a user undo mid-session moves the head to the ancestor side, the wrong direction); V86 born, V84 amended |
 | Extra: the web multitouch pan + the smartphone compact rules (the F20 web slice, owner 2026-11-25) + the RESTORED mouse drag-pan (the delta line lost in the 2026-11-13 split) | done — full gate green + the wasm check + the visual driver; +9 tests | two-plus fingers pan by the average movement (`camera.rs::TouchPan` via egui `multi_touch().translation_delta`; a second finger landing mid-stroke commits the stroke as its node first — `input.rs::commit_stroke_gesture`; the session stays pan-only until the last finger lifts); a phone-width WEB viewport (600 pt, `main.rs::is_smartphone_viewport`, cfg-only in main.rs per the Repo-facts rule) gets the compact rules — every floating window's first-open gap FLUSH 0 (`placement.rs::first_open_gap`/`layers_first_open_lift`, all five call sites: Tools/Palette/Layers/Tree+clones) and the Tool Log window + its View item hidden (the log keeps recording); `handle_pan` regains `self.pan += response.drag_delta()` — the middle/Space+LMB drag pans moved NOTHING since e8eb5d1 (2026-11-13); two new egui quirks recorded (the headless drag recipe: TWO warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a prior pointer pos) |
 | Extra: AGENTS.md compacted to the rulebook budget — every rule kept, the narratives moved to their canonical homes (docs round, owner-approved skeleton) | done — comment-only .rs edits → rules.sh + cargo check green | 323 lines/64.8 KB → 182 lines/32 KB; owner-request narratives, verbatim quotes and date-stamped backstories stripped — dates kept ONLY where the date is the rule's identity (the scenarios/tests.rs lock, the history_tree.rs split deferral, the app.rs guard exemption); the per-module Repo-facts facts verified already at home in the module doc comments (app.rs's map, input.rs, selection.rs, tool_icons.rs, tree_window/paint.rs, fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap patches (input.rs's doc gained the global Esc/Ctrl+A/fill-click facts, selection.rs's tolerance_from_percent gained the ONE-slider fact, windows.rs's doc names the select_panel child); the egui 0.37 quirks section moved VERBATIM (26 bullets byte-identical, diff-checked) to the new docs/agents/egui-quirks.md + the new Reading-routes row; the warm-target retirement, the CI description and the delivery mechanics each deduplicated to ONE canonical statement; the new "Maintenance" section states the ~150–200-line budget mirroring the log-entry budget |
 | Extra: the session-start tooling stops lying — the --warm toolchain gate + the honest verdict, the driver's MCP startup probe, the windowfocus row (owner-picked PROBLEMS.md script fixes 1+2+5) | done — full gate green + live branch tests | the three PROBLEMS.md-documented lies fixed in the two dev scripts: `sandbox_check.sh --warm` gates the detached warm-up on cargo/rustup ("[NO] warm-up SKIPPED…" instead of a doomed job whose log claimed "finished (exit 0)" — the lie reproduced live at this session's start) and its verdict captures each rc before any $(date) resets $? ("finished (clippy 0, test 0)" / "warm-up FAILED (…) — verify.sh is NOT hot"); `visual_driver.py` gained a startup MCP probe (one initialize handshake, 5 s deadline, a loud DRIVER PROBE line + exit 3 on no-reply/EOF/bad path — the old silent exit 0 or hang-to-cap is dead; stdout line-buffered; the usage line documents the --features mcp requirement and the exit codes; mcp_smoke.py untouched); the GUI lane gained the windowfocus row (with a display `xdotool help` must list the subcommand, without one a [--] reminder, a loader-broken binary its own trap-13 [NO]) |
@@ -64,16 +64,16 @@
 
 **Verification stamp:** English-only repo-wide — a language WHITELIST (English
 is simply the only written language here: comments, docs, commit titles), not a
-script blacklist. FULL gate re-verified 2026-11-26 (the
-pinch-zoom/startup-latch/BMP round — Rust + docs, the full gate): fmt clean,
+script blacklist. FULL gate re-verified 2026-11-26 (the touch-gesture takeover
+REVERT round — platform-neutral Rust, the full gate): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green on --all-targets (default +
-mcp + fill-bench), `cargo test --profile gates` 398 green / with `--features
-mcp` 398 green (+1 ignored each; +6 tests of this round: the pinch machine's
-anchor law, the pinch-spread and move-and-spread REAL-pass zooms, the BMP
-round trips, the startup-latch freeze); the WASM check clean (`cargo check
---target wasm32-unknown-unknown`, 39 s cold — the web save glue gained the
-BMP arm); the visual driver green through target/gates/russet under Xvfb
-(ALL scenarios).
+mcp + fill-bench), `cargo test --profile gates` 403 green / with `--features
+mcp` 403 green (+1 ignored each; +5 tests of this round: the touch machine's
+birth-flag pair, the REAL-pass pencil-dot and fill revert regressions seeded
+in the exact eframe-web event shape, the history tree's ancestry guard); no
+WASM check needed (the change touches no web-facing code — no `web/`, no
+cfg paths, no trunk config; the native gate is the lane per AGENTS.md's
+wasm-check economy).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -81,7 +81,54 @@ BMP arm); the visual driver green through target/gates/russet under Xvfb
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, a fifth time: the oldest entry — the `Tooling:` session-start-tooling round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, a sixth time: the oldest live entry — the AGENTS.md-compaction `Docs:` round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+
+
+### 2026-11-26 — `Fix:` the touch-gesture takeover REVERTS the session's tool marks — owner bug report
+
+- **What:** the owner's phone report: "при попытке воспользоваться на
+  смартфоне в вебе зумом или паном выбранный инструмент всё равно
+  используется" — every zoom/pan attempt left tool marks. Root cause
+  (verified against the installed eframe 0.37.0 source): eframe-web
+  pushes an EMULATED primary pointer press on EVERY touchstart (the
+  first touch drives the pointer), and egui's multi-touch gesture starts
+  only on the frame AFTER the second finger lands (`touch_state.rs`
+  seeds from the PREVIOUS pass's interact pos) — so finger 1 always
+  painted through the ordinary tool path before the suppression
+  engaged, and the 2026-11-25 convention ("commit the in-flight stroke,
+  pixels stay") kept the marks. The takeover now leaves NOTHING:
+  `input.rs::touch_takeover` runs on the gesture's first frame — commit
+  any in-flight stroke as its node QUIET (the revert restores pixels
+  through node snapshots only; no phantom Tool Log row), undo the active
+  layer's history back to the touch session's baseline (the head latched
+  on the session's BIRTH pass — `camera.rs::TouchGesture` gained
+  `had_touches`/`first_touch`; a simultaneous landing births and begins
+  in ONE pass, the latch running first), cancel the pending
+  Line/Shape/Text/Select states, all guarded by the new
+  `LayerTree::head_descends_from` (a user undo mid-session would put the
+  head on the ancestor side — no wrong-direction undoing). One finger
+  still paints; the session suppression until the last finger lifts is
+  unchanged. New quirk in `docs/agents/egui-quirks.md` (the emulated
+  press + the late gesture start).
+- **Files:** `src/app/camera.rs` (+ tests: `touch_gesture.rs`, NEW
+  `tests/touch_takeover.rs`, `touch_gesture_pass.rs`), `src/app.rs`,
+  `src/app/input.rs`, `src/history_tree.rs` (+ tests), `src/layers.rs`,
+  `SPEC.md` (§3.4), `docs/agents/egui-quirks.md`, both `DEBTS-*.md`
+  (V86 born, V84 amended; F20's web-slice text), `PROGRESS.md`,
+  `TIMING.md`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 29 s hot
+  (the recycled-sandbox cold warm-up ~4 min) — rules.sh HARD-green, fmt
+  clean, clippy `-D warnings` × default/mcp/fill-bench, `cargo test
+  --profile gates` 403 green / `--features mcp` 403 green (+1 ignored
+  each; +5 tests of this round: the machine's birth-flag pair, the
+  REAL-pass pencil-dot and fill REVERT regressions seeded in the exact
+  eframe-web shape, the ancestry guard). No WASM check — the change is
+  platform-neutral Rust (no `web/`, no cfg paths, no trunk config).
+- **Owner-checks:** V86 born (the phone revert pass); V84 amended (the
+  takeover sentence changed). Open: V86, V85, V84, V81 (the 4 newest of
+  8 open).
+- **Commit title:** `Fix: the multi-touch takeover reverts the session's tool marks (a zoom/pan attempt paints nothing)`
+
 
 
 ### 2026-11-26 — `Feat:` the touch pinch zoom + the startup-latched smartphone rules + BMP in open and save — owner request
@@ -166,35 +213,3 @@ BMP arm); the visual driver green through target/gates/russet under Xvfb
 - **Owner-checks:** V84 born (the web pass on a real phone + the desktop/native legs,
   incl. the restored drag pan). Open: V84, V81, V80, V66 (the 4 newest of 6 open).
 - **Commit title:** `Feat: web multitouch pan + smartphone compact windows; restore the lost mouse drag-pan`
-
-### 2026-11-25 — `Docs:` AGENTS.md compacted to the rulebook budget — 323 lines/64.8 KB → 182 lines/32 KB; every rule survives, the narratives moved to their canonical homes
-
-- **What:** the docs-compaction round (the owner approved the skeleton up front). Rules kept,
-  history stripped — each rule keeps itself + at most one rationale line; dates survive ONLY
-  where the date is the rule's identity (the `scenarios/tests.rs` owner lock, the
-  `history_tree.rs` split deferral, the `app.rs` guard exemption). The per-module facts of the
-  "Repo facts" mega-bullets were verified ALREADY at home in the module doc comments
-  (app.rs's map, input.rs, selection.rs, tool_icons.rs/draw.rs, tree_window/paint.rs,
-  fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap
-  patches (input.rs's doc gained the global Esc / Ctrl+A / fill-click facts;
-  selection.rs's `tolerance_from_percent` gained the ONE-slider-ONE-method fact; windows.rs's
-  doc names the `select_panel` child). The "eframe/egui 0.37 API quirks" section moved VERBATIM
-  — 26 bullets, byte-identical, diff-checked — into the new `docs/agents/egui-quirks.md`; the
-  Reading routes gained the "UI / windows / egui work" row; `layers_window.rs`'s comment
-  citation re-pointed. Deduplicated to ONE canonical statement each: the warm-target retirement
-  (was 3 statements + a pointer), the CI description (was 2 — canonical in "Repo facts",
-  "Commands" keeps a pointer), the delivery mechanics (canonical in "Delivery ritual"). New
-  "Maintenance" section: the ~150–200-line budget, mirroring the log-entry budget.
-- **Files:** `AGENTS.md`, `docs/agents/egui-quirks.md` (new), `TIMING.md` (the cold cargo-check
-  row), `PROGRESS.md`, `src/app/input.rs`, `src/selection.rs`, `src/app/windows.rs`,
-  `src/app/layers_window.rs` — the four .rs diffs are DOC-COMMENT-ONLY (every changed line a
-  `//!`/`///` comment, diff-grep proven).
-- **Verified:** the gate case, stated per AGENTS.md "Commands": NOT docs-only (Rust comments
-  touched), but comment-only edits → `scripts/rules.sh` + `cargo check` is enough. `rules.sh`
-  HARD GREEN (report-only notes unchanged — the over-guard files were over the limit before
-  this round); `cargo check` clean (fresh sandbox: rustup + the pinned 1.99.1 toolchain
-  installed first, 1m 26s — the TIMING.md row added); `cargo fmt --check` clean.
-- **Owner-checks:** skim the mapping table in the chat reply (each trimmed/moved block → its
-  new location) to confirm nothing was lost; skim `docs/agents/egui-quirks.md` (the verbatim
-  move); the rules.sh over-guard report lines still await your split verdicts.
-- **Commit title:** `Docs: compact AGENTS.md to the rulebook budget — egui quirks moved verbatim to docs/agents/egui-quirks.md, per-module facts live in module doc comments`

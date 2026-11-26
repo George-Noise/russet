@@ -6,8 +6,10 @@
 //! gesture, [`TouchGesture`], owner requests 2026-11-25/26: two or more
 //! fingers PAN by the average movement of all touch points and PINCH-zoom
 //! by the touches' spreading distance ratio, egui's
-//! `InputState::multi_touch()` deltas). A child module of `app`, so it can
-//! touch `App`'s private fields; `app.rs` stays the orchestrator.
+//! `InputState::multi_touch()` deltas). The gesture's first frame also
+//! triggers the TAKEOVER revert (owner bug report 2026-11-26) in
+//! `input.rs::touch_takeover`. A child module of `app`, so it can touch
+//! `App`'s private fields; `app.rs` stays the orchestrator.
 
 use eframe::egui::{self, Key, MouseWheelUnit, PointerButton, Pos2, Rect, Vec2};
 
@@ -210,10 +212,12 @@ impl App {
     /// zooms. The caller (`draw_canvas`) additionally treats the whole
     /// touch session as "panning" from the gesture's first frame until the
     /// last finger lifts ([`TouchGestureFrame::session`]) — no stroke starts or
-    /// resumes on the leftover finger — and commits an in-flight freehand
-    /// stroke as its node on the gesture's FIRST frame
-    /// ([`TouchGestureFrame::began`], `input::commit_stroke_gesture`): the
-    /// pixels the one finger already painted stay, undoable as one node.
+    /// resumes on the leftover finger — and on the gesture's FIRST frame
+    /// REVERTS everything the touch session has painted so far
+    /// ([`TouchGestureFrame::began`], `input::touch_takeover`, owner bug
+    /// report 2026-11-26: eframe-web's emulated primary press makes the
+    /// session's first finger paint before the gesture engages, and a
+    /// zoom/pan attempt must leave no tool marks).
     /// egui itself zeroes BOTH deltas on the frames the finger COUNT changes
     /// (finger add/remove re-baselines the average), so no debounce is
     /// needed on this side either.
@@ -225,6 +229,19 @@ impl App {
         let multi = ui.input(|i| i.multi_touch());
         let touches_down = ui.input(|i| i.any_touches());
         let frame = self.touch_gesture.step(multi, touches_down);
+        // The takeover baseline (owner bug report 2026-11-26): latched on
+        // the touch session's BIRTH pass — before the same pass's tool
+        // dispatch can paint anything (the first finger's emulated pointer
+        // press paints AFTER this) — and cleared when the last finger
+        // lifts. The gesture's first frame (`frame.began`, handled by the
+        // caller in `draw_canvas`) reverts the active layer's history to
+        // this baseline — see [`input::touch_takeover`].
+        if frame.first_touch {
+            self.touch_baseline = Some((self.layers.active_layer(), self.layers.head()));
+        }
+        if !touches_down {
+            self.touch_baseline = None;
+        }
         // Zoom FIRST, pan SECOND — the exact fingers-follow math: scaling
         // around the OLD midpoint keeps the canvas point that was under it
         // fixed there, and the pan delta (the midpoint's own movement)
@@ -388,16 +405,24 @@ fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
 /// the touch session counts as "panning", so the leftover finger cannot
 /// resume painting until every finger has lifted (the standard paint-app
 /// convention). `began` flags the gesture's FIRST frame — the takeover
-/// moment, on which the caller commits any in-flight freehand stroke before
-/// the gesture owns the input. The state also remembers the PREVIOUS
-/// frame's gesture center — the pinch zoom's anchor (see
-/// [`TouchGestureFrame::anchor`]). Pure so the convention is unit-testable
-/// without an egui context; App carries it next to `pan` (like
-/// [`PanKeyLatch`]).
+/// moment, on which the caller REVERTS everything the touch session has
+/// painted so far (`input::touch_takeover`; the previous convention —
+/// committing the in-flight stroke, the painted pixels staying — was the
+/// owner's bug report 2026-11-26). `first_touch` flags the session's BIRTH
+/// pass (the 0→any-touches transition), on which the caller latches the
+/// history baseline to revert to ([`App::touch_baseline`]). The state also
+/// remembers the PREVIOUS frame's gesture center — the pinch zoom's
+/// anchor (see [`TouchGestureFrame::anchor`]). Pure so the convention is
+/// unit-testable without an egui context; App carries it next to `pan`
+/// (like [`PanKeyLatch`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct TouchGesture {
     session: bool,
     prev_center: Option<Pos2>,
+    /// Were ANY touches down at the end of the previous step? The
+    /// 0→any transition of a pass is the touch session's birth —
+    /// the caller's baseline latch reads it once per session.
+    had_touches: bool,
 }
 
 /// What one frame of [`TouchGesture::step`] decided.
@@ -425,6 +450,14 @@ pub(super) struct TouchGestureFrame {
     /// gesture frame until the frame NO finger is down anymore) — the
     /// caller treats it as "panning" (no stroke starts or resumes).
     pub(super) session: bool,
+    /// True on the touch session's BIRTH pass — the pass where touches
+    /// went from none to any (one finger landing, or a simultaneous
+    /// landing that also begins the gesture). The caller latches the
+    /// history baseline ON this pass ([`App::touch_baseline`]), before
+    /// the same pass's tool dispatch can paint — so a gesture that
+    /// grows out of the session can revert every mark the session
+    /// made ([`App::touch_takeover`]).
+    pub(super) first_touch: bool,
 }
 
 impl TouchGesture {
@@ -439,6 +472,12 @@ impl TouchGesture {
         touches_down: bool,
     ) -> TouchGestureFrame {
         let began = multi.is_some() && !self.session;
+        // The session's birth: no touches at the end of the previous
+        // step, and any now. A simultaneous landing (both fingers in ONE
+        // pass) births AND begins in the same pass — the birth flag
+        // still fires so the baseline latch precedes the takeover.
+        let first_touch = touches_down && !self.had_touches;
+        self.had_touches = touches_down;
         let (delta, zoom_factor, anchor) = match multi {
             Some(m) => {
                 // The zoom anchors at the PREVIOUS center (the exact
@@ -463,6 +502,7 @@ impl TouchGesture {
             anchor,
             began,
             session: self.session,
+            first_touch,
         }
     }
 }

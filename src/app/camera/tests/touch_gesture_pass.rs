@@ -260,9 +260,12 @@ fn a_move_and_spread_frame_zooms_and_pans_together() {
 
 #[test]
 fn a_gesture_takeover_commits_the_in_flight_stroke_as_a_node() {
-    // The takeover rule: a two-finger gesture beginning mid-stroke ENDS the
-    // stroke as a proper history node (the painted pixels stay, undoable)
-    // instead of orphaning them under the gesture's stroke suppression.
+    // The takeover's FIRST half: a two-finger gesture beginning mid-stroke
+    // ENDS the stroke as a proper history node (the pixels become a real
+    // tree node) — the takeover's baseline REVERT (`touch_takeover`) then
+    // undoes it, because the revert restores pixels through node
+    // snapshots only (a bare state reset would orphan them in the layer).
+    // The REAL-pass revert regressions live in `touch_takeover.rs`.
     let mut app = App::new_headless();
     app.stroke_button = Some(PointerButton::Primary);
     app.is_stroking = true;
@@ -272,7 +275,7 @@ fn a_gesture_takeover_commits_the_in_flight_stroke_as_a_node() {
 
     let before = app.layers.layer_nodes(0).expect("layer 0 exists").len();
 
-    app.commit_stroke_gesture();
+    app.commit_stroke_gesture(true);
 
     let after = app.layers.layer_nodes(0).expect("layer 0 exists").len();
     assert_eq!(after, before + 1, "one node for the taken-over stroke");

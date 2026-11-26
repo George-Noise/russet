@@ -536,6 +536,32 @@ impl LayerTree {
         }
     }
 
+    /// Does the current head descend from `baseline` (is it, or a child of
+    /// it, recursively)? The touch-gesture takeover's revert
+    /// (`app/input.rs::touch_takeover`, owner bug report 2026-11-26) only
+    /// steps the head back while this holds: nodes created since a
+    /// baseline form a straight descendant line, so undoing reaches it —
+    /// but a user UNDO made mid-touch-session moves the head to the
+    /// baseline's PARENT (an ancestor), and a blind "undo until baseline"
+    /// loop there would eat nodes that predate the touch.
+    pub fn head_descends_from(&self, baseline: Option<NodeId>) -> bool {
+        let Some(baseline) = baseline else {
+            // "Descends from nothing" is never true — a real tree always
+            // has a Start root, so a `None` baseline never occurs in
+            // practice; answering `false` keeps the revert loop inert
+            // instead of eating the whole tree.
+            return false;
+        };
+        let mut head = self.head;
+        while let Some(id) = head {
+            if head == Some(baseline) {
+                return true;
+            }
+            head = self.index.get(&id).and_then(|&i| self.nodes[i].parent);
+        }
+        false
+    }
+
     /// Redo: prefer the branch the head was left from (the redo hint),
     /// else the first-created child. No-op without a child to move to.
     pub fn redo(&mut self) -> bool {

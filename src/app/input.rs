@@ -649,13 +649,15 @@ impl App {
 
     /// Commits an in-flight freehand gesture as its ONE history node —
     /// the release path's body, shared by the pointer RELEASE
-    /// (`handle_stroke`) and the MULTI-TOUCH takeover (owner request
-    /// 2026-11-25: a two-finger gesture beginning mid-stroke ENDS the
-    /// stroke first — the painted pixels stay, undoable as one node,
-    /// instead of being orphaned by the gesture's stroke suppression).
-    /// The whole gesture state resets with it, so the leftover finger of
-    /// the touch session paints nothing until every finger has lifted.
-    pub(super) fn commit_stroke_gesture(&mut self) {
+    /// (`handle_stroke`, logging) and the MULTI-TOUCH takeover
+    /// ([`Self::touch_takeover`], QUIET — the takeover reverts the node
+    /// right after committing it, and a zoom/pan attempt must leave
+    /// neither pixels nor a phantom Tool Log row). One gesture = one
+    /// node of ONE tool — the tool frozen at stroke start — with the
+    /// whole gesture's pixels on record; the whole gesture state resets
+    /// with it, so the leftover finger of the touch session paints
+    /// nothing until every finger has lifted.
+    pub(super) fn commit_stroke_gesture(&mut self, log: bool) {
         if self.is_stroking {
             // The smoothing window holds a closing piece; rasterize it
             // BEFORE the snapshot so the recorded canvas carries the whole
@@ -693,11 +695,66 @@ impl App {
                         | Tool::Select
                         | Tool::Fill => "Stroke",
                     };
-                    self.action_log.push(label);
+                    if log {
+                        self.action_log.push(label);
+                    }
                 }
             }
         }
         self.reset_stroke_state();
+    }
+
+    /// The multi-touch TAKEOVER (owner bug report 2026-11-26: "when trying
+    /// to use zoom or pan on a smartphone in web, the selected tool is
+    /// still used"): the gesture's first frame hands the touch session to
+    /// the camera — and the attempt must leave NO tool marks. eframe-web
+    /// emulates a primary POINTER press on every touchstart (the first
+    /// finger drives the pointer, and egui's multi-touch gesture only
+    /// engages on the frame AFTER the second finger lands), so the first
+    /// finger of every zoom/pan attempt paints through the ordinary
+    /// tool path before the gesture can take over: a pencil dot, a short
+    /// stroke, a fill flood. This reverts ALL of it:
+    ///
+    /// 1. Any in-flight freehand stroke is committed as its node FIRST
+    ///    (`commit_stroke_gesture`, QUIET) — its pixels become a real tree
+    ///    node, because the baseline revert below restores pixels through
+    ///    node snapshots only (a bare state reset would orphan them in the
+    ///    layer).
+    /// 2. The active layer's history is then reverted to the touch
+    ///    session's BASELINE (the head latched on the session's first
+    ///    pass, [`App::touch_baseline`]) — undoing every node the session
+    ///    created: the stroke node just committed, a fill that fired on
+    ///    the first tap. The reverted nodes stay as ordinary tree forks
+    ///    (any undo leaves a redo branch), so a deliberate redo can
+    ///    resurface them; the Tool Log stays quiet — the net user-visible
+    ///    effect is "nothing happened".
+    /// 3. The pending visual states a first finger may have opened are
+    ///    cancelled: the Line/Shape preview, the Text entry, the Select
+    ///    gesture (its lifted pixels restore), a mid-switch stroke-paint
+    ///    leftover.
+    ///
+    /// The session's own suppression (the caller's `panning` flag) keeps
+    /// every later gesture frame paint-free until the last finger lifts.
+    pub(super) fn touch_takeover(&mut self) {
+        self.commit_stroke_gesture(false);
+        if let Some((layer, baseline)) = self.touch_baseline
+            && self.layers.active_layer() == layer
+            && self.layers.head_descends_from(baseline)
+        {
+            let mut reverted = false;
+            while self.layers.head() != baseline && self.layers.undo() {
+                reverted = true;
+            }
+            if reverted {
+                self.restore_active_layer_state();
+                self.dirty = true;
+                self.ctx.request_repaint();
+            }
+        }
+        self.cancel_preview();
+        self.cancel_text_edit();
+        self.cancel_select_gesture();
+        self.stroke_paint = None;
     }
 
     /// The freehand gesture state's ground zero (shared by the release
@@ -742,8 +799,8 @@ impl App {
             // brush and eraser alike — on the active layer's tree. The color
             // was captured at stroke start — it is what the gesture painted
             // with. The same commit serves the multi-touch takeover
-            // ([`Self::commit_stroke_gesture`]).
-            self.commit_stroke_gesture();
+            // ([`Self::touch_takeover`]).
+            self.commit_stroke_gesture(true);
         }
 
         if !self.is_stroking && response.hovered() && !space {

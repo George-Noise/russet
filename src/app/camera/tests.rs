@@ -119,4 +119,7 @@ mod latch;
 // The multi-touch pan + the restored drag-delta pan (same split rule).
 mod drag_pan;
 mod touch_gesture;
+// The gesture takeover's REVERT regressions (owner bug report
+// 2026-11-26) — REAL `draw_canvas` passes in the eframe-web shape.
 mod touch_gesture_pass;
+mod touch_takeover;
