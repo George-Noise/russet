@@ -20,6 +20,7 @@
 > log ≈). One command per row; never merge rows.
 
 ## Cold
+| 2026-11-26 | the no-node takeover round's recycled sandbox: rustup + the pinned 1.99.1 toolchain reinstalled in-session, `cargo check` (native dev, whole dep graph) 1m 26s, `trunk build` (dev wasm, whole graph + the wasm-bindgen 0.2.130 download) 1m 11s; verify.sh's full gate right after (fmt fix + the three clippy lanes + both test lanes) | **1m26s + 1m11s + 96 s** | `time`d |
 | 2026-11-26 | the raw-touch round's recycled sandbox: rustup + the pinned 1.99.1 toolchain reinstalled (the detached nohup install DIED with the shell — run heavy installs in the foreground), `cargo check` (native dev, whole dep graph) 1m 18s, `trunk build` (dev wasm, whole graph + wasm-bindgen) ≈ 4 min, the second/third trunk rebuilds incremental seconds | **1m18s + ≈4 min** | cargo/trunk prints |
 | 2026-11-26 | the detached gates warm-up COLD (the takeover-revert round's recycled sandbox: rustup reinstalled, the pinned 1.99.1 toolchain re-fetched, then clippy + `cargo test --no-run` over the whole dep graph — the lane it heats made verify.sh a 29 s run right after) | **≈ 4 min** (started ~08:47, the log's finish line 08:51:43) | observed from the background log ≈ |
 | 2026-11-26 | `cargo check --target wasm32-unknown-unknown` (the pinch-zoom/BMP round — web-facing code changed: the web save glue's BMP arm; the wasm dep graph COLD on the recycled sandbox's fresh toolchain, the wasm std re-downloaded first) | **39 s** | `time`d |

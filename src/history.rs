@@ -55,6 +55,16 @@ impl ActionLog {
     pub fn clear(&mut self) {
         self.entries.clear();
     }
+
+    /// Drops every entry past the first `len` — the multi-touch takeover's
+    /// log rollback (owner report 2026-11-26, third pass: a tap that turns
+    /// into a zoom/pan gesture must leave neither a node nor a Tool Log
+    /// row). `next_id` keeps increasing, so the ids of dropped rows stay
+    /// unique for the document's lifetime. A `len` past the current length
+    /// (possible only after eviction shrank the log) is a no-op.
+    pub fn truncate_to(&mut self, len: usize) {
+        self.entries.truncate(len);
+    }
 }
 
 impl Default for ActionLog {

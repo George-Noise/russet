@@ -7,11 +7,12 @@
 //! fingers PAN by the average movement of all touch points and PINCH-zoom
 //! by the touches' spreading distance ratio, egui's
 //! `InputState::multi_touch()` deltas). The SECOND finger's landing frame
-//! (the raw Touch stream's 1→2 id transition — owner bug report
-//! 2026-11-26, the second pass: a real phone's fingers never land in one
-//! frame, and egui's gesture may engage LATE or never at all, so the
-//! takeover and the suppression ride the RAW stream, never the gesture)
-//! triggers the TAKEOVER revert in `input.rs::touch_takeover`. A child
+//! (the raw Touch stream's 1→2 id transition — owner bug reports
+//! 2026-11-26: a real phone's fingers never land in one frame, and the
+//! third pass — the web pipeline's tap press runs in its OWN pass before
+//! any touch exists, so the marks, the nodes and the baseline timing all
+//! follow that shape) triggers the TAKEOVER revert in
+//! `input.rs::touch_takeover`. A child
 //! module of `app`, so it can touch `App`'s private fields; `app.rs` stays
 //! the orchestrator.
 
@@ -214,44 +215,61 @@ impl App {
     /// phone user has neither keyboard nor wheel, so the same two fingers
     /// carry BOTH jobs — dragging them pans, spreading/pinching them
     /// zooms. The takeover and the suppression, though, ride the RAW
-    /// Touch stream (owner bug report 2026-11-26, second pass: a real
-    /// phone's fingers land in DIFFERENT frames and the gesture may
-    /// engage LATE or never): the SECOND finger's landing frame
-    /// ([`TouchGestureFrame::second_finger`]) REVERTS everything the
-    /// touch session has painted so far (`input::touch_takeover`), and
-    /// the session stays "panning"
+    /// Touch stream (owner bug reports 2026-11-26: a real phone's fingers
+    /// land in DIFFERENT frames and the gesture may engage LATE or never,
+    /// and the third pass found the web pipeline's own shape — the tap's
+    /// first press runs in a pass of its own BEFORE any touch event
+    /// exists): the SECOND finger's landing frame
+    /// ([`TouchGestureFrame::second_finger`]) reverts everything the
+    /// touch session has painted so far (`input::touch_takeover`), and the
+    /// session stays "panning"
     /// ([`TouchGestureFrame::session`]) — no stroke starts or resumes
-    /// — until the last finger lifts, gesture or no gesture.
-    /// egui itself zeroes BOTH deltas on the frames the finger COUNT changes
-    /// (finger add/remove re-baselines the average), so no debounce is
-    /// needed on this side either.
+    /// — until the last finger lifts, gesture or no gesture. The web
+    /// pipeline's per-tap DOUBLE press (the browser's real `pointerdown`
+    /// in its own pass, then the touchstart's emulated press) is deduped
+    /// by [`TouchGestureFrame::press_duplicate`] so a stateless click
+    /// tool (Fill) fires once per tap. egui itself zeroes BOTH deltas on
+    /// the frames the finger COUNT changes (finger add/remove
+    /// re-baselines the average), so no debounce is needed on this side
+    /// either.
     pub(super) fn handle_touch_gesture(
         &mut self,
         ui: &egui::Ui,
         panel_rect: Rect,
     ) -> TouchGestureFrame {
-        let (multi, touches_down, fold) = ui.input(|i| {
+        let (multi, touches_down, primary_pressed, fold) = ui.input(|i| {
             (
                 i.multi_touch(),
                 i.any_touches(),
+                i.pointer.primary_pressed(),
                 fold_touch_ids(&i.raw.events),
             )
         });
         let frame = self
             .touch_gesture
-            .step(&fold.0, &fold.1, touches_down, multi);
-        // The takeover baseline (owner bug report 2026-11-26): latched on
-        // the touch session's BIRTH pass — before the same pass's tool
-        // dispatch can paint anything (the first finger's emulated pointer
-        // press paints AFTER this) — and cleared when the last finger
-        // lifts. The SECOND finger's landing frame (`frame.second_finger`,
-        // handled by the caller in `draw_canvas`) reverts the active
-        // layer's history to this baseline — see [`input::touch_takeover`].
-        if frame.first_touch {
-            self.touch_baseline = Some((self.layers.active_layer(), self.layers.head()));
-        }
-        if !touches_down {
-            self.touch_baseline = None;
+            .step(&fold.0, &fold.1, touches_down, primary_pressed, multi);
+        // The ROLLING takeover baseline (owner report 2026-11-26, third
+        // pass: the old birth-pass latch came one pass too late for
+        // instant tools — the web pipeline runs a tap's first press in
+        // its OWN pass, before any Touch event exists, so a Fill fired
+        // and recorded its node BEFORE the touch session's birth could
+        // latch anything, and the takeover could never revert it):
+        // latched at every QUIET pass (no touches down, pointer up) and
+        // at every FRESH primary press with no touches down — always
+        // BEFORE the same pass's tool dispatch (which runs later in
+        // `draw_canvas`), so it is the last stable PRE-TAP state of the
+        // active layer: head + Tool Log length. The SECOND finger's
+        // landing frame (`frame.second_finger`, handled by the caller in
+        // `draw_canvas`) reverts the active layer's history to this
+        // baseline — see [`input::touch_takeover`].
+        let quiet = !touches_down && !ui.input(|i| i.pointer.any_down());
+        let fresh_press = primary_pressed && !touches_down;
+        if quiet || fresh_press {
+            self.touch_baseline = Some((
+                self.layers.active_layer(),
+                self.layers.head(),
+                self.action_log.items().len(),
+            ));
         }
         // Zoom FIRST, pan SECOND — the exact fingers-follow math: scaling
         // around the OLD midpoint keeps the canvas point that was under it
@@ -415,15 +433,17 @@ fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
 /// after the gesture proper ends (one finger still down): the whole rest of
 /// the touch session counts as "panning", so the leftover finger cannot
 /// resume painting until every finger has lifted (the standard paint-app
-/// convention). `began` flags the gesture's FIRST frame — the takeover
-/// moment, on which the caller REVERTS everything the touch session has
-/// painted so far (`input::touch_takeover`; the previous convention —
-/// committing the in-flight stroke, the painted pixels staying — was the
-/// owner's bug report 2026-11-26). `first_touch` flags the session's BIRTH
-/// pass (the 0→any-touches transition), on which the caller latches the
-/// history baseline to revert to ([`App::touch_baseline`]). The state also
-/// remembers the PREVIOUS frame's gesture center — the pinch zoom's
-/// anchor (see [`TouchGestureFrame::anchor`]). Pure so the convention is
+/// convention). `second_finger` flags the second finger's landing frame —
+/// the takeover moment, on which the caller REVERTS everything the touch
+/// session has painted so far (`input::touch_takeover`; the previous
+/// convention — committing the in-flight stroke, the painted pixels
+/// staying — was the owner's bug report 2026-11-26; the third pass made
+/// the revert a REMOVAL — no node at all). The state also remembers the
+/// PREVIOUS frame's gesture center — the pinch zoom's anchor (see
+/// [`TouchGestureFrame::anchor`]) — and whether a BARE primary press (a
+/// press observed with NO touch down) was seen since the last quiet pass,
+/// which is what identifies the web pipeline's per-tap DUPLICATE press
+/// (see [`TouchGestureFrame::press_duplicate`]). Pure so the convention is
 /// unit-testable without an egui context; App carries it next to `pan`
 /// (like [`PanKeyLatch`]).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -441,6 +461,17 @@ pub(super) struct TouchGesture {
     poisoned: bool,
     /// The PREVIOUS gesture frame's center — the pinch zoom's anchor.
     prev_center: Option<Pos2>,
+    /// Was a primary press seen with NO touch down since the last quiet
+    /// pass (a pass with no touches and no press)? The WEB backend fires
+    /// a tap's press TWICE — the browser's real `pointerdown` runs a
+    /// whole app pass in its own handler BEFORE the `touchstart`'s
+    /// emulated press — so the SECOND press of a tap arrives while the
+    /// touch is already down; on native winit the one emulated press
+    /// arrives in the SAME pass as the touch, so the flag is always
+    /// false there when it matters and the single press dispatches.
+    /// This flag is what separates "the same tap's duplicate" (suppress)
+    /// from "a fresh interaction's first press" (dispatch).
+    bare_press_seen: bool,
 }
 
 /// What one frame of [`TouchGesture::step`] decided.
@@ -476,14 +507,19 @@ pub(super) struct TouchGestureFrame {
     /// session never poisons; the leftover finger of a pinch keeps the
     /// poison until it too lifts.
     pub(super) session: bool,
-    /// True on the touch session's BIRTH pass — the pass where touches
-    /// went from none to any (one finger landing, or a simultaneous
-    /// landing that also begins the gesture). The caller latches the
-    /// history baseline ON this pass ([`App::touch_baseline`]), before
-    /// the same pass's tool dispatch can paint — so a gesture that
-    /// grows out of the session can revert every mark the session
-    /// made ([`App::touch_takeover`]).
-    pub(super) first_touch: bool,
+    /// True on a pass whose primary press is the WEB pipeline's per-tap
+    /// DUPLICATE — a press observed while a touch is already down AND a
+    /// BARE press (no touch) was seen since the last quiet pass. eframe-web
+    /// fires each tap twice: the browser's real `pointerdown` runs the
+    /// app pass synchronously in its own handler (before ANY touch event
+    /// exists), and the following `touchstart` pushes a second,
+    /// emulated press alongside the Touch start. A stateless click tool
+    /// (Fill) would fire on BOTH presses (owner report 2026-11-26, third
+    /// pass: "the fill applies twice on a single finger's touch") — the
+    /// caller suppresses the tool dispatch for this pass instead. On
+    /// native winit the touch and its one emulated press share a pass, so
+    /// the flag never fires there: the single press dispatches normally.
+    pub(super) press_duplicate: bool,
 }
 
 impl TouchGesture {
@@ -497,7 +533,8 @@ impl TouchGesture {
     /// One frame's decision. `started`/`ended` are the frame's raw
     /// Touch-stream id changes ([`fold_touch_ids`] of `i.raw.events`),
     /// `any_touches` is egui's authoritative "is any finger down"
-    /// (reconciles the id set), and `multi` is the frame's multi-touch
+    /// (reconciles the id set), `primary_pressed` is whether the pointer
+    /// pressed Primary this pass, and `multi` is the frame's multi-touch
     /// info — `Some` exactly while a two-plus-finger gesture is
     /// underway — egui computes `translation_delta` and `zoom_delta`
     /// against the previous gesture state, zeroing BOTH on
@@ -511,12 +548,12 @@ impl TouchGesture {
         started: &[egui::TouchId],
         ended: &[egui::TouchId],
         any_touches: bool,
+        primary_pressed: bool,
         multi: Option<egui::MultiTouchInfo>,
     ) -> TouchGestureFrame {
         // The raw fold: remove the ended ids, add the started ones (the
         // set is order-proof — an End and a Start of the same id in one
         // frame leaves it down, a re-Start of a live id is a no-op).
-        let was_empty = self.active.is_empty();
         for id in ended {
             self.active.retain(|a| a != id);
         }
@@ -531,11 +568,24 @@ impl TouchGesture {
         if !any_touches {
             self.active.clear();
         }
-        // The session's birth: no live ids before this fold, and any now.
-        // A simultaneous landing (both fingers in ONE pass) births AND
-        // takes over in the same pass — the birth flag still fires so
-        // the baseline latch precedes the takeover.
-        let first_touch = was_empty && !self.active.is_empty();
+        // The web pipeline's per-tap DOUBLE press, deduped (owner report
+        // 2026-11-26, third pass: "the fill applies twice on a single
+        // finger's touch"): a press observed while a touch is already
+        // down, AFTER a bare press (no touch) was seen, is the tap's
+        // SECOND press — the tap already dispatched on the bare one. The
+        // bookkeeping runs BEFORE `second_finger`/poison so a takeover
+        // pass's own emulated press counts as a duplicate too. Native
+        // winit never trips this (its one emulated press shares the
+        // touch's own pass, so no bare press precedes it).
+        let press_duplicate = primary_pressed && !self.active.is_empty() && self.bare_press_seen;
+        if primary_pressed && self.active.is_empty() {
+            self.bare_press_seen = true;
+        }
+        // A quiet pass (no touch, no press) ends the interaction: the
+        // next bare press is a fresh tap's first press, not a duplicate.
+        if !any_touches && !primary_pressed {
+            self.bare_press_seen = false;
+        }
         // The second finger: the 1→2 raw transition, or the gesture report
         // as a belt-and-braces fallback (a seeded gesture implies two
         // live touches, so the fold must have seen the starts).
@@ -567,7 +617,7 @@ impl TouchGesture {
             anchor,
             second_finger,
             session: self.session_live(),
-            first_touch,
+            press_duplicate,
         }
     }
 }

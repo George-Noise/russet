@@ -262,13 +262,14 @@ fn a_move_and_spread_frame_zooms_and_pans_together() {
 }
 
 #[test]
-fn a_gesture_takeover_commits_the_in_flight_stroke_as_a_node() {
-    // The takeover's FIRST half: a two-finger gesture beginning mid-stroke
-    // ENDS the stroke as a proper history node (the pixels become a real
-    // tree node) — the takeover's baseline REVERT (`touch_takeover`) then
-    // undoes it, because the revert restores pixels through node
-    // snapshots only (a bare state reset would orphan them in the layer).
-    // The REAL-pass revert regressions live in `touch_takeover.rs`.
+fn a_tap_release_commits_the_in_flight_stroke_as_a_node() {
+    // The RELEASE path's commit (owner request 2026-11-13): a completed
+    // freehand gesture — a lone finger's tap lifting — records its ONE
+    // node. The takeover never commits: it discards the in-flight stroke
+    // and reverts to the baseline (`touch_takeover`), so a zoom/pan
+    // attempt records no node at all (owner report 2026-11-26, third
+    // pass). The REAL-pass revert regressions live in
+    // `touch_takeover.rs` / `touch_takeover_web.rs`.
     let mut app = App::new_headless();
     app.stroke_button = Some(PointerButton::Primary);
     app.is_stroking = true;
@@ -278,10 +279,10 @@ fn a_gesture_takeover_commits_the_in_flight_stroke_as_a_node() {
 
     let before = app.layers.layer_nodes(0).expect("layer 0 exists").len();
 
-    app.commit_stroke_gesture(true);
+    app.commit_stroke_gesture();
 
     let after = app.layers.layer_nodes(0).expect("layer 0 exists").len();
-    assert_eq!(after, before + 1, "one node for the taken-over stroke");
+    assert_eq!(after, before + 1, "one node for the completed stroke");
     assert!(!app.is_stroking, "the gesture state is ground zero again");
     assert!(app.stroke_paint.is_none());
     assert!(app.stroke_button.is_none() && app.stroke_tool.is_none());

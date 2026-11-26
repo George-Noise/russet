@@ -1,19 +1,19 @@
-//! The multi-touch TAKEOVER regressions (owner bug report 2026-11-26:
+//! The multi-touch TAKEOVER regressions (owner bug reports 2026-11-26:
 //! "when trying to use zoom or pan on a smartphone in web, the selected
-//! tool is still used"), driven through `Context::run_pass` hosting
-//! `draw_canvas` — the app's REAL frame order — with the raw events in
-//! the eframe-WEB shape: every touchstart carries an EMULATED primary
-//! pointer press FIRST (the web backend's first touch drives the
-//! pointer; `eframe/src/web/events.rs::install_touchstart`), then the
-//! Touch events. eframe-web pushes that emulated press even when the
-//! gesture's second finger lands, and egui's multi-touch gesture only
-//! engages on the frame AFTER the second finger — so the FIRST finger
-//! of every zoom/pan attempt paints through the ordinary tool path.
-//! The takeover must leave no trace: the canvas, the history head and
-//! the tool state return to the pre-touch moment, and the gesture
-//! frames themselves paint nothing. The pure machine tests live in
-//! `touch_gesture.rs`; the pass-shape regressions in
-//! `touch_gesture_pass.rs`.
+//! tool is still used", then "fingers land at different times", then "a
+//! new node is still created — no node should happen at all"), driven
+//! through `Context::run_pass` hosting `draw_canvas` — the app's REAL
+//! frame order. The streams here use the SINGLE-PASS touch shape (the
+//! emulated primary press and the Touch events share one pass — the
+//! native-winit pipeline, and the shape the earlier rounds tested);
+//! eframe-web's staggered REAL pipeline (the browser's `pointerdown`
+//! runs an app pass of its own BEFORE any touch exists, then the
+//! touchstart's emulated press follows) lives in
+//! `touch_takeover_web.rs`. The takeover must leave NOTHING: the canvas,
+//! the history tree (no node, no fork), the Tool Log and the tool state
+//! return to the pre-touch moment, and the gesture frames themselves
+//! paint nothing. The pure machine tests live in `touch_gesture.rs`;
+//! the pass-shape regressions in `touch_gesture_pass.rs`.
 
 use super::super::App;
 use crate::tools::Tool;
@@ -73,6 +73,7 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
     let panel_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(300.0, 300.0));
     let baseline = app.layers.head();
     let baseline_nodes = app.layers.layer_nodes(0).expect("layer 0 exists").len();
+    let baseline_log = app.action_log.items().len();
     // The canvas (800×600 at zoom 100%) centers in the 300×300 panel, so
     // the screen press (100,100) lands at its own CANVAS coordinates —
     // the same mapping the app uses.
@@ -101,8 +102,8 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
     assert!(app.is_stroking, "one finger still paints");
     assert_eq!(
         app.touch_baseline,
-        Some((0, baseline)),
-        "the session's birth pass latched the pre-touch history head"
+        Some((0, baseline, baseline_log)),
+        "the rolling baseline latches the pre-touch state"
     );
     assert_ne!(
         app.layers.active().pixmap().pixel(dot_x, dot_y),
@@ -111,8 +112,9 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
     );
 
     // Finger 2 lands: the gesture takes over — the dot reverts, the head
-    // returns to the baseline, no stroke state survives. (The emulated
-    // press comes along — eframe-web pushes one on EVERY touchstart.)
+    // returns to the baseline, no stroke state survives, and NO node is
+    // left behind (the revert is a REMOVAL, not an undo fork — the
+    // owner's third report: "no new node should happen at all").
     canvas_pass(
         &ctx,
         vec![
@@ -130,8 +132,13 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
     );
     assert_eq!(
         app.layers.layer_nodes(0).expect("layer 0 exists").len(),
-        baseline_nodes + 1,
-        "the reverted dot stays as an ordinary tree fork (undo semantics)"
+        baseline_nodes,
+        "the takeover leaves NO node — not even an undone fork"
+    );
+    assert_eq!(
+        app.action_log.items().len(),
+        baseline_log,
+        "no Tool Log row survives the takeover"
     );
     assert_eq!(
         app.layers.active().pixmap().pixel(dot_x, dot_y),
@@ -159,8 +166,9 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
     assert_eq!(app.pan, Vec2::new(10.0, 4.0), "the gesture pans");
 
     // The last fingers lift (eframe-web: the emulated release, the
-    // pointer-gone, then the touch ends): the session and the baseline
-    // clear — a fresh finger paints again.
+    // pointer-gone, then the touch ends): the session ends and the
+    // baseline rolls on to the post-session state — a fresh finger
+    // paints again.
     canvas_pass(
         &ctx,
         vec![
@@ -177,9 +185,10 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
         &mut app,
         panel_rect,
     );
-    assert!(
-        app.touch_baseline.is_none(),
-        "the session's end clears the baseline"
+    assert_eq!(
+        app.touch_baseline,
+        Some((0, baseline, baseline_log)),
+        "the baseline stays latched at the pre-session state"
     );
 }
 
@@ -187,7 +196,7 @@ fn a_second_finger_reverts_the_first_fingers_pencil_dot() {
 fn a_second_finger_reverts_a_fill_that_fired_on_the_first_tap() {
     // The INSTANT-tool class of the same bug: a fill floods on the first
     // finger's press — a whole history node, not just a dot — and the
-    // takeover reverts it the same way.
+    // takeover reverts it the same way: the node is REMOVED, no fork.
     let mut app = App::new_headless();
     app.tools.tool = Tool::Fill;
     app.tools.primary = Color32::RED;
@@ -195,6 +204,7 @@ fn a_second_finger_reverts_a_fill_that_fired_on_the_first_tap() {
     let panel_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(300.0, 300.0));
     let baseline = app.layers.head();
     let baseline_nodes = app.layers.layer_nodes(0).expect("layer 0 exists").len();
+    let baseline_log = app.action_log.items().len();
     let (probe_x, probe_y) = (100u32, 100u32);
     let untouched = app.layers.active().pixmap().pixel(probe_x, probe_y);
 
@@ -222,7 +232,8 @@ fn a_second_finger_reverts_a_fill_that_fired_on_the_first_tap() {
         "the flood recorded its node"
     );
 
-    // Finger 2 lands: the takeover reverts the flood — pixels, head, all.
+    // Finger 2 lands: the takeover reverts the flood — pixels, head, the
+    // node itself, all gone.
     canvas_pass(
         &ctx,
         vec![
@@ -236,6 +247,16 @@ fn a_second_finger_reverts_a_fill_that_fired_on_the_first_tap() {
         app.layers.head(),
         baseline,
         "the history returned to the pre-touch head"
+    );
+    assert_eq!(
+        app.layers.layer_nodes(0).expect("layer 0 exists").len(),
+        baseline_nodes,
+        "the takeover removed the fill's node — no fork"
+    );
+    assert_eq!(
+        app.action_log.items().len(),
+        baseline_log,
+        "the fill's Tool Log row is gone too"
     );
     assert_eq!(
         app.layers.active().pixmap().pixel(probe_x, probe_y),
@@ -276,22 +297,18 @@ fn the_second_finger_reverts_the_stroke_with_no_gesture_at_all() {
     canvas_pass(&ctx, vec![], &mut app, panel_rect);
 
     // Finger 1 lands — NO pointer events anywhere in this stream: the
-    // session's birth latches the baseline, and no gesture can seed.
+    // session's birth still poisons nothing, and no gesture can seed.
     canvas_pass(
         &ctx,
         vec![touch(1, TouchPhase::Start, Pos2::new(100.0, 100.0))],
         &mut app,
         panel_rect,
     );
-    assert_eq!(
-        app.touch_baseline,
-        Some((0, baseline)),
-        "the birth pass latched the pre-touch head — pointer or no pointer"
-    );
 
     // Finger 2 lands in a LATER frame (the staggered reality). The gesture
     // NEVER engages: the takeover rides the raw id transition instead,
-    // committing the in-flight stroke as its node and reverting it.
+    // discarding the in-flight stroke (no node ever) and reverting to the
+    // baseline.
     canvas_pass(
         &ctx,
         vec![touch(2, TouchPhase::Start, Pos2::new(200.0, 200.0))],
@@ -306,8 +323,8 @@ fn the_second_finger_reverts_the_stroke_with_no_gesture_at_all() {
     );
     assert_eq!(
         app.layers.layer_nodes(0).expect("layer 0 exists").len(),
-        baseline_nodes + 1,
-        "the reverted stroke stays as an ordinary tree fork"
+        baseline_nodes,
+        "the in-flight stroke left no node behind — no fork"
     );
 
     // The session poisons WITHOUT the gesture: a later primary press (an

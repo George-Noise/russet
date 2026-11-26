@@ -123,3 +123,7 @@ mod touch_gesture;
 // 2026-11-26) — REAL `draw_canvas` passes in the eframe-web shape.
 mod touch_gesture_pass;
 mod touch_takeover;
+// The takeover on the REAL staggered eframe-web pipeline: the browser's
+// pointerdown runs an app pass of its own BEFORE any touch exists (owner
+// report 2026-11-26, third pass — the double fill and the pre-touch node).
+mod touch_takeover_web;

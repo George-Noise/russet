@@ -192,17 +192,20 @@ pub struct App {
     /// "panning" until the last finger lifts. Updated in
     /// `camera::handle_touch_gesture`.
     touch_gesture: camera::TouchGesture,
-    /// The touch-session BASELINE for the gesture takeover (owner bug
-    /// report 2026-11-26: "when trying to use zoom or pan on a smartphone
-    /// in web, the selected tool is still used" — the attempt must leave
-    /// no tool marks): the active layer + its history head latched on the
-    /// touch session's FIRST pass (`camera::handle_touch_gesture`), before
-    /// the same pass's tool dispatch can paint (eframe-web's emulated
-    /// primary press makes the first finger paint through the pointer
-    /// path). When the SECOND finger lands (the raw Touch stream's 1→2
-    /// transition), [`input::touch_takeover`] reverts the active layer's
-    /// history to this baseline; cleared when the last finger lifts.
-    touch_baseline: Option<(usize, Option<NodeId>)>,
+    /// The ROLLING touch-session BASELINE for the gesture takeover (owner
+    /// bug reports 2026-11-26, three passes — the last: "no new node should
+    /// happen at all on web smartphones during a two-finger pan/zoom"):
+    /// the active layer + its history head + the Tool Log length, latched
+    /// at every QUIET pass and at every FRESH primary press with no touches
+    /// down (`camera::handle_touch_gesture` — the web pipeline runs a
+    /// tap's first press in its OWN pass, before any touch exists, so the
+    /// latch must precede that press's dispatch to cover instant tools:
+    /// a Fill records its node in the press pass). When the SECOND finger
+    /// lands (the raw Touch stream's 1→2 transition),
+    /// [`input::touch_takeover`] reverts the active layer to this
+    /// baseline — REMOVING the session's nodes, restoring the baseline
+    /// snapshot and truncating the log back, leaving no fork behind.
+    touch_baseline: Option<(usize, Option<NodeId>, usize)>,
     /// The session's STARTUP smartphone latch (owner request 2026-11-26,
     /// amending the 2026-11-25 compact rules): `is_smartphone_viewport`
     /// evaluated exactly ONCE, on the session's FIRST frame
@@ -867,21 +870,24 @@ impl App {
         // touches' average movement and pinch-zooms by the spreading
         // ratio, and the SECOND finger's landing frame — the raw Touch
         // stream's 1→2 id transition, whichever frame the finger
-        // actually lands in (owner bug report 2026-11-26, second pass: a
-        // phone's fingers land at DIFFERENT times and egui's gesture may
-        // engage late or never — the trigger cannot depend on it) —
-        // REVERTS everything the touch session has painted so far
+        // actually lands in (owner bug reports 2026-11-26: fingers land
+        // at DIFFERENT times; the third pass additionally found the web
+        // pipeline's per-tap DOUBLE press — the browser's real
+        // `pointerdown` runs an app pass BEFORE any touch event, then
+        // the touchstart's emulated press follows) — reverts
+        // everything the touch session has painted so far
         // ([`input::touch_takeover`]; eframe-web's emulated primary press
         // makes the session's first finger paint before any gesture can
-        // engage — a zoom/pan attempt must leave no tool marks; the
-        // reverted nodes stay as ordinary tree forks). The session stays
-        // "panning" until the last finger lifts, so the leftover finger
-        // paints nothing — even when the gesture never engages.
+        // engage — a zoom/pan attempt leaves no tool marks and NO history
+        // node). The session stays "panning" until the last finger
+        // lifts, so the leftover finger paints nothing — even when the
+        // gesture never engages — and a duplicate press (the web tap's
+        // second, emulated one) never re-fires a stateless click tool.
         let touch = self.handle_touch_gesture(ui, panel_rect);
         if touch.second_finger {
             self.touch_takeover();
         }
-        let panning = self.handle_pan(ui, &response) || touch.session;
+        let panning = self.handle_pan(ui, &response) || touch.session || touch.press_duplicate;
         let rect = self.canvas_rect(panel_rect);
         match self.tools.tool {
             Tool::Pencil | Tool::Brush | Tool::Eraser => {

@@ -1,5 +1,46 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-26 — `Feat:` the touch pinch zoom + the startup-latched smartphone rules + BMP in open and save — owner request
+
+- **What:** three orders from the 2026-11-26 chat. (1) PINCH ZOOM rides the same
+  two-finger gesture as the pan (a phone has no keyboard/wheel): `TouchPan`
+  renamed `TouchGesture` (`camera.rs`); its frame now carries `zoom_factor` and
+  `anchor` — the PREVIOUS frame's `center_pos` (tracked in the machine), the
+  zoom anchoring there so the content follows the fingers EXACTLY
+  (`App::handle_touch_gesture` applies the anchored zoom BEFORE the pan delta —
+  the other order drifts); `set_zoom` re-uploads the canvas texture only when
+  the crisp/smooth sampling family flips (once per whole-100% crossing, not
+  once per pinch frame); degenerate factors (inf/NaN from a zero previous
+  distance) are dropped. (2) The smartphone rules became STARTUP-latched
+  (rotation must not show/hide a window): `app.rs::latch_smartphone_session`
+  freezes the FIRST frame's viewport verdict for the session — the Tool Log
+  window starts hidden with its View ▸ Tool Log item LIVE (the user's toggle is
+  the only lever afterwards), and the FLUSH-0 first-open gaps read the frozen
+  value (replacing the per-frame checks in windows/palette/layers/tree). (3)
+  BMP in open AND save (F17's decision): the `bmp` feature flag on the PINNED
+  image crate — zero new dependencies (Cargo.lock untouched); Open filters list
+  `.bmp` (native + web), the Save dropdown gains "BMP image" with the
+  locked-ON Lossless row and NO knob (uncompressed — nothing to tune), the
+  codec writes 32-bit RGBA (the V4-header flavor, the one BMP form with alpha),
+  the web Blob carries `image/bmp`, the MCP path export accepts `.bmp`.
+- **Files:** `Cargo.toml`, `src/file_io.rs` (+ `codecs.rs`, `tests.rs` + NEW
+  `tests/png_knob.rs`), `src/app/save_dialog.rs` (+ tests), `src/app/camera.rs`
+  (+ RENAMED `tests/touch_pan.rs`→`touch_gesture.rs`, NEW
+  `tests/touch_gesture_pass.rs` + `tests/drag_pan.rs`), `src/app.rs`,
+  `src/app/{menu,tool_log,windows,palette_window,layers_window,tree_window}.rs`,
+  `src/app/tests.rs`, `SPEC.md` (§1/§3.4/§3.7/§3.10/§3.11),
+  `docs/agents/egui-quirks.md`, both `DEBTS-*.md` (V85 born, V84 amended;
+  F20's zoom slice, F17's BMP paid), `TIMING.md`, `PROBLEMS.md`,
+  `PROGRESS.md`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 22–30 s hot —
+  rules.sh HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
+  `cargo test --profile gates` 398 green / `--features mcp` 398 green (+1
+  ignored each; +6 tests); the WASM check clean; the driver green under Xvfb.
+- **Owner-checks:** V85 born (the BMP pass + the amended phone web legs); V84
+  amended (the pinch zoom and the Tool Log startup rules changed the click-through).
+  Open: V85, V84, V81, V80 (the 4 newest of 7 open).
+- **Commit title:** `Feat: touch pinch zoom + startup-latched smartphone rules; BMP in open and save`
+
 ### 2026-11-25 — `Feat:` the web multitouch pan + the smartphone compact rules (the F20 web slice); the mouse drag-pan restored — owner request
 
 - **What:** three pieces. (1) The multitouch PAN (ordered "web, пока что только web", the

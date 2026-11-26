@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: the takeover leaves NO node at all — the web tap's double press deduped (owner's third report 2026-11-26) | done — full gate green; +10 tests, A/B browser proof | the REAL eframe-web pipeline staggers a tap (the browser's pointerdown runs an app pass BEFORE any touch exists, then the touchstart's emulated press follows — see the new egui-quirks entry): a stateless Fill fired on BOTH presses and the baseline sat one pass too late to cover the first press's node — so the baseline is now a ROLLING pre-tap latch (layer + head + log length), the takeover DISCARDS the in-flight stroke, REMOVES the session's nodes (remove_last, no fork) and restores the baseline snapshot, and the duplicate press is deduped platform-free (`TouchGesture::bare_press_seen`); verified by an A/B browser run — identical gestures with/without a prior tap give pixel-identical screenshots |
 | Extra: the takeover rides the RAW touch stream — the second finger's own landing frame (owner's second report 2026-11-26) | done — full gate green; +5 tests | the gesture-gated takeover/suppression misfired on the owner's phone (fingers land in DIFFERENT frames; egui's gesture may seed late or never): `TouchGesture` now folds the raw `Event::Touch` ids itself (`camera.rs::fold_touch_ids`, reconciled against `any_touches()`), fires the takeover on the raw 1→2 transition (`TouchGestureFrame::second_finger`), and poisons the session until the raw set empties — `multi_touch()` is ONLY the pan/zoom delta source; V86 amended (the staggered + no-gesture legs) |
 | Extra: the touch-gesture TAKEOVER revert — a zoom/pan attempt leaves NO tool marks (owner bug report 2026-11-26) | done — full gate green; +5 tests | eframe-web emulates a primary POINTER press on EVERY touchstart (`eframe/src/web/events.rs::install_touchstart`) and egui's multi-touch gesture only engages on the frame AFTER the second finger lands, so the first finger of every attempt painted (a dot, a short stroke, a fill) — the takeover at the gesture's first frame now REVERTS it all: an in-flight stroke is committed as its node FIRST (pixels become a real node — the revert restores through snapshots only), then the active layer's history is undone back to the baseline latched on the touch session's BIRTH pass (`app.rs::touch_baseline`, `camera.rs::TouchGestureFrame::first_touch` — the 0→any-touches transition; a simultaneous landing births AND begins in one pass, the latch runs first), the pending Line/Shape/Text/Select states are cancelled, the Tool Log stays QUIET (the net effect: nothing happened); the reverted nodes stay as ordinary tree forks (redoable), and the revert only runs while the head still descends from the baseline (`history_tree.rs::LayerTree::head_descends_from` — a user undo mid-session moves the head to the ancestor side, the wrong direction); V86 born, V84 amended |
 | Extra: the web multitouch pan + the smartphone compact rules (the F20 web slice, owner 2026-11-25) + the RESTORED mouse drag-pan (the delta line lost in the 2026-11-13 split) | done — full gate green + the wasm check + the visual driver; +9 tests | two-plus fingers pan by the average movement (`camera.rs::TouchPan` via egui `multi_touch().translation_delta`; a second finger landing mid-stroke commits the stroke as its node first — `input.rs::commit_stroke_gesture`; the session stays pan-only until the last finger lifts); a phone-width WEB viewport (600 pt, `main.rs::is_smartphone_viewport`, cfg-only in main.rs per the Repo-facts rule) gets the compact rules — every floating window's first-open gap FLUSH 0 (`placement.rs::first_open_gap`/`layers_first_open_lift`, all five call sites: Tools/Palette/Layers/Tree+clones) and the Tool Log window + its View item hidden (the log keeps recording); `handle_pan` regains `self.pan += response.drag_delta()` — the middle/Space+LMB drag pans moved NOTHING since e8eb5d1 (2026-11-13); two new egui quirks recorded (the headless drag recipe: TWO warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a prior pointer pos) |
@@ -65,16 +66,17 @@
 
 **Verification stamp:** English-only repo-wide — a language WHITELIST (English
 is simply the only written language here: comments, docs, commit titles), not a
-script blacklist. FULL gate re-verified 2026-11-26 (the touch-gesture takeover
-REVERT round — platform-neutral Rust, the full gate): fmt clean,
+script blacklist. FULL gate re-verified 2026-11-26 (the no-node takeover +
+double-press dedupe round — platform-neutral Rust, the full gate): fmt clean,
 rules.sh HARD-green, clippy `-D warnings` green on --all-targets (default +
-mcp + fill-bench), `cargo test --profile gates` 403 green / with `--features
-mcp` 403 green (+1 ignored each; +5 tests of this round: the touch machine's
-birth-flag pair, the REAL-pass pencil-dot and fill revert regressions seeded
-in the exact eframe-web event shape, the history tree's ancestry guard); no
-WASM check needed (the change touches no web-facing code — no `web/`, no
-cfg paths, no trunk config; the native gate is the lane per AGENTS.md's
-wasm-check economy).
+mcp + fill-bench), `cargo test --profile gates` 413 green / with `--features
+mcp` 413 green (+1 ignored each; +10 tests of this round: the dedupe machine
+set, the REAL staggered-pipeline regressions — the single tap fills once, the
+gesture leaves no node, the pre-baseline fill is removed — and the removal-
+convention updates); PLUS the real-browser A/B pass (two identical gestures,
+with/without a prior tap — pixel-identical screenshots); no WASM lane
+needed beyond a debug `trunk build` smoke (the change is platform-neutral
+Rust; the native gate is the lane per AGENTS.md's wasm-check economy).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -82,7 +84,62 @@ wasm-check economy).
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, a seventh time: the oldest live entry — the 2026-11-25 multitouch-pan round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, an eighth time: the oldest live entry — the 2026-11-26 pinch-zoom/phone-latch/BMP round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+
+### 2026-11-26 — `Fix:` the takeover leaves NO node at all — the web tap's double press deduped (owner's third report)
+
+- **What:** the owner's phone retest of the second-pass delivery ("nothing
+  changed in my manual tests" — a node is still created even though undo
+  runs, no node should happen at all, and the fill applies TWICE on a
+  single finger's touch; translated from his Russian): the earlier rounds
+  tested the WRONG pass shape — the REAL eframe-web pipeline staggers a
+  tap (the browser's real `pointerdown` handler runs an app pass in its
+  own `runner.logic()` call BEFORE any Touch event exists, then the
+  touchstart's emulated press follows), so a stateless Fill fired on BOTH
+  presses and the baseline (latched on the touch birth pass) sat one pass
+  AFTER the fill's node — the revert could never cover it. Three fixes,
+  all platform-free: (1) the takeover baseline is a ROLLING pre-tap latch
+  (`App::touch_baseline`: layer + head + Tool Log length; latched at
+  every quiet pass and every fresh bare press, always BEFORE the press's
+  own dispatch); (2) the takeover DISCARDS the in-flight stroke (never
+  commits — the old commit-then-undo left a tree fork, the "new node"
+  itself), REMOVES the session's nodes back to the baseline
+  (`remove_last`, not undo — the tree returns to its exact pre-tap shape)
+  and restores the baseline snapshot, truncating the Tool Log
+  (`ActionLog::truncate_to`); (3) the per-tap duplicate press never
+  dispatches a tool (`TouchGesture::bare_press_seen` →
+  `TouchGestureFrame::press_duplicate` — a press while a touch is down,
+  after a bare press was seen; native winit's single-pass shape never
+  trips it). The pipeline quirk is new in `docs/agents/egui-quirks.md`;
+  `first_touch` (the old birth-pass latch's carrier) is gone with its
+  convention, and `commit_stroke_gesture` lost its QUIET parameter (the
+  takeover no longer commits).
+- **Files:** `src/app/camera.rs` (+ tests: `touch_gesture.rs` rewritten —
+  the dedupe machine set; NEW `tests/touch_takeover_web.rs` with the REAL
+  staggered pipeline — the single tap fills once, the gesture leaves no
+  node at all, the pre-baseline fill is removed; `touch_takeover.rs` and
+  `touch_gesture_pass.rs` updated to the removal convention;
+  `tests.rs` declares the new module), `src/app.rs`, `src/app/input.rs`,
+  `src/history.rs`, `SPEC.md` (§3.4), `docs/agents/egui-quirks.md`,
+  both `DEBTS-*.md` (V86 amended, F20), `PROGRESS.md`, `TIMING.md`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN (96 s) —
+  rules.sh HARD-green, fmt clean, clippy `-D warnings` green (default +
+  mcp + fill-bench), `cargo test --profile gates` 413 green (+1 ignored;
+  +10 tests of this round) / `--features mcp` green on the same 413.
+  PLUS the REAL-browser pass (Chromium, CDP trusted touch, a
+  smartphone-sized context): the event order captured on-page —
+  `pointerdown` BEFORE `touchstart` per tap, finger 2's `pointerdown`
+  after finger 1's `touchstart` (the exact staggered shape the new tests
+  model); the pinch zoomed the APP's own view (visualViewport stayed at
+  scale 1 — no browser zoom took over); and two IDENTICAL gestures — one
+  with, one without a prior lone tap — produced pixel-identical
+  post-gesture screenshots: the takeover reverted every mark (the A/B
+  diff is 0 pixels).
+- **Owner-checks:** V86 amended (the third-pass legs: NO node at all, the
+  single fill per tap — the phone retest). Open: V86, V85, V84, V81
+  (the 4 newest of 8 open).
+- **Commit title:** `Fix: the touch takeover removes its nodes instead of forking, and the web tap's double press is deduped`
+
 
 ### 2026-11-26 — `Fix:` the touch takeover rides the RAW touch stream — the second finger's own landing frame (owner's second report)
 
@@ -175,46 +232,3 @@ wasm-check economy).
   takeover sentence changed). Open: V86, V85, V84, V81 (the 4 newest of
   8 open).
 - **Commit title:** `Fix: the multi-touch takeover reverts the session's tool marks (a zoom/pan attempt paints nothing)`
-
-
-
-### 2026-11-26 — `Feat:` the touch pinch zoom + the startup-latched smartphone rules + BMP in open and save — owner request
-
-- **What:** three orders from the 2026-11-26 chat. (1) PINCH ZOOM rides the same
-  two-finger gesture as the pan (a phone has no keyboard/wheel): `TouchPan`
-  renamed `TouchGesture` (`camera.rs`); its frame now carries `zoom_factor` and
-  `anchor` — the PREVIOUS frame's `center_pos` (tracked in the machine), the
-  zoom anchoring there so the content follows the fingers EXACTLY
-  (`App::handle_touch_gesture` applies the anchored zoom BEFORE the pan delta —
-  the other order drifts); `set_zoom` re-uploads the canvas texture only when
-  the crisp/smooth sampling family flips (once per whole-100% crossing, not
-  once per pinch frame); degenerate factors (inf/NaN from a zero previous
-  distance) are dropped. (2) The smartphone rules became STARTUP-latched
-  (rotation must not show/hide a window): `app.rs::latch_smartphone_session`
-  freezes the FIRST frame's viewport verdict for the session — the Tool Log
-  window starts hidden with its View ▸ Tool Log item LIVE (the user's toggle is
-  the only lever afterwards), and the FLUSH-0 first-open gaps read the frozen
-  value (replacing the per-frame checks in windows/palette/layers/tree). (3)
-  BMP in open AND save (F17's decision): the `bmp` feature flag on the PINNED
-  image crate — zero new dependencies (Cargo.lock untouched); Open filters list
-  `.bmp` (native + web), the Save dropdown gains "BMP image" with the
-  locked-ON Lossless row and NO knob (uncompressed — nothing to tune), the
-  codec writes 32-bit RGBA (the V4-header flavor, the one BMP form with alpha),
-  the web Blob carries `image/bmp`, the MCP path export accepts `.bmp`.
-- **Files:** `Cargo.toml`, `src/file_io.rs` (+ `codecs.rs`, `tests.rs` + NEW
-  `tests/png_knob.rs`), `src/app/save_dialog.rs` (+ tests), `src/app/camera.rs`
-  (+ RENAMED `tests/touch_pan.rs`→`touch_gesture.rs`, NEW
-  `tests/touch_gesture_pass.rs` + `tests/drag_pan.rs`), `src/app.rs`,
-  `src/app/{menu,tool_log,windows,palette_window,layers_window,tree_window}.rs`,
-  `src/app/tests.rs`, `SPEC.md` (§1/§3.4/§3.7/§3.10/§3.11),
-  `docs/agents/egui-quirks.md`, both `DEBTS-*.md` (V85 born, V84 amended;
-  F20's zoom slice, F17's BMP paid), `TIMING.md`, `PROBLEMS.md`,
-  `PROGRESS.md`.
-- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 22–30 s hot —
-  rules.sh HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
-  `cargo test --profile gates` 398 green / `--features mcp` 398 green (+1
-  ignored each; +6 tests); the WASM check clean; the driver green under Xvfb.
-- **Owner-checks:** V85 born (the BMP pass + the amended phone web legs); V84
-  amended (the pinch zoom and the Tool Log startup rules changed the click-through).
-  Open: V85, V84, V81, V80 (the 4 newest of 7 open).
-- **Commit title:** `Feat: touch pinch zoom + startup-latched smartphone rules; BMP in open and save`
