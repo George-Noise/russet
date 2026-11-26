@@ -3821,3 +3821,43 @@ the `PROGRESS.md` verification stamp. Newest first, same format as the live log.
 | Extra: the delivery-pyc fix — .gitignore landed + deliver.sh guards (owner 2026-11-19) | done — guard tested both ways, gates green | the owner re-caught `scripts/__pycache__/mcp_smoke.cpython-312.pyc` inside russet.zip (AND the patch): the v5 round CLAIMED the .gitignore entries but they never landed — HEAD carried only /target /dist /result, so the leak reopened on the first new import; `.gitignore` now really carries `__pycache__/` + `*.pyc`; `visual_driver.py` sets `sys.dont_write_bytecode` before the mcp_smoke import (the cache is no longer written at the source); `deliver.sh` gains TWO hard guards (the staged tree + the patch's ^diff headers) that FAIL the delivery on any bytecode cache |
 | Extra: the "Save Image" dialog — Save and Save As converge (owner 2026-11-19) | done — gates + GUI probes + driver green | BOTH Save and Save As open ONE in-app dialog (`app/save_dialog.rs`): the file name field, the PNG/JPEG format radio (THE format choice), the JPEG Quality 1..=100 (default 90), the live "Saving as:" preview, the native Folder row + Browse… (hidden on web; a cancelled pick keeps the dialog open); `file_io.rs` gains `SaveFormat`, the quality-parameterized JPEG encoder and `pick_save_folder`; the MCP `export_png` keeps the extension-decides path export; debt F17 born (consider other formats) |
 | Extra: smooth freehand strokes — coalesced pointer moves + midpoint-quadratic pieces (owner 2026-11-19) | done — gates + driver green | NEW `tools/smooth.rs`: every coalesced `Event::PointerMoved` feeds the midpoint-quadratic window (the old one-point-per-frame stream drew the fast-stroke polygon); brush/eraser stroke ONE C1-continuous tiny-skia path per frame with a batched dirty rect; the pencil keeps its 1 px Bresenham trail along the smoothed centerline (quads flattened to ~1 px steps, translucent-safe joint dedupe); `draw_segment` stays for the press dot + MCP paths; SPEC §3.5 rewritten; V44 born — the pencil half FAILED on the owner's pass and was reworked 2026-11-20 (the next row) |
+
+### 2026-11-25 — `Tooling:` the session-start tooling stops lying — the --warm toolchain gate, the honest verdict, the driver's MCP startup probe, the windowfocus row — the owner-picked PROBLEMS.md script fixes (items 1+2+5)
+
+- **What:** the owner read PROBLEMS.md (his explicit order) and picked plan B's script fixes.
+  (1) `scripts/sandbox_check.sh` --warm gates the detached warm-up on the toolchain —
+  "[NO] warm-up SKIPPED…" instead of a doomed job (the lie reproduced live this session
+  start: rustup MISSING yet "warm-up started… verify.sh is hot"); the detached script
+  captures each rc BEFORE any $(date …) resets $? (that substitution is why the old line
+  printed "finished (exit 0)" over two "cargo: command not found" — PROBLEMS.md
+  2026-11-20/23/24, three entries, one bug) and ends "finished (clippy 0, test 0)" ONLY
+  when both stages exit 0, else "warm-up FAILED (clippy rc=X, test rc=Y) — verify.sh is
+  NOT hot" (rc=skipped when clippy failed first). (2) `scripts/visual_driver.py`: a
+  startup probe speaks ONE initialize handshake with a 5 s deadline (a throwaway
+  instance) — no reply / an EOF / an unspawnable path print ONE loud "DRIVER PROBE: …"
+  line and exit 3 (the old silent exit 0 against a non-MCP build and the hang-to-cap are
+  dead, PROBLEMS.md 2026-11-20/24); stdout is line-buffered (piped runs stream, no more
+  0-byte logs), the usage line documents the --features mcp requirement + the exit codes;
+  mcp_smoke.py untouched (the entry asked for the fix in the driver). (3) the GUI lane's
+  windowfocus row (the 2026-11-21 "could improve"): with a reachable display
+  `xdotool help` must list the windowfocus subcommand ([yes]); without one a [--]
+  reminder (help inits xdo before dispatching — a display-free probe is impossible); a
+  loader-broken binary gets its own trap-13 [NO]; the probe carries the /tmp bundle's
+  lib dir on LD_LIBRARY_PATH.
+- **Files:** `scripts/sandbox_check.sh`, `scripts/visual_driver.py`, `PROGRESS.md`,
+  `TIMING.md` (the cold warm-up row), `SANDBOX.md` (one trap-13 sentence:
+  help/windowfocus need the lib dir AND a live X server). No Rust touched.
+- **Verified:** the FULL gate ran (scripts/ are beyond-.md — NOT docs-only; the owner's
+  no-builds note was a one-round recommendation, not a standing ban):
+  `scripts/verify.sh` ALL GATES GREEN, 17 s hot — rules.sh HARD-green, fmt clean, clippy
+  `-D warnings` × default/mcp/fill-bench, `cargo test --profile gates` 370 green /
+  `--features mcp` 383 green (+1 ignored each). Branch tests live: the probe's EOF
+  (/bin/true) and 5 s timeout (a silent wrapper) modes exit 3 loudly; the pass-through
+  drives target/gates/russet under Xvfb — ALL VISUAL-DRIVER SCENARIOS GREEN (15 checks,
+  3.6 s); the skip branch prints [NO] warm-up SKIPPED (a fake HOME + a cargo-less PATH);
+  the started branch ends the hot log "finished (clippy 0, test 0)"; both windowfocus
+  states live ([--] without a display, [yes] with Xvfb); the branch tests caught the
+  first draft's own bug (a trap-13 loader error misreported as a missing subcommand) —
+  fixed and re-tested. NO wasm check (no web-facing code touched).
+- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
+- **Commit title:** `Gate the --warm warm-up on the toolchain; give visual_driver.py an MCP startup probe; probe the windowfocus path in sandbox_check`

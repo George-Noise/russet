@@ -3,7 +3,8 @@
 //! live in child modules (they can access `App`'s private fields):
 //!   [`camera`]    — §3.4: canvas rect, zoom (Paint.NET-style steps), pan
 //!                   (wheel, mouse drag, WASD, and the multi-touch
-//!                   `TouchPan` — owner request 2026-11-25)
+//!                   `TouchGesture` — pan + pinch zoom, owner requests
+//!                   2026-11-25/2026-11-26)
 //!   [`dialogs`]   — §3.7/§3.8: New / Resize Canvas / unsaved-changes / Error
 //!   [`document`]  — owner request 2026-11-13: document lifecycle — New/
 //!                   Open/Save, the unsaved-changes gate, the window title
@@ -180,12 +181,26 @@ pub struct App {
     /// nothing until the letter is released — owner bug report 2026-11-24.
     /// Updated from the frame's raw key events in `camera::handle_key_pan`.
     pan_key_latch: camera::PanKeyLatch,
-    /// The multi-touch pan session ([`camera::TouchPan`], owner request
-    /// 2026-11-25): while a two-plus-finger gesture is underway the frame
-    /// pans by the touches' average movement, and the whole touch session
-    /// stays "panning" until the last finger lifts. Updated in
-    /// `camera::handle_touch_pan`.
-    touch_pan: camera::TouchPan,
+    /// The multi-touch gesture session ([`camera::TouchGesture`], owner
+    /// requests 2026-11-25/2026-11-26): while a two-plus-finger gesture is
+    /// underway the frame pans by the touches' average movement AND
+    /// pinch-zooms by the touches' spreading ratio (anchored at the
+    /// gesture's center), and the whole touch session stays "panning"
+    /// until the last finger lifts. Updated in
+    /// `camera::handle_touch_gesture`.
+    touch_gesture: camera::TouchGesture,
+    /// The session's STARTUP smartphone latch (owner request 2026-11-26,
+    /// amending the 2026-11-25 compact rules): `is_smartphone_viewport`
+    /// evaluated exactly ONCE, on the session's FIRST frame
+    /// ([`Self::latch_smartphone_session`]), and frozen for the whole
+    /// session — a phone ROTATION never revisits the decision. The
+    /// compact rules key on the frozen value: the Tool Log window starts
+    /// hidden (its View ▸ Tool Log checkbox stays live, so the user can
+    /// turn it back on — nothing appears or disappears on its own), and
+    /// every floating window's first-open edge gap is FLUSH 0 (see SPEC
+    /// §3.11). Native builds latch `false` by construction (the check's
+    /// wasm half is a `cfg!` in `main.rs`).
+    smartphone_session: Option<bool>,
     is_stroking: bool,
     /// Smoothed-stroke emission window (owner request 2026-11-19): the
     /// midpoint-quadratic window every coalesced pointer move of the
@@ -462,7 +477,8 @@ impl App {
             zoom: 1.0,
             pan: Vec2::ZERO,
             pan_key_latch: camera::PanKeyLatch::default(),
-            touch_pan: camera::TouchPan::default(),
+            touch_gesture: camera::TouchGesture::default(),
+            smartphone_session: None,
             is_stroking: false,
             stroke_smooth: SmoothStroke::new(Pos2::ZERO),
             stroke_trail: PencilTrail::default(),
@@ -784,15 +800,31 @@ impl App {
         self.canvas_tex.set(image, self.canvas_texture_options());
     }
 
-    /// True while running in a WEB build on a SMARTPHONE-sized viewport
-    /// (owner request 2026-11-25): the content area narrower than
-    /// [`crate::SMARTPHONE_MAX_VIEWPORT_PT`] points. The compact UI rules
-    /// key on it — the Tool Log window stays hidden (and its View-menu item
-    /// with it), and every floating window's first-open edge gap is FLUSH 0
-    /// (see SPEC §3.11). Native builds are always `false` (the check's
-    /// wasm half is a `cfg!` in `main.rs`).
-    fn is_smartphone(&self) -> bool {
-        crate::is_smartphone_viewport(self.ctx.content_rect().width())
+    /// Freezes the session's smartphone decision ONCE (owner request
+    /// 2026-11-26 — the STARTUP-only compact rules): the FIRST frame's
+    /// viewport check is stored and never re-evaluated — a later rotation
+    /// (or a desktop browser window resized across the threshold) must
+    /// not make windows appear or disappear on their own. On a latched
+    /// phone the Tool Log window starts HIDDEN (the View item stays live
+    /// — the user's own toggle re-opens it; `menu.rs`). Pure latch —
+    /// `phone_now` is passed in (the first frame's
+    /// `is_smartphone_viewport` verdict) so a native test can drive BOTH
+    /// sides of the branch.
+    fn latch_smartphone_session(&mut self, phone_now: bool) {
+        if self.smartphone_session.is_none() {
+            self.smartphone_session = Some(phone_now);
+            if phone_now {
+                self.history_window_open = false;
+            }
+        }
+    }
+
+    /// The frozen smartphone decision (see
+    /// [`Self::latch_smartphone_session`]); `false` while no frame has
+    /// run yet (the headless builders — the latch only exists to be read
+    /// by the frame flow, never before it).
+    fn smartphone_session(&self) -> bool {
+        self.smartphone_session.unwrap_or(false)
     }
 
     fn draw_canvas(&mut self, ui: &mut egui::Ui, panel_rect: Rect) {
@@ -815,14 +847,15 @@ impl App {
             // A mid-gesture tool switch abandons the pending visual node.
             self.stroke_paint = None;
         }
-        // The multi-touch pan (owner request 2026-11-25, the F20 web
-        // slice): a two-plus-finger gesture pans by the touches' average
-        // movement, and the FIRST gesture frame ends any in-flight
-        // freehand stroke — committed as its node, the painted pixels
-        // staying — before the gesture owns the input. The session stays
-        // "panning" until the last finger lifts, so the leftover finger
-        // paints nothing.
-        let touch = self.handle_touch_pan(ui);
+        // The multi-touch gesture (owner requests 2026-11-25/2026-11-26,
+        // the F20 web slices): a two-plus-finger gesture pans by the
+        // touches' average movement and pinch-zooms by the spreading
+        // ratio, and the FIRST gesture frame ends any in-flight freehand
+        // stroke — committed as its node, the painted pixels staying —
+        // before the gesture owns the input. The session stays "panning"
+        // until the last finger lifts, so the leftover finger paints
+        // nothing.
+        let touch = self.handle_touch_gesture(ui, panel_rect);
         if touch.began {
             self.commit_stroke_gesture();
         }
@@ -964,6 +997,16 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // The smartphone compact rules LATCH here, on the session's FIRST
+        // frame (owner request 2026-11-26): the viewport is checked ONCE —
+        // every later frame (a phone ROTATION included) reads the frozen
+        // decision (`smartphone_session`), so no window ever appears or
+        // disappears on its own. Before the top menu and the windows: the
+        // latched phone hides the Tool Log window BEFORE anything could
+        // draw it, and the first-open gaps read the frozen value too.
+        self.latch_smartphone_session(crate::is_smartphone_viewport(
+            self.ctx.content_rect().width(),
+        ));
         // MCP events first: tool calls land before anything else draws.
         #[cfg(all(feature = "mcp", not(target_arch = "wasm32")))]
         self.mcp_poll();

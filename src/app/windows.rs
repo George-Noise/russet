@@ -77,15 +77,6 @@ fn tools_title_frame(ctx: &Context) -> egui::Frame {
     frame
 }
 
-/// The smartphone-viewport check of the first-open gaps (owner request
-/// 2026-11-25): the shared gate of every floating window's first-open
-/// position — a phone-narrow WEB viewport gets the FLUSH-0 compact rules
-/// (SPEC §3.11). Native tests always pass `false` (the wasm half of
-/// `crate::is_smartphone_viewport` is a compile-time `false` there).
-fn smartphone_view(ctx: &Context) -> bool {
-    crate::is_smartphone_viewport(ctx.content_rect().width())
-}
-
 /// The width of the Size block's slider: EXACTLY the Shape panel's widest
 /// button row (3 × [`TOOL_BUTTON_PT`] + 2 × [`TOOL_GRID_GAP`]) — the owner's
 /// 2026-11-20 pass moved the "Size" label ABOVE the slider and narrowed the
@@ -93,8 +84,13 @@ fn smartphone_view(ctx: &Context) -> bool {
 /// Size element was the panel's widest row).
 /// The builder of the "Tools" window itself (§3.2). Exposed as a function so
 /// the regression tests (`windows/tests.rs`) run the exact builder the app
-/// runs.
-fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'a> {
+/// runs; `smartphone` is the session's frozen startup latch (see the note
+/// above — the app passes `App::smartphone_session`).
+fn tools_window_builder<'a>(
+    ctx: &Context,
+    open: &'a mut bool,
+    smartphone: bool,
+) -> egui::Window<'a> {
     egui::Window::new("")
         .id(tools_window_id())
         // Owner v5 (2026-11-18): the v4 `title_bar(false)` removed the
@@ -113,8 +109,8 @@ fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'
         // ~11 pt past the window's right edge and the ✕ lands half outside it.
         .title_frame(tools_title_frame(ctx))
         // First open (§3.2): 0.5rem from the left edge (FLUSH 0 on a
-        // smartphone-sized web viewport — owner request 2026-11-25, SPEC
-        // §3.11); vertically a bit
+        // smartphone web session — owner request 2026-11-25, SPEC
+        // §3.11 — latched at startup since 2026-11-26); vertically a bit
         // ABOVE center — 40% of the free vertical space above the window
         // and 60% below it (owner request 2026-11-11). The LEFT_CENTER
         // pivot + `default_pos` set the left gap and a centered start;
@@ -125,10 +121,7 @@ fn tools_window_builder<'a>(ctx: &Context, open: &'a mut bool) -> egui::Window<'
         // position — after any user move or §3.11 repositioning the
         // stored position always wins.
         .pivot(egui::Align2::LEFT_CENTER)
-        .default_pos(
-            ctx.content_rect().left_center()
-                + egui::vec2(first_open_gap(smartphone_view(ctx)), 0.0),
-        )
+        .default_pos(ctx.content_rect().left_center() + egui::vec2(first_open_gap(smartphone), 0.0))
         .auto_sized() // size follows the content; no resize handles
 }
 
@@ -141,27 +134,28 @@ impl App {
         // `App::ui` — before the canvas, so the Eyedropper's pipette cursor
         // exists too; here every frame just blits the cached textures.
         let mut open = true;
-        let shown = tools_window_builder(ctx, &mut open).show(ctx, |ui| {
-            // The Tools window itself is ONLY the tool list: the per-tool
-            // settings live in the magnetized panel below/above it (owner
-            // request 2026-11-17, see `tool_settings_window`).
-            egui::Grid::new("tools_grid")
-                .num_columns(TOOL_COLUMNS)
-                // egui floors every column at `interact_size.x` (40 pt),
-                // which padded the 28 pt buttons with invisible width and
-                // made the column gap 18 pt while the row gap stayed 6 pt
-                // (owner request 2026-11-18: equal gaps both ways).
-                .min_col_width(TOOL_BUTTON_PT)
-                .spacing([TOOL_GRID_GAP, TOOL_GRID_GAP])
-                .show(ui, |ui| {
-                    for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {
-                        for tool in row {
-                            self.tool_button(ui, *tool);
+        let shown =
+            tools_window_builder(ctx, &mut open, self.smartphone_session()).show(ctx, |ui| {
+                // The Tools window itself is ONLY the tool list: the per-tool
+                // settings live in the magnetized panel below/above it (owner
+                // request 2026-11-17, see `tool_settings_window`).
+                egui::Grid::new("tools_grid")
+                    .num_columns(TOOL_COLUMNS)
+                    // egui floors every column at `interact_size.x` (40 pt),
+                    // which padded the 28 pt buttons with invisible width and
+                    // made the column gap 18 pt while the row gap stayed 6 pt
+                    // (owner request 2026-11-18: equal gaps both ways).
+                    .min_col_width(TOOL_BUTTON_PT)
+                    .spacing([TOOL_GRID_GAP, TOOL_GRID_GAP])
+                    .show(ui, |ui| {
+                        for row in tool_icons::TOOLS.chunks(TOOL_COLUMNS) {
+                            for tool in row {
+                                self.tool_button(ui, *tool);
+                            }
+                            ui.end_row();
                         }
-                        ui.end_row();
-                    }
-                });
-        });
+                    });
+            });
         if let Some(response) = &shown {
             place_floating_window(
                 ctx,

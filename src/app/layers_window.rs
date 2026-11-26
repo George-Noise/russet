@@ -95,10 +95,11 @@ impl App {
             .collect();
         let mut request = LayerRequest::default();
         // The smartphone compact rule (owner request 2026-11-25, SPEC
-        // §3.11): the first-open gaps go FLUSH 0 on a phone-sized web
-        // viewport — the window hugs the right and bottom edges (the
-        // 1.75rem zoom-label lift folds to 0 with the gap).
-        let smartphone = crate::is_smartphone_viewport(ctx.content_rect().width());
+        // §3.11): the first-open gaps go FLUSH 0 on a phone web session —
+        // the window hugs the right and bottom edges (the 1.75rem
+        // zoom-label lift folds to 0 with the gap); since 2026-11-26 keyed
+        // on the FROZEN startup latch (a rotation never re-decides it).
+        let smartphone = self.smartphone_session();
         let shown = egui::Window::new("Layers")
             .id(layers_window_id())
             .open(&mut open)

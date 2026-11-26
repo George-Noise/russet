@@ -1,17 +1,19 @@
-//! Unit tests for the platform-independent image plumbing (SPEC §3.7, §5.1):
-//! premultiplied alpha on the way in, demultiplied bytes on the way out, and
-//! the white background JPEG expects — plus the "Save Image" dialog's
-//! `SaveFormat` mapping and quality clamp (owner request 2026-11-19) and the
-//! PNG compression knob (owner request 2026-11-20: the slider trades file
-//! size vs encode time, NEVER pixels — every level is lossless).
+//! Unit tests for the platform-independent image plumbing (SPEC §3.7,
+//! §5.1): premultiplied alpha on the way in, demultiplied bytes on the
+//! way out, the white background the JPEG expects — and the BMP's
+//! 32-bit RGBA round trip (owner request 2026-11-26, F17's decision) —
+//! plus the "Save Image" dialog's `SaveFormat` mapping and quality clamp
+//! (owner request 2026-11-19). The PNG compression knob tests live in
+//! `tests/png_knob.rs` (the ~300-line split, 2026-11-26).
 
 use tiny_skia::{ColorU8, Pixmap};
 
 use super::SaveFormat;
 use super::codecs::{
-    DEFAULT_JPEG_QUALITY, DEFAULT_PNG_COMPRESSION, encode_jpeg_with_quality, encode_png,
-    encode_png_with_compression, pixmap_from_image, png_compression_type,
+    DEFAULT_JPEG_QUALITY, encode_bmp, encode_jpeg_with_quality, encode_png, pixmap_from_image,
 };
+
+mod png_knob;
 
 #[test]
 fn png_round_trip_preserves_rgba_bytes() {
@@ -67,10 +69,16 @@ fn the_save_format_maps_extensions_both_ways() {
     assert_eq!(SaveFormat::from_extension("png"), Some(SaveFormat::Png));
     assert_eq!(SaveFormat::from_extension("jpg"), Some(SaveFormat::Jpeg));
     assert_eq!(SaveFormat::from_extension("JPEG"), Some(SaveFormat::Jpeg));
+    assert_eq!(SaveFormat::from_extension("bmp"), Some(SaveFormat::Bmp));
+    assert_eq!(SaveFormat::from_extension("BMP"), Some(SaveFormat::Bmp));
     assert_eq!(SaveFormat::from_extension("gif"), None);
     assert_eq!(SaveFormat::from_extension(""), None);
     assert_eq!(SaveFormat::Png.extension(), "png");
     assert_eq!(SaveFormat::Jpeg.extension(), "jpg");
+    assert_eq!(SaveFormat::Bmp.extension(), "bmp");
+    assert_eq!(SaveFormat::Png.label(), "PNG image");
+    assert_eq!(SaveFormat::Jpeg.label(), "JPEG image");
+    assert_eq!(SaveFormat::Bmp.label(), "BMP image");
 }
 
 #[test]
@@ -112,110 +120,57 @@ fn the_web_download_blob_carries_the_format_mime_type() {
     // mapping must stay in lockstep with SaveFormat.
     assert_eq!(SaveFormat::Png.mime_type(), "image/png");
     assert_eq!(SaveFormat::Jpeg.mime_type(), "image/jpeg");
+    assert_eq!(SaveFormat::Bmp.mime_type(), "image/bmp");
 }
 
-// ---- the PNG compression knob (owner request 2026-11-20: the slider) ----
+// ---- the BMP codec (owner request 2026-11-26, F17's decision) ----
 
-/// A compressible 64×64 canvas: flat quadrants over a smooth horizontal
-/// gradient (the shape deflate's effort levels actually act on).
-fn structured_test_pixmap() -> Pixmap {
-    let mut pixmap = Pixmap::new(64, 64).expect("64x64 pixmap");
-    for (i, pixel) in pixmap.pixels_mut().iter_mut().enumerate() {
-        let x = (i % 64) as u8;
-        let y = (i / 64) as u8;
-        let (r, g, b) = if y < 16 {
-            (255, 0, 0)
-        } else if y < 32 {
-            (0, 255, 0)
-        } else if y < 48 {
-            (x, x, x)
-        } else {
-            (255 - x, 255 - x, 255 - x)
-        };
-        *pixel = ColorU8::from_rgba(r, g, b, 255).premultiply();
-    }
+#[test]
+fn bmp_round_trip_preserves_rgba_bytes_including_alpha() {
+    // BMP saves ride the 32-bit BITMAPV4HEADER flavor — the ONE BMP form
+    // that carries alpha (F17's note), so the round trip returns the exact
+    // RGBA bytes, a fully transparent pixel included.
+    let mut pixmap = Pixmap::new(2, 1).expect("2x1 pixmap");
+    pixmap.pixels_mut()[0] = ColorU8::from_rgba(10, 20, 30, 255).premultiply();
+    pixmap.pixels_mut()[1] = ColorU8::from_rgba(0, 0, 0, 0).premultiply();
+
+    let bmp = encode_bmp(&pixmap).expect("BMP encodes");
+    let decoded = image::load_from_memory(&bmp)
+        .expect("BMP decodes")
+        .to_rgba8();
+    assert_eq!(decoded.dimensions(), (2, 1));
+    assert_eq!(decoded.get_pixel(0, 0).0, [10, 20, 30, 255]);
+    assert_eq!(decoded.get_pixel(1, 0).0[3], 0);
+}
+
+#[test]
+fn bmp_files_open_through_the_shared_decode_path() {
+    // The Open path (native `image::open`, web `load_from_memory`) needs
+    // only the crate's `bmp` feature — the bytes above decode through
+    // the same conversion every opened file takes.
+    let mut pixmap = Pixmap::new(3, 3).expect("3x3 pixmap");
     pixmap
+        .pixels_mut()
+        .iter_mut()
+        .enumerate()
+        .for_each(|(i, pixel)| {
+            *pixel = ColorU8::from_rgba(
+                (i * 7 % 256) as u8,
+                (i * 13 % 256) as u8,
+                (i * 29 % 256) as u8,
+                200,
+            )
+            .premultiply();
+        });
+
+    let bmp = encode_bmp(&pixmap).expect("BMP encodes");
+    let reloaded = pixmap_from_image(image::load_from_memory(&bmp).expect("BMP decodes"))
+        .expect("BMP converts to a pixmap");
+    assert_eq!((reloaded.width(), reloaded.height()), (3, 3));
+    assert_eq!(reloaded.pixel(1, 2).expect("pixel in bounds").alpha(), 200);
 }
 
-#[test]
-fn the_png_compression_slider_maps_onto_the_deflate_levels() {
-    // 0..=9 are the encoder's real, distinct stops: Level(0) stores the
-    // rows uncompressed, Level(1..=9) set the EXACT deflate level; any
-    // out-of-range value clamps to 9 — no panic can reach the save path.
-    use image::codecs::png::CompressionType;
-    assert_eq!(png_compression_type(0), CompressionType::Level(0));
-    assert_eq!(png_compression_type(1), CompressionType::Level(1));
-    assert_eq!(png_compression_type(6), CompressionType::Level(6));
-    assert_eq!(png_compression_type(9), CompressionType::Level(9));
-    assert_eq!(png_compression_type(10), CompressionType::Level(9));
-    assert_eq!(png_compression_type(255), CompressionType::Level(9));
-    // The dialog's default rides the balanced middle (flate2's own default
-    // level).
-    assert_eq!(
-        png_compression_type(DEFAULT_PNG_COMPRESSION),
-        CompressionType::Level(6)
-    );
-}
-
-#[test]
-fn every_png_compression_level_saves_the_same_pixels() {
-    // THE promise the dialog's Lossless row displays (owner request
-    // 2026-11-20): the slider trades file size, never fidelity — decoding
-    // the saved bytes at every effort returns the exact RGBA pixels.
-    let pixmap = structured_test_pixmap();
-    let source = image::RgbaImage::from_raw(
-        64,
-        64,
-        pixmap
-            .pixels()
-            .iter()
-            .flat_map(|p| {
-                let c = p.demultiply();
-                [c.red(), c.green(), c.blue(), c.alpha()]
-            })
-            .collect::<Vec<u8>>(),
-    )
-    .expect("64x64 RGBA image");
-    for compression in [0, 6, 9] {
-        let png = encode_png_with_compression(&pixmap, compression).expect("PNG encodes");
-        let decoded = image::load_from_memory(&png)
-            .expect("PNG decodes")
-            .to_rgba8();
-        assert_eq!(decoded.as_raw(), source.as_raw());
-    }
-}
-
-#[test]
-fn higher_png_compression_encodes_smaller_files() {
-    // The slider must not be a placebo: level 9 packs the structured
-    // canvas tighter than level 0's uncompressed store.
-    let pixmap = structured_test_pixmap();
-    let stored = encode_png_with_compression(&pixmap, 0).expect("store encodes");
-    let best = encode_png_with_compression(&pixmap, 9).expect("best encodes");
-    assert!(
-        best.len() < stored.len(),
-        "compression 9 ({} bytes) should encode smaller than 0 ({} bytes)",
-        best.len(),
-        stored.len()
-    );
-}
-
-#[test]
-fn intermediate_png_compression_levels_encode_intermediate_files() {
-    // The slider's stops are ordered: level 3 must land BETWEEN the store
-    // and level 9 on this compressible canvas.
-    let pixmap = structured_test_pixmap();
-    let stored = encode_png_with_compression(&pixmap, 0).expect("store encodes");
-    let mid = encode_png_with_compression(&pixmap, 3).expect("level 3 encodes");
-    let best = encode_png_with_compression(&pixmap, 9).expect("level 9 encodes");
-    assert!(
-        mid.len() < stored.len() && best.len() < mid.len(),
-        "expected store ({} bytes) > level 3 ({} bytes) > level 9 ({} bytes)",
-        stored.len(),
-        mid.len(),
-        best.len()
-    );
-}
+// ---- the FileTask handles (F21) ----
 
 /// F21 (owner pick of variant A, 2026-11-21): the file tasks are POLL
 /// handles — the blocking picker runs on a worker thread and the UI loop

@@ -13,6 +13,7 @@ use crate::file_io::SaveFormat;
 fn the_composed_name_carries_the_chosen_formats_extension() {
     assert_eq!(compose_file_name("photo", SaveFormat::Png), "photo.png");
     assert_eq!(compose_file_name("photo", SaveFormat::Jpeg), "photo.jpg");
+    assert_eq!(compose_file_name("photo", SaveFormat::Bmp), "photo.bmp");
 }
 
 #[test]
@@ -27,6 +28,7 @@ fn a_typed_extension_matching_the_format_survives() {
         compose_file_name("photo.jpg", SaveFormat::Jpeg),
         "photo.jpg"
     );
+    assert_eq!(compose_file_name("photo.bmp", SaveFormat::Bmp), "photo.bmp");
 }
 
 #[test]
@@ -37,6 +39,8 @@ fn a_conflicting_typed_extension_is_replaced() {
         "photo.jpg"
     );
     assert_eq!(compose_file_name("photo.jpg", SaveFormat::Png), "photo.png");
+    assert_eq!(compose_file_name("photo.png", SaveFormat::Bmp), "photo.bmp");
+    assert_eq!(compose_file_name("photo.bmp", SaveFormat::Png), "photo.png");
     // Only the IMAGE extension is the format's; the rest of the base stays.
     assert_eq!(
         compose_file_name("photo.old.png", SaveFormat::Png),
@@ -78,6 +82,7 @@ fn the_prefill_strips_a_known_extension_only() {
     assert_eq!(base_name_of("photo.png"), "photo");
     assert_eq!(base_name_of("PHOTO.JPG"), "PHOTO");
     assert_eq!(base_name_of("photo.jpeg"), "photo");
+    assert_eq!(base_name_of("photo.bmp"), "photo");
     assert_eq!(base_name_of("photo.old.png"), "photo.old");
     assert_eq!(base_name_of("photo.txt"), "photo.txt");
     assert_eq!(base_name_of("Untitled"), "Untitled");

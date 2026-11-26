@@ -41,16 +41,18 @@ impl App {
         }
         let mut open = true;
         // The smartphone compact rule (owner request 2026-11-25, SPEC
-        // §3.11): FLUSH-0 first-open gaps on a phone-sized web viewport.
-        let smartphone = crate::is_smartphone_viewport(ctx.content_rect().width());
+        // §3.11): FLUSH-0 first-open gaps on a phone web session — since
+        // 2026-11-26 keyed on the FROZEN startup latch (a rotation never
+        // re-decides it).
+        let smartphone = self.smartphone_session();
         let shown = egui::Window::new("Palette")
             .id(palette_window_id())
             .open(&mut open)
             // First open (§3.3): the window's bottom-left corner sits 0.5rem
             // from the main window's left and bottom edges (`Align2::LEFT_BOTTOM`
             // pivot interprets `default_pos` as that corner's position) —
-            // FLUSH 0 on a smartphone-sized web viewport (owner request
-            // 2026-11-25, SPEC §3.11).
+            // FLUSH 0 on a smartphone web session (owner request
+            // 2026-11-25, SPEC §3.11 — latched at startup since 2026-11-26).
             // As with Tools, the stored position wins after any move.
             .pivot(egui::Align2::LEFT_BOTTOM)
             .default_pos(

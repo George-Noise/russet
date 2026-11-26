@@ -19,7 +19,7 @@ pub(super) fn show_tools_once(ctx: &egui::Context, input: &egui::RawInput) -> (R
     let mut body_shown = false;
     let mut output = ctx.run_pass(input.clone(), |ctx| {
         let mut open = true;
-        let shown = tools_window_builder(ctx, &mut open).show(ctx, |ui| {
+        let shown = tools_window_builder(ctx, &mut open, false).show(ctx, |ui| {
             ui.label("tools");
         });
         if let Some(response) = &shown {

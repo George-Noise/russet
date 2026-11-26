@@ -30,10 +30,11 @@ pub(super) const FIRST_OPEN_GAP: f32 = 0.5 * REM;
 pub(super) const LAYERS_FIRST_OPEN_LIFT: f32 = 1.75 * REM;
 
 /// The FIRST-OPEN edge gap for the current viewport (owner request
-/// 2026-11-25): the usual 0.5rem, but FLUSH 0 on a smartphone-sized web
-/// viewport — every floating window sits edge-to-edge on phones (SPEC
+/// 2026-11-25): the usual 0.5rem, but FLUSH 0 on a smartphone web
+/// session — every floating window sits edge-to-edge on phones (SPEC
 /// §3.11's smartphone rule). Pure so the rule is unit-testable; the
-/// smartphone flag comes from `App::is_smartphone`.
+/// smartphone flag comes from the session's frozen startup latch
+/// (`App::smartphone_session`, since 2026-11-26).
 pub(super) fn first_open_gap(smartphone: bool) -> f32 {
     if smartphone { 0.0 } else { FIRST_OPEN_GAP }
 }

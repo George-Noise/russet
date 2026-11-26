@@ -42,13 +42,17 @@ impl App {
     /// The Tool Log window (owner request 2026-11-13 renamed it from
     /// "History"): the read-only action log, newest first. Entries are
     /// plain labels — clicking them does nothing yet by design.
-    /// HIDDEN on a smartphone-sized web viewport (owner request
-    /// 2026-11-25, SPEC §3.11's smartphone rule): a phone screen has no
-    /// room for a fifth floating window — the log itself keeps recording,
-    /// only the window never renders (and the View item is hidden with
-    /// it, so no dead toggle exists).
+    /// HIDDEN AT START on a smartphone-sized web viewport (owner request
+    /// 2026-11-26, amending the 2026-11-25 rule; SPEC §3.11's smartphone
+    /// paragraph): a phone screen has no room for a fifth floating window,
+    /// so the startup latch (`app.rs::latch_smartphone_session`) opens the
+    /// session with `history_window_open` already false — but the View ▸
+    /// Tool Log checkbox stays LIVE, and the latch is never revisited, so
+    /// the user's own toggle is the ONLY thing that shows or hides the
+    /// window afterwards (a rotation changes nothing). The log itself
+    /// keeps recording underneath either way.
     pub(super) fn history_window(&mut self, ctx: &Context) {
-        if !self.history_window_open || self.is_smartphone() {
+        if !self.history_window_open {
             return;
         }
         let mut open = true;

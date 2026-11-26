@@ -2,10 +2,12 @@
 //! conversion ([`pixmap_from_image`] — the premultiplied-alpha canvas
 //! invariant), the PNG encoders (the encoder-default one shared with the
 //! MCP snapshot tool, the slider-driven one behind the "Save Image"
-//! dialog's Compression knob) and the JPEG encoder (transparency
-//! flattened onto white, §5.1), plus the two encoder defaults the dialog
-//! prefill and the path-based MCP export start from. Pure plumbing — no
-//! platform branches, no dialogs; the platform glue stays in the root's
+//! dialog's Compression knob), the JPEG encoder (transparency flattened
+//! onto white, §5.1), the BMP encoder (owner request 2026-11-26, F17's
+//! decision — the `bmp` feature flag on the pinned crate, no new
+//! dependencies), plus the two encoder defaults the dialog prefill and
+//! the path-based MCP export start from. Pure plumbing — no platform
+//! branches, no dialogs; the platform glue stays in the root's
 //! `native`/`web` mods and the root re-exports everything bin code
 //! consumes.
 //!
@@ -131,4 +133,33 @@ pub(crate) fn encode_jpeg_with_quality(pixmap: &Pixmap, quality: u8) -> Result<V
             .map_err(|err| format!("Failed to encode JPEG: {err}"))?;
     }
     Ok(jpeg)
+}
+
+/// BMP encode (owner request 2026-11-26 — F17's decision, the `bmp` feature
+/// flag on the pinned crate): RGBA, the same demultiplied source the PNG
+/// encoders build from. The pinned encoder writes a 32-bit BITMAPV4HEADER
+/// file for `Rgba8` — the ONE BMP flavor that carries alpha; 24-bit files
+/// would need the JPEG's white-flatten instead. There is no knob: the
+/// format stores its rows UNCOMPRESSED, so a quality/effort slider has
+/// nothing to trade (the F17 note — no options row), and the encode is
+/// lossless. The alpha channel is preserved in the bytes; viewers that
+/// predate the V4 header may render fully-opaque (the format's own quirk,
+/// recorded in F17).
+pub(crate) fn encode_bmp(pixmap: &Pixmap) -> Result<Vec<u8>, String> {
+    let image = demultiplied_rgba(pixmap)?;
+    let mut bmp = Vec::new();
+    {
+        use image::ImageEncoder;
+        let mut cursor = std::io::Cursor::new(&mut bmp);
+        let encoder = image::codecs::bmp::BmpEncoder::new(&mut cursor);
+        encoder
+            .write_image(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                image::ExtendedColorType::Rgba8,
+            )
+            .map_err(|err| format!("Failed to encode BMP: {err}"))?;
+    }
+    Ok(bmp)
 }

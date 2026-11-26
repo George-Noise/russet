@@ -3,11 +3,11 @@
 //! physical-pixel snapping) and panning (plain/Shift wheel, middle button,
 //! Space+LMB, W/A/S/D — with the combo latch, [`PanKeyLatch`], that keeps a
 //! letter pressed under an accelerator from panning — and the MULTI-TOUCH
-//! pan, [`TouchPan`], owner request 2026-11-25: two or more fingers pan by
-//! the average movement of all touch points, egui's
-//! `InputState::multi_touch().translation_delta`). A child module of
-//! `app`, so it can touch `App`'s private fields; `app.rs` stays the
-//! orchestrator.
+//! gesture, [`TouchGesture`], owner requests 2026-11-25/26: two or more
+//! fingers PAN by the average movement of all touch points and PINCH-zoom
+//! by the touches' spreading distance ratio, egui's
+//! `InputState::multi_touch()` deltas). A child module of `app`, so it can
+//! touch `App`'s private fields; `app.rs` stays the orchestrator.
 
 use eframe::egui::{self, Key, MouseWheelUnit, PointerButton, Pos2, Rect, Vec2};
 
@@ -91,6 +91,13 @@ impl App {
         if (new_zoom - self.zoom).abs() < f32::EPSILON {
             return;
         }
+        // The full re-upload below exists so a crisp/smooth SAMPLING change
+        // takes effect immediately (glow applies the sampler params on
+        // every upload), and it only matters when the zoom actually CROSSES
+        // between the crisp and the smooth family — so it is paid exactly
+        // then (owner request 2026-11-26, with the continuous pinch: one
+        // re-upload per crossing instead of one per pinch frame).
+        let crisp_before = self.crisp_zoom();
         if let Some(anchor) = anchor {
             let ppp = self.ctx.pixels_per_point();
             let rect = self.canvas_rect(panel_rect);
@@ -100,9 +107,9 @@ impl App {
             self.pan = new_min - panel_rect.center() + canvas * (new_zoom / ppp) * 0.5;
         }
         self.zoom = new_zoom;
-        // Re-upload once so the new point/bilinear sampling takes effect
-        // immediately (glow applies the sampler params on every upload).
-        self.repaint_full();
+        if self.crisp_zoom() != crisp_before {
+            self.repaint_full();
+        }
         log::info!("Zoom: {}%", (self.zoom * 100.0).round() as i32);
     }
 
@@ -182,7 +189,7 @@ impl App {
             // line was LOST in the 2026-11-13 app.rs split (e8eb5d1) — the
             // detection, the Grabbing cursor and the stroke suppression
             // survived, but the view never moved; restored 2026-11-25 with
-            // a regression test (camera/tests/touch_pan.rs). Same sign
+            // a regression test (camera/tests/touch_gesture.rs). Same sign
             // convention as the touch pan below: the canvas moves WITH the
             // drag.
             self.pan += response.drag_delta();
@@ -191,25 +198,52 @@ impl App {
         drag_panning || key_panning
     }
 
-    /// The MULTI-TOUCH pan step (owner request 2026-11-25, the F20 web
-    /// slice): while TWO OR MORE fingers are down egui reports a
-    /// multi-touch gesture whose `translation_delta` is the average
-    /// movement of all touch points — that delta pans the view, the content
+    /// The MULTI-TOUCH gesture step (owner requests 2026-11-25/2026-11-26,
+    /// the F20 web slices): while TWO OR MORE fingers are down egui
+    /// reports a multi-touch gesture — its `translation_delta` (the
+    /// average movement of all touch points) pans the view, the content
     /// following the fingers (the same convention as the mouse drag pan
-    /// above). The caller (`draw_canvas`) additionally treats the whole
+    /// above), and its `zoom_delta` (the ratio of the touches' average
+    /// pairwise distance to the previous frame's) is the PINCH zoom: a
+    /// phone user has neither keyboard nor wheel, so the same two fingers
+    /// carry BOTH jobs — dragging them pans, spreading/pinching them
+    /// zooms. The caller (`draw_canvas`) additionally treats the whole
     /// touch session as "panning" from the gesture's first frame until the
-    /// last finger lifts ([`TouchPanFrame::session`]) — no stroke starts or
+    /// last finger lifts ([`TouchGestureFrame::session`]) — no stroke starts or
     /// resumes on the leftover finger — and commits an in-flight freehand
     /// stroke as its node on the gesture's FIRST frame
-    /// ([`TouchPanFrame::began`], `input::commit_stroke_gesture`): the
+    /// ([`TouchGestureFrame::began`], `input::commit_stroke_gesture`): the
     /// pixels the one finger already painted stay, undoable as one node.
-    /// egui itself zeroes the delta on the frames the finger COUNT changes
+    /// egui itself zeroes BOTH deltas on the frames the finger COUNT changes
     /// (finger add/remove re-baselines the average), so no debounce is
     /// needed on this side either.
-    pub(super) fn handle_touch_pan(&mut self, ui: &egui::Ui) -> TouchPanFrame {
-        let multi = ui.input(|i| i.multi_touch()).map(|m| m.translation_delta);
+    pub(super) fn handle_touch_gesture(
+        &mut self,
+        ui: &egui::Ui,
+        panel_rect: Rect,
+    ) -> TouchGestureFrame {
+        let multi = ui.input(|i| i.multi_touch());
         let touches_down = ui.input(|i| i.any_touches());
-        let frame = self.touch_pan.step(multi, touches_down);
+        let frame = self.touch_gesture.step(multi, touches_down);
+        // Zoom FIRST, pan SECOND — the exact fingers-follow math: scaling
+        // around the OLD midpoint keeps the canvas point that was under it
+        // fixed there, and the pan delta (the midpoint's own movement)
+        // then carries it to the NEW midpoint. (Applied in the other order
+        // the anchor would read the already-shifted canvas and the content
+        // would drift off the fingers by (f-1)·delta each frame.)
+        if frame.zoom_factor != 1.0 && frame.zoom_factor.is_finite() {
+            // The anchor is the PREVIOUS frame's gesture center (see
+            // [`TouchGestureFrame::anchor`]); `None` (no prior center —
+            // practically only a re-baselined first frame, whose factor is
+            // 1.0 anyway) takes `set_zoom`'s plain panel-center path.
+            // `is_finite` guards a degenerate device report: egui computes
+            // the ratio of two average distances, and two fingers resting
+            // on the SAME point make the previous average 0 — the ratio
+            // turns inf (or 0/0 NaN) and would poison the zoom state;
+            // the frame is dropped instead.
+            self.set_zoom(self.zoom * frame.zoom_factor, frame.anchor, panel_rect);
+            ui.ctx().request_repaint();
+        }
         if frame.delta != Vec2::ZERO {
             self.pan += frame.delta;
             ui.ctx().request_repaint();
@@ -346,29 +380,45 @@ fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
     m.ctrl || m.command || m.mac_cmd || m.alt
 }
 
-/// The multi-touch pan session (owner request 2026-11-25, the F20 web
-/// slice; the pure machine behind [`App::handle_touch_pan`]). egui's
-/// `multi_touch()` reports a gesture while two or more fingers are down;
-/// this state keeps the SESSION alive after the gesture proper ends (one
-/// finger still down): the whole rest of the touch session counts as
-/// "panning", so the leftover finger cannot resume painting until every
-/// finger has lifted (the standard paint-app convention). `began` flags
-/// the gesture's FIRST frame — the takeover moment, on which the caller
-/// commits any in-flight freehand stroke before the gesture owns the
-/// input. Pure so the convention is unit-testable without an egui
-/// context; App carries it next to `pan` (like [`PanKeyLatch`]).
+/// The multi-touch gesture session (owner requests 2026-11-25/2026-11-26,
+/// the F20 web slices; the pure machine behind
+/// [`App::handle_touch_gesture`]). egui's `multi_touch()` reports a gesture
+/// while two or more fingers are down; this state keeps the SESSION alive
+/// after the gesture proper ends (one finger still down): the whole rest of
+/// the touch session counts as "panning", so the leftover finger cannot
+/// resume painting until every finger has lifted (the standard paint-app
+/// convention). `began` flags the gesture's FIRST frame — the takeover
+/// moment, on which the caller commits any in-flight freehand stroke before
+/// the gesture owns the input. The state also remembers the PREVIOUS
+/// frame's gesture center — the pinch zoom's anchor (see
+/// [`TouchGestureFrame::anchor`]). Pure so the convention is unit-testable
+/// without an egui context; App carries it next to `pan` (like
+/// [`PanKeyLatch`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(super) struct TouchPan {
+pub(super) struct TouchGesture {
     session: bool,
+    prev_center: Option<Pos2>,
 }
 
-/// What one frame of [`TouchPan::step`] decided.
+/// What one frame of [`TouchGesture::step`] decided.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct TouchPanFrame {
+pub(super) struct TouchGestureFrame {
     /// The pan delta to apply THIS frame — zero on every frame without an
     /// active multi-touch gesture, including the finger-count-change
     /// frames where egui itself zeroes the delta.
     pub(super) delta: Vec2,
+    /// The pinch zoom factor to apply THIS frame — a MULTIPLICATIVE
+    /// ratio (1.0 = none; > 1 spread, < 1 pinch), zeroed to 1.0 by egui
+    /// on the finger-count-change frames exactly like `delta`.
+    pub(super) zoom_factor: f32,
+    /// The PREVIOUS frame's gesture center — the zoom's anchor: keeping
+    /// THAT screen point fixed while scaling by `zoom_factor`, THEN
+    /// applying `delta`, lands the canvas point that was under the old
+    /// midpoint exactly under the new one (the content follows the
+    /// fingers). `None` when no gesture frame preceded this one
+    /// (practically only a re-baselined first frame — its `zoom_factor`
+    /// is 1.0 anyway, so the anchor is never read there).
+    pub(super) anchor: Option<Pos2>,
     /// True on the FIRST frame of the gesture — the takeover moment.
     pub(super) began: bool,
     /// True while the gesture owns the touch session (from the first
@@ -377,21 +427,40 @@ pub(super) struct TouchPanFrame {
     pub(super) session: bool,
 }
 
-impl TouchPan {
-    /// One frame's decision: `multi` is the frame's multi-touch
-    /// translation (`Some` exactly while a two-plus-finger gesture is
-    /// underway — egui's `translation_delta`, already zeroed on
-    /// finger-count-change frames), `touches_down` says whether ANY finger
-    /// is on the surface at all.
-    fn step(&mut self, multi: Option<Vec2>, touches_down: bool) -> TouchPanFrame {
+impl TouchGesture {
+    /// One frame's decision: `multi` is the frame's multi-touch info
+    /// (`Some` exactly while a two-plus-finger gesture is underway — egui
+    /// computes `translation_delta` and `zoom_delta` against the previous
+    /// gesture state, zeroing BOTH on finger-count-change frames),
+    /// `touches_down` says whether ANY finger is on the surface at all.
+    fn step(
+        &mut self,
+        multi: Option<egui::MultiTouchInfo>,
+        touches_down: bool,
+    ) -> TouchGestureFrame {
         let began = multi.is_some() && !self.session;
+        let (delta, zoom_factor, anchor) = match multi {
+            Some(m) => {
+                // The zoom anchors at the PREVIOUS center (the exact
+                // content-follows-the-fingers math — see
+                // `TouchGestureFrame::anchor`); this frame's center becomes
+                // the next frame's previous.
+                let anchor = self.prev_center;
+                self.prev_center = Some(m.center_pos);
+                (m.translation_delta, m.zoom_delta, anchor)
+            }
+            None => (Vec2::ZERO, 1.0, None),
+        };
         if multi.is_some() {
             self.session = true;
         } else if !touches_down {
             self.session = false;
+            self.prev_center = None;
         }
-        TouchPanFrame {
-            delta: multi.unwrap_or_default(),
+        TouchGestureFrame {
+            delta,
+            zoom_factor,
+            anchor,
             began,
             session: self.session,
         }

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 mod codecs;
 
 pub(crate) use codecs::{
-    DEFAULT_JPEG_QUALITY, DEFAULT_PNG_COMPRESSION, encode_jpeg_with_quality,
+    DEFAULT_JPEG_QUALITY, DEFAULT_PNG_COMPRESSION, encode_bmp, encode_jpeg_with_quality,
     encode_png_with_compression, pixmap_from_image,
 };
 // The MCP snapshot tool's encoder — its only bin consumer (feature `mcp`,
@@ -80,13 +80,15 @@ impl FileTask {
 pub use web::FileTask;
 
 /// The save formats of the "Save Image" dialog (SPEC §3.7; owner request
-/// 2026-11-19): the format choice lives IN the dialog — a dropdown since
-/// 2026-11-20, a radio before — not in the OS filter list — so the enum is
-/// shared by the dialog state, the codecs and the platform save glue.
+/// 2026-11-19; BMP joined 2026-11-26, F17's decision): the format choice
+/// lives IN the dialog — a dropdown since 2026-11-20, a radio before — not
+/// in the OS filter list — so the enum is shared by the dialog state, the
+/// codecs and the platform save glue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SaveFormat {
     Png,
     Jpeg,
+    Bmp,
 }
 
 impl SaveFormat {
@@ -97,6 +99,7 @@ impl SaveFormat {
         match self {
             Self::Png => "png",
             Self::Jpeg => "jpg",
+            Self::Bmp => "bmp",
         }
     }
 
@@ -106,6 +109,7 @@ impl SaveFormat {
         match self {
             Self::Png => "PNG image",
             Self::Jpeg => "JPEG image",
+            Self::Bmp => "BMP image",
         }
     }
 
@@ -118,6 +122,7 @@ impl SaveFormat {
         match self {
             Self::Png => "image/png",
             Self::Jpeg => "image/jpeg",
+            Self::Bmp => "image/bmp",
         }
     }
 
@@ -127,6 +132,7 @@ impl SaveFormat {
         match ext.to_ascii_lowercase().as_str() {
             "png" => Some(Self::Png),
             "jpg" | "jpeg" => Some(Self::Jpeg),
+            "bmp" => Some(Self::Bmp),
             _ => None,
         }
     }
@@ -178,7 +184,7 @@ mod native {
     use tiny_skia::Pixmap;
 
     use super::{
-        FileOutcome, FileTask, LoadedImage, SaveFormat, SaveOptions, SavedImage,
+        FileOutcome, FileTask, LoadedImage, SaveFormat, SaveOptions, SavedImage, encode_bmp,
         encode_jpeg_with_quality, encode_png_with_compression, pixmap_from_image,
     };
 
@@ -187,7 +193,7 @@ mod native {
     /// polls the result (F21).
     fn open_image_blocking() -> Result<Option<LoadedImage>, String> {
         let Some(path) = rfd::FileDialog::new()
-            .add_filter("Images", &["png", "jpg", "jpeg"])
+            .add_filter("Images", &["png", "jpg", "jpeg", "bmp"])
             .pick_file()
         else {
             return Ok(None);
@@ -294,7 +300,9 @@ mod native {
         let format = path
             .extension()
             .and_then(|ext| SaveFormat::from_extension(&ext.to_string_lossy()))
-            .ok_or_else(|| "Unsupported file extension. Use .png, .jpg or .jpeg.".to_string())?;
+            .ok_or_else(|| {
+                "Unsupported file extension. Use .png, .jpg, .jpeg or .bmp.".to_string()
+            })?;
         save_image_to_path(pixmap, path, SaveOptions::defaults_for(format))
     }
 
@@ -306,6 +314,7 @@ mod native {
         let bytes = match options.format {
             SaveFormat::Png => encode_png_with_compression(pixmap, options.png_compression)?,
             SaveFormat::Jpeg => encode_jpeg_with_quality(pixmap, options.jpeg_quality)?,
+            SaveFormat::Bmp => encode_bmp(pixmap)?,
         };
         std::fs::write(path, bytes).map_err(|err| format!("Failed to save image: {err}"))
     }
@@ -322,8 +331,8 @@ mod web {
     use wasm_bindgen_futures::wasm_bindgen::JsCast;
 
     use super::{
-        FileOutcome, LoadedImage, SaveFormat, SaveOptions, SavedImage, encode_jpeg_with_quality,
-        encode_png_with_compression, pixmap_from_image,
+        FileOutcome, LoadedImage, SaveFormat, SaveOptions, SavedImage, encode_bmp,
+        encode_jpeg_with_quality, encode_png_with_compression, pixmap_from_image,
     };
 
     /// The one-slot mailbox of a web task: `None` while the task runs,
@@ -362,7 +371,7 @@ mod web {
         wasm_bindgen_futures::spawn_local(async move {
             let result = async {
                 let Some(handle) = rfd::AsyncFileDialog::new()
-                    .add_filter("Images", &["png", "jpg", "jpeg"])
+                    .add_filter("Images", &["png", "jpg", "jpeg", "bmp"])
                     .pick_file()
                     .await
                 else {
@@ -441,6 +450,7 @@ mod web {
         let bytes = match options.format {
             SaveFormat::Png => encode_png_with_compression(pixmap, options.png_compression),
             SaveFormat::Jpeg => encode_jpeg_with_quality(pixmap, options.jpeg_quality),
+            SaveFormat::Bmp => encode_bmp(pixmap),
         }?;
 
         let window = web_sys::window()

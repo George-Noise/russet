@@ -162,9 +162,10 @@ impl App {
     /// Renders the main History Tree window and every clone.
     pub(super) fn tree_windows(&mut self, ctx: &Context) {
         // The smartphone compact rule (owner request 2026-11-25, SPEC
-        // §3.11): the first-open gap goes FLUSH 0 on a phone-sized web
-        // viewport (the main window and the clones alike).
-        let smartphone = crate::is_smartphone_viewport(ctx.content_rect().width());
+        // §3.11): the first-open gap goes FLUSH 0 on a phone web session
+        // (the main window and the clones alike); since 2026-11-26 keyed
+        // on the FROZEN startup latch (a rotation never re-decides it).
+        let smartphone = self.smartphone_session();
         if self.tree_window_open {
             let mut view = self.tree_views[0];
             let mut open = true;
@@ -175,7 +176,8 @@ impl App {
                 // First open (owner request 2026-11-12): exactly the OLD
                 // History window's spot — 0.5rem from the right edge, just
                 // below the menu bar; §3.11 takes over afterwards (FLUSH 0
-                // on a smartphone — owner request 2026-11-25).
+                // on a smartphone web session — owner request
+                // 2026-11-25).
                 .pivot(Align2::RIGHT_TOP)
                 .default_pos(egui::pos2(
                     ctx.content_rect().right() - first_open_gap(smartphone),
@@ -237,12 +239,11 @@ impl App {
 
     /// First-open position of a clone: the main window's first-open spot
     /// stepped down-left per clone number (the stored placement wins later,
-    /// like for every floating window). FLUSH 0 on a smartphone-sized web
-    /// viewport (owner request 2026-11-25, SPEC §3.11).
+    /// like for every floating window). FLUSH 0 on a smartphone web
+    /// session (owner request 2026-11-25, SPEC §3.11 — since 2026-11-26
+    /// the FROZEN startup latch, like every compact rule).
     fn clone_first_pos(&self, view: &TreeView) -> Pos2 {
-        let gap = first_open_gap(crate::is_smartphone_viewport(
-            self.ctx.content_rect().width(),
-        ));
+        let gap = first_open_gap(self.smartphone_session());
         egui::pos2(
             self.ctx.content_rect().right() - gap - view.cascade,
             self.last_panel_rect.top() + gap + view.cascade,

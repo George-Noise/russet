@@ -20,6 +20,7 @@
 > log ≈). One command per row; never merge rows.
 
 ## Cold
+| 2026-11-26 | `cargo check --target wasm32-unknown-unknown` (the pinch-zoom/BMP round — web-facing code changed: the web save glue's BMP arm; the wasm dep graph COLD on the recycled sandbox's fresh toolchain, the wasm std re-downloaded first) | **39 s** | `time`d |
 | 2026-11-25 | `cargo check --target wasm32-unknown-unknown` (the touch-pan/smartphone round — the web-facing code check; the wasm triple added to the fresh sandbox's toolchain first, the whole wasm dep graph cold) | **39 s** | cargo's print |
 | 2026-11-25 | the whole dep-graph build of this session happened across the DETACHED background warm-up + the interactive test/check loop (rustup + the pinned toolchain installed at session start); verify.sh's own full gate then ran in 32 s hot | **not singly timed** | — |
 | 2026-11-25 | `cargo check` (the AGENTS.md-compaction round — comment-only .rs edits; the fresh sandbox had NO toolchain at all: rustup + the pinned 1.99.1 toolchain installed first, then the whole dep-graph check) | **1m 26s** | cargo's print |

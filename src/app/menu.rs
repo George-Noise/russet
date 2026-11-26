@@ -140,13 +140,14 @@ impl App {
                     ui.checkbox(&mut self.tools_window_open, "Tools");
                     ui.checkbox(&mut self.palette_window_open, "Palette");
                     ui.checkbox(&mut self.tree_window_open, "History Tree");
-                    // The Tool Log's toggle is hidden together with the
-                    // window itself on a smartphone-sized web viewport (owner
-                    // request 2026-11-25, SPEC §3.11) — no dead control on a
-                    // phone; the log keeps recording underneath.
-                    if !self.is_smartphone() {
-                        ui.checkbox(&mut self.history_window_open, "Tool Log");
-                    }
+                    // The Tool Log's toggle is ALWAYS live (owner request
+                    // 2026-11-26, amending the 2026-11-25 rule): on a
+                    // smartphone the WINDOW merely starts hidden — the
+                    // item stays, so the user can turn the log back on
+                    // (nothing appears or disappears on its own; the
+                    // hiding is decided once at startup, see
+                    // `app.rs::latch_smartphone_session`).
+                    ui.checkbox(&mut self.history_window_open, "Tool Log");
                     ui.checkbox(&mut self.layers_window_open, "Layers");
                 });
 

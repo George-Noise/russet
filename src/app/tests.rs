@@ -140,3 +140,44 @@ fn the_startup_load_applies_the_saved_mode() {
 
     assert_eq!(app.mouse_side.mode(), mouse_side::MouseSideMode::Always);
 }
+
+/// The smartphone compact rules LATCH ONCE at startup (owner request
+/// 2026-11-26): the first frame's viewport verdict freezes for the whole
+/// session — on a latched phone the Tool Log window starts hidden (the
+/// View ▸ Tool Log checkbox stays the user's own lever), and a later
+/// "rotation" (the viewport verdict flipping) never revisits the
+/// decision, so no window appears or disappears on its own.
+#[test]
+fn the_smartphone_rules_latch_once_at_startup_and_survive_rotation() {
+    let mut app = App::new_headless();
+
+    assert!(
+        !app.smartphone_session(),
+        "before the first frame the latch reads as not-a-phone"
+    );
+
+    // The session starts on a phone-width viewport: the rules latch.
+    app.latch_smartphone_session(true);
+
+    assert!(app.smartphone_session(), "the verdict is frozen as true");
+    assert!(
+        !app.history_window_open,
+        "the Tool Log window starts hidden on a phone"
+    );
+
+    // The user turns the log back on from the View menu.
+    app.history_window_open = true;
+
+    // The phone ROTATES — the viewport verdict is now "desktop-wide": the
+    // latch never re-runs, nothing toggles on its own.
+    app.latch_smartphone_session(false);
+
+    assert!(
+        app.smartphone_session(),
+        "the startup decision stays frozen after a rotation"
+    );
+    assert!(
+        app.history_window_open,
+        "the user's own toggle survives the rotation"
+    );
+}

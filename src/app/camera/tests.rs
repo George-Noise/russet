@@ -117,4 +117,6 @@ fn an_accelerator_modifier_suppresses_the_key_pan() {
 // split past the ~300-line guard — move the tests, not the visibility).
 mod latch;
 // The multi-touch pan + the restored drag-delta pan (same split rule).
-mod touch_pan;
+mod drag_pan;
+mod touch_gesture;
+mod touch_gesture_pass;

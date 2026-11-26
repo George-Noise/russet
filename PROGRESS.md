@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: the touch PINCH zoom + the smartphone rules latched at STARTUP + BMP in open and save (owner 2026-11-26) | done — full gate green + the wasm check + the visual driver; +6 tests | the pinch zoom rides the same two-finger gesture as the pan (continuous, anchored at the previous frame's gesture center — `camera.rs::TouchGesture`, renamed from `TouchPan`; the pan applies AFTER the anchored zoom so the content follows the fingers exactly; `set_zoom` re-uploads only on crisp/smooth sampling flips); the smartphone compact rules are decided ONCE on the first frame (`app.rs::latch_smartphone_session`) — a phone rotation never shows/hides a window, the Tool Log starts hidden with its View item LIVE; BMP = the `bmp` feature flag on the pinned image crate, zero new dependencies (the lock untouched), 32-bit RGBA saves, the locked-ON Lossless row with NO knob |
 | Extra: the web multitouch pan + the smartphone compact rules (the F20 web slice, owner 2026-11-25) + the RESTORED mouse drag-pan (the delta line lost in the 2026-11-13 split) | done — full gate green + the wasm check + the visual driver; +9 tests | two-plus fingers pan by the average movement (`camera.rs::TouchPan` via egui `multi_touch().translation_delta`; a second finger landing mid-stroke commits the stroke as its node first — `input.rs::commit_stroke_gesture`; the session stays pan-only until the last finger lifts); a phone-width WEB viewport (600 pt, `main.rs::is_smartphone_viewport`, cfg-only in main.rs per the Repo-facts rule) gets the compact rules — every floating window's first-open gap FLUSH 0 (`placement.rs::first_open_gap`/`layers_first_open_lift`, all five call sites: Tools/Palette/Layers/Tree+clones) and the Tool Log window + its View item hidden (the log keeps recording); `handle_pan` regains `self.pan += response.drag_delta()` — the middle/Space+LMB drag pans moved NOTHING since e8eb5d1 (2026-11-13); two new egui quirks recorded (the headless drag recipe: TWO warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a prior pointer pos) |
 | Extra: AGENTS.md compacted to the rulebook budget — every rule kept, the narratives moved to their canonical homes (docs round, owner-approved skeleton) | done — comment-only .rs edits → rules.sh + cargo check green | 323 lines/64.8 KB → 182 lines/32 KB; owner-request narratives, verbatim quotes and date-stamped backstories stripped — dates kept ONLY where the date is the rule's identity (the scenarios/tests.rs lock, the history_tree.rs split deferral, the app.rs guard exemption); the per-module Repo-facts facts verified already at home in the module doc comments (app.rs's map, input.rs, selection.rs, tool_icons.rs, tree_window/paint.rs, fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap patches (input.rs's doc gained the global Esc/Ctrl+A/fill-click facts, selection.rs's tolerance_from_percent gained the ONE-slider fact, windows.rs's doc names the select_panel child); the egui 0.37 quirks section moved VERBATIM (26 bullets byte-identical, diff-checked) to the new docs/agents/egui-quirks.md + the new Reading-routes row; the warm-target retirement, the CI description and the delivery mechanics each deduplicated to ONE canonical statement; the new "Maintenance" section states the ~150–200-line budget mirroring the log-entry budget |
 | Extra: the session-start tooling stops lying — the --warm toolchain gate + the honest verdict, the driver's MCP startup probe, the windowfocus row (owner-picked PROBLEMS.md script fixes 1+2+5) | done — full gate green + live branch tests | the three PROBLEMS.md-documented lies fixed in the two dev scripts: `sandbox_check.sh --warm` gates the detached warm-up on cargo/rustup ("[NO] warm-up SKIPPED…" instead of a doomed job whose log claimed "finished (exit 0)" — the lie reproduced live at this session's start) and its verdict captures each rc before any $(date) resets $? ("finished (clippy 0, test 0)" / "warm-up FAILED (…) — verify.sh is NOT hot"); `visual_driver.py` gained a startup MCP probe (one initialize handshake, 5 s deadline, a loud DRIVER PROBE line + exit 3 on no-reply/EOF/bad path — the old silent exit 0 or hang-to-cap is dead; stdout line-buffered; the usage line documents the --features mcp requirement and the exit codes; mcp_smoke.py untouched); the GUI lane gained the windowfocus row (with a display `xdotool help` must list the subcommand, without one a [--] reminder, a loader-broken binary its own trap-13 [NO]) |
@@ -63,17 +64,16 @@
 
 **Verification stamp:** English-only repo-wide — a language WHITELIST (English
 is simply the only written language here: comments, docs, commit titles), not a
-script blacklist. FULL gate re-verified 2026-11-25 (the touch-pan/smartphone
-round — Rust + docs, the full gate): fmt clean, rules.sh HARD-green, clippy
-`-D warnings` green on --all-targets (default + mcp + fill-bench),
-`cargo test --profile gates` 392 green / with `--features mcp` 392 green
-(+1 ignored each; +9 tests of this round: the TouchPan machine, the
-two-finger integration through REAL run_pass frames, the middle-drag
-regression, the stroke-takeover commit, the smartphone gap helpers +
-threshold); the WASM check clean (`cargo check --target
-wasm32-unknown-unknown`, 39 s cold — the web-facing code path was touched);
-the visual driver green through target/gates/russet under Xvfb (all
-scenarios).
+script blacklist. FULL gate re-verified 2026-11-26 (the
+pinch-zoom/startup-latch/BMP round — Rust + docs, the full gate): fmt clean,
+rules.sh HARD-green, clippy `-D warnings` green on --all-targets (default +
+mcp + fill-bench), `cargo test --profile gates` 398 green / with `--features
+mcp` 398 green (+1 ignored each; +6 tests of this round: the pinch machine's
+anchor law, the pinch-spread and move-and-spread REAL-pass zooms, the BMP
+round trips, the startup-latch freeze); the WASM check clean (`cargo check
+--target wasm32-unknown-unknown`, 39 s cold — the web save glue gained the
+BMP arm); the visual driver green through target/gates/russet under Xvfb
+(ALL scenarios).
 
 ## Warnings — open issues deliberately NOT fixed yet
 
@@ -81,8 +81,49 @@ scenarios).
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-25, a fourth time: the oldest entry — the `Docs:` English-only whitelist round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, a fifth time: the oldest entry — the `Tooling:` session-start-tooling round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
 
+
+### 2026-11-26 — `Feat:` the touch pinch zoom + the startup-latched smartphone rules + BMP in open and save — owner request
+
+- **What:** three orders from the 2026-11-26 chat. (1) PINCH ZOOM rides the same
+  two-finger gesture as the pan (a phone has no keyboard/wheel): `TouchPan`
+  renamed `TouchGesture` (`camera.rs`); its frame now carries `zoom_factor` and
+  `anchor` — the PREVIOUS frame's `center_pos` (tracked in the machine), the
+  zoom anchoring there so the content follows the fingers EXACTLY
+  (`App::handle_touch_gesture` applies the anchored zoom BEFORE the pan delta —
+  the other order drifts); `set_zoom` re-uploads the canvas texture only when
+  the crisp/smooth sampling family flips (once per whole-100% crossing, not
+  once per pinch frame); degenerate factors (inf/NaN from a zero previous
+  distance) are dropped. (2) The smartphone rules became STARTUP-latched
+  (rotation must not show/hide a window): `app.rs::latch_smartphone_session`
+  freezes the FIRST frame's viewport verdict for the session — the Tool Log
+  window starts hidden with its View ▸ Tool Log item LIVE (the user's toggle is
+  the only lever afterwards), and the FLUSH-0 first-open gaps read the frozen
+  value (replacing the per-frame checks in windows/palette/layers/tree). (3)
+  BMP in open AND save (F17's decision): the `bmp` feature flag on the PINNED
+  image crate — zero new dependencies (Cargo.lock untouched); Open filters list
+  `.bmp` (native + web), the Save dropdown gains "BMP image" with the
+  locked-ON Lossless row and NO knob (uncompressed — nothing to tune), the
+  codec writes 32-bit RGBA (the V4-header flavor, the one BMP form with alpha),
+  the web Blob carries `image/bmp`, the MCP path export accepts `.bmp`.
+- **Files:** `Cargo.toml`, `src/file_io.rs` (+ `codecs.rs`, `tests.rs` + NEW
+  `tests/png_knob.rs`), `src/app/save_dialog.rs` (+ tests), `src/app/camera.rs`
+  (+ RENAMED `tests/touch_pan.rs`→`touch_gesture.rs`, NEW
+  `tests/touch_gesture_pass.rs` + `tests/drag_pan.rs`), `src/app.rs`,
+  `src/app/{menu,tool_log,windows,palette_window,layers_window,tree_window}.rs`,
+  `src/app/tests.rs`, `SPEC.md` (§1/§3.4/§3.7/§3.10/§3.11),
+  `docs/agents/egui-quirks.md`, both `DEBTS-*.md` (V85 born, V84 amended;
+  F20's zoom slice, F17's BMP paid), `TIMING.md`, `PROBLEMS.md`,
+  `PROGRESS.md`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 22–30 s hot —
+  rules.sh HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
+  `cargo test --profile gates` 398 green / `--features mcp` 398 green (+1
+  ignored each; +6 tests); the WASM check clean; the driver green under Xvfb.
+- **Owner-checks:** V85 born (the BMP pass + the amended phone web legs); V84
+  amended (the pinch zoom and the Tool Log startup rules changed the click-through).
+  Open: V85, V84, V81, V80 (the 4 newest of 7 open).
+- **Commit title:** `Feat: touch pinch zoom + startup-latched smartphone rules; BMP in open and save`
 
 ### 2026-11-25 — `Feat:` the web multitouch pan + the smartphone compact rules (the F20 web slice); the mouse drag-pan restored — owner request
 
@@ -157,43 +198,3 @@ scenarios).
   new location) to confirm nothing was lost; skim `docs/agents/egui-quirks.md` (the verbatim
   move); the rules.sh over-guard report lines still await your split verdicts.
 - **Commit title:** `Docs: compact AGENTS.md to the rulebook budget — egui quirks moved verbatim to docs/agents/egui-quirks.md, per-module facts live in module doc comments`
-
-### 2026-11-25 — `Tooling:` the session-start tooling stops lying — the --warm toolchain gate, the honest verdict, the driver's MCP startup probe, the windowfocus row — the owner-picked PROBLEMS.md script fixes (items 1+2+5)
-
-- **What:** the owner read PROBLEMS.md (his explicit order) and picked plan B's script fixes.
-  (1) `scripts/sandbox_check.sh` --warm gates the detached warm-up on the toolchain —
-  "[NO] warm-up SKIPPED…" instead of a doomed job (the lie reproduced live this session
-  start: rustup MISSING yet "warm-up started… verify.sh is hot"); the detached script
-  captures each rc BEFORE any $(date …) resets $? (that substitution is why the old line
-  printed "finished (exit 0)" over two "cargo: command not found" — PROBLEMS.md
-  2026-11-20/23/24, three entries, one bug) and ends "finished (clippy 0, test 0)" ONLY
-  when both stages exit 0, else "warm-up FAILED (clippy rc=X, test rc=Y) — verify.sh is
-  NOT hot" (rc=skipped when clippy failed first). (2) `scripts/visual_driver.py`: a
-  startup probe speaks ONE initialize handshake with a 5 s deadline (a throwaway
-  instance) — no reply / an EOF / an unspawnable path print ONE loud "DRIVER PROBE: …"
-  line and exit 3 (the old silent exit 0 against a non-MCP build and the hang-to-cap are
-  dead, PROBLEMS.md 2026-11-20/24); stdout is line-buffered (piped runs stream, no more
-  0-byte logs), the usage line documents the --features mcp requirement + the exit codes;
-  mcp_smoke.py untouched (the entry asked for the fix in the driver). (3) the GUI lane's
-  windowfocus row (the 2026-11-21 "could improve"): with a reachable display
-  `xdotool help` must list the windowfocus subcommand ([yes]); without one a [--]
-  reminder (help inits xdo before dispatching — a display-free probe is impossible); a
-  loader-broken binary gets its own trap-13 [NO]; the probe carries the /tmp bundle's
-  lib dir on LD_LIBRARY_PATH.
-- **Files:** `scripts/sandbox_check.sh`, `scripts/visual_driver.py`, `PROGRESS.md`,
-  `TIMING.md` (the cold warm-up row), `SANDBOX.md` (one trap-13 sentence:
-  help/windowfocus need the lib dir AND a live X server). No Rust touched.
-- **Verified:** the FULL gate ran (scripts/ are beyond-.md — NOT docs-only; the owner's
-  no-builds note was a one-round recommendation, not a standing ban):
-  `scripts/verify.sh` ALL GATES GREEN, 17 s hot — rules.sh HARD-green, fmt clean, clippy
-  `-D warnings` × default/mcp/fill-bench, `cargo test --profile gates` 370 green /
-  `--features mcp` 383 green (+1 ignored each). Branch tests live: the probe's EOF
-  (/bin/true) and 5 s timeout (a silent wrapper) modes exit 3 loudly; the pass-through
-  drives target/gates/russet under Xvfb — ALL VISUAL-DRIVER SCENARIOS GREEN (15 checks,
-  3.6 s); the skip branch prints [NO] warm-up SKIPPED (a fake HOME + a cargo-less PATH);
-  the started branch ends the hot log "finished (clippy 0, test 0)"; both windowfocus
-  states live ([--] without a display, [yes] with Xvfb); the branch tests caught the
-  first draft's own bug (a trap-13 loader error misreported as a missing subcommand) —
-  fixed and re-tested. NO wasm check (no web-facing code touched).
-- **Owner-checks:** none born. Open: V83, V82, V81, V80 (the 4 newest of 11 open).
-- **Commit title:** `Gate the --warm warm-up on the toolchain; give visual_driver.py an MCP startup probe; probe the windowfocus path in sandbox_check`

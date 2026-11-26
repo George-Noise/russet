@@ -57,7 +57,7 @@ fn the_title_strip_fits_inside_the_tools_window() {
     for _ in 0..3 {
         let mut output = ctx.run_pass(input.clone(), |ctx| {
             let mut open = true;
-            let shown = tools_window_builder(ctx, &mut open).show(ctx, |ui| {
+            let shown = tools_window_builder(ctx, &mut open, false).show(ctx, |ui| {
                 ui.allocate_exact_size(egui::vec2(grid_w, 10.0), egui::Sense::hover());
                 // The same atom math `title_ui` runs: the atoms are
                 // Heading-row-height squares, the icons shrink them.

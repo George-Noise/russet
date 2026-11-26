@@ -1,10 +1,12 @@
 //! The "Save Image" dialog (SPEC §3.7; owner request 2026-11-19): BOTH
 //! File ▸ Save (Ctrl+S) and File ▸ Save As (Ctrl+Shift+S) open it — an
 //! in-app dialog replacing the OS save dialog, with everything the save
-//! needs collected IN THE DIALOG: the format dropdown (PNG / JPEG — a
-//! radio until 2026-11-20), the file name, the per-format encoding knob
-//! (the PNG compression slider, the JPEG quality) with a live caption
-//! explaining what the CURRENT number means (owner request 2026-11-20 —
+//! needs collected IN THE DIALOG: the format dropdown (PNG / JPEG / BMP —
+//! a radio until 2026-11-20; BMP joined 2026-11-26, F17's decision), the
+//! file name, the per-format encoding knob (the PNG compression slider,
+//! the JPEG quality — BMP has none: the format stores its rows
+//! uncompressed, nothing to trade) with a live caption explaining what
+//! the CURRENT number means (owner request 2026-11-20 —
 //! the numbers were not obvious even to the owner), the Lossless row
 //! (owner request 2026-11-20; same day it moved ABOVE the knob into the
 //! distance-separated encoding group) and — native only — the
@@ -65,7 +67,7 @@ pub(super) fn compose_file_name(raw: &str, format: SaveFormat) -> String {
     format!("{}.{}", base_name_of(&cleaned), format.extension())
 }
 
-/// Strips a KNOWN image extension (`.png` / `.jpg` / `.jpeg`,
+/// Strips a KNOWN image extension (`.png` / `.jpg` / `.jpeg` / `.bmp`,
 /// case-insensitive) for the dialog's prefill — the format choice owns
 /// the extension, so `display_name` must not pin one. Unknown or no extension:
 /// the trimmed name as-is; nothing usable: [`FALLBACK_NAME`].
@@ -74,7 +76,7 @@ pub(super) fn base_name_of(name: &str) -> String {
     // `to_ascii_lowercase` only maps ASCII bytes, so the UTF-8 boundaries
     // of `lower` and `name` are identical and the byte slice is safe.
     let lower = name.to_ascii_lowercase();
-    if let Some(base_len) = [".png", ".jpg", ".jpeg"]
+    if let Some(base_len) = [".png", ".jpg", ".jpeg", ".bmp"]
         .iter()
         .find_map(|ext| lower.strip_suffix(ext).map(|base| base.len()))
     {
@@ -224,6 +226,11 @@ impl App {
                                 SaveFormat::Jpeg,
                                 SaveFormat::Jpeg.label(),
                             );
+                            ui.selectable_value(
+                                &mut self.save_format,
+                                SaveFormat::Bmp,
+                                SaveFormat::Bmp.label(),
+                            );
                         });
                 });
                 // The encoding group is separated from the rows above by
@@ -272,6 +279,20 @@ impl App {
                         // PNG row (owner request 2026-11-20).
                         ui.weak(jpeg_quality_hint(self.save_quality));
                         ui.weak(JPEG_QUALITY_TAIL);
+                    }
+                    SaveFormat::Bmp => {
+                        // The locked-ON Lossless row, the same display
+                        // convention as PNG — BMP is lossless (the format
+                        // stores its rows uncompressed). No knob follows:
+                        // F17's no-options note — a quality/effort slider
+                        // has nothing to trade — so the group ends with the
+                        // guarantee row plus the one-line reason.
+                        let mut lossless = true;
+                        ui.horizontal(|ui| {
+                            ui.add_enabled(false, egui::Checkbox::new(&mut lossless, "Lossless"));
+                            ui.weak("(always — BMP is lossless)");
+                        });
+                        ui.weak("The file stores every pixel uncompressed — nothing to tune.");
                     }
                 }
                 // A matching gap closes the group before the buttons.
