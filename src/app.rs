@@ -185,8 +185,11 @@ pub struct App {
     /// requests 2026-11-25/2026-11-26): while a two-plus-finger gesture is
     /// underway the frame pans by the touches' average movement AND
     /// pinch-zooms by the touches' spreading ratio (anchored at the
-    /// gesture's center), and the whole touch session stays "panning"
-    /// until the last finger lifts. Updated in
+    /// gesture's center); the SECOND finger's landing frame (the raw Touch
+    /// stream's 1→2 id transition — whatever frame the finger actually
+    /// lands in, the gesture's seeding is never the trigger) fires the
+    /// takeover below and poisons the session, which then stays
+    /// "panning" until the last finger lifts. Updated in
     /// `camera::handle_touch_gesture`.
     touch_gesture: camera::TouchGesture,
     /// The touch-session BASELINE for the gesture takeover (owner bug
@@ -196,9 +199,9 @@ pub struct App {
     /// touch session's FIRST pass (`camera::handle_touch_gesture`), before
     /// the same pass's tool dispatch can paint (eframe-web's emulated
     /// primary press makes the first finger paint through the pointer
-    /// path). When the multi-touch gesture begins,
-    /// [`input::touch_takeover`] reverts the active layer's history to
-    /// this baseline; cleared when the last finger lifts.
+    /// path). When the SECOND finger lands (the raw Touch stream's 1→2
+    /// transition), [`input::touch_takeover`] reverts the active layer's
+    /// history to this baseline; cleared when the last finger lifts.
     touch_baseline: Option<(usize, Option<NodeId>)>,
     /// The session's STARTUP smartphone latch (owner request 2026-11-26,
     /// amending the 2026-11-25 compact rules): `is_smartphone_viewport`
@@ -862,16 +865,20 @@ impl App {
         // The multi-touch gesture (owner requests 2026-11-25/2026-11-26,
         // the F20 web slices): a two-plus-finger gesture pans by the
         // touches' average movement and pinch-zooms by the spreading
-        // ratio, and the gesture's FIRST frame REVERTS everything the
-        // touch session has painted so far ([`input::touch_takeover`],
-        // owner bug report 2026-11-26: eframe-web's emulated primary
-        // press makes the session's first finger paint before the
-        // gesture can engage — a zoom/pan attempt must leave no tool
-        // marks; the reverted nodes stay as ordinary tree forks). The
-        // session stays "panning" until the last finger lifts, so the
-        // leftover finger paints nothing.
+        // ratio, and the SECOND finger's landing frame — the raw Touch
+        // stream's 1→2 id transition, whichever frame the finger
+        // actually lands in (owner bug report 2026-11-26, second pass: a
+        // phone's fingers land at DIFFERENT times and egui's gesture may
+        // engage late or never — the trigger cannot depend on it) —
+        // REVERTS everything the touch session has painted so far
+        // ([`input::touch_takeover`]; eframe-web's emulated primary press
+        // makes the session's first finger paint before any gesture can
+        // engage — a zoom/pan attempt must leave no tool marks; the
+        // reverted nodes stay as ordinary tree forks). The session stays
+        // "panning" until the last finger lifts, so the leftover finger
+        // paints nothing — even when the gesture never engages.
         let touch = self.handle_touch_gesture(ui, panel_rect);
-        if touch.began {
+        if touch.second_finger {
             self.touch_takeover();
         }
         let panning = self.handle_pan(ui, &response) || touch.session;

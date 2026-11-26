@@ -706,14 +706,17 @@ impl App {
 
     /// The multi-touch TAKEOVER (owner bug report 2026-11-26: "when trying
     /// to use zoom or pan on a smartphone in web, the selected tool is
-    /// still used"): the gesture's first frame hands the touch session to
-    /// the camera — and the attempt must leave NO tool marks. eframe-web
-    /// emulates a primary POINTER press on every touchstart (the first
-    /// finger drives the pointer, and egui's multi-touch gesture only
-    /// engages on the frame AFTER the second finger lands), so the first
-    /// finger of every zoom/pan attempt paints through the ordinary
-    /// tool path before the gesture can take over: a pencil dot, a short
-    /// stroke, a fill flood. This reverts ALL of it:
+    /// still used" — and the second pass: a real phone's fingers land at
+    /// DIFFERENT times, so the trigger is the raw Touch stream's second
+    /// `Start`, not the gesture): the second finger's landing frame hands
+    /// the touch session to the camera — and the attempt must leave NO
+    /// tool marks. eframe-web emulates a primary POINTER press on every
+    /// touchstart (the first finger drives the pointer, and egui's
+    /// multi-touch gesture may engage LATE or never — its seeding needs
+    /// a prior pointer position, so it can never be the takeover's
+    /// trigger), so the first finger of every zoom/pan attempt paints
+    /// through the ordinary tool path before the takeover: a pencil dot,
+    /// a short stroke, a fill flood. This reverts ALL of it:
     ///
     /// 1. Any in-flight freehand stroke is committed as its node FIRST
     ///    (`commit_stroke_gesture`, QUIET) — its pixels become a real tree

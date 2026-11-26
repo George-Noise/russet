@@ -6,10 +6,14 @@
 //! gesture, [`TouchGesture`], owner requests 2026-11-25/26: two or more
 //! fingers PAN by the average movement of all touch points and PINCH-zoom
 //! by the touches' spreading distance ratio, egui's
-//! `InputState::multi_touch()` deltas). The gesture's first frame also
-//! triggers the TAKEOVER revert (owner bug report 2026-11-26) in
-//! `input.rs::touch_takeover`. A child module of `app`, so it can touch
-//! `App`'s private fields; `app.rs` stays the orchestrator.
+//! `InputState::multi_touch()` deltas). The SECOND finger's landing frame
+//! (the raw Touch stream's 1→2 id transition — owner bug report
+//! 2026-11-26, the second pass: a real phone's fingers never land in one
+//! frame, and egui's gesture may engage LATE or never at all, so the
+//! takeover and the suppression ride the RAW stream, never the gesture)
+//! triggers the TAKEOVER revert in `input.rs::touch_takeover`. A child
+//! module of `app`, so it can touch `App`'s private fields; `app.rs` stays
+//! the orchestrator.
 
 use eframe::egui::{self, Key, MouseWheelUnit, PointerButton, Pos2, Rect, Vec2};
 
@@ -209,15 +213,15 @@ impl App {
     /// pairwise distance to the previous frame's) is the PINCH zoom: a
     /// phone user has neither keyboard nor wheel, so the same two fingers
     /// carry BOTH jobs — dragging them pans, spreading/pinching them
-    /// zooms. The caller (`draw_canvas`) additionally treats the whole
-    /// touch session as "panning" from the gesture's first frame until the
-    /// last finger lifts ([`TouchGestureFrame::session`]) — no stroke starts or
-    /// resumes on the leftover finger — and on the gesture's FIRST frame
-    /// REVERTS everything the touch session has painted so far
-    /// ([`TouchGestureFrame::began`], `input::touch_takeover`, owner bug
-    /// report 2026-11-26: eframe-web's emulated primary press makes the
-    /// session's first finger paint before the gesture engages, and a
-    /// zoom/pan attempt must leave no tool marks).
+    /// zooms. The takeover and the suppression, though, ride the RAW
+    /// Touch stream (owner bug report 2026-11-26, second pass: a real
+    /// phone's fingers land in DIFFERENT frames and the gesture may
+    /// engage LATE or never): the SECOND finger's landing frame
+    /// ([`TouchGestureFrame::second_finger`]) REVERTS everything the
+    /// touch session has painted so far (`input::touch_takeover`), and
+    /// the session stays "panning"
+    /// ([`TouchGestureFrame::session`]) — no stroke starts or resumes
+    /// — until the last finger lifts, gesture or no gesture.
     /// egui itself zeroes BOTH deltas on the frames the finger COUNT changes
     /// (finger add/remove re-baselines the average), so no debounce is
     /// needed on this side either.
@@ -226,16 +230,23 @@ impl App {
         ui: &egui::Ui,
         panel_rect: Rect,
     ) -> TouchGestureFrame {
-        let multi = ui.input(|i| i.multi_touch());
-        let touches_down = ui.input(|i| i.any_touches());
-        let frame = self.touch_gesture.step(multi, touches_down);
+        let (multi, touches_down, fold) = ui.input(|i| {
+            (
+                i.multi_touch(),
+                i.any_touches(),
+                fold_touch_ids(&i.raw.events),
+            )
+        });
+        let frame = self
+            .touch_gesture
+            .step(&fold.0, &fold.1, touches_down, multi);
         // The takeover baseline (owner bug report 2026-11-26): latched on
         // the touch session's BIRTH pass — before the same pass's tool
         // dispatch can paint anything (the first finger's emulated pointer
         // press paints AFTER this) — and cleared when the last finger
-        // lifts. The gesture's first frame (`frame.began`, handled by the
-        // caller in `draw_canvas`) reverts the active layer's history to
-        // this baseline — see [`input::touch_takeover`].
+        // lifts. The SECOND finger's landing frame (`frame.second_finger`,
+        // handled by the caller in `draw_canvas`) reverts the active
+        // layer's history to this baseline — see [`input::touch_takeover`].
         if frame.first_touch {
             self.touch_baseline = Some((self.layers.active_layer(), self.layers.head()));
         }
@@ -415,14 +426,21 @@ fn pan_suppressed_by_modifiers(m: egui::Modifiers) -> bool {
 /// anchor (see [`TouchGestureFrame::anchor`]). Pure so the convention is
 /// unit-testable without an egui context; App carries it next to `pan`
 /// (like [`PanKeyLatch`]).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct TouchGesture {
-    session: bool,
+    /// The touch ids the raw stream says are on the glass RIGHT NOW —
+    /// [`fold_touch_ids`] of each frame's `Event::Touch` stream adds ids
+    /// on `Start` and removes them on `End`/`Cancel` (a `Move` carries no
+    /// id change). The set is the machine's own truth, reconciled against
+    /// egui's `any_touches()` each step.
+    active: Vec<egui::TouchId>,
+    /// Has this touch session already seen a SECOND finger? Set on the
+    /// 1→2 id transition (or a `multi_touch()` report — whichever
+    /// comes first) and held until the last finger lifts; while it holds,
+    /// the caller suppresses all tool input for the session.
+    poisoned: bool,
+    /// The PREVIOUS gesture frame's center — the pinch zoom's anchor.
     prev_center: Option<Pos2>,
-    /// Were ANY touches down at the end of the previous step? The
-    /// 0→any transition of a pass is the touch session's birth —
-    /// the caller's baseline latch reads it once per session.
-    had_touches: bool,
 }
 
 /// What one frame of [`TouchGesture::step`] decided.
@@ -444,11 +462,19 @@ pub(super) struct TouchGestureFrame {
     /// (practically only a re-baselined first frame — its `zoom_factor`
     /// is 1.0 anyway, so the anchor is never read there).
     pub(super) anchor: Option<Pos2>,
-    /// True on the FIRST frame of the gesture — the takeover moment.
-    pub(super) began: bool,
-    /// True while the gesture owns the touch session (from the first
-    /// gesture frame until the frame NO finger is down anymore) — the
-    /// caller treats it as "panning" (no stroke starts or resumes).
+    /// True on the frame the SECOND finger lands — the takeover
+    /// moment: the raw Touch stream's 1→2 id transition (a simultaneous
+    /// landing births AND takes over in one pass), or the first
+    /// `multi_touch()` report if the raw fold somehow missed the starts.
+    /// The caller reverts the session's tool marks
+    /// ([`App::touch_takeover`]) and the session turns "panning" from
+    /// this frame.
+    pub(super) second_finger: bool,
+    /// True while the touch session is POISONED — a second finger has
+    /// landed and not every finger has lifted yet — the caller treats it
+    /// as "panning" (no stroke starts or resumes). A lone-finger drawing
+    /// session never poisons; the leftover finger of a pinch keeps the
+    /// poison until it too lifts.
     pub(super) session: bool,
     /// True on the touch session's BIRTH pass — the pass where touches
     /// went from none to any (one finger landing, or a simultaneous
@@ -461,23 +487,68 @@ pub(super) struct TouchGestureFrame {
 }
 
 impl TouchGesture {
-    /// One frame's decision: `multi` is the frame's multi-touch info
-    /// (`Some` exactly while a two-plus-finger gesture is underway — egui
-    /// computes `translation_delta` and `zoom_delta` against the previous
-    /// gesture state, zeroing BOTH on finger-count-change frames),
-    /// `touches_down` says whether ANY finger is on the surface at all.
+    /// The derived session state: poisoned AND some finger still on the
+    /// glass — what the caller's "panning" gate reads (the frame carries
+    /// it as `session`; this accessor is for between-pass assertions).
+    pub(super) fn session_live(&self) -> bool {
+        self.poisoned && !self.active.is_empty()
+    }
+
+    /// One frame's decision. `started`/`ended` are the frame's raw
+    /// Touch-stream id changes ([`fold_touch_ids`] of `i.raw.events`),
+    /// `any_touches` is egui's authoritative "is any finger down"
+    /// (reconciles the id set), and `multi` is the frame's multi-touch
+    /// info — `Some` exactly while a two-plus-finger gesture is
+    /// underway — egui computes `translation_delta` and `zoom_delta`
+    /// against the previous gesture state, zeroing BOTH on
+    /// finger-count-change frames. The takeover and the suppression are
+    /// decided from the RAW ids alone: a second finger that lands while
+    /// the gesture has not (yet) engaged still fires `second_finger` and
+    /// poisons the session (owner report 2026-11-26: a phone's fingers
+    /// land in DIFFERENT frames, and the gesture may never engage).
     fn step(
         &mut self,
+        started: &[egui::TouchId],
+        ended: &[egui::TouchId],
+        any_touches: bool,
         multi: Option<egui::MultiTouchInfo>,
-        touches_down: bool,
     ) -> TouchGestureFrame {
-        let began = multi.is_some() && !self.session;
-        // The session's birth: no touches at the end of the previous
-        // step, and any now. A simultaneous landing (both fingers in ONE
-        // pass) births AND begins in the same pass — the birth flag
-        // still fires so the baseline latch precedes the takeover.
-        let first_touch = touches_down && !self.had_touches;
-        self.had_touches = touches_down;
+        // The raw fold: remove the ended ids, add the started ones (the
+        // set is order-proof — an End and a Start of the same id in one
+        // frame leaves it down, a re-Start of a live id is a no-op).
+        let was_empty = self.active.is_empty();
+        for id in ended {
+            self.active.retain(|a| a != id);
+        }
+        for id in started {
+            if !self.active.contains(id) {
+                self.active.push(*id);
+            }
+        }
+        // Reconcile with egui's touch state: if no finger is down there,
+        // the whole set is stale (a missed End/Cancel) — clear it, so a
+        // lost end cannot wedge the session poisoned forever.
+        if !any_touches {
+            self.active.clear();
+        }
+        // The session's birth: no live ids before this fold, and any now.
+        // A simultaneous landing (both fingers in ONE pass) births AND
+        // takes over in the same pass — the birth flag still fires so
+        // the baseline latch precedes the takeover.
+        let first_touch = was_empty && !self.active.is_empty();
+        // The second finger: the 1→2 raw transition, or the gesture report
+        // as a belt-and-braces fallback (a seeded gesture implies two
+        // live touches, so the fold must have seen the starts).
+        let second_finger = !self.poisoned && (self.active.len() >= 2 || multi.is_some());
+        if second_finger {
+            self.poisoned = true;
+        }
+        // The session ends with the last finger: the poison lifts only
+        // when the glass is empty again.
+        if self.active.is_empty() {
+            self.poisoned = false;
+            self.prev_center = None;
+        }
         let (delta, zoom_factor, anchor) = match multi {
             Some(m) => {
                 // The zoom anchors at the PREVIOUS center (the exact
@@ -490,21 +561,45 @@ impl TouchGesture {
             }
             None => (Vec2::ZERO, 1.0, None),
         };
-        if multi.is_some() {
-            self.session = true;
-        } else if !touches_down {
-            self.session = false;
-            self.prev_center = None;
-        }
         TouchGestureFrame {
             delta,
             zoom_factor,
             anchor,
-            began,
-            session: self.session,
+            second_finger,
+            session: self.session_live(),
             first_touch,
         }
     }
+}
+
+/// The raw Touch stream's per-frame fold: which touch ids STARTED this
+/// frame, which ENDED (`End` or `Cancel` — both take the finger off the
+/// glass). `Move` events carry no id change, and multiple coalesced
+/// events of one id in a frame fold to the same result. Feeding
+/// [`TouchGesture::step`] from THIS fold — not from egui's gesture —
+/// is what makes the takeover and the suppression independent of the
+/// gesture's backend-specific seeding (owner report 2026-11-26).
+fn fold_touch_ids(events: &[egui::Event]) -> (Vec<egui::TouchId>, Vec<egui::TouchId>) {
+    let mut started = Vec::new();
+    let mut ended = Vec::new();
+    for event in events {
+        if let egui::Event::Touch { id, phase, .. } = event {
+            match phase {
+                egui::TouchPhase::Start => {
+                    if !started.contains(id) {
+                        started.push(*id);
+                    }
+                }
+                egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                    if !ended.contains(id) {
+                        ended.push(*id);
+                    }
+                }
+                egui::TouchPhase::Move => {}
+            }
+        }
+    }
+    (started, ended)
 }
 
 /// The W/A/S/D combo latch (owner bug report 2026-11-24: Ctrl+S with Ctrl

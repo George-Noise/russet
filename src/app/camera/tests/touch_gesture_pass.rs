@@ -112,7 +112,7 @@ fn multi_touch_translation_pans_the_view() {
         "a single finger is no gesture"
     );
     assert!(
-        app.touch_gesture.session,
+        app.touch_gesture.session_live(),
         "the session outlives the dropped finger"
     );
 
@@ -123,7 +123,10 @@ fn multi_touch_translation_pans_the_view() {
         &mut app,
         panel_rect,
     );
-    assert!(!app.touch_gesture.session, "no finger down — session over");
+    assert!(
+        !app.touch_gesture.session_live(),
+        "no finger down — session over"
+    );
 }
 
 #[test]

@@ -20,6 +20,7 @@
 > log ≈). One command per row; never merge rows.
 
 ## Cold
+| 2026-11-26 | the raw-touch round's recycled sandbox: rustup + the pinned 1.99.1 toolchain reinstalled (the detached nohup install DIED with the shell — run heavy installs in the foreground), `cargo check` (native dev, whole dep graph) 1m 18s, `trunk build` (dev wasm, whole graph + wasm-bindgen) ≈ 4 min, the second/third trunk rebuilds incremental seconds | **1m18s + ≈4 min** | cargo/trunk prints |
 | 2026-11-26 | the detached gates warm-up COLD (the takeover-revert round's recycled sandbox: rustup reinstalled, the pinned 1.99.1 toolchain re-fetched, then clippy + `cargo test --no-run` over the whole dep graph — the lane it heats made verify.sh a 29 s run right after) | **≈ 4 min** (started ~08:47, the log's finish line 08:51:43) | observed from the background log ≈ |
 | 2026-11-26 | `cargo check --target wasm32-unknown-unknown` (the pinch-zoom/BMP round — web-facing code changed: the web save glue's BMP arm; the wasm dep graph COLD on the recycled sandbox's fresh toolchain, the wasm std re-downloaded first) | **39 s** | `time`d |
 | 2026-11-25 | `cargo check --target wasm32-unknown-unknown` (the touch-pan/smartphone round — the web-facing code check; the wasm triple added to the fresh sandbox's toolchain first, the whole wasm dep graph cold) | **39 s** | cargo's print |
@@ -31,6 +32,7 @@
 | 2026-11-24 | `cargo check --profile gates --features mcp` — the dep-graph check COLD (the same wiped sandbox; the check artifacts do NOT feed the test codegen — the test build recompiled every dep) | **1m 26s** | cargo's print |
 
 ## Hot
+| 2026-11-26 | the round's verify gate + browser re-verifications (see PROGRESS) — after the fixes: `cargo test --profile gates touch_` 0.28–0.76 s per filter | **sub-second** | cargo prints |
 | 2026-11-26 | `bash scripts/verify.sh` (the takeover-revert round's full gate — the warm-up-heated gates lane: rules + fmt + clippy ×3 lanes + `cargo test` ×2; 403 tests, 8.4 s the biggest test lane) | **29 s** | verify.sh per-stage print |
 | 2026-11-24 | `cargo test --profile gates --features mcp` run DIRECTLY in the agent shell — HANGS on the shell's open pipe stdin (killed at 320 s and at 100 s caps); with `< /dev/null` the same run finishes in ~50 s wall (the compile was cached by verify.sh, 377 tests in 7.5 s). verify.sh itself never hangs — run direct mcp-lane tests with stdin closed | **320 s + 100 s killed; ~50 s OK** | the tool-call wall clock ≈ |
 | 2026-11-24 | `visual_driver.py ./target/debug/russet` against the WRONG build (no `--features mcp`) — the driver speaks MCP over piped stdin, a plain binary never handshakes: hung until the 240 s cap killed it (the mcp build ran the same probe in 3 s; SANDBOX.md now says the binary must be mcp-enabled) | **4m 0s (killed)** | `time`d exactly |

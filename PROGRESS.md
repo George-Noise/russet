@@ -11,6 +11,7 @@
 
 | Milestone | Status | Notes |
 |---|---|---|
+| Extra: the takeover rides the RAW touch stream — the second finger's own landing frame (owner's second report 2026-11-26) | done — full gate green; +5 tests | the gesture-gated takeover/suppression misfired on the owner's phone (fingers land in DIFFERENT frames; egui's gesture may seed late or never): `TouchGesture` now folds the raw `Event::Touch` ids itself (`camera.rs::fold_touch_ids`, reconciled against `any_touches()`), fires the takeover on the raw 1→2 transition (`TouchGestureFrame::second_finger`), and poisons the session until the raw set empties — `multi_touch()` is ONLY the pan/zoom delta source; V86 amended (the staggered + no-gesture legs) |
 | Extra: the touch-gesture TAKEOVER revert — a zoom/pan attempt leaves NO tool marks (owner bug report 2026-11-26) | done — full gate green; +5 tests | eframe-web emulates a primary POINTER press on EVERY touchstart (`eframe/src/web/events.rs::install_touchstart`) and egui's multi-touch gesture only engages on the frame AFTER the second finger lands, so the first finger of every attempt painted (a dot, a short stroke, a fill) — the takeover at the gesture's first frame now REVERTS it all: an in-flight stroke is committed as its node FIRST (pixels become a real node — the revert restores through snapshots only), then the active layer's history is undone back to the baseline latched on the touch session's BIRTH pass (`app.rs::touch_baseline`, `camera.rs::TouchGestureFrame::first_touch` — the 0→any-touches transition; a simultaneous landing births AND begins in one pass, the latch runs first), the pending Line/Shape/Text/Select states are cancelled, the Tool Log stays QUIET (the net effect: nothing happened); the reverted nodes stay as ordinary tree forks (redoable), and the revert only runs while the head still descends from the baseline (`history_tree.rs::LayerTree::head_descends_from` — a user undo mid-session moves the head to the ancestor side, the wrong direction); V86 born, V84 amended |
 | Extra: the web multitouch pan + the smartphone compact rules (the F20 web slice, owner 2026-11-25) + the RESTORED mouse drag-pan (the delta line lost in the 2026-11-13 split) | done — full gate green + the wasm check + the visual driver; +9 tests | two-plus fingers pan by the average movement (`camera.rs::TouchPan` via egui `multi_touch().translation_delta`; a second finger landing mid-stroke commits the stroke as its node first — `input.rs::commit_stroke_gesture`; the session stays pan-only until the last finger lifts); a phone-width WEB viewport (600 pt, `main.rs::is_smartphone_viewport`, cfg-only in main.rs per the Repo-facts rule) gets the compact rules — every floating window's first-open gap FLUSH 0 (`placement.rs::first_open_gap`/`layers_first_open_lift`, all five call sites: Tools/Palette/Layers/Tree+clones) and the Tool Log window + its View item hidden (the log keeps recording); `handle_pan` regains `self.pan += response.drag_delta()` — the middle/Space+LMB drag pans moved NOTHING since e8eb5d1 (2026-11-13); two new egui quirks recorded (the headless drag recipe: TWO warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a prior pointer pos) |
 | Extra: AGENTS.md compacted to the rulebook budget — every rule kept, the narratives moved to their canonical homes (docs round, owner-approved skeleton) | done — comment-only .rs edits → rules.sh + cargo check green | 323 lines/64.8 KB → 182 lines/32 KB; owner-request narratives, verbatim quotes and date-stamped backstories stripped — dates kept ONLY where the date is the rule's identity (the scenarios/tests.rs lock, the history_tree.rs split deferral, the app.rs guard exemption); the per-module Repo-facts facts verified already at home in the module doc comments (app.rs's map, input.rs, selection.rs, tool_icons.rs, tree_window/paint.rs, fill_bench.rs, placement.rs, flake.nix — gap-checked fact by fact) + three comment-only gap patches (input.rs's doc gained the global Esc/Ctrl+A/fill-click facts, selection.rs's tolerance_from_percent gained the ONE-slider fact, windows.rs's doc names the select_panel child); the egui 0.37 quirks section moved VERBATIM (26 bullets byte-identical, diff-checked) to the new docs/agents/egui-quirks.md + the new Reading-routes row; the warm-target retirement, the CI description and the delivery mechanics each deduplicated to ONE canonical statement; the new "Maintenance" section states the ~150–200-line budget mirroring the log-entry budget |
@@ -81,7 +82,53 @@ wasm-check economy).
   open HUMAN checks live in DEBTS-verification.md, open functional debts in
   DEBTS-functional.md (the agent must ask about them per AGENTS.md "Debts").
 
-## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, a sixth time: the oldest live entry — the AGENTS.md-compaction `Docs:` round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+## Log — newest first. Insert a new entry directly under this heading. (Compacted 2026-11-26, a seventh time: the oldest live entry — the 2026-11-25 multitouch-pan round — moved verbatim to PROGRESS-archive.md; the newest 3 stay.)
+
+### 2026-11-26 — `Fix:` the touch takeover rides the RAW touch stream — the second finger's own landing frame (owner's second report)
+
+- **What:** the owner's phone retest of the takeover delivery: "Стало хуже —
+  нужно учитывать, что
+  пользователь не может в один и
+  тот же кадр нажать сразу 2 пальца —
+  один палец и второй касаются
+  экрана в разное время" — the
+  takeover and the session suppression were GATED on `multi_touch()`,
+  whose engagement is backend-seeding business: on the phone (fingers in
+  different frames, the gesture seeding late or never) the takeover
+  misfired. The trigger now rides the RAW Touch stream: `TouchGesture`
+  folds the live touch ids itself (`camera.rs::fold_touch_ids` — Start
+  adds, End/Cancel removes; reconciled against `any_touches()` so a lost
+  end cannot wedge the session), fires the takeover on the raw 1→2 id
+  transition (`TouchGestureFrame::second_finger` — whichever frame the
+  second finger lands in; a simultaneous landing births AND takes over in
+  one pass), and POISONS the session until the raw set empties — the
+  leftover finger paints nothing even with no gesture; `multi_touch()`
+  stays ONLY the pan/zoom delta source (deltas + the zoom anchor
+  unchanged). The orphaned `tests/touch_pan.rs` (dead since the
+  TouchPan→TouchGesture rename — never declared as a module) is removed.
+  New quirk in `docs/agents/egui-quirks.md` (the seeding dependence).
+- **Files:** `src/app/camera.rs` (+ its `tests/`: `touch_gesture.rs`
+  rewritten to the new machine, NEW no-gesture regressions,
+  `touch_gesture_pass.rs` on `session_live`), `src/app.rs`,
+  `src/app/input.rs`, `SPEC.md` (§3.4), `docs/agents/egui-quirks.md`,
+  both `DEBTS-*.md` (V86/V84 amended, F20's web-slice text),
+  `PROGRESS.md`, `TIMING.md`; removed `src/app/camera/tests/touch_pan.rs`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN — rules.sh
+  HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
+  `cargo test --profile gates` 403 green / `--features mcp` 403 green
+  (+1 ignored each; +4 tests of this round: the no-gesture takeover
+  regression — RED on the gesture-gated implementation, proven by
+  checkout, then green — the machine's staggered/simultaneous/cancel/
+  reconcile set, and the fold's unit test). PLUS the real-browser pass:
+  the web build re-driven by CDP trusted touch (the full pointer-event
+  cascade incl. the sync `pointerdown` logic frames) — staggered pinch,
+  marks revert, zoom+pan apply, and the plain one-finger draw still
+  paints; pixel-diff oracles. No WASM lane needed (platform-neutral Rust).
+- **Owner-checks:** V86 amended (the staggered + the
+  gesture-never-engages legs — the phone retest). Open: V86, V85, V84,
+  V81 (the 4 newest of 8 open).
+- **Commit title:** `Fix: the touch takeover rides the raw touch stream, not the gesture (staggered second fingers revert too)`
+
 
 
 ### 2026-11-26 — `Fix:` the touch-gesture takeover REVERTS the session's tool marks — owner bug report
@@ -171,45 +218,3 @@ wasm-check economy).
   amended (the pinch zoom and the Tool Log startup rules changed the click-through).
   Open: V85, V84, V81, V80 (the 4 newest of 7 open).
 - **Commit title:** `Feat: touch pinch zoom + startup-latched smartphone rules; BMP in open and save`
-
-### 2026-11-25 — `Feat:` the web multitouch pan + the smartphone compact rules (the F20 web slice); the mouse drag-pan restored — owner request
-
-- **What:** three pieces. (1) The multitouch PAN (ordered "web, пока что только web", the
-  egui path is platform-neutral so it rides wherever touches arrive): two-plus fingers pan
-  by the AVERAGE movement of all touch points (`InputState::multi_touch().translation_delta`;
-  `camera.rs::TouchPan` + `App::handle_touch_pan`) — one finger keeps painting, a second
-  finger landing mid-stroke ENDS the stroke as its node first (`input.rs::commit_stroke_gesture`,
-  extracted from the release path; the painted pixels stay, undoable), and the touch session
-  stays pan-only until the frame NO finger is down (the leftover finger cannot resume
-  painting); pinch does NOT zoom (scope). (2) The SMARTPHONE compact rules for a
-  phone-width WEB viewport (600 pt gate, `main.rs::is_smartphone_viewport` — the platform
-  branch stays in main.rs per the Repo-facts rule; `App::is_smartphone`): every floating
-  window's first-open edge gap FLUSH 0 (`placement.rs::first_open_gap` /
-  `layers_first_open_lift`, applied at all five first-open sites — Tools, Palette, Layers
-  (the 1.75rem zoom-label lift folds to 0 too), History Tree + clones), and the Tool Log
-  window + its View-menu item hidden on phones (the log itself keeps recording). No native
-  Android build is planned (owner 2026-11-25). (3) A found-and-fixed REGRESSION:
-  `self.pan += response.drag_delta()` was LOST in the 2026-11-13 app.rs split (e8eb5d1) —
-  the middle-button and Space+LMB drag pans moved NOTHING since (the detection, cursor and
-  stroke suppression survived); restored in `handle_pan`, pinned by a regression test. Two
-  new egui quirks recorded in docs/agents/egui-quirks.md (the headless drag recipe — two
-  warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a
-  prior pointer position).
-- **Files:** `src/main.rs`, `src/app.rs`, `src/app/camera.rs` (+ `camera/tests.rs`, NEW
-  `camera/tests/touch_pan.rs`), `src/app/input.rs`, `src/app/placement.rs` (+
-  `placement/tests/first_open.rs`), `src/app/windows.rs`,
-  `src/app/windows/palette_window.rs`, `src/app/layers_window.rs`,
-  `src/app/tree_window.rs`, `src/app/tool_log.rs`, `src/app/menu.rs`, `SPEC.md` (§3.4 touch
-  pan; §3.11 smartphone paragraph), `docs/agents/egui-quirks.md`,
-  `DEBTS-verification.md` (V84 born; V83/V82/V79/V78/V77/V76 closed — owner-verified in
-  chat this round), `DEBTS-functional.md` (F20's web slice PAID — trackpads/pen tablets
-  remain open; F17 carries the BMP/WebP options note the owner asked for),
-  `TIMING.md`, `PROGRESS.md`.
-- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 32 s hot — rules.sh
-  HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
-  `cargo test --profile gates` 392 green / `--features mcp` 392 green (+1 ignored each;
-  +9 tests of this round); the WASM check clean (39 s cold — cfg-wasm paths touched); the
-  visual driver green through target/gates/russet under Xvfb (ALL scenarios).
-- **Owner-checks:** V84 born (the web pass on a real phone + the desktop/native legs,
-  incl. the restored drag pan). Open: V84, V81, V80, V66 (the 4 newest of 6 open).
-- **Commit title:** `Feat: web multitouch pan + smartphone compact windows; restore the lost mouse drag-pan`

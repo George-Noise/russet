@@ -1,5 +1,47 @@
 # PROGRESS — archive (Russet)
 
+### 2026-11-25 — `Feat:` the web multitouch pan + the smartphone compact rules (the F20 web slice); the mouse drag-pan restored — owner request
+
+- **What:** three pieces. (1) The multitouch PAN (ordered "web, пока что только web", the
+  egui path is platform-neutral so it rides wherever touches arrive): two-plus fingers pan
+  by the AVERAGE movement of all touch points (`InputState::multi_touch().translation_delta`;
+  `camera.rs::TouchPan` + `App::handle_touch_pan`) — one finger keeps painting, a second
+  finger landing mid-stroke ENDS the stroke as its node first (`input.rs::commit_stroke_gesture`,
+  extracted from the release path; the painted pixels stay, undoable), and the touch session
+  stays pan-only until the frame NO finger is down (the leftover finger cannot resume
+  painting); pinch does NOT zoom (scope). (2) The SMARTPHONE compact rules for a
+  phone-width WEB viewport (600 pt gate, `main.rs::is_smartphone_viewport` — the platform
+  branch stays in main.rs per the Repo-facts rule; `App::is_smartphone`): every floating
+  window's first-open edge gap FLUSH 0 (`placement.rs::first_open_gap` /
+  `layers_first_open_lift`, applied at all five first-open sites — Tools, Palette, Layers
+  (the 1.75rem zoom-label lift folds to 0 too), History Tree + clones), and the Tool Log
+  window + its View-menu item hidden on phones (the log itself keeps recording). No native
+  Android build is planned (owner 2026-11-25). (3) A found-and-fixed REGRESSION:
+  `self.pan += response.drag_delta()` was LOST in the 2026-11-13 app.rs split (e8eb5d1) —
+  the middle-button and Space+LMB drag pans moved NOTHING since (the detection, cursor and
+  stroke suppression survived); restored in `handle_pan`, pinned by a regression test. Two
+  new egui quirks recorded in docs/agents/egui-quirks.md (the headless drag recipe — two
+  warm-up passes, a movable area's root steals the press; the multi-touch seeding needs a
+  prior pointer position).
+- **Files:** `src/main.rs`, `src/app.rs`, `src/app/camera.rs` (+ `camera/tests.rs`, NEW
+  `camera/tests/touch_pan.rs`), `src/app/input.rs`, `src/app/placement.rs` (+
+  `placement/tests/first_open.rs`), `src/app/windows.rs`,
+  `src/app/windows/palette_window.rs`, `src/app/layers_window.rs`,
+  `src/app/tree_window.rs`, `src/app/tool_log.rs`, `src/app/menu.rs`, `SPEC.md` (§3.4 touch
+  pan; §3.11 smartphone paragraph), `docs/agents/egui-quirks.md`,
+  `DEBTS-verification.md` (V84 born; V83/V82/V79/V78/V77/V76 closed — owner-verified in
+  chat this round), `DEBTS-functional.md` (F20's web slice PAID — trackpads/pen tablets
+  remain open; F17 carries the BMP/WebP options note the owner asked for),
+  `TIMING.md`, `PROGRESS.md`.
+- **Verified:** FULL gate `bash scripts/verify.sh` ALL GREEN, 32 s hot — rules.sh
+  HARD-green, fmt clean, clippy `-D warnings` × default/mcp/fill-bench,
+  `cargo test --profile gates` 392 green / `--features mcp` 392 green (+1 ignored each;
+  +9 tests of this round); the WASM check clean (39 s cold — cfg-wasm paths touched); the
+  visual driver green through target/gates/russet under Xvfb (ALL scenarios).
+- **Owner-checks:** V84 born (the web pass on a real phone + the desktop/native legs,
+  incl. the restored drag pan). Open: V84, V81, V80, V66 (the 4 newest of 6 open).
+- **Commit title:** `Feat: web multitouch pan + smartphone compact windows; restore the lost mouse drag-pan`
+
 ### 2026-11-25 — `Docs:` AGENTS.md compacted to the rulebook budget — 323 lines/64.8 KB → 182 lines/32 KB; every rule survives, the narratives moved to their canonical homes
 
 - **What:** the docs-compaction round (the owner approved the skeleton up front). Rules kept,

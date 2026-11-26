@@ -243,3 +243,103 @@ fn a_second_finger_reverts_a_fill_that_fired_on_the_first_tap() {
         "the flood is gone — the tap that became a gesture painted nothing"
     );
 }
+
+#[test]
+fn the_second_finger_reverts_the_stroke_with_no_gesture_at_all() {
+    // The owner's SECOND report 2026-11-26 ("It got worse — a user cannot
+    // press both fingers in the same frame; the fingers touch at
+    // DIFFERENT times"): a stream where egui's multi-touch gesture NEVER
+    // engages — the raw Touch events carry no pointer events at all, so
+    // `touch_state.rs` has no prior pointer position to seed from and
+    // `multi_touch()` stays `None` the whole session (a native-touchscreen
+    // shape; on the phone the same hole appears whenever the gesture
+    // seeds late or never). The takeover must still fire on the raw
+    // 1→2 id transition — the second finger's `Touch{Start}` frame — and
+    // the session must poison without the gesture.
+    let mut app = App::new_headless();
+    app.tools.tool = Tool::Pencil;
+    app.tools.primary = Color32::RED;
+    // The first finger's in-flight stroke (on the phone eframe-web's
+    // emulated pointer press paints it; the pointer-less harness seeds
+    // the same gesture state directly — the takeover must end it).
+    app.stroke_button = Some(PointerButton::Primary);
+    app.is_stroking = true;
+    app.stroke_paint = Some(Color32::RED);
+    app.stroke_tool = Some(Tool::Pencil);
+    app.stroke_smooth = crate::tools::SmoothStroke::new(Pos2::new(10.0, 10.0));
+    let ctx = egui::Context::default();
+    let panel_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(300.0, 300.0));
+    let baseline = app.layers.head();
+    let baseline_nodes = app.layers.layer_nodes(0).expect("layer 0 exists").len();
+
+    canvas_pass(&ctx, vec![], &mut app, panel_rect);
+    canvas_pass(&ctx, vec![], &mut app, panel_rect);
+
+    // Finger 1 lands — NO pointer events anywhere in this stream: the
+    // session's birth latches the baseline, and no gesture can seed.
+    canvas_pass(
+        &ctx,
+        vec![touch(1, TouchPhase::Start, Pos2::new(100.0, 100.0))],
+        &mut app,
+        panel_rect,
+    );
+    assert_eq!(
+        app.touch_baseline,
+        Some((0, baseline)),
+        "the birth pass latched the pre-touch head — pointer or no pointer"
+    );
+
+    // Finger 2 lands in a LATER frame (the staggered reality). The gesture
+    // NEVER engages: the takeover rides the raw id transition instead,
+    // committing the in-flight stroke as its node and reverting it.
+    canvas_pass(
+        &ctx,
+        vec![touch(2, TouchPhase::Start, Pos2::new(200.0, 200.0))],
+        &mut app,
+        panel_rect,
+    );
+    assert!(!app.is_stroking, "the takeover ended the stroke");
+    assert_eq!(
+        app.layers.head(),
+        baseline,
+        "the history returned to the pre-touch head with NO gesture engaged"
+    );
+    assert_eq!(
+        app.layers.layer_nodes(0).expect("layer 0 exists").len(),
+        baseline_nodes + 1,
+        "the reverted stroke stays as an ordinary tree fork"
+    );
+
+    // The session poisons WITHOUT the gesture: a later primary press (an
+    // emulated touchstart press while both fingers hold) must not start a
+    // stroke until every finger has lifted.
+    canvas_pass(&ctx, vec![], &mut app, panel_rect);
+    canvas_pass(
+        &ctx,
+        vec![press_at(Pos2::new(120.0, 120.0))],
+        &mut app,
+        panel_rect,
+    );
+    assert!(
+        !app.is_stroking,
+        "the poisoned session suppresses the press — no gesture needed"
+    );
+
+    // Every finger lifts; the next lone press paints again.
+    canvas_pass(
+        &ctx,
+        vec![
+            touch(1, TouchPhase::End, Pos2::new(100.0, 100.0)),
+            touch(2, TouchPhase::End, Pos2::new(200.0, 200.0)),
+        ],
+        &mut app,
+        panel_rect,
+    );
+    canvas_pass(
+        &ctx,
+        vec![press_at(Pos2::new(120.0, 120.0))],
+        &mut app,
+        panel_rect,
+    );
+    assert!(app.is_stroking, "a fresh lone finger paints again");
+}
